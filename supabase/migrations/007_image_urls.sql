@@ -1,0 +1,23 @@
+-- Демо-фотографии для меню (Unsplash)
+UPDATE menu_items SET image_url = 'https://images.unsplash.com/photo-1572695157366-5e585ab2b69f?w=400&q=80' WHERE name = 'Брускетта с томатами';
+UPDATE menu_items SET image_url = 'https://images.unsplash.com/photo-1546793665-c74683f339c1?w=400&q=80' WHERE name = 'Салат Цезарь';
+UPDATE menu_items SET image_url = 'https://images.unsplash.com/photo-1580822184713-fc5400e7fe10?w=400&q=80' WHERE name = 'Тартар из лосося';
+UPDATE menu_items SET image_url = 'https://images.unsplash.com/photo-1544025162-d76694265947?w=400&q=80' WHERE name = 'Карпаччо из говядины';
+UPDATE menu_items SET image_url = 'https://images.unsplash.com/photo-1547592166-23ac45744acd?w=400&q=80' WHERE name = 'Борщ';
+UPDATE menu_items SET image_url = 'https://images.unsplash.com/photo-1476718406336-bb5a9690ee2a?w=400&q=80' WHERE name = 'Крем-суп из тыквы';
+UPDATE menu_items SET image_url = 'https://images.unsplash.com/photo-1569050467447-ce54b3bbc37d?w=400&q=80' WHERE name = 'Том Ям';
+UPDATE menu_items SET image_url = 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=400&q=80' WHERE name = 'Стейк Рибай 300г';
+UPDATE menu_items SET image_url = 'https://images.unsplash.com/photo-1519708227418-c8fd9a32b7a2?w=400&q=80' WHERE name = 'Семга на гриле';
+UPDATE menu_items SET image_url = 'https://images.unsplash.com/photo-1598103442097-8b74394b95c8?w=400&q=80' WHERE name = 'Куриное филе';
+UPDATE menu_items SET image_url = 'https://images.unsplash.com/photo-1612874742237-6526221588e3?w=400&q=80' WHERE name = 'Паста Карбонара';
+UPDATE menu_items SET image_url = 'https://images.unsplash.com/photo-1551892374-ecf8754cf8b0?w=400&q=80' WHERE name = 'Паста Болоньезе';
+UPDATE menu_items SET image_url = 'https://images.unsplash.com/photo-1476124369491-e7addf5db371?w=400&q=80' WHERE name = 'Ризотто с грибами';
+UPDATE menu_items SET image_url = 'https://images.unsplash.com/photo-1571877227200-a0d98ea607e9?w=400&q=80' WHERE name = 'Тирамису';
+UPDATE menu_items SET image_url = 'https://images.unsplash.com/photo-1533134242443-d4fd215305ad?w=400&q=80' WHERE name = 'Чизкейк Нью-Йорк';
+UPDATE menu_items SET image_url = 'https://images.unsplash.com/photo-1624353365286-3f8d62daad51?w=400&q=80' WHERE name = 'Шоколадный фондан';
+UPDATE menu_items SET image_url = 'https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?w=400&q=80' WHERE name = 'Американо';
+UPDATE menu_items SET image_url = 'https://images.unsplash.com/photo-1572442388796-11668a67e53d?w=400&q=80' WHERE name = 'Капучино';
+UPDATE menu_items SET image_url = 'https://images.unsplash.com/photo-1600271886742-f049cd451bba?w=400&q=80' WHERE name = 'Свежевыжатый сок';
+UPDATE menu_items SET image_url = 'https://images.unsplash.com/photo-1548839140-29a749e1cf4d?w=400&q=80' WHERE name = 'Вода Evian 0.5л';
+UPDATE menu_items SET image_url = 'https://images.unsplash.com/photo-1510812431401-41d2bd2722f3?w=400&q=80' WHERE name = 'Бокал вина 150мл';
+UPDATE menu_items SET image_url = 'https://images.unsplash.com/photo-1608270586620-248524c67de9?w=400&q=80' WHERE name = 'Пиво Хайнекен 0.5л';
