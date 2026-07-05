@@ -7,6 +7,7 @@ import DeviceSetupPage from './features/auth/DeviceSetupPage'
 import PinLoginPage from './features/auth/PinLoginPage'
 import ProtectedRoute from './features/auth/ProtectedRoute'
 import HomePage from './features/home/HomePage'
+import MenuPage from './features/menu/MenuPage'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -51,6 +52,15 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <HomePage />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/menu"
+            element={
+              <ProtectedRoute allowedRoles={['owner', 'manager']}>
+                <MenuPage />
               </ProtectedRoute>
             }
           />

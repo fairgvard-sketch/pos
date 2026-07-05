@@ -43,3 +43,69 @@ export interface StaffSession {
   role: Role
   location_id: string | null
 }
+
+// ── Каталог ──────────────────────────────────────────────
+// Все цены — целые агороты (см. lib/money.ts)
+
+export interface Station {
+  id: string
+  org_id: string
+  location_id: string
+  name: string
+  sort_order: number
+}
+
+export interface MenuCategory {
+  id: string
+  org_id: string
+  location_id: string
+  name: string
+  sort_order: number
+  is_active: boolean
+}
+
+export interface MenuItem {
+  id: string
+  org_id: string
+  category_id: string
+  station_id: string | null
+  name: string
+  price: number
+  image_url: string | null
+  is_available: boolean
+  ask_modifiers: boolean
+  sort_order: number
+  item_variants?: ItemVariant[]
+  menu_item_modifier_groups?: { group_id: string; sort_order: number }[]
+}
+
+export interface ItemVariant {
+  id: string
+  org_id: string
+  item_id: string
+  name: string
+  price: number
+  is_default: boolean
+  sort_order: number
+}
+
+export interface ModifierGroup {
+  id: string
+  org_id: string
+  name: string
+  min_select: number
+  max_select: number
+  sort_order: number
+  modifiers?: Modifier[]
+}
+
+export interface Modifier {
+  id: string
+  org_id: string
+  group_id: string
+  name: string
+  price_delta: number
+  is_default: boolean
+  is_available: boolean
+  sort_order: number
+}
