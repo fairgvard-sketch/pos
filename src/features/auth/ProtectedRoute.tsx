@@ -1,26 +1,35 @@
+import { useEffect, useState } from 'react'
 import { Navigate } from 'react-router-dom'
+import { supabase } from '../../lib/supabase'
 import { useAuthStore } from '../../store/authStore'
-import type { StaffRole } from '../../types'
+import type { Role } from '../../types'
 
 interface Props {
+  allowedRoles?: Role[]
   children: React.ReactNode
-  allowedRoles?: StaffRole[]
 }
 
-export default function ProtectedRoute({ children, allowedRoles }: Props) {
-  const staff = useAuthStore((s) => s.currentStaff)
+/**
+ * Двухуровневая защита:
+ * 1. Нет сессии устройства → /setup
+ * 2. Нет PIN-сессии сотрудника → /pin
+ * 3. Роль не подходит → /home
+ */
+export default function ProtectedRoute({ allowedRoles, children }: Props) {
+  const staff = useAuthStore((s) => s.staff)
+  const [deviceState, setDeviceState] = useState<'loading' | 'none' | 'ok'>('loading')
 
-  if (!staff) {
-    return <Navigate to="/" replace />
-  }
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setDeviceState(data.session ? 'ok' : 'none')
+    })
+  }, [])
 
+  if (deviceState === 'loading') return null
+  if (deviceState === 'none') return <Navigate to="/setup" replace />
+  if (!staff) return <Navigate to="/pin" replace />
   if (allowedRoles && !allowedRoles.includes(staff.role)) {
-    const redirect =
-      staff.role === 'kitchen' ? '/kitchen'
-      : staff.role === 'manager' ? '/hub'
-      : '/tables'
-    return <Navigate to={redirect} replace />
+    return <Navigate to="/home" replace />
   }
-
   return <>{children}</>
 }

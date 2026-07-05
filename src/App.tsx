@@ -1,19 +1,12 @@
+import { useEffect, useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Toaster } from 'react-hot-toast'
-import PinLogin from './features/auth/PinLogin'
+import { supabase } from './lib/supabase'
+import DeviceSetupPage from './features/auth/DeviceSetupPage'
+import PinLoginPage from './features/auth/PinLoginPage'
 import ProtectedRoute from './features/auth/ProtectedRoute'
-import TablesPage from './features/tables/TablesPage'
-import OrderPage from './features/orders/OrderPage'
-import KitchenPage from './features/kitchen/KitchenPage'
-import PaymentPage from './features/payments/PaymentPage'
-import ManagerPage from './features/analytics/ManagerPage'
-import HubPage from './features/hub/HubPage'
-import ReportsPage from './features/reports/ReportsPage'
-import LoyaltyPage from './features/loyalty/LoyaltyPage'
-import SettingsPage from './features/settings/SettingsPage'
-import RefundPage from './features/payments/RefundPage'
-import RetailPage from './features/orders/RetailPage'
+import HomePage from './features/home/HomePage'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -24,108 +17,40 @@ const queryClient = new QueryClient({
   },
 })
 
+/** "/" → куда нужно: нет сессии устройства → /setup, есть → /pin */
+function RootRedirect() {
+  const [target, setTarget] = useState<string | null>(null)
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      if (!data.session) {
+        setTarget('/setup')
+      } else if (!data.session.user.app_metadata?.org_id) {
+        setTarget('/setup')
+      } else {
+        setTarget('/pin')
+      }
+    })
+  }, [])
+
+  if (!target) return null
+  return <Navigate to={target} replace />
+}
+
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<PinLogin />} />
+          <Route path="/" element={<RootRedirect />} />
+          <Route path="/setup" element={<DeviceSetupPage />} />
+          <Route path="/pin" element={<PinLoginPage />} />
 
           <Route
-            path="/tables"
+            path="/home"
             element={
-              <ProtectedRoute allowedRoles={['waiter', 'manager']}>
-                <TablesPage />
-              </ProtectedRoute>
-            }
-          />
-
-          <Route
-            path="/order/:tableId"
-            element={
-              <ProtectedRoute allowedRoles={['waiter', 'manager']}>
-                <OrderPage />
-              </ProtectedRoute>
-            }
-          />
-
-          <Route
-            path="/payment/:orderId"
-            element={
-              <ProtectedRoute allowedRoles={['waiter', 'manager']}>
-                <PaymentPage />
-              </ProtectedRoute>
-            }
-          />
-
-          <Route
-            path="/kitchen"
-            element={
-              <ProtectedRoute allowedRoles={['kitchen', 'manager']}>
-                <KitchenPage />
-              </ProtectedRoute>
-            }
-          />
-
-          <Route
-            path="/manager"
-            element={
-              <ProtectedRoute allowedRoles={['manager']}>
-                <ManagerPage />
-              </ProtectedRoute>
-            }
-          />
-
-          <Route
-            path="/hub"
-            element={
-              <ProtectedRoute allowedRoles={['manager']}>
-                <HubPage />
-              </ProtectedRoute>
-            }
-          />
-
-          <Route
-            path="/reports"
-            element={
-              <ProtectedRoute allowedRoles={['manager']}>
-                <ReportsPage />
-              </ProtectedRoute>
-            }
-          />
-
-<Route
-            path="/loyalty"
-            element={
-              <ProtectedRoute allowedRoles={['manager']}>
-                <LoyaltyPage />
-              </ProtectedRoute>
-            }
-          />
-
-          <Route
-            path="/settings"
-            element={
-              <ProtectedRoute allowedRoles={['manager']}>
-                <SettingsPage />
-              </ProtectedRoute>
-            }
-          />
-
-          <Route
-            path="/refund"
-            element={
-              <ProtectedRoute allowedRoles={['manager']}>
-                <RefundPage />
-              </ProtectedRoute>
-            }
-          />
-
-          <Route
-            path="/retail"
-            element={
-              <ProtectedRoute allowedRoles={['waiter', 'manager']}>
-                <RetailPage />
+              <ProtectedRoute>
+                <HomePage />
               </ProtectedRoute>
             }
           />

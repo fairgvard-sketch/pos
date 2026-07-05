@@ -96,15 +96,6 @@
   }
 }
 
-/* ── Shake (неверный PIN) ────────────────────────────────── */
-@keyframes shake {
-  0%, 100% { transform: translateX(0); }
-  20% { transform: translateX(-8px); }
-  40% { transform: translateX(8px); }
-  60% { transform: translateX(-5px); }
-  80% { transform: translateX(5px); }
-}
-
 /* ── Scroll fade masks ───────────────────────────────────── */
 .scroll-fade-y {
   mask-image: linear-gradient(to bottom, transparent 0%, black 32px, black calc(100% - 32px), transparent 100%);
