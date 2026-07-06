@@ -3,13 +3,13 @@ import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
 import { useLangStore } from '../store/langStore'
 import { t } from '../lib/i18n'
+import Icon from './Icon'
+import type { IconName } from './Icon'
 
-interface Props {
-  active: 'sell' | 'menu'
-}
+export type SidebarPage = 'sell' | 'queue' | 'menu' | 'analytics' | 'settings'
 
 /** Общий сайдбар кассы: навигация, часы, сотрудник */
-export default function AppSidebar({ active }: Props) {
+export default function AppSidebar({ active }: { active: SidebarPage }) {
   const navigate = useNavigate()
   const lang = useLangStore((s) => s.lang)
   const staff = useAuthStore((s) => s.staff)
@@ -25,11 +25,18 @@ export default function AppSidebar({ active }: Props) {
       </div>
 
       <nav className="space-y-1">
-        <SideLink active={active === 'sell'} label={t(lang, 'sell')} icon="▦" onClick={() => navigate('/sell')} />
+        <SideLink active={active === 'sell'} label={t(lang, 'sell')} iconName="orders" onClick={() => navigate('/sell')} />
+        <SideLink active={active === 'queue'} label={t(lang, 'queue')} iconName="orders" onClick={() => navigate('/queue')} />
         {isManager && (
-          <SideLink active={active === 'menu'} label={t(lang, 'menu')} icon="≡" onClick={() => navigate('/menu')} />
+          <SideLink active={active === 'menu'} label={t(lang, 'menu')} iconName="menu" onClick={() => navigate('/menu')} />
         )}
-        <SideLink label={t(lang, 'lock')} icon="◈" onClick={() => { lock(); navigate('/pin', { replace: true }) }} />
+        {isManager && (
+          <SideLink active={active === 'analytics'} label={t(lang, 'reports')} iconName="analytics" onClick={() => navigate('/reports')} />
+        )}
+        {isManager && (
+          <SideLink active={active === 'settings'} label={t(lang, 'settings')} iconName="settings" onClick={() => navigate('/settings')} />
+        )}
+        <SideLink label={t(lang, 'lock')} iconName="customers" onClick={() => { lock(); navigate('/pin', { replace: true }) }} />
       </nav>
 
       <div className="mt-auto space-y-4">
@@ -48,7 +55,7 @@ export default function AppSidebar({ active }: Props) {
   )
 }
 
-function SideLink({ label, icon, active, onClick }: { label: string; icon: string; active?: boolean; onClick: () => void }) {
+function SideLink({ label, iconName, active, onClick }: { label: string; iconName: IconName; active?: boolean; onClick: () => void }) {
   return (
     <button
       onClick={onClick}
@@ -56,7 +63,7 @@ function SideLink({ label, icon, active, onClick }: { label: string; icon: strin
         active ? 'bg-gray-100 text-gray-900' : 'text-gray-400 hover:text-gray-700 hover:bg-gray-50'
       }`}
     >
-      <span className="text-base w-5 text-center">{icon}</span>
+      <Icon name={iconName} isActive={active} size={20} />
       {label}
     </button>
   )
