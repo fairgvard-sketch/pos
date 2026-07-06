@@ -9,16 +9,18 @@ import customItemOutline from '../assets/icons/custom-item.svg?raw'
 import discountOutline from '../assets/icons/discount.svg?raw'
 import noteOutline from '../assets/icons/note.svg?raw'
 import refundOutline from '../assets/icons/refund.svg?raw'
+import queueOutline from '../assets/icons/queue.svg?raw'
 
 import ordersDark from '../assets/icons/active/orders-dark.svg?raw'
 import menuDark from '../assets/icons/active/menu-dark.svg?raw'
 import analyticsDark from '../assets/icons/active/analytics-dark.svg?raw'
 import settingsDark from '../assets/icons/active/settings-dark.svg?raw'
 import customersDark from '../assets/icons/active/customers-dark.svg?raw'
+import queueDark from '../assets/icons/active/queue-dark.svg?raw'
 
 export type IconName =
   | 'orders' | 'menu' | 'analytics' | 'settings' | 'customers'
-  | 'cash' | 'card' | 'customItem' | 'discount' | 'note' | 'refund'
+  | 'cash' | 'card' | 'customItem' | 'discount' | 'note' | 'refund' | 'queue'
 
 const outline: Record<IconName, string> = {
   orders: ordersOutline,
@@ -32,6 +34,7 @@ const outline: Record<IconName, string> = {
   discount: discountOutline,
   note: noteOutline,
   refund: refundOutline,
+  queue: queueOutline,
 }
 
 // Тёмный (активный) вариант есть не у всех — падаем на outline
@@ -41,6 +44,7 @@ const active: Partial<Record<IconName, string>> = {
   analytics: analyticsDark,
   settings: settingsDark,
   customers: customersDark,
+  queue: queueDark,
 }
 
 interface Props {

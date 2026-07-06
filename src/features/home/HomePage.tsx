@@ -38,7 +38,7 @@ export default function HomePage() {
   const visibleTiles = TILES.filter((tile) => !tile.minRole || isManager)
 
   return (
-    <div dir={isRtl ? 'rtl' : 'ltr'} className="min-h-screen bg-[#f8f9fb]">
+    <div dir={isRtl ? 'rtl' : 'ltr'} className="min-h-screen bg-[#f8f9fb] flex flex-col">
       <header className="page-header">
         <div>
           <span className="font-bold text-gray-900">{t(lang, 'hello')}, {staff.name}</span>
@@ -52,8 +52,8 @@ export default function HomePage() {
         </div>
       </header>
 
-      <main className="max-w-3xl mx-auto p-6">
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+      <main className="flex-1 flex items-center justify-center p-6">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 w-full max-w-3xl">
           {visibleTiles.map((tile) => (
             <button
               key={tile.key}
