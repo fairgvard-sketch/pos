@@ -1,7 +1,16 @@
 import { useMemo, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { fetchCategories, createCategory, updateCategory, deleteCategory, fetchItems } from './api'
+import {
+  DndContext, closestCenter, PointerSensor, TouchSensor, useSensor, useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  SortableContext, verticalListSortingStrategy, arrayMove, useSortable,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+import { fetchCategories, createCategory, updateCategory, deleteCategory, fetchItems, reorderItems, reorderCategories } from './api'
+import type { MenuItem, MenuCategory } from '../../types'
 import { useLangStore } from '../../store/langStore'
 import { t, type TranslationKey } from '../../lib/i18n'
 import { formatMoney } from '../../lib/money'
@@ -41,13 +50,73 @@ export default function MenuPage() {
   const activeCat = activeCategoryId ?? categories[0]?.id ?? null
   const selectedItem = items.find((i) => i.id === selectedItemId) ?? null
 
+  const searching = search.trim().length > 0
+
   const listItems = useMemo(() => {
-    if (search.trim()) {
+    if (searching) {
       const q = search.trim().toLowerCase()
       return items.filter((i) => i.name.toLowerCase().includes(q))
     }
     return items.filter((i) => i.category_id === activeCat)
-  }, [items, activeCat, search])
+  }, [items, activeCat, search, searching])
+
+  // Порядок для DnD читается прямо из кеша (listItems / categories):
+  // оптимистичное обновление пишем в кеш, отдельный локальный стейт не нужен
+  const orderedItems = listItems
+  const orderedCats = categories
+
+  const reorder = useMutation({
+    mutationFn: (ids: string[]) => reorderItems(ids),
+    onError: (e) => {
+      toast.error((e as Error).message)
+      qc.invalidateQueries({ queryKey: ['menu_items'] })
+    },
+  })
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 180, tolerance: 8 } }),
+  )
+
+  function handleDragEnd(e: DragEndEvent) {
+    const { active, over } = e
+    if (!over || active.id === over.id) return
+    const from = orderedItems.findIndex((i) => i.id === active.id)
+    const to = orderedItems.findIndex((i) => i.id === over.id)
+    if (from < 0 || to < 0) return
+    const next = arrayMove(orderedItems, from, to)
+    qc.setQueryData<MenuItem[]>(['menu_items'], (old) => {
+      if (!old) return old
+      const order = new Map(next.map((it, i) => [it.id, i]))
+      return [...old].sort((a, b) =>
+        (order.get(a.id) ?? a.sort_order) - (order.get(b.id) ?? b.sort_order))
+    })
+    reorder.mutate(next.map((i) => i.id))
+  }
+
+  const reorderCats = useMutation({
+    mutationFn: (ids: string[]) => reorderCategories(ids),
+    onError: (e) => {
+      toast.error((e as Error).message)
+      qc.invalidateQueries({ queryKey: ['menu_categories'] })
+    },
+  })
+
+  function handleCatDragEnd(e: DragEndEvent) {
+    const { active, over } = e
+    if (!over || active.id === over.id) return
+    const from = orderedCats.findIndex((c) => c.id === active.id)
+    const to = orderedCats.findIndex((c) => c.id === over.id)
+    if (from < 0 || to < 0) return
+    const next = arrayMove(orderedCats, from, to)
+    qc.setQueryData<MenuCategory[]>(['menu_categories'], (old) => {
+      if (!old) return old
+      const order = new Map(next.map((c, i) => [c.id, i]))
+      return [...old].sort((a, b) =>
+        (order.get(a.id) ?? a.sort_order) - (order.get(b.id) ?? b.sort_order))
+    })
+    reorderCats.mutate(next.map((c) => c.id))
+  }
 
   const addCategory = useMutation({
     mutationFn: () => createCategory(newCatName.trim(), categories.length, newCatIcon),
@@ -150,43 +219,26 @@ export default function MenuPage() {
                 </form>
               )}
 
-              <div className="space-y-0.5">
-                {categories.map((c) => (
-                  <div key={c.id} className="group relative">
-                    <button
-                      onClick={() => { setActiveCategoryId(c.id); setSearch('') }}
-                      className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-sm font-semibold transition-all ${
-                        !search && c.id === activeCat ? 'bg-gray-100 text-gray-900' : 'text-gray-500 hover:bg-gray-50'
-                      }`}
-                    >
-                      <span className="truncate">
-                        {c.icon && <span className="me-1.5">{c.icon}</span>}
-                        {c.name}
-                      </span>
-                      <span className="text-xs text-gray-300 group-hover:hidden">
-                        {items.filter((i) => i.category_id === c.id).length}
-                      </span>
-                    </button>
-                    <div className="absolute top-1/2 -translate-y-1/2 end-2 hidden group-hover:flex gap-1 bg-inherit">
-                      <button
-                        onClick={() => {
+              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleCatDragEnd}>
+                <SortableContext items={orderedCats.map((c) => c.id)} strategy={verticalListSortingStrategy}>
+                  <div className="space-y-0.5">
+                    {orderedCats.map((c) => (
+                      <SortableCategoryRow
+                        key={c.id}
+                        cat={c}
+                        active={!search && c.id === activeCat}
+                        count={items.filter((i) => i.category_id === c.id).length}
+                        onSelect={() => { setActiveCategoryId(c.id); setSearch('') }}
+                        onRename={() => {
                           const name = prompt(t(lang, 'categoryName'), c.name)
                           if (name?.trim()) renameCategory.mutate({ id: c.id, name: name.trim() })
                         }}
-                        className="text-xs text-gray-400 hover:text-gray-700"
-                      >
-                        ✎
-                      </button>
-                      <button
-                        onClick={() => confirm(t(lang, 'confirmDelete')) && removeCategory.mutate(c.id)}
-                        className="text-xs text-gray-400 hover:text-red-500"
-                      >
-                        ✕
-                      </button>
-                    </div>
+                        onDelete={() => confirm(t(lang, 'confirmDelete')) && removeCategory.mutate(c.id)}
+                      />
+                    ))}
                   </div>
-                ))}
-              </div>
+                </SortableContext>
+              </DndContext>
             </div>
 
             {/* Все товары */}
@@ -211,28 +263,31 @@ export default function MenuPage() {
                 {t(lang, 'addItem')}
               </button>
 
-              <div className="space-y-0.5">
-                {listItems.map((i) => (
-                  <button
-                    key={i.id}
-                    onClick={() => selectItem(i.id)}
-                    className={`w-full flex items-center gap-2.5 px-2 py-1.5 rounded-xl transition-all text-start ${
-                      i.id === selectedItemId ? 'bg-gray-100' : 'hover:bg-gray-50'
-                    } ${!i.is_available ? 'opacity-40' : ''}`}
-                  >
-                    <ItemImage item={i} size="mini" />
-                    <span className="flex-1 min-w-0">
-                      <span className="block text-sm font-semibold text-gray-900 truncate leading-tight">
-                        {i.is_favorite && <span className="text-amber-400">★ </span>}
-                        {i.name}
-                      </span>
-                      <span className="block text-xs text-gray-400 tabular-nums">
-                        {formatMoney(i.price, lang)}
-                      </span>
-                    </span>
-                  </button>
-                ))}
-              </div>
+              {searching ? (
+                <div className="space-y-0.5">
+                  {listItems.map((i) => (
+                    <ItemRow
+                      key={i.id} item={i} lang={lang}
+                      selected={i.id === selectedItemId}
+                      onSelect={() => selectItem(i.id)}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                  <SortableContext items={orderedItems.map((i) => i.id)} strategy={verticalListSortingStrategy}>
+                    <div className="space-y-0.5">
+                      {orderedItems.map((i) => (
+                        <SortableItemRow
+                          key={i.id} item={i} lang={lang}
+                          selected={i.id === selectedItemId}
+                          onSelect={() => selectItem(i.id)}
+                        />
+                      ))}
+                    </div>
+                  </SortableContext>
+                </DndContext>
+              )}
             </div>
           </div>
         )}
@@ -264,6 +319,112 @@ export default function MenuPage() {
           {tab === 'stations' && <StationsTab />}
         </main>
       )}
+    </div>
+  )
+}
+
+// ── Строка товара в списке каталога ─────────────────────────
+interface RowProps {
+  item: MenuItem
+  lang: 'ru' | 'he'
+  selected: boolean
+  onSelect: () => void
+  handle?: React.ReactNode
+}
+
+function ItemRow({ item, lang, selected, onSelect, handle }: RowProps) {
+  return (
+    <div
+      className={`w-full flex items-center gap-1.5 px-2 py-1.5 rounded-xl transition-all ${
+        selected ? 'bg-gray-100' : 'hover:bg-gray-50'
+      } ${!item.is_available ? 'opacity-40' : ''}`}
+    >
+      {handle}
+      <button onClick={onSelect} className="flex-1 min-w-0 flex items-center gap-2.5 text-start">
+        <ItemImage item={item} size="mini" />
+        <span className="flex-1 min-w-0">
+          <span className="block text-sm font-semibold text-gray-900 truncate leading-tight">
+            {item.is_favorite && <span className="text-amber-400">★ </span>}
+            {item.name}
+          </span>
+          <span className="block text-xs text-gray-400 tabular-nums">{formatMoney(item.price, lang)}</span>
+        </span>
+      </button>
+    </div>
+  )
+}
+
+// ── Строка категории (перетаскиваемая) ──────────────────────
+interface CatRowProps {
+  cat: MenuCategory
+  active: boolean
+  count: number
+  onSelect: () => void
+  onRename: () => void
+  onDelete: () => void
+}
+
+function SortableCategoryRow({ cat, active, count, onSelect, onRename, onDelete }: CatRowProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: cat.id })
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    zIndex: isDragging ? 10 : undefined,
+    position: 'relative',
+  }
+  return (
+    <div ref={setNodeRef} style={style} className="group relative flex items-center">
+      <button
+        {...attributes}
+        {...listeners}
+        className="shrink-0 text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing touch-none px-0.5"
+        aria-label="drag"
+      >
+        ⠿
+      </button>
+      <button
+        onClick={onSelect}
+        className={`flex-1 min-w-0 flex items-center justify-between px-3 py-2 rounded-xl text-sm font-semibold transition-all ${
+          active ? 'bg-gray-100 text-gray-900' : 'text-gray-500 hover:bg-gray-50'
+        }`}
+      >
+        <span className="truncate">
+          {cat.icon && <span className="me-1.5">{cat.icon}</span>}
+          {cat.name}
+        </span>
+        <span className="text-xs text-gray-300 group-hover:hidden">{count}</span>
+      </button>
+      <div className="absolute top-1/2 -translate-y-1/2 end-2 hidden group-hover:flex gap-1 bg-inherit">
+        <button onClick={onRename} className="text-xs text-gray-400 hover:text-gray-700">✎</button>
+        <button onClick={onDelete} className="text-xs text-gray-400 hover:text-red-500">✕</button>
+      </div>
+    </div>
+  )
+}
+
+function SortableItemRow(props: RowProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: props.item.id })
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    zIndex: isDragging ? 10 : undefined,
+    position: 'relative',
+  }
+  const handle = (
+    <button
+      {...attributes}
+      {...listeners}
+      className="shrink-0 text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing touch-none px-0.5"
+      aria-label="drag"
+    >
+      ⠿
+    </button>
+  )
+  return (
+    <div ref={setNodeRef} style={style}>
+      <ItemRow {...props} handle={handle} />
     </div>
   )
 }

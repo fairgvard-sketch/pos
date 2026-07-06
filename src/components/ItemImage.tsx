@@ -17,16 +17,19 @@ function tileTone(name: string): string {
 }
 
 const SIZES = {
-  card: 'w-full aspect-[4/3] rounded-xl text-3xl',
+  card: 'w-full aspect-square rounded-xl text-3xl',
   line: 'w-10 h-10 rounded-lg text-base',
   mini: 'w-8 h-8 rounded-lg text-sm',
-  hero: 'w-full aspect-[4/3] rounded-2xl text-5xl',
+  hero: 'w-full aspect-square rounded-2xl text-5xl',
 } as const
+
+// Крупные превью (карточка/герой) — фото целиком (contain); мелкие — заполняют (cover)
+const FIT = { card: 'object-contain', hero: 'object-contain', line: 'object-cover', mini: 'object-cover' } as const
 
 export default function ItemImage({ item, size }: { item: Pick<MenuItem, 'name' | 'image_url'>; size: keyof typeof SIZES }) {
   const cls = SIZES[size]
   if (item.image_url) {
-    return <img src={item.image_url} alt="" className={`${cls} object-cover`} />
+    return <img src={item.image_url} alt="" className={`${cls} ${FIT[size]}`} />
   }
   return (
     <div className={`${cls} ${tileTone(item.name)} flex items-center justify-center font-black select-none shrink-0`}>

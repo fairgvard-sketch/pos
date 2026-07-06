@@ -14,6 +14,7 @@ interface Tile {
 const TILES: Tile[] = [
   { key: 'sell', path: '/sell', ready: true },
   { key: 'queue', path: '/queue', ready: false },
+  { key: 'shift', path: '/shift', ready: true },
   { key: 'menu', path: '/menu', ready: true, minRole: 'manager' },
   { key: 'reports', path: '/reports', ready: false, minRole: 'manager' },
   { key: 'settings', path: '/settings', ready: false, minRole: 'manager' },

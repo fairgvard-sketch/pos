@@ -41,6 +41,16 @@ export async function deleteCategory(id: string) {
   if (error) throw error
 }
 
+/** Новый порядок категорий: массив id в желаемой последовательности → sort_order = индекс */
+export async function reorderCategories(orderedIds: string[]) {
+  const updates = orderedIds.map((id, i) =>
+    supabase.from('menu_categories').update({ sort_order: i }).eq('id', id)
+  )
+  const results = await Promise.all(updates)
+  const failed = results.find((r) => r.error)
+  if (failed?.error) throw failed.error
+}
+
 // ── Товары ───────────────────────────────────────────────
 
 export async function fetchItems(): Promise<MenuItem[]> {
@@ -165,6 +175,16 @@ async function syncItemRelations(itemId: string, input: ItemInput, orgId: string
     )
     if (error) throw error
   }
+}
+
+/** Новый порядок товаров: массив id в желаемой последовательности → sort_order = индекс */
+export async function reorderItems(orderedIds: string[]) {
+  const updates = orderedIds.map((id, i) =>
+    supabase.from('menu_items').update({ sort_order: i }).eq('id', id)
+  )
+  const results = await Promise.all(updates)
+  const failed = results.find((r) => r.error)
+  if (failed?.error) throw failed.error
 }
 
 export async function toggleItemAvailability(id: string, isAvailable: boolean) {

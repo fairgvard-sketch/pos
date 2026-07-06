@@ -2,7 +2,8 @@ import { useMemo, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { fetchCategories, fetchItems, fetchModifierGroups } from '../menu/api'
-import { placeOrder } from './api'
+import { placeOrder, payOrder, type PaymentInput } from './api'
+import { fetchCurrentShift } from '../shift/api'
 import { useCartStore, cartTotal, lineUnitPrice, type CartLine, type CartMod } from '../../store/cartStore'
 import { useAuthStore } from '../../store/authStore'
 import { useLangStore } from '../../store/langStore'
@@ -10,6 +11,8 @@ import { t } from '../../lib/i18n'
 import { formatMoney } from '../../lib/money'
 import type { MenuItem, ModifierGroup } from '../../types'
 import ItemPicker from './ItemPicker'
+import PaymentSheet from './PaymentSheet'
+import ShiftGate from '../shift/ShiftGate'
 import AppSidebar from '../../components/AppSidebar'
 import ItemImage from '../../components/ItemImage'
 
@@ -39,6 +42,7 @@ export default function SellPage() {
   const staff = useAuthStore((s) => s.staff)
   const qc = useQueryClient()
 
+  const { data: shift, isLoading: shiftLoading } = useQuery({ queryKey: ['current_shift'], queryFn: fetchCurrentShift })
   const { data: categories = [] } = useQuery({ queryKey: ['menu_categories'], queryFn: fetchCategories })
   const { data: items = [] } = useQuery({ queryKey: ['menu_items'], queryFn: fetchItems })
   const { data: allGroups = [] } = useQuery({ queryKey: ['modifier_groups'], queryFn: fetchModifierGroups })
@@ -51,9 +55,12 @@ export default function SellPage() {
   const [picker, setPicker] = useState<{ item: MenuItem; line: CartLine | null } | null>(null)
   const [placedNumber, setPlacedNumber] = useState<number | null>(null)
   const [clientUuid, setClientUuid] = useState(() => crypto.randomUUID())
+  // Заказ, ожидающий оплаты (после place, до pay)
+  const [payingOrder, setPayingOrder] = useState<{ orderId: string; dailyNumber: number; total: number } | null>(null)
 
-  // Стартовая вкладка: избранное, если оно есть
-  const currentCat = activeCat ?? (hasFavorites ? 'fav' : 'all')
+  // Стартовая вкладка — первая категория по списку (иначе всё)
+  const firstCat = categories.find((c) => c.is_active)?.id
+  const currentCat = activeCat ?? firstCat ?? 'all'
 
   const visibleItems = useMemo(() => {
     let list = items.filter((i) => i.is_available)
@@ -82,13 +89,26 @@ export default function SellPage() {
     cart.addLine(defaultConfig(item, groups))
   }
 
+  // Шаг 1: создать заказ → открыть диалог оплаты
   const place = useMutation({
     mutationFn: () => placeOrder(clientUuid, staff!.id, cart.orderType, cart.customerName, cart.lines),
     onSuccess: (res) => {
-      setPlacedNumber(res.daily_number)
+      setPayingOrder({ orderId: res.order_id, dailyNumber: res.daily_number, total: res.total })
+    },
+    onError: (e) => toast.error(e.message),
+  })
+
+  // Шаг 2: принять оплату → показать номер, очистить корзину
+  const pay = useMutation({
+    mutationFn: (payments: PaymentInput[]) => payOrder(payingOrder!.orderId, payments),
+    onSuccess: () => {
+      const num = payingOrder!.dailyNumber
+      setPayingOrder(null)
+      setPlacedNumber(num)
       cart.clear()
       setClientUuid(crypto.randomUUID())
       qc.invalidateQueries({ queryKey: ['orders'] })
+      qc.invalidateQueries({ queryKey: ['current_shift'] })
       setTimeout(() => setPlacedNumber(null), 2500)
     },
     onError: (e) => toast.error(e.message),
@@ -99,6 +119,11 @@ export default function SellPage() {
   const vatIncluded = Math.round((total * 18) / 118)
 
   if (!staff) return null
+
+  // Нет открытой смены — не пускаем к продажам
+  if (!shiftLoading && !shift) {
+    return <ShiftGate />
+  }
 
   return (
     <div dir={isRtl ? 'rtl' : 'ltr'} className="h-screen bg-[#eceef1] flex gap-3 p-3 overflow-hidden">
@@ -122,9 +147,6 @@ export default function SellPage() {
                 ★ {t(lang, 'favorites')}
               </Chip>
             )}
-            <Chip active={!search && currentCat === 'all'} onClick={() => { setSearch(''); setActiveCat('all') }}>
-              {t(lang, 'all')}
-            </Chip>
             {categories.filter((c) => c.is_active).map((c) => (
               <Chip key={c.id} active={!search && currentCat === c.id} onClick={() => { setSearch(''); setActiveCat(c.id) }}>
                 {c.name}
@@ -164,7 +186,7 @@ export default function SellPage() {
       </main>
 
       {/* ── Заказ ───────────────────────────────────── */}
-      <aside className="w-[340px] shrink-0 bg-white rounded-3xl flex flex-col overflow-hidden">
+      <aside className="w-[400px] shrink-0 bg-white rounded-3xl flex flex-col overflow-hidden">
         <div className="p-4 pb-3 shrink-0">
           <h2 className="text-lg font-black text-gray-900 mb-3">{t(lang, 'newOrderTitle')}</h2>
           <div className="grid grid-cols-2 gap-1 bg-gray-50 border border-gray-100 rounded-xl p-0.5 mb-2.5">
@@ -214,15 +236,19 @@ export default function SellPage() {
                       </span>
                     )}
                   </button>
-                  <span className="font-bold text-sm text-gray-900 tabular-nums shrink-0">
-                    {formatMoney(lineUnitPrice(l) * l.qty, lang)}
-                  </span>
-                </div>
-                <div className="flex items-center gap-1 mt-2 ps-[50px]">
-                  <Stepper onClick={() => cart.updateQty(l.key, l.qty - 1)}>−</Stepper>
-                  <span className="w-8 text-center font-bold text-sm tabular-nums">{l.qty}</span>
-                  <Stepper onClick={() => cart.updateQty(l.key, l.qty + 1)}>+</Stepper>
-                  <button onClick={() => cart.removeLine(l.key)} className="ms-auto text-gray-300 hover:text-red-500 px-2">✕</button>
+                  <div className="flex flex-col items-end gap-1.5 shrink-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-bold text-sm text-gray-900 tabular-nums">
+                        {formatMoney(lineUnitPrice(l) * l.qty, lang)}
+                      </span>
+                      <button onClick={() => cart.removeLine(l.key)} className="text-gray-300 hover:text-red-500">✕</button>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Stepper onClick={() => cart.updateQty(l.key, l.qty - 1)}>−</Stepper>
+                      <span className="w-6 text-center font-bold text-sm tabular-nums">{l.qty}</span>
+                      <Stepper onClick={() => cart.updateQty(l.key, l.qty + 1)}>+</Stepper>
+                    </div>
+                  </div>
                 </div>
               </div>
             )
@@ -252,6 +278,16 @@ export default function SellPage() {
           </button>
         </div>
       </aside>
+
+      {/* Оплата созданного заказа */}
+      {payingOrder && (
+        <PaymentSheet
+          total={payingOrder.total}
+          busy={pay.isPending}
+          onCancel={() => setPayingOrder(null)}
+          onPay={(payments) => pay.mutate(payments)}
+        />
+      )}
 
       {picker && (
         <ItemPicker
@@ -287,7 +323,7 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
     <button
       onClick={onClick}
       className={`px-4 py-2 rounded-xl text-sm font-semibold whitespace-nowrap transition-all active:scale-[0.96] ${
-        active ? 'bg-gray-900 text-white' : 'bg-gray-50 border border-gray-100 text-gray-500 hover:border-gray-300'
+        active ? 'bg-gray-200 text-gray-900' : 'text-gray-400 hover:bg-gray-100'
       }`}
     >
       {children}
@@ -299,7 +335,8 @@ function Stepper({ onClick, children }: { onClick: () => void; children: React.R
   return (
     <button
       onClick={onClick}
-      className="w-8 h-8 rounded-lg bg-gray-50 border border-gray-200 font-bold text-gray-600
+      className="w-7 h-7 rounded-lg bg-gray-50 border border-gray-200 text-sm font-bold text-gray-600
+                 flex items-center justify-center leading-none
                  hover:border-gray-400 active:scale-[0.9] transition-all"
     >
       {children}

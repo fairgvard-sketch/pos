@@ -35,3 +35,19 @@ export async function placeOrder(
   if (error) throw new Error(error.message)
   return data as PlaceOrderResult
 }
+
+export interface PaymentInput {
+  method: 'cash' | 'card'
+  amount: number
+  tendered?: number
+  change_due?: number
+}
+
+/** Принять оплату по заказу и перевести его в paid */
+export async function payOrder(orderId: string, payments: PaymentInput[]): Promise<void> {
+  const { error } = await supabase.rpc('pay_order', {
+    p_order_id: orderId,
+    p_payments: payments,
+  })
+  if (error) throw new Error(error.message)
+}

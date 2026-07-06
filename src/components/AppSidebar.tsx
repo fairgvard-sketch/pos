@@ -6,7 +6,7 @@ import { t } from '../lib/i18n'
 import Icon from './Icon'
 import type { IconName } from './Icon'
 
-export type SidebarPage = 'sell' | 'queue' | 'menu' | 'analytics' | 'settings'
+export type SidebarPage = 'sell' | 'queue' | 'shift' | 'menu' | 'analytics' | 'settings'
 
 /** Общий сайдбар кассы: навигация, часы, сотрудник */
 export default function AppSidebar({ active }: { active: SidebarPage }) {
@@ -20,13 +20,15 @@ export default function AppSidebar({ active }: { active: SidebarPage }) {
 
   return (
     <aside className="w-52 shrink-0 bg-white rounded-3xl flex flex-col p-4">
-      <div className="px-2 pt-1 pb-5">
-        <span className="font-black text-gray-900 tracking-widest text-sm uppercase">Kassa</span>
+      <div className="px-2 pt-1 pb-5 text-center">
+        <div className="font-medium text-gray-900 tracking-[0.25em] text-lg leading-none uppercase">VANDAL</div>
+        <div className="text-[10px] font-semibold text-gray-400 tracking-[0.35em] uppercase mt-1">Coffee</div>
       </div>
 
       <nav className="space-y-1">
         <SideLink active={active === 'sell'} label={t(lang, 'sell')} iconName="orders" onClick={() => navigate('/sell')} />
         <SideLink active={active === 'queue'} label={t(lang, 'queue')} iconName="orders" onClick={() => navigate('/queue')} />
+        <SideLink active={active === 'shift'} label={t(lang, 'shift')} iconName="customers" onClick={() => navigate('/shift')} />
         {isManager && (
           <SideLink active={active === 'menu'} label={t(lang, 'menu')} iconName="menu" onClick={() => navigate('/menu')} />
         )}
