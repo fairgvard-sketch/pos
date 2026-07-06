@@ -3,6 +3,12 @@ import menuOutline from '../assets/icons/menu.svg?raw'
 import analyticsOutline from '../assets/icons/analytics.svg?raw'
 import settingsOutline from '../assets/icons/settings.svg?raw'
 import customersOutline from '../assets/icons/customers.svg?raw'
+import cashOutline from '../assets/icons/cash.svg?raw'
+import cardOutline from '../assets/icons/card.svg?raw'
+import customItemOutline from '../assets/icons/custom-item.svg?raw'
+import discountOutline from '../assets/icons/discount.svg?raw'
+import noteOutline from '../assets/icons/note.svg?raw'
+import refundOutline from '../assets/icons/refund.svg?raw'
 
 import ordersDark from '../assets/icons/active/orders-dark.svg?raw'
 import menuDark from '../assets/icons/active/menu-dark.svg?raw'
@@ -10,7 +16,9 @@ import analyticsDark from '../assets/icons/active/analytics-dark.svg?raw'
 import settingsDark from '../assets/icons/active/settings-dark.svg?raw'
 import customersDark from '../assets/icons/active/customers-dark.svg?raw'
 
-export type IconName = 'orders' | 'menu' | 'analytics' | 'settings' | 'customers'
+export type IconName =
+  | 'orders' | 'menu' | 'analytics' | 'settings' | 'customers'
+  | 'cash' | 'card' | 'customItem' | 'discount' | 'note' | 'refund'
 
 const outline: Record<IconName, string> = {
   orders: ordersOutline,
@@ -18,9 +26,16 @@ const outline: Record<IconName, string> = {
   analytics: analyticsOutline,
   settings: settingsOutline,
   customers: customersOutline,
+  cash: cashOutline,
+  card: cardOutline,
+  customItem: customItemOutline,
+  discount: discountOutline,
+  note: noteOutline,
+  refund: refundOutline,
 }
 
-const active: Record<IconName, string> = {
+// Тёмный (активный) вариант есть не у всех — падаем на outline
+const active: Partial<Record<IconName, string>> = {
   orders: ordersDark,
   menu: menuDark,
   analytics: analyticsDark,
@@ -36,7 +51,7 @@ interface Props {
 }
 
 export default function Icon({ name, isActive = false, size = 20, className = '' }: Props) {
-  const raw = isActive ? active[name] : outline[name]
+  const raw = (isActive && active[name]) || outline[name]
   // Заменяем width/height на нужный размер
   const svg = raw
     .replace(/width="24"/, `width="${size}"`)

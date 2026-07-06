@@ -148,6 +148,12 @@ export const translations = {
     confirmPayment: 'Оплатить',
     toPay: 'К оплате',
 
+    // Действия кассы (пока заглушки)
+    customItem: 'Свободная позиция',
+    discount: 'Скидка',
+    note: 'Заметка',
+    refund: 'Возврат',
+
     // Смены
     shift: 'Смена',
     openShift: 'Открыть смену',
@@ -174,6 +180,16 @@ export const translations = {
     exactMatch: 'Сходится',
     openedAt: 'Открыта',
     confirmClose: 'Закрыть смену? Это действие завершит рабочий сеанс.',
+
+    // Очередь бариста
+    queueEmpty: 'Очередь пуста',
+    queueEmptyHint: 'Оплаченные заказы появятся здесь',
+    ready: 'Готово',
+    allReady: 'Всё готово',
+    waitingCount: 'В очереди',
+    ago: 'назад',
+    justNow: 'только что',
+    minShort: 'мин',
   },
   he: {
     // Общее
@@ -322,6 +338,12 @@ export const translations = {
     confirmPayment: 'לתשלום',
     toPay: 'לתשלום',
 
+    // Действия кассы (пока заглушки)
+    customItem: 'פריט חופשי',
+    discount: 'הנחה',
+    note: 'הערה',
+    refund: 'החזר',
+
     // Смены
     shift: 'משמרת',
     openShift: 'פתיחת משמרת',
@@ -348,6 +370,16 @@ export const translations = {
     exactMatch: 'תואם',
     openedAt: 'נפתחה',
     confirmClose: 'לסגור משמרת? פעולה זו תסיים את סבב העבודה.',
+
+    // Очередь бариста
+    queueEmpty: 'התור ריק',
+    queueEmptyHint: 'הזמנות ששולמו יופיעו כאן',
+    ready: 'מוכן',
+    allReady: 'הכל מוכן',
+    waitingCount: 'בתור',
+    ago: 'לפני',
+    justNow: 'עכשיו',
+    minShort: 'דק׳',
   },
 } as const
 

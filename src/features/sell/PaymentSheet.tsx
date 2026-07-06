@@ -3,9 +3,11 @@ import { useLangStore } from '../../store/langStore'
 import { t } from '../../lib/i18n'
 import { formatMoney, parseMoney } from '../../lib/money'
 import type { PaymentInput } from './api'
+import Icon from '../../components/Icon'
 
 interface Props {
   total: number
+  startMode?: 'choose' | 'cash'
   onCancel: () => void
   onPay: (payments: PaymentInput[]) => void
   busy: boolean
@@ -24,9 +26,9 @@ function quickCashOptions(total: number): number[] {
   return [...opts].sort((a, b) => a - b).slice(0, 5)
 }
 
-export default function PaymentSheet({ total, onCancel, onPay, busy }: Props) {
+export default function PaymentSheet({ total, startMode = 'choose', onCancel, onPay, busy }: Props) {
   const lang = useLangStore((s) => s.lang)
-  const [mode, setMode] = useState<'choose' | 'cash'>('choose')
+  const [mode, setMode] = useState<'choose' | 'cash'>(startMode)
   const [tenderedStr, setTenderedStr] = useState('')
 
   const quick = useMemo(() => quickCashOptions(total), [total])
@@ -59,17 +61,17 @@ export default function PaymentSheet({ total, onCancel, onPay, busy }: Props) {
             <button
               onClick={() => setMode('cash')}
               disabled={busy}
-              className="rounded-2xl border-2 border-gray-200 hover:border-gray-900 py-8 flex flex-col items-center gap-2 transition-all active:scale-[0.97]"
+              className="rounded-2xl border-2 border-gray-200 hover:border-gray-900 py-8 flex flex-col items-center gap-3 transition-all active:scale-[0.97]"
             >
-              <span className="text-3xl">💵</span>
+              <Icon name="cash" size={32} />
               <span className="font-bold text-gray-900">{t(lang, 'payCash')}</span>
             </button>
             <button
               onClick={payCard}
               disabled={busy}
-              className="rounded-2xl border-2 border-gray-200 hover:border-gray-900 py-8 flex flex-col items-center gap-2 transition-all active:scale-[0.97]"
+              className="rounded-2xl border-2 border-gray-200 hover:border-gray-900 py-8 flex flex-col items-center gap-3 transition-all active:scale-[0.97]"
             >
-              <span className="text-3xl">💳</span>
+              <Icon name="card" size={32} />
               <span className="font-bold text-gray-900">{t(lang, 'payCard')}</span>
             </button>
           </div>

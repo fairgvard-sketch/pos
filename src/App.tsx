@@ -10,6 +10,7 @@ import HomePage from './features/home/HomePage'
 import MenuPage from './features/menu/MenuPage'
 import SellPage from './features/sell/SellPage'
 import ShiftPage from './features/shift/ShiftPage'
+import QueuePage from './features/queue/QueuePage'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -63,6 +64,15 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <SellPage />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/queue"
+            element={
+              <ProtectedRoute>
+                <QueuePage />
               </ProtectedRoute>
             }
           />

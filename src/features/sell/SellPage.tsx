@@ -15,6 +15,7 @@ import PaymentSheet from './PaymentSheet'
 import ShiftGate from '../shift/ShiftGate'
 import AppSidebar from '../../components/AppSidebar'
 import ItemImage from '../../components/ItemImage'
+import Icon from '../../components/Icon'
 
 /** Дефолтная конфигурация товара — для добавления в 1 тап */
 function defaultConfig(item: MenuItem, groups: ModifierGroup[]) {
@@ -55,8 +56,11 @@ export default function SellPage() {
   const [picker, setPicker] = useState<{ item: MenuItem; line: CartLine | null } | null>(null)
   const [placedNumber, setPlacedNumber] = useState<number | null>(null)
   const [clientUuid, setClientUuid] = useState(() => crypto.randomUUID())
-  // Заказ, ожидающий оплаты (после place, до pay)
-  const [payingOrder, setPayingOrder] = useState<{ orderId: string; dailyNumber: number; total: number } | null>(null)
+  // Заказ, ожидающий оплаты (после place, до pay).
+  // intent: 'card' — оплатить сразу картой; 'cash'/'choose' — открыть диалог
+  const [payingOrder, setPayingOrder] = useState<
+    { orderId: string; dailyNumber: number; total: number; intent: 'cash' | 'card' | 'choose' } | null
+  >(null)
 
   // Стартовая вкладка — первая категория по списку (иначе всё)
   const firstCat = categories.find((c) => c.is_active)?.id
@@ -89,30 +93,41 @@ export default function SellPage() {
     cart.addLine(defaultConfig(item, groups))
   }
 
-  // Шаг 1: создать заказ → открыть диалог оплаты
+  function finishPaid(num: number) {
+    setPayingOrder(null)
+    setPlacedNumber(num)
+    cart.clear()
+    setClientUuid(crypto.randomUUID())
+    qc.invalidateQueries({ queryKey: ['orders'] })
+    qc.invalidateQueries({ queryKey: ['current_shift'] })
+    setTimeout(() => setPlacedNumber(null), 2500)
+  }
+
+  // Шаг 1: создать заказ. intent решает, что дальше:
+  //   card   → сразу оплатить картой
+  //   cash   → открыть диалог с расчётом сдачи
+  //   choose → открыть диалог выбора способа
   const place = useMutation({
-    mutationFn: () => placeOrder(clientUuid, staff!.id, cart.orderType, cart.customerName, cart.lines),
+    mutationFn: (intent: 'cash' | 'card' | 'choose') =>
+      placeOrder(clientUuid, staff!.id, cart.orderType, cart.customerName, cart.lines).then((r) => ({ ...r, intent })),
     onSuccess: (res) => {
-      setPayingOrder({ orderId: res.order_id, dailyNumber: res.daily_number, total: res.total })
+      if (res.intent === 'card') {
+        payWithClose({ orderId: res.order_id, dailyNumber: res.daily_number, payments: [{ method: 'card', amount: res.total }] })
+      } else {
+        setPayingOrder({ orderId: res.order_id, dailyNumber: res.daily_number, total: res.total, intent: res.intent })
+      }
     },
     onError: (e) => toast.error(e.message),
   })
 
   // Шаг 2: принять оплату → показать номер, очистить корзину
   const pay = useMutation({
-    mutationFn: (payments: PaymentInput[]) => payOrder(payingOrder!.orderId, payments),
-    onSuccess: () => {
-      const num = payingOrder!.dailyNumber
-      setPayingOrder(null)
-      setPlacedNumber(num)
-      cart.clear()
-      setClientUuid(crypto.randomUUID())
-      qc.invalidateQueries({ queryKey: ['orders'] })
-      qc.invalidateQueries({ queryKey: ['current_shift'] })
-      setTimeout(() => setPlacedNumber(null), 2500)
-    },
+    mutationFn: (v: { orderId: string; dailyNumber: number; payments: PaymentInput[] }) =>
+      payOrder(v.orderId, v.payments),
+    onSuccess: (_r, v) => finishPaid(v.dailyNumber),
     onError: (e) => toast.error(e.message),
   })
+  const payWithClose = (v: { orderId: string; dailyNumber: number; payments: PaymentInput[] }) => pay.mutate(v)
 
   const total = cartTotal(cart.lines)
   // НДС включён в цену — показываем справочно (18% по умолчанию, снапшот считает сервер)
@@ -182,6 +197,14 @@ export default function SellPage() {
               ))}
             </div>
           )}
+        </div>
+
+        {/* Ряд действий (пока заглушки — функционал в следующих фазах) */}
+        <div className="shrink-0 border-t border-gray-100 px-5 pt-3 pb-5 flex gap-2 overflow-x-auto">
+          <ActionButton icon="customItem" label={t(lang, 'customItem')} lang={lang} />
+          <ActionButton icon="discount" label={t(lang, 'discount')} lang={lang} />
+          <ActionButton icon="note" label={t(lang, 'note')} lang={lang} />
+          <ActionButton icon="refund" label={t(lang, 'refund')} lang={lang} />
         </div>
       </main>
 
@@ -268,24 +291,48 @@ export default function SellPage() {
             <span className="font-bold text-gray-900">{t(lang, 'total')}</span>
             <span className="text-2xl font-black text-gray-900 tabular-nums">{formatMoney(total, lang)}</span>
           </div>
-          <button
-            onClick={() => place.mutate()}
-            disabled={cart.lines.length === 0 || place.isPending}
-            className="btn-primary w-full !py-4 !text-base !rounded-2xl mt-2"
-          >
-            {place.isPending ? t(lang, 'charging') : t(lang, 'charge')}
-            {cart.lines.length > 0 && <span className="tabular-nums ms-2">{formatMoney(total, lang)}</span>}
-          </button>
+          {(() => {
+            const disabled = cart.lines.length === 0 || place.isPending || pay.isPending
+            return (
+              <>
+                <button
+                  onClick={() => place.mutate('choose')}
+                  disabled={disabled}
+                  className="btn-primary w-full !py-4 !text-base !rounded-2xl mt-2 flex items-center justify-between !px-5"
+                >
+                  <span>{place.isPending ? t(lang, 'charging') : t(lang, 'charge')}</span>
+                  {cart.lines.length > 0 && <span className="tabular-nums">{formatMoney(total, lang)}</span>}
+                </button>
+                <div className="grid grid-cols-2 gap-2 mt-2">
+                  <button
+                    onClick={() => place.mutate('cash')}
+                    disabled={disabled}
+                    className="btn-secondary !py-3 !rounded-2xl flex items-center justify-center gap-2"
+                  >
+                    <Icon name="cash" size={18} /> {t(lang, 'payCash')}
+                  </button>
+                  <button
+                    onClick={() => place.mutate('card')}
+                    disabled={disabled}
+                    className="btn-secondary !py-3 !rounded-2xl flex items-center justify-center gap-2"
+                  >
+                    <Icon name="card" size={18} /> {t(lang, 'payCard')}
+                  </button>
+                </div>
+              </>
+            )
+          })()}
         </div>
       </aside>
 
-      {/* Оплата созданного заказа */}
+      {/* Оплата созданного заказа (наличные с расчётом сдачи или выбор способа) */}
       {payingOrder && (
         <PaymentSheet
           total={payingOrder.total}
+          startMode={payingOrder.intent === 'cash' ? 'cash' : 'choose'}
           busy={pay.isPending}
           onCancel={() => setPayingOrder(null)}
-          onPay={(payments) => pay.mutate(payments)}
+          onPay={(payments) => pay.mutate({ orderId: payingOrder.orderId, dailyNumber: payingOrder.dailyNumber, payments })}
         />
       )}
 
@@ -315,6 +362,19 @@ export default function SellPage() {
         </div>
       )}
     </div>
+  )
+}
+
+function ActionButton({ icon, label, lang }: { icon: 'customItem' | 'discount' | 'note' | 'refund'; label: string; lang: 'ru' | 'he' }) {
+  return (
+    <button
+      onClick={() => toast(`${label} — ${t(lang, 'comingSoon')}`)}
+      className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold
+                 text-gray-900 hover:border-gray-400 transition-all whitespace-nowrap active:scale-[0.97]"
+    >
+      <Icon name={icon} size={18} />
+      {label}
+    </button>
   )
 }
 
