@@ -193,9 +193,15 @@ function OrderCard({
       <div className={`flex items-center justify-between px-4 py-3 border-b ${theme.cardBorder}`}>
         <div className="flex items-baseline gap-2">
           <span className={`text-2xl font-black tabular-nums ${theme.number}`}>#{order.daily_number}</span>
-          <span className={`text-xs font-semibold uppercase tracking-wide ${theme.itemDetailIdle}`}>
-            {order.order_type === 'takeaway' ? t(lang, 'takeaway') : t(lang, 'here')}
-          </span>
+          {order.table_label ? (
+            <span className={`text-xs font-bold uppercase tracking-wide ${theme.number}`}>
+              {t(lang, 'tableLabel')} {order.table_label}
+            </span>
+          ) : (
+            <span className={`text-xs font-semibold uppercase tracking-wide ${theme.itemDetailIdle}`}>
+              {order.order_type === 'takeaway' ? t(lang, 'takeaway') : t(lang, 'here')}
+            </span>
+          )}
         </div>
         <span className={`text-xs tabular-nums ${theme.itemDetailIdle}`}>{waited}</span>
       </div>

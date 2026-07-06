@@ -16,6 +16,18 @@ export function formatMoney(agorot: Agorot, lang: Lang): string {
   })} ₪`
 }
 
+/** Список сумм → "10/12/14 ₪" (символ валюты один раз в конце) */
+export function formatMoneyList(agorotList: Agorot[], lang: Lang): string {
+  const locale = lang === 'he' ? 'he-IL' : 'ru-RU'
+  const nums = agorotList.map((a) =>
+    (a / 100).toLocaleString(locale, {
+      minimumFractionDigits: a % 100 === 0 ? 0 : 2,
+      maximumFractionDigits: 2,
+    })
+  )
+  return `${nums.join('/')} ₪`
+}
+
 /** Пользовательский ввод "12.50" → 1250 агорот */
 export function parseMoney(input: string): Agorot | null {
   const normalized = input.replace(',', '.').trim()

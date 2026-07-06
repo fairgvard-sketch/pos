@@ -1,17 +1,23 @@
 import { useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { fetchCategories, fetchItems, fetchModifierGroups } from '../menu/api'
 import { placeOrder, payOrder, type PaymentInput } from './api'
 import { fetchCurrentShift } from '../shift/api'
-import { useCartStore, cartTotal, lineUnitPrice, type CartLine, type CartMod } from '../../store/cartStore'
+import { fetchCurrentLocation } from '../auth/api'
+import { appendToOrder, voidTableOrder } from '../tables/api'
+import { useCartStore, cartSubtotal, cartTotal, discountAmount, lineUnitPrice, type CartLine, type CartMod } from '../../store/cartStore'
 import { useAuthStore } from '../../store/authStore'
 import { useLangStore } from '../../store/langStore'
 import { t } from '../../lib/i18n'
-import { formatMoney } from '../../lib/money'
+import { formatMoney, formatMoneyList } from '../../lib/money'
 import type { MenuItem, ModifierGroup } from '../../types'
 import ItemPicker from './ItemPicker'
 import PaymentSheet from './PaymentSheet'
+import DiscountSheet from './DiscountSheet'
+import PriceSheet from './PriceSheet'
+import TableSheet from './TableSheet'
 import ShiftGate from '../shift/ShiftGate'
 import AppSidebar from '../../components/AppSidebar'
 import ItemImage from '../../components/ItemImage'
@@ -34,6 +40,7 @@ function defaultConfig(item: MenuItem, groups: ModifierGroup[]) {
     basePrice: variant?.price ?? item.price,
     mods,
     notes: '',
+    priceOverride: null,
   }
 }
 
@@ -42,8 +49,12 @@ export default function SellPage() {
   const isRtl = lang === 'he'
   const staff = useAuthStore((s) => s.staff)
   const qc = useQueryClient()
+  const navigate = useNavigate()
 
   const { data: shift, isLoading: shiftLoading } = useQuery({ queryKey: ['current_shift'], queryFn: fetchCurrentShift })
+  const { data: location } = useQuery({ queryKey: ['current_location'], queryFn: fetchCurrentLocation })
+  // Столы показываем, если точка не в режиме чистой стойки
+  const showTable = location?.service_mode === 'counter_tables' || location?.service_mode === 'tables'
   const { data: categories = [] } = useQuery({ queryKey: ['menu_categories'], queryFn: fetchCategories })
   const { data: items = [] } = useQuery({ queryKey: ['menu_items'], queryFn: fetchItems })
   const { data: allGroups = [] } = useQuery({ queryKey: ['modifier_groups'], queryFn: fetchModifierGroups })
@@ -54,6 +65,11 @@ export default function SellPage() {
   const [activeCat, setActiveCat] = useState<string | 'all' | 'fav' | null>(null)
   const [search, setSearch] = useState('')
   const [picker, setPicker] = useState<{ item: MenuItem; line: CartLine | null } | null>(null)
+  const [showDiscount, setShowDiscount] = useState(false)
+  const [showCustom, setShowCustom] = useState(false)
+  const [showTableSheet, setShowTableSheet] = useState(false)
+  // Строка, у которой правим цену вручную (edit-режим PriceSheet)
+  const [editingPrice, setEditingPrice] = useState<CartLine | null>(null)
   const [placedNumber, setPlacedNumber] = useState<number | null>(null)
   const [clientUuid, setClientUuid] = useState(() => crypto.randomUUID())
   // Заказ, ожидающий оплаты (после place, до pay).
@@ -94,12 +110,19 @@ export default function SellPage() {
   }
 
   function finishPaid(num: number) {
+    const wasTable = !!cart.tableCtx
     setPayingOrder(null)
-    setPlacedNumber(num)
     cart.clear()
     setClientUuid(crypto.randomUUID())
     qc.invalidateQueries({ queryKey: ['orders'] })
     qc.invalidateQueries({ queryKey: ['current_shift'] })
+    qc.invalidateQueries({ queryKey: ['open_table_orders'] })
+    qc.invalidateQueries({ queryKey: ['queue'] })
+    if (wasTable) {
+      navigate('/hall')  // счёт стола закрыт — назад в зал
+      return
+    }
+    setPlacedNumber(num)
     setTimeout(() => setPlacedNumber(null), 2500)
   }
 
@@ -109,7 +132,7 @@ export default function SellPage() {
   //   choose → открыть диалог выбора способа
   const place = useMutation({
     mutationFn: (intent: 'cash' | 'card' | 'choose') =>
-      placeOrder(clientUuid, staff!.id, cart.orderType, cart.customerName, cart.lines).then((r) => ({ ...r, intent })),
+      placeOrder(clientUuid, staff!.id, cart.orderType, cart.customerName, cart.lines, cart.discount, cart.tableLabel).then((r) => ({ ...r, intent })),
     onSuccess: (res) => {
       if (res.intent === 'card') {
         payWithClose({ orderId: res.order_id, dailyNumber: res.daily_number, payments: [{ method: 'card', amount: res.total }] })
@@ -129,7 +152,50 @@ export default function SellPage() {
   })
   const payWithClose = (v: { orderId: string; dailyNumber: number; payments: PaymentInput[] }) => pay.mutate(v)
 
-  const total = cartTotal(cart.lines)
+  const tableCtx = cart.tableCtx
+
+  // Режим столов: сохранить дозаказ в открытый счёт (остаётся open) → назад в зал
+  const saveBill = useMutation({
+    mutationFn: () => appendToOrder(tableCtx!.orderId, staff!.id, cart.lines),
+    onSuccess: () => {
+      toast.success(t(lang, 'billSaved'))
+      cart.clear()
+      qc.invalidateQueries({ queryKey: ['open_table_orders'] })
+      qc.invalidateQueries({ queryKey: ['queue'] })
+      navigate('/hall')
+    },
+    onError: (e) => toast.error(e.message),
+  })
+
+  // Режим столов: добавить новые позиции (если есть) и открыть оплату всего счёта
+  const billToPay = useMutation({
+    mutationFn: async () => {
+      if (cart.lines.length > 0) {
+        const r = await appendToOrder(tableCtx!.orderId, staff!.id, cart.lines)
+        return r.total
+      }
+      return tableCtx!.existingTotal
+    },
+    onSuccess: (billTotal) => {
+      setPayingOrder({ orderId: tableCtx!.orderId, dailyNumber: 0, total: billTotal, intent: 'choose' })
+    },
+    onError: (e) => toast.error(e.message),
+  })
+
+  // Режим столов: отменить пустой/ошибочный счёт
+  const voidBill = useMutation({
+    mutationFn: () => voidTableOrder(tableCtx!.orderId),
+    onSuccess: () => {
+      cart.clear()
+      qc.invalidateQueries({ queryKey: ['open_table_orders'] })
+      navigate('/hall')
+    },
+    onError: (e) => toast.error(e.message),
+  })
+
+  const subtotal = cartSubtotal(cart.lines)
+  const discAmount = discountAmount(subtotal, cart.discount)
+  const total = cartTotal(cart.lines, cart.discount)
   // НДС включён в цену — показываем справочно (18% по умолчанию, снапшот считает сервер)
   const vatIncluded = Math.round((total * 18) / 118)
 
@@ -179,8 +245,8 @@ export default function SellPage() {
                 <button
                   key={item.id}
                   onClick={() => handleItemTap(item)}
-                  className="relative rounded-2xl border border-gray-100 p-3 text-start bg-white
-                             hover:border-gray-200 hover:shadow-[0_4px_16px_rgba(0,0,0,0.06)]
+                  className="relative rounded-2xl border border-gray-200 p-3 text-start bg-white
+                             hover:border-gray-300 hover:shadow-[0_4px_16px_rgba(0,0,0,0.06)]
                              transition-all duration-150 active:scale-[0.97]"
                 >
                   {item.is_favorite && (
@@ -188,56 +254,105 @@ export default function SellPage() {
                   )}
                   <ItemImage item={item} size="card" />
                   <div className="mt-2.5 font-semibold text-gray-900 text-sm leading-tight">{item.name}</div>
-                  <div className="mt-1 text-sm font-bold text-gray-500 tabular-nums">
-                    {item.item_variants && item.item_variants.length > 0
-                      ? formatMoney(Math.min(...item.item_variants.map((v) => v.price)), lang) + '+'
-                      : formatMoney(item.price, lang)}
-                  </div>
+                  {(() => {
+                    const priceLabel =
+                      item.item_variants && item.item_variants.length > 0
+                        ? formatMoneyList(
+                            item.item_variants
+                              .slice()
+                              .sort((a, b) => a.sort_order - b.sort_order)
+                              .map((v) => v.price),
+                            lang
+                          )
+                        : formatMoney(item.price, lang)
+                    return (
+                      <div
+                        className="mt-1 text-sm font-bold text-gray-500 tabular-nums truncate"
+                        title={priceLabel}
+                      >
+                        {priceLabel}
+                      </div>
+                    )
+                  })()}
                 </button>
               ))}
             </div>
           )}
         </div>
 
-        {/* Ряд действий (пока заглушки — функционал в следующих фазах) */}
+        {/* Ряд действий */}
         <div className="shrink-0 border-t border-gray-100 px-5 pt-3 pb-5 flex gap-2 overflow-x-auto">
-          <ActionButton icon="customItem" label={t(lang, 'customItem')} lang={lang} />
-          <ActionButton icon="discount" label={t(lang, 'discount')} lang={lang} />
-          <ActionButton icon="note" label={t(lang, 'note')} lang={lang} />
-          <ActionButton icon="refund" label={t(lang, 'refund')} lang={lang} />
+          <ActionButton icon="customItem" label={t(lang, 'customItem')} onClick={() => setShowCustom(true)} />
+          <ActionButton
+            icon="discount"
+            label={t(lang, 'discount')}
+            active={!!cart.discount}
+            onClick={() => setShowDiscount(true)}
+          />
+          <ActionButton icon="note" label={t(lang, 'note')} onClick={() => toast(`${t(lang, 'note')} — ${t(lang, 'comingSoon')}`)} />
+          <ActionButton icon="refund" label={t(lang, 'refund')} onClick={() => toast(`${t(lang, 'refund')} — ${t(lang, 'comingSoon')}`)} />
         </div>
       </main>
 
       {/* ── Заказ ───────────────────────────────────── */}
       <aside className="w-[400px] shrink-0 bg-white rounded-3xl flex flex-col overflow-hidden">
         <div className="p-4 pb-3 shrink-0">
-          <h2 className="text-lg font-black text-gray-900 mb-3">{t(lang, 'newOrderTitle')}</h2>
-          <div className="grid grid-cols-2 gap-1 bg-gray-50 border border-gray-100 rounded-xl p-0.5 mb-2.5">
-            {(['here', 'takeaway'] as const).map((tp) => (
-              <button
-                key={tp}
-                onClick={() => cart.setOrderType(tp)}
-                className={`py-2 rounded-lg text-sm font-semibold transition-all ${
-                  cart.orderType === tp
-                    ? 'bg-white text-gray-900 shadow-[0_1px_2px_rgba(0,0,0,0.08)]'
-                    : 'text-gray-400 hover:text-gray-600'
-                }`}
-              >
-                {t(lang, tp)}
-              </button>
-            ))}
-          </div>
-          <input
-            className="input !py-2"
-            placeholder={t(lang, 'customerNameOpt')}
-            value={cart.customerName}
-            onChange={(e) => cart.setCustomerName(e.target.value)}
-          />
+          {tableCtx ? (
+            /* Режим столов: работаем со счётом конкретного стола */
+            <div className="flex items-baseline justify-between mb-3">
+              <h2 className="text-lg font-black text-gray-900">
+                {t(lang, 'tableLabel')} {tableCtx.tableLabel}
+                <span className="text-gray-400 font-semibold"> · {t(lang, 'openBill')}</span>
+              </h2>
+              {tableCtx.existingTotal > 0 && (
+                <span className="text-sm font-bold text-gray-500 tabular-nums">
+                  {formatMoney(tableCtx.existingTotal, lang)}
+                </span>
+              )}
+            </div>
+          ) : (
+            <>
+              <h2 className="text-lg font-black text-gray-900 mb-3">{t(lang, 'newOrderTitle')}</h2>
+              <div className="grid grid-cols-2 gap-1 bg-gray-50 border border-gray-100 rounded-xl p-0.5 mb-2.5">
+                {(['here', 'takeaway'] as const).map((tp) => (
+                  <button
+                    key={tp}
+                    onClick={() => cart.setOrderType(tp)}
+                    className={`py-2 rounded-lg text-sm font-semibold transition-all ${
+                      cart.orderType === tp
+                        ? 'bg-white text-gray-900 shadow-[0_1px_2px_rgba(0,0,0,0.08)]'
+                        : 'text-gray-400 hover:text-gray-600'
+                    }`}
+                  >
+                    {t(lang, tp)}
+                  </button>
+                ))}
+              </div>
+              <div className={showTable ? 'grid grid-cols-2 gap-2' : ''}>
+                <input
+                  className="input !py-2"
+                  placeholder={t(lang, 'customerNameOpt')}
+                  value={cart.customerName}
+                  onChange={(e) => cart.setCustomerName(e.target.value)}
+                />
+                {showTable && (
+                  <button
+                    onClick={() => setShowTableSheet(true)}
+                    className={`input !py-2 text-start ${cart.tableLabel ? 'text-gray-900 font-semibold' : 'text-gray-400'}`}
+                  >
+                    {cart.tableLabel ? `${t(lang, 'tableLabel')} ${cart.tableLabel}` : t(lang, 'tablePlaceholder')}
+                  </button>
+                )}
+              </div>
+            </>
+          )}
         </div>
 
         <div className="flex-1 overflow-y-auto px-4 space-y-2">
           {cart.lines.length === 0 && (
-            <p className="text-gray-300 text-sm text-center pt-16">{t(lang, 'cartEmptyHint')}</p>
+            <p className="text-gray-300 text-sm text-center pt-16">
+              {t(lang, tableCtx ? 'addToBill' : 'cartEmptyHint')}
+            </p>
           )}
           {cart.lines.map((l) => {
             const item = items.find((i) => i.id === l.itemId)
@@ -247,23 +362,34 @@ export default function SellPage() {
                   {item && <ItemImage item={item} size="line" />}
                   <button
                     className="text-start flex-1 min-w-0"
-                    onClick={() => item && setPicker({ item, line: l })}
+                    onClick={() => (item ? setPicker({ item, line: l }) : setEditingPrice(l))}
                   >
                     <span className="font-semibold text-gray-900 text-sm block leading-tight">
                       {l.name}
                       {l.variantName && <span className="text-gray-500 font-medium"> · {l.variantName}</span>}
                     </span>
-                    {(l.mods.length > 0 || l.notes) && (
+                    {(l.mods.length > 0 || l.notes || l.priceOverride !== null) && (
                       <span className="block text-xs text-gray-500 mt-0.5 truncate">
-                        {[...l.mods.map((m) => m.name), l.notes].filter(Boolean).join(' · ')}
+                        {[
+                          ...l.mods.map((m) => m.name),
+                          l.notes,
+                          l.priceOverride !== null ? t(lang, 'priceOverridden') : '',
+                        ]
+                          .filter(Boolean)
+                          .join(' · ')}
                       </span>
                     )}
                   </button>
                   <div className="flex flex-col items-end gap-1.5 shrink-0">
                     <div className="flex items-center gap-1.5">
-                      <span className="font-bold text-sm text-gray-900 tabular-nums">
+                      <button
+                        onClick={() => setEditingPrice(l)}
+                        className={`font-bold text-sm tabular-nums ${
+                          l.priceOverride !== null ? 'text-gray-900 underline decoration-dotted underline-offset-2' : 'text-gray-900'
+                        }`}
+                      >
                         {formatMoney(lineUnitPrice(l) * l.qty, lang)}
-                      </span>
+                      </button>
                       <button onClick={() => cart.removeLine(l.key)} className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-red-500">✕</button>
                     </div>
                     <div className="flex items-center gap-1">
@@ -279,6 +405,25 @@ export default function SellPage() {
         </div>
 
         <div className="p-4 pt-3 shrink-0 border-t border-gray-100 space-y-1.5">
+          {cart.discount && discAmount > 0 && (
+            <>
+              <div className="flex justify-between text-sm text-gray-500">
+                <span>{t(lang, 'subtotal')}</span>
+                <span className="tabular-nums">{formatMoney(subtotal, lang)}</span>
+              </div>
+              <button
+                onClick={() => setShowDiscount(true)}
+                className="flex justify-between w-full text-sm text-emerald-600 font-medium"
+              >
+                <span>
+                  {t(lang, 'discountLabel')}
+                  {cart.discount.type === 'percent' && ` ${cart.discount.value}%`}
+                  {cart.discount.reason && ` · ${cart.discount.reason}`}
+                </span>
+                <span className="tabular-nums">−{formatMoney(discAmount, lang)}</span>
+              </button>
+            </>
+          )}
           <div className="flex justify-between text-sm text-gray-500">
             <span>{t(lang, 'vatIncl')} 18%</span>
             <span className="tabular-nums">{formatMoney(vatIncluded, lang)}</span>
@@ -289,37 +434,74 @@ export default function SellPage() {
               {formatMoney(total, lang)}
             </span>
           </div>
-          {(() => {
-            const disabled = cart.lines.length === 0 || place.isPending || pay.isPending
-            return (
-              <>
-                <button
-                  onClick={() => place.mutate('choose')}
-                  disabled={disabled}
-                  className="btn-primary w-full !py-4 !text-base !rounded-2xl mt-2 flex items-center justify-between !px-5"
-                >
-                  <span>{place.isPending ? t(lang, 'charging') : t(lang, 'charge')}</span>
-                  {cart.lines.length > 0 && <span className="tabular-nums">{formatMoney(total, lang)}</span>}
-                </button>
-                <div className="grid grid-cols-2 gap-2 mt-2">
+          {tableCtx ? (
+            /* Столы: сохранить дозаказ ИЛИ оплатить весь счёт */
+            (() => {
+              const busy = saveBill.isPending || billToPay.isPending || pay.isPending
+              const hasNew = cart.lines.length > 0
+              const emptyBill = tableCtx.existingTotal === 0 && !hasNew
+              return (
+                <>
                   <button
-                    onClick={() => place.mutate('cash')}
-                    disabled={disabled}
-                    className="btn-secondary min-h-[52px] !rounded-2xl flex items-center justify-center gap-2"
+                    onClick={() => saveBill.mutate()}
+                    disabled={busy || !hasNew}
+                    className="btn-primary w-full !py-4 !text-base !rounded-2xl mt-2 flex items-center justify-between !px-5"
                   >
-                    <Icon name="cash" size={18} /> {t(lang, 'payCash')}
+                    <span>{t(lang, 'saveBill')}</span>
+                    {hasNew && <span className="tabular-nums">{formatMoney(total, lang)}</span>}
                   </button>
+                  <div className="grid grid-cols-2 gap-2 mt-2">
+                    <button
+                      onClick={() => (emptyBill ? voidBill.mutate() : billToPay.mutate())}
+                      disabled={busy}
+                      className="btn-secondary min-h-[52px] !rounded-2xl flex items-center justify-center gap-2"
+                    >
+                      {emptyBill ? t(lang, 'voidBill') : t(lang, 'payBill')}
+                    </button>
+                    <button
+                      onClick={() => { cart.clear(); navigate('/hall') }}
+                      disabled={busy}
+                      className="btn-ghost min-h-[52px] !rounded-2xl"
+                    >
+                      {t(lang, 'back')}
+                    </button>
+                  </div>
+                </>
+              )
+            })()
+          ) : (
+            (() => {
+              const disabled = cart.lines.length === 0 || place.isPending || pay.isPending
+              return (
+                <>
                   <button
-                    onClick={() => place.mutate('card')}
+                    onClick={() => place.mutate('choose')}
                     disabled={disabled}
-                    className="btn-secondary min-h-[52px] !rounded-2xl flex items-center justify-center gap-2"
+                    className="btn-primary w-full !py-4 !text-base !rounded-2xl mt-2 flex items-center justify-between !px-5"
                   >
-                    <Icon name="card" size={18} /> {t(lang, 'payCard')}
+                    <span>{place.isPending ? t(lang, 'charging') : t(lang, 'charge')}</span>
+                    {cart.lines.length > 0 && <span className="tabular-nums">{formatMoney(total, lang)}</span>}
                   </button>
-                </div>
-              </>
-            )
-          })()}
+                  <div className="grid grid-cols-2 gap-2 mt-2">
+                    <button
+                      onClick={() => place.mutate('cash')}
+                      disabled={disabled}
+                      className="btn-secondary min-h-[52px] !rounded-2xl flex items-center justify-center gap-2"
+                    >
+                      <Icon name="cash" size={18} /> {t(lang, 'payCash')}
+                    </button>
+                    <button
+                      onClick={() => place.mutate('card')}
+                      disabled={disabled}
+                      className="btn-secondary min-h-[52px] !rounded-2xl flex items-center justify-center gap-2"
+                    >
+                      <Icon name="card" size={18} /> {t(lang, 'payCard')}
+                    </button>
+                  </div>
+                </>
+              )
+            })()
+          )}
         </div>
       </aside>
 
@@ -341,13 +523,68 @@ export default function SellPage() {
           line={picker.line}
           onClose={() => setPicker(null)}
           onConfirm={(cfg) => {
+            // Переконфигурация в пикере сбрасывает ручную цену — она относилась к старой сборке
             if (picker.line) {
-              cart.updateLine(picker.line.key, cfg)
+              cart.updateLine(picker.line.key, { ...cfg, priceOverride: null })
             } else {
-              cart.addLine({ itemId: picker.item.id, name: picker.item.name, ...cfg })
+              cart.addLine({ itemId: picker.item.id, name: picker.item.name, ...cfg, priceOverride: null })
             }
             setPicker(null)
           }}
+        />
+      )}
+
+      {showDiscount && (
+        <DiscountSheet
+          subtotal={subtotal}
+          current={cart.discount}
+          onApply={(d) => { cart.setDiscount(d); setShowDiscount(false) }}
+          onCancel={() => setShowDiscount(false)}
+        />
+      )}
+
+      {showTableSheet && (
+        <TableSheet
+          current={cart.tableLabel}
+          onApply={(label) => { cart.setTableLabel(label); setShowTableSheet(false) }}
+          onCancel={() => setShowTableSheet(false)}
+        />
+      )}
+
+      {showCustom && (
+        <PriceSheet
+          mode="custom"
+          onSubmit={({ name, priceOverride }) => {
+            cart.addLine({
+              itemId: null,
+              name,
+              variantId: null,
+              variantName: null,
+              basePrice: priceOverride,
+              mods: [],
+              notes: '',
+              priceOverride,
+            })
+            setShowCustom(false)
+          }}
+          onCancel={() => setShowCustom(false)}
+        />
+      )}
+
+      {editingPrice && (
+        <PriceSheet
+          mode="edit"
+          line={editingPrice}
+          autoPrice={editingPrice.basePrice + editingPrice.mods.reduce((s, m) => s + m.priceDelta, 0)}
+          onSubmit={({ priceOverride }) => {
+            cart.updateLine(editingPrice.key, { priceOverride })
+            setEditingPrice(null)
+          }}
+          onReset={() => {
+            cart.updateLine(editingPrice.key, { priceOverride: null })
+            setEditingPrice(null)
+          }}
+          onCancel={() => setEditingPrice(null)}
         />
       )}
 
@@ -363,12 +600,26 @@ export default function SellPage() {
   )
 }
 
-function ActionButton({ icon, label, lang }: { icon: 'customItem' | 'discount' | 'note' | 'refund'; label: string; lang: 'ru' | 'he' }) {
+function ActionButton({
+  icon,
+  label,
+  onClick,
+  active = false,
+}: {
+  icon: 'customItem' | 'discount' | 'note' | 'refund'
+  label: string
+  onClick: () => void
+  active?: boolean
+}) {
   return (
     <button
-      onClick={() => toast(`${label} — ${t(lang, 'comingSoon')}`)}
-      className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold
-                 text-gray-900 hover:border-gray-400 transition-all whitespace-nowrap active:scale-[0.97]"
+      onClick={onClick}
+      className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-semibold
+                 transition-all whitespace-nowrap active:scale-[0.97] ${
+                   active
+                     ? 'border-gray-900 bg-gray-900 text-white'
+                     : 'border-gray-200 text-gray-900 hover:border-gray-400'
+                 }`}
     >
       <Icon name={icon} size={18} />
       {label}

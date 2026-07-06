@@ -20,27 +20,35 @@ export interface QueueOrder {
   daily_number: number
   order_type: 'here' | 'takeaway'
   customer_name: string | null
+  table_label: string | null
   status: string
   paid_at: string | null
   created_at: string
   order_items: QueueItem[]
 }
 
-/** Оплаченные заказы (в очереди), старые сверху — FIFO */
+/**
+ * Заказы в очереди готовки, старые сверху (FIFO).
+ * — оплаченные заказы стойки (status='paid')
+ * — открытые счета столов (status='open' + table_id): в режиме tables
+ *   готовим сразу, до оплаты. Чистая стойка их не создаёт, так что
+ *   для counter-точки выборка эквивалентна прежней (только paid).
+ */
 export async function fetchQueue(): Promise<QueueOrder[]> {
   const { data, error } = await supabase
     .from('orders')
     .select(`
-      id, daily_number, order_type, customer_name, status, paid_at, created_at,
+      id, daily_number, order_type, customer_name, table_label, status, paid_at, created_at,
       order_items (
         id, name, variant_name, qty, notes, station_id, prep_status,
         order_item_modifiers ( name )
       )
     `)
-    .eq('status', 'paid')
-    .order('paid_at', { ascending: true })
+    .or('status.eq.paid,and(status.eq.open,table_id.not.is.null)')
+    .order('created_at', { ascending: true })
   if (error) throw error
-  return data as QueueOrder[]
+  // Открытый счёт без позиций (только что сел гость) в очереди не показываем
+  return (data as QueueOrder[]).filter((o) => o.order_items.length > 0)
 }
 
 export async function markItemReady(itemId: string, ready = true): Promise<void> {

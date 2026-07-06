@@ -1,5 +1,5 @@
 import { supabase } from '../../lib/supabase'
-import type { StaffSession } from '../../types'
+import type { Location, ServiceMode, StaffSession } from '../../types'
 
 export interface DeviceContext {
   orgId: string | null
@@ -16,6 +16,30 @@ export async function getDeviceContext(): Promise<DeviceContext | null> {
     orgId: meta.org_id ?? null,
     locationId: meta.location_id ?? null,
   }
+}
+
+/** Текущая точка устройства (service_mode, ставка НДС и пр.). RLS скоупит по org. */
+export async function fetchCurrentLocation(): Promise<Location> {
+  const ctx = await getDeviceContext()
+  if (!ctx?.locationId) throw new Error('Device not bootstrapped')
+  const { data, error } = await supabase
+    .from('locations')
+    .select('*')
+    .eq('id', ctx.locationId)
+    .single()
+  if (error) throw new Error(error.message)
+  return data as Location
+}
+
+/** Сменить режим обслуживания точки. RLS (locations_all) допускает UPDATE в своей org. */
+export async function updateServiceMode(mode: ServiceMode): Promise<void> {
+  const ctx = await getDeviceContext()
+  if (!ctx?.locationId) throw new Error('Device not bootstrapped')
+  const { error } = await supabase
+    .from('locations')
+    .update({ service_mode: mode })
+    .eq('id', ctx.locationId)
+  if (error) throw new Error(error.message)
 }
 
 export async function signInDevice(email: string, password: string) {

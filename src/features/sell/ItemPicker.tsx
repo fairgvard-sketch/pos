@@ -72,7 +72,7 @@ export default function ItemPicker({ item, groups, line, onConfirm, onClose }: P
   const preview: CartLine = {
     key: '', itemId: item.id, name: item.name,
     variantId, variantName: currentVariant?.name ?? null,
-    basePrice, mods, qty: 1, notes,
+    basePrice, mods, qty: 1, notes, priceOverride: null,
   }
 
   function confirm() {

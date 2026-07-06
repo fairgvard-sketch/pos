@@ -11,6 +11,8 @@ import MenuPage from './features/menu/MenuPage'
 import SellPage from './features/sell/SellPage'
 import ShiftPage from './features/shift/ShiftPage'
 import QueuePage from './features/queue/QueuePage'
+import SettingsPage from './features/settings/SettingsPage'
+import HallPage from './features/tables/HallPage'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -69,6 +71,15 @@ export default function App() {
           />
 
           <Route
+            path="/hall"
+            element={
+              <ProtectedRoute>
+                <HallPage />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
             path="/queue"
             element={
               <ProtectedRoute>
@@ -91,6 +102,15 @@ export default function App() {
             element={
               <ProtectedRoute allowedRoles={['owner', 'manager']}>
                 <MenuPage />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/settings"
+            element={
+              <ProtectedRoute allowedRoles={['owner', 'manager']}>
+                <SettingsPage />
               </ProtectedRoute>
             }
           />

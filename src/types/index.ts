@@ -50,6 +50,17 @@ export interface StaffSession {
 // ── Каталог ──────────────────────────────────────────────
 // Все цены — целые агороты (см. lib/money.ts)
 
+export interface Table {
+  id: string
+  org_id: string
+  location_id: string
+  label: string
+  zone: string | null
+  sort_order: number
+  is_active: boolean
+  created_at: string
+}
+
 export interface Station {
   id: string
   org_id: string

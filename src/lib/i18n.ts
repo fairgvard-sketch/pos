@@ -48,7 +48,7 @@ export const translations = {
     hello: 'Привет',
     lock: 'Блокировка',
     sell: 'Продажа',
-    queue: 'Очередь',
+    queue: 'Заказы',
     menu: 'Меню',
     reports: 'Отчёты',
     settings: 'Настройки',
@@ -98,6 +98,12 @@ export const translations = {
     // Экран продажи
     here: 'Здесь',
     takeaway: 'С собой',
+    tableLabel: 'Стол',
+    tablePlaceholder: 'Номер стола',
+    tableSheetTitle: 'Номер стола',
+    tableNone: 'Без стола',
+    noTable: 'Стол не указан',
+    apply: 'Применить',
     total: 'Итого',
     charge: 'Оформить',
     charging: 'Оформляем...',
@@ -148,11 +154,64 @@ export const translations = {
     confirmPayment: 'Оплатить',
     toPay: 'К оплате',
 
-    // Действия кассы (пока заглушки)
+    // Действия кассы
     customItem: 'Свободная позиция',
     discount: 'Скидка',
     note: 'Заметка',
     refund: 'Возврат',
+
+    // Скидка на заказ
+    discountTitle: 'Скидка на заказ',
+    discountPercent: 'Процент',
+    discountFixed: 'Сумма',
+    discountValue: 'Размер скидки',
+    discountReason: 'Причина (необязательно)',
+    discountReasonPh: 'Например: скидка сотруднику',
+    applyDiscount: 'Применить',
+    removeDiscount: 'Убрать скидку',
+    discountLabel: 'Скидка',
+
+    // Свободная позиция / ручная цена
+    customItemTitle: 'Свободная позиция',
+    editPriceTitle: 'Цена позиции',
+    customItemName: 'Название',
+    customItemNamePh: 'Например: Торт на заказ',
+    priceLabel: 'Цена, ₪',
+    manualPrice: 'Ручная цена',
+    resetPrice: 'Вернуть цену из меню',
+    priceOverridden: 'ручная цена',
+
+    // Зал / столы
+    hall: 'Зал',
+    hallEmpty: 'Столы не заведены',
+    hallEmptyHint: 'Добавьте столы в настройках',
+    tableFree: 'Свободен',
+    tableBusy: 'Занят',
+    newTableOrder: 'Открыть счёт',
+    openBill: 'Счёт',
+    addToBill: 'Добавить в счёт',
+    saveBill: 'Сохранить счёт',
+    billSaved: 'Счёт сохранён',
+    payBill: 'К оплате',
+    voidBill: 'Отменить счёт',
+    confirmVoidBill: 'Отменить этот счёт? Позиции не сохранятся.',
+    alreadyInBill: 'Уже в счёте',
+    tablesManage: 'Столы',
+    addTable: '+ Стол',
+    tableLabelField: 'Номер / название',
+    tableZoneField: 'Зона (необязательно)',
+    noTablesYet: 'Столы ещё не заведены',
+
+    // Настройки
+    settingsTitle: 'Настройки',
+    serviceModeTitle: 'Режим обслуживания',
+    serviceModeHint: 'Как гости получают заказ. Влияет на экран продажи и очередь.',
+    modeCounter: 'Стойка',
+    modeCounterHint: 'Заказ и оплата у кассы, гость забирает сам',
+    modeCounterTables: 'Стойка + столы',
+    modeCounterTablesHint: 'Оплата у кассы, но заказ несут к столу',
+    modeTables: 'Столы',
+    modeTablesHint: 'Открытые счета, зал, оплата в конце',
 
     // Смены
     shift: 'Смена',
@@ -182,7 +241,7 @@ export const translations = {
     confirmClose: 'Закрыть смену? Это действие завершит рабочий сеанс.',
 
     // Очередь бариста
-    queueEmpty: 'Очередь пуста',
+    queueEmpty: 'Заказов пока нет',
     queueEmptyHint: 'Оплаченные заказы появятся здесь',
     ready: 'Готово',
     allReady: 'Всё готово',
@@ -238,7 +297,7 @@ export const translations = {
     hello: 'שלום',
     lock: 'נעילה',
     sell: 'מכירה',
-    queue: 'תור',
+    queue: 'הזמנות',
     menu: 'תפריט',
     reports: 'דוחות',
     settings: 'הגדרות',
@@ -288,6 +347,12 @@ export const translations = {
     // Экран продажи
     here: 'כאן',
     takeaway: 'לקחת',
+    tableLabel: 'שולחן',
+    tablePlaceholder: 'מספר שולחן',
+    tableSheetTitle: 'מספר שולחן',
+    tableNone: 'ללא שולחן',
+    noTable: 'שולחן לא צוין',
+    apply: 'החל',
     total: 'סה"כ',
     charge: 'לחייב',
     charging: 'מחייבים...',
@@ -338,11 +403,64 @@ export const translations = {
     confirmPayment: 'לתשלום',
     toPay: 'לתשלום',
 
-    // Действия кассы (пока заглушки)
+    // Действия кассы
     customItem: 'פריט חופשי',
     discount: 'הנחה',
     note: 'הערה',
     refund: 'החזר',
+
+    // Скидка на заказ
+    discountTitle: 'הנחה על ההזמנה',
+    discountPercent: 'אחוז',
+    discountFixed: 'סכום',
+    discountValue: 'גובה ההנחה',
+    discountReason: 'סיבה (אופציונלי)',
+    discountReasonPh: 'לדוגמה: הנחת עובד',
+    applyDiscount: 'החל',
+    removeDiscount: 'הסר הנחה',
+    discountLabel: 'הנחה',
+
+    // Свободная позиция / ручная цена
+    customItemTitle: 'פריט חופשי',
+    editPriceTitle: 'מחיר הפריט',
+    customItemName: 'שם',
+    customItemNamePh: 'לדוגמה: עוגה בהזמנה',
+    priceLabel: 'מחיר, ₪',
+    manualPrice: 'מחיר ידני',
+    resetPrice: 'החזר מחיר מהתפריט',
+    priceOverridden: 'מחיר ידני',
+
+    // Зал / столы
+    hall: 'אולם',
+    hallEmpty: 'לא הוגדרו שולחנות',
+    hallEmptyHint: 'הוסיפו שולחנות בהגדרות',
+    tableFree: 'פנוי',
+    tableBusy: 'תפוס',
+    newTableOrder: 'פתח חשבון',
+    openBill: 'חשבון',
+    addToBill: 'הוסף לחשבון',
+    saveBill: 'שמור חשבון',
+    billSaved: 'החשבון נשמר',
+    payBill: 'לתשלום',
+    voidBill: 'בטל חשבון',
+    confirmVoidBill: 'לבטל את החשבון? הפריטים לא יישמרו.',
+    alreadyInBill: 'כבר בחשבון',
+    tablesManage: 'שולחנות',
+    addTable: '+ שולחן',
+    tableLabelField: 'מספר / שם',
+    tableZoneField: 'אזור (אופציונלי)',
+    noTablesYet: 'עדיין לא הוגדרו שולחנות',
+
+    // Настройки
+    settingsTitle: 'הגדרות',
+    serviceModeTitle: 'מצב שירות',
+    serviceModeHint: 'איך הלקוחות מקבלים את ההזמנה. משפיע על מסך המכירה והתור.',
+    modeCounter: 'דלפק',
+    modeCounterHint: 'הזמנה ותשלום בקופה, הלקוח לוקח בעצמו',
+    modeCounterTables: 'דלפק + שולחנות',
+    modeCounterTablesHint: 'תשלום בקופה, אך מגישים לשולחן',
+    modeTables: 'שולחנות',
+    modeTablesHint: 'חשבונות פתוחים, אולם, תשלום בסוף',
 
     // Смены
     shift: 'משמרת',
@@ -372,7 +490,7 @@ export const translations = {
     confirmClose: 'לסגור משמרת? פעולה זו תסיים את סבב העבודה.',
 
     // Очередь бариста
-    queueEmpty: 'התור ריק',
+    queueEmpty: 'אין הזמנות עדיין',
     queueEmptyHint: 'הזמנות ששולמו יופיעו כאן',
     ready: 'מוכן',
     allReady: 'הכל מוכן',

@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { useAuthStore } from '../store/authStore'
 import { useLangStore } from '../store/langStore'
+import { fetchCurrentLocation } from '../features/auth/api'
 import { t } from '../lib/i18n'
 import Icon from './Icon'
 import type { IconName } from './Icon'
 
-export type SidebarPage = 'sell' | 'queue' | 'shift' | 'menu' | 'analytics' | 'settings'
+export type SidebarPage = 'sell' | 'hall' | 'queue' | 'shift' | 'menu' | 'analytics' | 'settings'
 
 /** Общий сайдбар кассы: навигация, часы, сотрудник */
 export default function AppSidebar({ active }: { active: SidebarPage }) {
@@ -15,8 +17,11 @@ export default function AppSidebar({ active }: { active: SidebarPage }) {
   const staff = useAuthStore((s) => s.staff)
   const lock = useAuthStore((s) => s.lock)
 
+  const { data: location } = useQuery({ queryKey: ['current_location'], queryFn: fetchCurrentLocation })
+
   if (!staff) return null
   const isManager = staff.role === 'owner' || staff.role === 'manager'
+  const showHall = location?.service_mode === 'tables'
 
   return (
     <aside className="w-52 shrink-0 bg-white rounded-3xl flex flex-col p-4">
@@ -27,6 +32,9 @@ export default function AppSidebar({ active }: { active: SidebarPage }) {
 
       <nav className="space-y-1">
         <SideLink active={active === 'sell'} label={t(lang, 'sell')} iconName="orders" onClick={() => navigate('/sell')} />
+        {showHall && (
+          <SideLink active={active === 'hall'} label={t(lang, 'hall')} iconName="customers" onClick={() => navigate('/hall')} />
+        )}
         <SideLink active={active === 'queue'} label={t(lang, 'queue')} iconName="queue" onClick={() => navigate('/queue')} />
         <SideLink active={active === 'shift'} label={t(lang, 'shift')} iconName="shift" onClick={() => navigate('/shift')} />
         {isManager && (
