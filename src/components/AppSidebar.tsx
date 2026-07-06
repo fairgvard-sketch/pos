@@ -28,7 +28,7 @@ export default function AppSidebar({ active }: { active: SidebarPage }) {
       <nav className="space-y-1">
         <SideLink active={active === 'sell'} label={t(lang, 'sell')} iconName="orders" onClick={() => navigate('/sell')} />
         <SideLink active={active === 'queue'} label={t(lang, 'queue')} iconName="queue" onClick={() => navigate('/queue')} />
-        <SideLink active={active === 'shift'} label={t(lang, 'shift')} iconName="customers" onClick={() => navigate('/shift')} />
+        <SideLink active={active === 'shift'} label={t(lang, 'shift')} iconName="shift" onClick={() => navigate('/shift')} />
         {isManager && (
           <SideLink active={active === 'menu'} label={t(lang, 'menu')} iconName="menu" onClick={() => navigate('/menu')} />
         )}

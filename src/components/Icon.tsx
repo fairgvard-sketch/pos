@@ -10,6 +10,7 @@ import discountOutline from '../assets/icons/discount.svg?raw'
 import noteOutline from '../assets/icons/note.svg?raw'
 import refundOutline from '../assets/icons/refund.svg?raw'
 import queueOutline from '../assets/icons/queue.svg?raw'
+import shiftOutline from '../assets/icons/shift.svg?raw'
 
 import ordersDark from '../assets/icons/active/orders-dark.svg?raw'
 import menuDark from '../assets/icons/active/menu-dark.svg?raw'
@@ -17,10 +18,11 @@ import analyticsDark from '../assets/icons/active/analytics-dark.svg?raw'
 import settingsDark from '../assets/icons/active/settings-dark.svg?raw'
 import customersDark from '../assets/icons/active/customers-dark.svg?raw'
 import queueDark from '../assets/icons/active/queue-dark.svg?raw'
+import shiftDark from '../assets/icons/active/shift-dark.svg?raw'
 
 export type IconName =
   | 'orders' | 'menu' | 'analytics' | 'settings' | 'customers'
-  | 'cash' | 'card' | 'customItem' | 'discount' | 'note' | 'refund' | 'queue'
+  | 'cash' | 'card' | 'customItem' | 'discount' | 'note' | 'refund' | 'queue' | 'shift'
 
 const outline: Record<IconName, string> = {
   orders: ordersOutline,
@@ -35,6 +37,7 @@ const outline: Record<IconName, string> = {
   note: noteOutline,
   refund: refundOutline,
   queue: queueOutline,
+  shift: shiftOutline,
 }
 
 // Тёмный (активный) вариант есть не у всех — падаем на outline
@@ -45,6 +48,7 @@ const active: Partial<Record<IconName, string>> = {
   settings: settingsDark,
   customers: customersDark,
   queue: queueDark,
+  shift: shiftDark,
 }
 
 interface Props {
