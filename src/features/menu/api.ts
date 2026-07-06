@@ -20,18 +20,18 @@ export async function fetchCategories(): Promise<MenuCategory[]> {
   return data as MenuCategory[]
 }
 
-export async function createCategory(name: string, sortOrder: number): Promise<MenuCategory> {
+export async function createCategory(name: string, sortOrder: number, icon: string | null = null): Promise<MenuCategory> {
   const { org_id, location_id } = await ctx()
   const { data, error } = await supabase
     .from('menu_categories')
-    .insert({ org_id, location_id, name, sort_order: sortOrder })
+    .insert({ org_id, location_id, name, icon, sort_order: sortOrder })
     .select()
     .single()
   if (error) throw error
   return data as MenuCategory
 }
 
-export async function updateCategory(id: string, patch: Partial<Pick<MenuCategory, 'name' | 'sort_order' | 'is_active'>>) {
+export async function updateCategory(id: string, patch: Partial<Pick<MenuCategory, 'name' | 'icon' | 'sort_order' | 'is_active'>>) {
   const { error } = await supabase.from('menu_categories').update(patch).eq('id', id)
   if (error) throw error
 }
@@ -54,13 +54,33 @@ export async function fetchItems(): Promise<MenuItem[]> {
 
 export interface ItemInput {
   name: string
+  description: string | null
   category_id: string
   station_id: string | null
   price: number
+  image_url: string | null
   is_available: boolean
+  is_favorite: boolean
   ask_modifiers: boolean
+  cost: number | null
+  sku: string | null
+  track_inventory: boolean
+  stock: number | null
   variants: { id?: string; name: string; price: number; is_default: boolean }[]
   modifier_group_ids: string[]
+}
+
+/** Загрузка фото товара в Storage → публичный URL */
+export async function uploadItemImage(file: File): Promise<string> {
+  const { org_id } = await ctx()
+  const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg'
+  const path = `${org_id}/${crypto.randomUUID()}.${ext}`
+  const { error } = await supabase.storage.from('menu-images').upload(path, file, {
+    cacheControl: '3600',
+    upsert: false,
+  })
+  if (error) throw new Error(error.message)
+  return supabase.storage.from('menu-images').getPublicUrl(path).data.publicUrl
 }
 
 export async function createItem(input: ItemInput): Promise<string> {
@@ -70,11 +90,18 @@ export async function createItem(input: ItemInput): Promise<string> {
     .insert({
       org_id,
       name: input.name,
+      description: input.description,
       category_id: input.category_id,
       station_id: input.station_id,
       price: input.price,
+      image_url: input.image_url,
       is_available: input.is_available,
+      is_favorite: input.is_favorite,
       ask_modifiers: input.ask_modifiers,
+      cost: input.cost,
+      sku: input.sku,
+      track_inventory: input.track_inventory,
+      stock: input.stock,
     })
     .select('id')
     .single()
@@ -89,11 +116,18 @@ export async function updateItem(id: string, input: ItemInput) {
     .from('menu_items')
     .update({
       name: input.name,
+      description: input.description,
       category_id: input.category_id,
       station_id: input.station_id,
       price: input.price,
+      image_url: input.image_url,
       is_available: input.is_available,
+      is_favorite: input.is_favorite,
       ask_modifiers: input.ask_modifiers,
+      cost: input.cost,
+      sku: input.sku,
+      track_inventory: input.track_inventory,
+      stock: input.stock,
     })
     .eq('id', id)
   if (error) throw error
@@ -135,6 +169,11 @@ async function syncItemRelations(itemId: string, input: ItemInput, orgId: string
 
 export async function toggleItemAvailability(id: string, isAvailable: boolean) {
   const { error } = await supabase.from('menu_items').update({ is_available: isAvailable }).eq('id', id)
+  if (error) throw error
+}
+
+export async function toggleItemFavorite(id: string, isFavorite: boolean) {
+  const { error } = await supabase.from('menu_items').update({ is_favorite: isFavorite }).eq('id', id)
   if (error) throw error
 }
 

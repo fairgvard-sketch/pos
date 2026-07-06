@@ -8,6 +8,7 @@ import PinLoginPage from './features/auth/PinLoginPage'
 import ProtectedRoute from './features/auth/ProtectedRoute'
 import HomePage from './features/home/HomePage'
 import MenuPage from './features/menu/MenuPage'
+import SellPage from './features/sell/SellPage'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -52,6 +53,15 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <HomePage />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/sell"
+            element={
+              <ProtectedRoute>
+                <SellPage />
               </ProtectedRoute>
             }
           />

@@ -6,6 +6,8 @@ export interface Org {
   created_at: string
 }
 
+export type ServiceMode = 'counter' | 'counter_tables' | 'tables'
+
 export interface Location {
   id: string
   org_id: string
@@ -13,6 +15,7 @@ export interface Location {
   currency: string
   vat_rate: number
   timezone: string
+  service_mode: ServiceMode
   created_at: string
 }
 
@@ -60,6 +63,7 @@ export interface MenuCategory {
   org_id: string
   location_id: string
   name: string
+  icon: string | null
   sort_order: number
   is_active: boolean
 }
@@ -70,11 +74,17 @@ export interface MenuItem {
   category_id: string
   station_id: string | null
   name: string
+  description: string | null
   price: number
   image_url: string | null
   is_available: boolean
+  is_favorite: boolean
   ask_modifiers: boolean
   sort_order: number
+  cost: number | null
+  sku: string | null
+  track_inventory: boolean
+  stock: number | null
   item_variants?: ItemVariant[]
   menu_item_modifier_groups?: { group_id: string; sort_order: number }[]
 }

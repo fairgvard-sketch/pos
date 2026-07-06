@@ -15,6 +15,9 @@ dist-ssr
 .env.local
 .env.*.local
 
+# Reference mockups / scratch screenshots (not part of the app)
+/*.png
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
