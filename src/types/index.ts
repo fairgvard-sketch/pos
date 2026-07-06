@@ -50,6 +50,8 @@ export interface StaffSession {
 // ── Каталог ──────────────────────────────────────────────
 // Все цены — целые агороты (см. lib/money.ts)
 
+export type TableStatus = 'free' | 'reserved' | 'disabled'
+
 export interface Table {
   id: string
   org_id: string
@@ -58,6 +60,7 @@ export interface Table {
   zone: string | null
   sort_order: number
   is_active: boolean
+  status: TableStatus
   created_at: string
 }
 

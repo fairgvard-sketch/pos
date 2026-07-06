@@ -1,7 +1,7 @@
 import { supabase } from '../../lib/supabase'
 import { getDeviceContext } from '../auth/api'
 import type { CartLine } from '../../store/cartStore'
-import type { Table } from '../../types'
+import type { Table, TableStatus } from '../../types'
 
 // ── Справочник столов ────────────────────────────────────
 
@@ -24,9 +24,24 @@ export async function createTable(label: string, zone: string | null, sortOrder:
   if (error) throw new Error(error.message)
 }
 
+/** Переименовать стол / сменить зону */
+export async function updateTable(id: string, label: string, zone: string | null): Promise<void> {
+  const { error } = await supabase
+    .from('tables')
+    .update({ label, zone: zone || null })
+    .eq('id', id)
+  if (error) throw new Error(error.message)
+}
+
 /** Мягкое удаление — is_active=false, чтобы не рвать ссылки заказов */
 export async function deleteTable(id: string): Promise<void> {
   const { error } = await supabase.from('tables').update({ is_active: false }).eq('id', id)
+  if (error) throw new Error(error.message)
+}
+
+/** Ручной статус стола: free / reserved / disabled */
+export async function setTableStatus(id: string, status: TableStatus): Promise<void> {
+  const { error } = await supabase.rpc('set_table_status', { p_table_id: id, p_status: status })
   if (error) throw new Error(error.message)
 }
 
@@ -73,6 +88,59 @@ export async function voidTableOrder(orderId: string, reason?: string): Promise<
   if (error) throw new Error(error.message)
 }
 
+/** Перенести открытый счёт на другой (свободный) стол */
+export async function moveTableOrder(orderId: string, toTableId: string): Promise<void> {
+  const { error } = await supabase.rpc('move_table_order', { p_order_id: orderId, p_to_table_id: toTableId })
+  if (error) throw new Error(error.message)
+}
+
+/** Слить счёт-источник в счёт-приёмник (source void, позиции переезжают) */
+export async function mergeTableOrders(sourceId: string, targetId: string): Promise<{ target_id: string; total: number }> {
+  const { data, error } = await supabase.rpc('merge_table_orders', { p_source_id: sourceId, p_target_id: targetId })
+  if (error) throw new Error(error.message)
+  return data as { target_id: string; total: number }
+}
+
+// ── Позиции счёта (для быстрого просмотра из зала) ────────
+
+export interface BillLine {
+  id: string
+  name: string
+  variant_name: string | null
+  qty: number
+  line_total: number
+  modifiers: string[]
+}
+
+/** Активные позиции открытого счёта (voided исключены) */
+export async function fetchOrderLines(orderId: string): Promise<BillLine[]> {
+  const { data, error } = await supabase
+    .from('order_items')
+    .select('id, name, variant_name, qty, line_total, order_item_modifiers(name)')
+    .eq('order_id', orderId)
+    .is('voided_at', null)
+  if (error) throw new Error(error.message)
+  return (data as { id: string; name: string; variant_name: string | null; qty: number; line_total: number; order_item_modifiers: { name: string }[] }[]).map((r) => ({
+    id: r.id,
+    name: r.name,
+    variant_name: r.variant_name,
+    qty: r.qty,
+    line_total: r.line_total,
+    modifiers: (r.order_item_modifiers ?? []).map((m) => m.name),
+  }))
+}
+
+/** Снять позицию с открытого счёта (мягкий void, аудируемо) */
+export async function voidOrderItem(itemId: string, staffId: string, reason?: string): Promise<{ total: number }> {
+  const { data, error } = await supabase.rpc('void_order_item', {
+    p_item_id: itemId,
+    p_staff_id: staffId,
+    p_reason: reason ?? null,
+  })
+  if (error) throw new Error(error.message)
+  return data as { total: number }
+}
+
 // ── Состояние зала: какие столы заняты ────────────────────
 
 export interface TableOccupancy {
@@ -81,21 +149,37 @@ export interface TableOccupancy {
   total: number
   daily_number: number
   opened_at: string
+  staff_name: string | null
+  item_count: number   // сумма qty активных позиций
 }
 
-/** Открытые счета всех столов точки — для раскраски карты зала */
+interface OpenOrderRow {
+  id: string
+  table_id: string
+  total: number
+  daily_number: number
+  created_at: string
+  staff: { name: string } | null
+  order_items: { qty: number; voided_at: string | null }[]
+}
+
+/** Открытые счета всех столов точки — для раскраски карты зала и инфо на карточке */
 export async function fetchOpenTableOrders(): Promise<TableOccupancy[]> {
   const { data, error } = await supabase
     .from('orders')
-    .select('id, table_id, total, daily_number, created_at')
+    .select('id, table_id, total, daily_number, created_at, staff(name), order_items(qty, voided_at)')
     .eq('status', 'open')
     .not('table_id', 'is', null)
   if (error) throw new Error(error.message)
-  return (data as { id: string; table_id: string; total: number; daily_number: number; created_at: string }[]).map((o) => ({
+  return (data as unknown as OpenOrderRow[]).map((o) => ({
     table_id: o.table_id,
     order_id: o.id,
     total: o.total,
     daily_number: o.daily_number,
     opened_at: o.created_at,
+    staff_name: o.staff?.name ?? null,
+    item_count: (o.order_items ?? [])
+      .filter((i) => i.voided_at === null)
+      .reduce((s, i) => s + i.qty, 0),
   }))
 }

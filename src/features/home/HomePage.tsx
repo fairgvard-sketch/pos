@@ -1,6 +1,8 @@
 import { useNavigate } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { useAuthStore } from '../../store/authStore'
 import { useLangStore } from '../../store/langStore'
+import { fetchCurrentLocation } from '../auth/api'
 import { t, type TranslationKey } from '../../lib/i18n'
 import LangToggle from '../../components/ui/LangToggle'
 
@@ -26,16 +28,24 @@ export default function HomePage() {
   const lock = useAuthStore((s) => s.lock)
   const lang = useLangStore((s) => s.lang)
   const isRtl = lang === 'he'
+  const { data: location } = useQuery({ queryKey: ['current_location'], queryFn: fetchCurrentLocation })
 
   if (!staff) return null
   const isManager = staff.role === 'owner' || staff.role === 'manager'
+  // Режим столов: вместо «Продажа» точка входа — «Зал»
+  const tablesMode = location?.service_mode === 'tables'
 
   function handleLock() {
     lock()
     navigate('/pin', { replace: true })
   }
 
-  const visibleTiles = TILES.filter((tile) => !tile.minRole || isManager)
+  const visibleTiles = TILES
+    .map((tile) =>
+      // В режиме столов первая плитка ведёт в зал, а не в продажу
+      tablesMode && tile.key === 'sell' ? { ...tile, key: 'hall' as TranslationKey, path: '/hall' } : tile
+    )
+    .filter((tile) => !tile.minRole || isManager)
 
   return (
     <div dir={isRtl ? 'rtl' : 'ltr'} className="min-h-screen bg-[#f8f9fb] flex flex-col">
