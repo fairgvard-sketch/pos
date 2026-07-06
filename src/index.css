@@ -102,6 +102,20 @@
   to   { opacity: 1; transform: translateY(0) scale(1); }
 }
 
+/* ── Pop (пружина: крупный номер заказа после оплаты) ─────── */
+@keyframes pop-in {
+  0%   { opacity: 0; transform: scale(0.6); }
+  60%  { opacity: 1; transform: scale(1.08); }
+  100% { transform: scale(1); }
+}
+
+/* ── Cart bump (подтверждение добавления в корзину) ──────── */
+@keyframes cart-bump {
+  0%, 100% { transform: scale(1); }
+  40%      { transform: scale(1.06); }
+}
+.cart-bump { animation: cart-bump 0.28s ease-out; }
+
 /* ── Shake (неверный PIN) ────────────────────────────────── */
 @keyframes shake {
   0%, 100% { transform: translateX(0); }

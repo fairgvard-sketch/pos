@@ -251,10 +251,10 @@ export default function SellPage() {
                   >
                     <span className="font-semibold text-gray-900 text-sm block leading-tight">
                       {l.name}
-                      {l.variantName && <span className="text-gray-400 font-medium"> · {l.variantName}</span>}
+                      {l.variantName && <span className="text-gray-500 font-medium"> · {l.variantName}</span>}
                     </span>
                     {(l.mods.length > 0 || l.notes) && (
-                      <span className="block text-xs text-gray-400 mt-0.5 truncate">
+                      <span className="block text-xs text-gray-500 mt-0.5 truncate">
                         {[...l.mods.map((m) => m.name), l.notes].filter(Boolean).join(' · ')}
                       </span>
                     )}
@@ -264,7 +264,7 @@ export default function SellPage() {
                       <span className="font-bold text-sm text-gray-900 tabular-nums">
                         {formatMoney(lineUnitPrice(l) * l.qty, lang)}
                       </span>
-                      <button onClick={() => cart.removeLine(l.key)} className="text-gray-300 hover:text-red-500">✕</button>
+                      <button onClick={() => cart.removeLine(l.key)} className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-red-500">✕</button>
                     </div>
                     <div className="flex items-center gap-1">
                       <Stepper onClick={() => cart.updateQty(l.key, l.qty - 1)}>−</Stepper>
@@ -279,17 +279,15 @@ export default function SellPage() {
         </div>
 
         <div className="p-4 pt-3 shrink-0 border-t border-gray-100 space-y-1.5">
-          <div className="flex justify-between text-sm text-gray-400">
-            <span>{t(lang, 'subtotal')}</span>
-            <span className="tabular-nums">{formatMoney(total, lang)}</span>
-          </div>
-          <div className="flex justify-between text-sm text-gray-400">
+          <div className="flex justify-between text-sm text-gray-500">
             <span>{t(lang, 'vatIncl')} 18%</span>
             <span className="tabular-nums">{formatMoney(vatIncluded, lang)}</span>
           </div>
           <div className="flex justify-between items-baseline pt-1">
             <span className="font-bold text-gray-900">{t(lang, 'total')}</span>
-            <span className="text-2xl font-black text-gray-900 tabular-nums">{formatMoney(total, lang)}</span>
+            <span key={total} className="text-2xl font-black text-gray-900 tabular-nums inline-block cart-bump">
+              {formatMoney(total, lang)}
+            </span>
           </div>
           {(() => {
             const disabled = cart.lines.length === 0 || place.isPending || pay.isPending
@@ -307,14 +305,14 @@ export default function SellPage() {
                   <button
                     onClick={() => place.mutate('cash')}
                     disabled={disabled}
-                    className="btn-secondary !py-3 !rounded-2xl flex items-center justify-center gap-2"
+                    className="btn-secondary min-h-[52px] !rounded-2xl flex items-center justify-center gap-2"
                   >
                     <Icon name="cash" size={18} /> {t(lang, 'payCash')}
                   </button>
                   <button
                     onClick={() => place.mutate('card')}
                     disabled={disabled}
-                    className="btn-secondary !py-3 !rounded-2xl flex items-center justify-center gap-2"
+                    className="btn-secondary min-h-[52px] !rounded-2xl flex items-center justify-center gap-2"
                   >
                     <Icon name="card" size={18} /> {t(lang, 'payCard')}
                   </button>
@@ -355,9 +353,9 @@ export default function SellPage() {
 
       {placedNumber !== null && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center" onClick={() => setPlacedNumber(null)}>
-          <div className="card px-16 py-12 text-center animate-[rise-in_0.25s_ease-out]">
-            <div className="text-sm text-gray-400 mb-2">{t(lang, 'orderPlaced')}</div>
-            <div className="text-6xl font-black text-gray-900 tabular-nums">#{placedNumber}</div>
+          <div className="card px-16 py-12 text-center animate-[pop-in_0.35s_cubic-bezier(0.34,1.56,0.64,1)]">
+            <div className="text-sm text-gray-500 mb-2">{t(lang, 'orderPlaced')}</div>
+            <div className="text-7xl font-black text-gray-900 tabular-nums">#{placedNumber}</div>
           </div>
         </div>
       )}
@@ -382,8 +380,8 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
   return (
     <button
       onClick={onClick}
-      className={`px-4 py-2 rounded-xl text-sm font-semibold whitespace-nowrap transition-all active:scale-[0.96] ${
-        active ? 'bg-gray-200 text-gray-900' : 'text-gray-400 hover:bg-gray-100'
+      className={`h-11 px-4 rounded-xl text-sm font-semibold whitespace-nowrap transition-all active:scale-[0.96] ${
+        active ? 'bg-gray-200 text-gray-900' : 'text-gray-500 hover:bg-gray-100'
       }`}
     >
       {children}
@@ -395,7 +393,7 @@ function Stepper({ onClick, children }: { onClick: () => void; children: React.R
   return (
     <button
       onClick={onClick}
-      className="w-7 h-7 rounded-lg bg-gray-50 border border-gray-200 text-sm font-bold text-gray-600
+      className="w-11 h-11 rounded-xl bg-gray-50 border border-gray-200 text-base font-bold text-gray-600
                  flex items-center justify-center leading-none
                  hover:border-gray-400 active:scale-[0.9] transition-all"
     >

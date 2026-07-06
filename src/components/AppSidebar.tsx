@@ -61,8 +61,8 @@ function SideLink({ label, iconName, active, onClick }: { label: string; iconNam
   return (
     <button
       onClick={onClick}
-      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all ${
-        active ? 'bg-gray-100 text-gray-900' : 'text-gray-400 hover:text-gray-700 hover:bg-gray-50'
+      className={`w-full flex items-center gap-3 px-3 h-11 rounded-xl text-sm font-semibold transition-all ${
+        active ? 'bg-gray-100 text-gray-900' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
       }`}
     >
       <Icon name={iconName} isActive={active} size={20} />
