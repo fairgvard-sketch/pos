@@ -68,6 +68,18 @@ export async function updateReceiptDetails(details: ReceiptDetails): Promise<voi
   if (error) throw new Error(error.message)
 }
 
+/** Сменить ставку НДС точки. Снапшот в заказ делает сервер (place_order) —
+ *  меняются только будущие заказы, пробитые не трогаем (аудит). */
+export async function updateVatRate(rate: number): Promise<void> {
+  const ctx = await getDeviceContext()
+  if (!ctx?.locationId) throw new Error('Device not bootstrapped')
+  const { error } = await supabase
+    .from('locations')
+    .update({ vat_rate: rate })
+    .eq('id', ctx.locationId)
+  if (error) throw new Error(error.message)
+}
+
 export async function signInDevice(email: string, password: string) {
   const { error } = await supabase.auth.signInWithPassword({ email, password })
   if (error) throw new Error(error.message)
