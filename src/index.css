@@ -137,13 +137,21 @@
 ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
 
-/* ── Print ───────────────────────────────────────────────── */
+/* ── Print (термолента 80мм) ──────────────────────────────── */
 @media print {
   @page { size: 80mm auto; margin: 0; }
+  /* На печать идёт только .receipt-print; остальное скрываем */
   body * { visibility: hidden; }
   .receipt-print, .receipt-print * { visibility: visible; }
   .receipt-print {
     position: absolute; left: 0; top: 0;
-    width: 80mm; font-size: 11px; font-family: monospace;
+    /* 80мм лента минус небольшие поля печатающей области */
+    width: 72mm; padding: 0 2mm;
+    font-size: 11px; line-height: 1.35; font-family: monospace;
+    color: #000;
+    /* Термопринтер печатает ч/б — заставляем браузер не «осветлять» серые тона */
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
   }
+  /* Ничего не должно выпирать за ширину ленты и рвать бумагу переносами */
+  .receipt-print * { max-width: 100%; box-shadow: none !important; }
 }

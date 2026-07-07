@@ -20,6 +20,17 @@ export default function ReceiptSheet({ orderId, onClose }: Props) {
   const { data: receipt, isLoading } = useQuery({ queryKey: ['receipt', orderId], queryFn: () => fetchReceipt(orderId) })
   const { data: location } = useQuery({ queryKey: ['current_location'], queryFn: fetchCurrentLocation })
 
+  /**
+   * Печать чека. Пока — браузерная печать (window.print), которая на терминале
+   * Sunmi с установленным SunmiPrinterPlugin уходит на встроенный термопринтер.
+   * Точка расширения: когда подключим Sunmi JS SDK (автопечать без диалога),
+   * мост встанет сюда с graceful fallback на window.print().
+   */
+  function handlePrint() {
+    if (!receipt) return
+    window.print()
+  }
+
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-white rounded-3xl w-full max-w-sm max-h-[90vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
@@ -32,7 +43,7 @@ export default function ReceiptSheet({ orderId, onClose }: Props) {
         </div>
 
         <div className="p-4 pt-3 border-t border-gray-100 grid grid-cols-2 gap-2 shrink-0">
-          <button onClick={() => window.print()} disabled={!receipt} className="btn-primary !py-3.5 !rounded-2xl">
+          <button onClick={handlePrint} disabled={!receipt} className="btn-primary !py-3.5 !rounded-2xl">
             {t(lang, 'printReceipt')}
           </button>
           <button onClick={onClose} className="btn-ghost !py-3.5 !rounded-2xl">
