@@ -277,8 +277,9 @@ export default function SellPage() {
   const subtotal = cartSubtotal(cart.lines)
   const discAmount = discountAmount(subtotal, cart.discount)
   const total = cartTotal(cart.lines, cart.discount)
-  // НДС включён в цену — показываем справочно (18% по умолчанию, снапшот считает сервер)
-  const vatIncluded = Math.round((total * 18) / 118)
+  // НДС включён в цену — показываем справочно по ставке точки (снапшот считает сервер)
+  const vatRate = Number(location?.vat_rate ?? 18)
+  const vatIncluded = Math.round((total * vatRate) / (100 + vatRate))
 
   if (!staff) return null
 
@@ -507,7 +508,7 @@ export default function SellPage() {
             </div>
           )}
           <div className="flex justify-between text-sm text-gray-500">
-            <span>{t(lang, 'vatIncl')} 18%</span>
+            <span>{t(lang, 'vatIncl')} {vatRate}%</span>
             <span className="tabular-nums">{formatMoney(vatIncluded, lang)}</span>
           </div>
           <div className="flex justify-between items-baseline pt-1">
