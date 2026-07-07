@@ -1,7 +1,38 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    VitePWA({
+      // SW обновляется сам, без диалогов — касса всегда на свежей версии
+      registerType: 'autoUpdate',
+      includeAssets: ['favicon.svg', 'icons.svg'],
+      manifest: {
+        name: 'Kassa — POS',
+        short_name: 'Kassa',
+        description: 'POS для кофеен и пекарен',
+        lang: 'ru',
+        // Тач-касса: во весь экран, только альбомная ориентация
+        display: 'fullscreen',
+        orientation: 'landscape',
+        background_color: '#eceef1',
+        theme_color: '#111827',
+        icons: [
+          { src: 'pwa-192.png', sizes: '192x192', type: 'image/png' },
+          { src: 'pwa-512.png', sizes: '512x512', type: 'image/png' },
+          { src: 'pwa-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+        ],
+      },
+      workbox: {
+        // Кэшируем весь бандл (уровень A): при коротком обрыве приложение
+        // грузится из кэша и не белеет. Данные Supabase — офлайн-очередь фазы 7.
+        globPatterns: ['**/*.{js,css,html,svg,woff,woff2}'],
+        navigateFallback: '/index.html',
+        cleanupOutdatedCaches: true,
+      },
+    }),
+  ],
 })
