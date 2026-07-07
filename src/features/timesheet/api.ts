@@ -7,14 +7,6 @@ import type { Role } from '../../types'
  * запись только через RPC, скоуп по org. Завершение = UPDATE clock_out.
  */
 
-/** Открытая (текущая) запись рабочего дня сотрудника */
-export interface OpenEntry {
-  id: string
-  staff_id: string
-  clock_in: string
-  clock_out: string | null
-}
-
 /** Строка истории табеля за период */
 export interface TimeEntryRow {
   id: string
@@ -40,20 +32,22 @@ export interface TimesheetReport {
   totals: TimeTotalRow[]
 }
 
-export async function clockIn(staffId: string): Promise<void> {
-  const { error } = await supabase.rpc('clock_in', { p_staff_id: staffId })
-  if (error) throw new Error(error.message)
+/** Результат отметки по PIN */
+export interface PunchResult {
+  action: 'in' | 'out'
+  staff_name: string
+  seconds?: number // при clock-out — длительность закрытого дня
 }
 
-export async function clockOut(staffId: string, note?: string): Promise<void> {
-  const { error } = await supabase.rpc('clock_out', { p_staff_id: staffId, p_note: note ?? null })
+/**
+ * Отметка в табеле по личному PIN. Сервер сам сверяет PIN, определяет
+ * сотрудника и переключает статус (clock-in ⇄ clock-out). PIN не покидает
+ * БД — отметить чужой день нельзя.
+ */
+export async function punchByPin(pin: string): Promise<PunchResult> {
+  const { data, error } = await supabase.rpc('punch_by_pin', { p_pin: pin })
   if (error) throw new Error(error.message)
-}
-
-export async function fetchOpenEntry(staffId: string): Promise<OpenEntry | null> {
-  const { data, error } = await supabase.rpc('open_time_entry', { p_staff_id: staffId })
-  if (error) throw new Error(error.message)
-  return (data as OpenEntry | null) ?? null
+  return data as PunchResult
 }
 
 export async function fetchTimesheetReport(from: Date, to: Date): Promise<TimesheetReport> {
