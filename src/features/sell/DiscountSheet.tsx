@@ -39,7 +39,7 @@ export default function DiscountSheet({ subtotal, current, onApply, onCancel }: 
 
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center p-4">
-      <div className="card w-full max-w-md p-6 animate-[rise-in_0.2s_ease-out]">
+      <div className="card w-full max-w-md p-6 short:p-4 max-h-[92vh] overflow-y-auto animate-[rise-in_0.2s_ease-out]">
         <h2 className="text-lg font-black text-gray-900 mb-4">{t(lang, 'discountTitle')}</h2>
 
         {/* Переключатель типа */}

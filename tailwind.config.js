@@ -15,6 +15,10 @@ export default {
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],
       },
+      screens: {
+        // Компактный режим для невысоких экранов (POS-терминалы Sunmi ~720–768px)
+        short: { raw: '(max-height: 800px)' },
+      },
     },
   },
   plugins: [],

@@ -309,7 +309,7 @@ export default function SellPage() {
             onChange={(e) => setSearch(e.target.value)}
           />
 
-          <div className="flex gap-2 overflow-x-auto py-4">
+          <div className="flex gap-2 overflow-x-auto py-4 short:py-2">
             {hasFavorites && (
               <Chip active={!search && currentCat === 'fav'} onClick={() => { setSearch(''); setActiveCat('fav') }}>
                 ★ {t(lang, 'favorites')}
@@ -327,7 +327,7 @@ export default function SellPage() {
           {visibleItems.length === 0 ? (
             <p className="text-gray-300 text-sm text-center pt-20">{t(lang, 'nothingFound')}</p>
           ) : (
-            <div className="grid grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-3">
               {visibleItems.map((item) => (
                 <button
                   key={item.id}
@@ -368,7 +368,7 @@ export default function SellPage() {
         </div>
 
         {/* Ряд действий */}
-        <div className="shrink-0 border-t border-gray-100 px-5 pt-3 pb-5 flex gap-2 overflow-x-auto">
+        <div className="shrink-0 border-t border-gray-100 px-5 pt-3 pb-5 short:pb-3 flex gap-2 overflow-x-auto">
           <ActionButton icon="customItem" label={t(lang, 'customItem')} onClick={() => setShowCustom(true)} />
           <ActionButton
             icon="discount"
@@ -382,7 +382,7 @@ export default function SellPage() {
       </main>
 
       {/* ── Заказ ───────────────────────────────────── */}
-      <aside className="w-[400px] shrink-0 bg-white rounded-3xl flex flex-col overflow-hidden">
+      <aside className="w-[clamp(320px,28vw,400px)] shrink-0 bg-white rounded-3xl flex flex-col overflow-hidden">
         <div className="p-4 pb-3 shrink-0">
           {tableCtx ? (
             /* Режим столов: работаем со счётом конкретного стола */
@@ -479,7 +479,7 @@ export default function SellPage() {
           })}
         </div>
 
-        <div className="p-4 pt-3 shrink-0 border-t border-gray-100 space-y-1.5">
+        <div className="p-4 pt-3 short:pt-2 shrink-0 border-t border-gray-100 space-y-1.5 short:space-y-1">
           {cart.discount && discAmount > 0 && (
             <>
               <div className="flex justify-between text-sm text-gray-500">
@@ -515,7 +515,7 @@ export default function SellPage() {
             {(() => {
               const shown = tableCtx ? tableCtx.existingTotal + total : total
               return (
-                <span key={shown} className="text-2xl font-black text-gray-900 tabular-nums inline-block cart-bump">
+                <span key={shown} className="text-2xl short:text-xl font-black text-gray-900 tabular-nums inline-block cart-bump">
                   {formatMoney(shown, lang)}
                 </span>
               )
@@ -532,7 +532,7 @@ export default function SellPage() {
                   <button
                     onClick={() => saveBill.mutate()}
                     disabled={busy || !hasNew}
-                    className="btn-primary w-full !py-4 !text-base !rounded-2xl mt-2 flex items-center justify-between !px-5"
+                    className="btn-primary w-full !py-4 short:!py-3 !text-base !rounded-2xl mt-2 flex items-center justify-between !px-5"
                   >
                     <span>{t(lang, 'saveBill')}</span>
                     {hasNew && <span className="tabular-nums">{formatMoney(total, lang)}</span>}
@@ -564,7 +564,7 @@ export default function SellPage() {
                   <button
                     onClick={() => place.mutate('choose')}
                     disabled={disabled}
-                    className="btn-primary w-full !py-4 !text-base !rounded-2xl mt-2 flex items-center justify-between !px-5"
+                    className="btn-primary w-full !py-4 short:!py-3 !text-base !rounded-2xl mt-2 flex items-center justify-between !px-5"
                   >
                     <span>{place.isPending ? t(lang, 'charging') : t(lang, 'charge')}</span>
                     {cart.lines.length > 0 && <span className="tabular-nums">{formatMoney(total, lang)}</span>}

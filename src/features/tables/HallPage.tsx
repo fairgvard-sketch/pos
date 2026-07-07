@@ -320,22 +320,22 @@ export default function HallPage() {
                           {formatMoney(occ!.total, lang)}
                         </span>
                         <div className="absolute bottom-2 start-2 text-start">
-                          <div className="flex items-center gap-1 text-[10px] text-gray-500">
+                          <div className="flex items-center gap-1 text-[11px] text-gray-500">
                             <span className="tabular-nums">{elapsedShort(occ!.opened_at, nowTs, lang)}</span>
                             <span className="text-gray-300">·</span>
                             <span className="tabular-nums">{occ!.item_count}</span>
                           </div>
                           {occ!.staff_name && (
-                            <div className="text-[10px] text-gray-400 truncate max-w-[90%]">{occ!.staff_name}</div>
+                            <div className="text-[11px] text-gray-400 truncate max-w-[90%]">{occ!.staff_name}</div>
                           )}
                         </div>
                       </>
                     ) : reserved ? (
-                      <span className="text-[10px] font-semibold text-blue-500">{t(lang, 'tableReserved')}</span>
+                      <span className="text-[11px] font-semibold text-blue-500">{t(lang, 'tableReserved')}</span>
                     ) : disabled ? (
-                      <span className="text-[10px] text-gray-400">{t(lang, 'tableDisabled')}</span>
+                      <span className="text-[11px] text-gray-400">{t(lang, 'tableDisabled')}</span>
                     ) : (
-                      <span className="text-[10px] text-emerald-600">{t(lang, 'tableFree')}</span>
+                      <span className="text-[11px] text-emerald-600">{t(lang, 'tableFree')}</span>
                     )}
                   </button>
                 )
