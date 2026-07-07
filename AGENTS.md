@@ -94,7 +94,7 @@ supabase/migrations/
 Глобальные классы в `src/index.css`: `.btn-primary/-secondary/-danger/-success/-ghost`,
 `.card`, `.card-hover`, `.input`, `.badge-*`, `.page-header`.
 Шрифт Inter; карточки `rounded-2xl`; кнопки `rounded-xl`; нажатие `active:scale-[0.97]`.
-Полная спека — `legacy/CLAUDE.md` раздел «Дизайн-система» (актуальна).
+Полная спека — `legacy/AGENTS.md` раздел «Дизайн-система» (актуальна).
 
 RTL: каждый экран оборачивается `dir={isRtl ? 'rtl' : 'ltr'}`; использовать
 логические свойства (`ms-*`/`me-*`, `start`/`end`), не `ml-*`/`mr-*`.

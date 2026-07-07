@@ -42,6 +42,32 @@ export async function updateServiceMode(mode: ServiceMode): Promise<void> {
   if (error) throw new Error(error.message)
 }
 
+/** Реквизиты для чека */
+export interface ReceiptDetails {
+  receipt_business_name: string | null
+  receipt_address: string | null
+  receipt_tax_id: string | null
+  receipt_phone: string | null
+  receipt_footer: string | null
+}
+
+/** Сохранить реквизиты заведения для чека. RLS (locations_all) — UPDATE в своей org. */
+export async function updateReceiptDetails(details: ReceiptDetails): Promise<void> {
+  const ctx = await getDeviceContext()
+  if (!ctx?.locationId) throw new Error('Device not bootstrapped')
+  const { error } = await supabase
+    .from('locations')
+    .update({
+      receipt_business_name: details.receipt_business_name || null,
+      receipt_address: details.receipt_address || null,
+      receipt_tax_id: details.receipt_tax_id || null,
+      receipt_phone: details.receipt_phone || null,
+      receipt_footer: details.receipt_footer || null,
+    })
+    .eq('id', ctx.locationId)
+  if (error) throw new Error(error.message)
+}
+
 export async function signInDevice(email: string, password: string) {
   const { error } = await supabase.auth.signInWithPassword({ email, password })
   if (error) throw new Error(error.message)

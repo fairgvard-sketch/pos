@@ -68,7 +68,7 @@ export default function ItemPreview({ name, description, imageUrl, priceStr, var
   }
 
   return (
-    <aside className="w-[280px] shrink-0 bg-white rounded-3xl flex flex-col overflow-hidden hidden xl:flex">
+    <aside className="w-[280px] shrink-0 bg-white rounded-3xl flex flex-col overflow-hidden hidden 2xl:flex">
       <div className="text-xs font-semibold text-gray-400 uppercase tracking-wide p-5 pb-3 shrink-0">
         {t(lang, 'preview')}
       </div>

@@ -1,12 +1,12 @@
-import { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useMemo, useRef, useState } from 'react'
+import { useNavigate, Navigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { fetchCategories, fetchItems, fetchModifierGroups } from '../menu/api'
-import { placeOrder, payOrder, type PaymentInput } from './api'
+import { placeOrder, payOrder, splitOrder, type PaymentInput } from './api'
 import { fetchCurrentShift } from '../shift/api'
 import { fetchCurrentLocation } from '../auth/api'
-import { appendToOrder, voidTableOrder } from '../tables/api'
+import { appendToOrder, voidTableOrder, fetchOrderLines, voidOrderItem, type BillLine } from '../tables/api'
 import { useCartStore, cartSubtotal, cartTotal, discountAmount, lineUnitPrice, type CartLine, type CartMod } from '../../store/cartStore'
 import { useAuthStore } from '../../store/authStore'
 import { useLangStore } from '../../store/langStore'
@@ -19,6 +19,8 @@ import DiscountSheet from './DiscountSheet'
 import PriceSheet from './PriceSheet'
 import TableSheet from './TableSheet'
 import ShiftGate from '../shift/ShiftGate'
+import ReceiptSheet from '../receipt/ReceiptSheet'
+import SplitItemsSheet from './SplitItemsSheet'
 import AppSidebar from '../../components/AppSidebar'
 import ItemImage from '../../components/ItemImage'
 import Icon from '../../components/Icon'
@@ -71,12 +73,19 @@ export default function SellPage() {
   // Строка, у которой правим цену вручную (edit-режим PriceSheet)
   const [editingPrice, setEditingPrice] = useState<CartLine | null>(null)
   const [placedNumber, setPlacedNumber] = useState<number | null>(null)
+  const [paidOrderId, setPaidOrderId] = useState<string | null>(null)  // последний оплаченный — для чека
+  const [showReceipt, setShowReceipt] = useState(false)
   const [clientUuid, setClientUuid] = useState(() => crypto.randomUUID())
   // Заказ, ожидающий оплаты (после place, до pay).
   // intent: 'card' — оплатить сразу картой; 'cash'/'choose' — открыть диалог
   const [payingOrder, setPayingOrder] = useState<
     { orderId: string; dailyNumber: number; total: number; intent: 'cash' | 'card' | 'choose' } | null
   >(null)
+  // Раздельная оплата по позициям: выбор позиций + остаток после оплаты части
+  const [showSplit, setShowSplit] = useState(false)
+  const [splitRemainder, setSplitRemainder] = useState<{ orderId: string; total: number } | null>(null)
+  // Режим столов: после финальной части цепочки сплита вернуться в зал
+  const returnToHall = useRef(false)
 
   // Стартовая вкладка — первая категория по списку (иначе всё)
   const firstCat = categories.find((c) => c.is_active)?.id
@@ -109,22 +118,58 @@ export default function SellPage() {
     cart.addLine(defaultConfig(item, groups))
   }
 
-  function finishPaid(num: number) {
+  function finishPaid(num: number, orderId: string) {
     const wasTable = !!cart.tableCtx
     setPayingOrder(null)
     cart.clear()
     setClientUuid(crypto.randomUUID())
+    setPaidOrderId(orderId)  // для кнопки «Чек»
     qc.invalidateQueries({ queryKey: ['orders'] })
     qc.invalidateQueries({ queryKey: ['current_shift'] })
     qc.invalidateQueries({ queryKey: ['open_table_orders'] })
+    qc.invalidateQueries({ queryKey: ['order_lines'] })
     qc.invalidateQueries({ queryKey: ['queue'] })
-    if (wasTable) {
+    // Цепочка сплита не закончена: показать номер/чек части,
+    // по «Готово» откроется оплата остатка (не уходим в зал)
+    if (splitRemainder) {
+      if (wasTable) returnToHall.current = true
+      setPlacedNumber(num)
+      return
+    }
+    if (wasTable || returnToHall.current) {
+      returnToHall.current = false
       navigate('/hall')  // счёт стола закрыт — назад в зал
       return
     }
     setPlacedNumber(num)
-    setTimeout(() => setPlacedNumber(null), 2500)
+    // Авто-скрытие убрано: закрывается по «Готово» или показу чека
   }
+
+  // «Готово» в модалке номера: если остался неоплаченный остаток сплита —
+  // сразу открываем его оплату
+  function dismissPlaced() {
+    const num = placedNumber ?? 0
+    setPlacedNumber(null)
+    if (splitRemainder) {
+      setPayingOrder({ orderId: splitRemainder.orderId, dailyNumber: num, total: splitRemainder.total, intent: 'choose' })
+      setSplitRemainder(null)
+    }
+  }
+
+  // Раздельная оплата: выбранные позиции → отдельный заказ со своим чеком
+  const split = useMutation({
+    mutationFn: (items: { item_id: string; qty: number }[]) =>
+      splitOrder(payingOrder!.orderId, staff!.id, items),
+    onSuccess: (res) => {
+      setShowSplit(false)
+      // Сначала платим за выделенную часть; остаток — следом
+      setSplitRemainder({ orderId: payingOrder!.orderId, total: res.remaining_total })
+      setPayingOrder({ orderId: res.new_order_id, dailyNumber: res.daily_number, total: res.new_total, intent: 'choose' })
+      qc.invalidateQueries({ queryKey: ['order_lines'] })
+      qc.invalidateQueries({ queryKey: ['queue'] })
+    },
+    onError: (e) => toast.error(e.message),
+  })
 
   // Шаг 1: создать заказ. intent решает, что дальше:
   //   card   → сразу оплатить картой
@@ -147,18 +192,41 @@ export default function SellPage() {
   const pay = useMutation({
     mutationFn: (v: { orderId: string; dailyNumber: number; payments: PaymentInput[] }) =>
       payOrder(v.orderId, v.payments),
-    onSuccess: (_r, v) => finishPaid(v.dailyNumber),
+    onSuccess: (_r, v) => finishPaid(v.dailyNumber, v.orderId),
     onError: (e) => toast.error(e.message),
   })
   const payWithClose = (v: { orderId: string; dailyNumber: number; payments: PaymentInput[] }) => pay.mutate(v)
 
   const tableCtx = cart.tableCtx
 
+  // Уже заказанные позиции открытого счёта стола (read-only, до дозаказа).
+  // cart.lines в режиме стола = только НОВЫЕ позиции, поэтому существующие
+  // тянем отдельно, чтобы бариста/кассир видел, что уже на столе.
+  const { data: existingLines = [] } = useQuery({
+    queryKey: ['order_lines', tableCtx?.orderId],
+    queryFn: () => fetchOrderLines(tableCtx!.orderId),
+    enabled: !!tableCtx,
+  })
+
+  // Снять уже заказанную позицию с открытого счёта (мягкий void)
+  const voidItem = useMutation({
+    mutationFn: (itemId: string) => voidOrderItem(itemId, staff!.id),
+    onSuccess: (res) => {
+      // Обновляем локальный существующий total, чтобы итог/шапка сразу сошлись
+      if (tableCtx) cart.setTableCtx({ ...tableCtx, existingTotal: res.total })
+      qc.invalidateQueries({ queryKey: ['order_lines', tableCtx!.orderId] })
+      qc.invalidateQueries({ queryKey: ['open_table_orders'] })
+      qc.invalidateQueries({ queryKey: ['queue'] })
+    },
+    onError: (e) => toast.error(e.message),
+  })
+
   // Режим столов: сохранить дозаказ в открытый счёт (остаётся open) → назад в зал
   const saveBill = useMutation({
     mutationFn: () => appendToOrder(tableCtx!.orderId, staff!.id, cart.lines),
     onSuccess: () => {
       toast.success(t(lang, 'billSaved'))
+      qc.invalidateQueries({ queryKey: ['order_lines', tableCtx!.orderId] })
       cart.clear()
       qc.invalidateQueries({ queryKey: ['open_table_orders'] })
       qc.invalidateQueries({ queryKey: ['queue'] })
@@ -193,6 +261,19 @@ export default function SellPage() {
     onError: (e) => toast.error(e.message),
   })
 
+  // Выход из стола («Назад»). Если счёт так и остался пустым (зашли по ошибке /
+  // просто посмотреть, ничего не добавили) — отменяем пустышку, чтобы стол не
+  // числился занятым. Иначе — просто выходим, счёт остаётся открытым.
+  function exitTable() {
+    const emptyOrder = existingLines.length === 0 && cart.lines.length === 0
+    if (emptyOrder && tableCtx) {
+      voidBill.mutate()
+    } else {
+      cart.clear()
+      navigate('/hall')
+    }
+  }
+
   const subtotal = cartSubtotal(cart.lines)
   const discAmount = discountAmount(subtotal, cart.discount)
   const total = cartTotal(cart.lines, cart.discount)
@@ -200,6 +281,12 @@ export default function SellPage() {
   const vatIncluded = Math.round((total * 18) / 118)
 
   if (!staff) return null
+
+  // Режим столов: продажа — не самостоятельный экран, вход через зал.
+  // Открыли /sell без выбранного стола → возвращаем в зал.
+  if (location?.service_mode === 'tables' && !cart.tableCtx) {
+    return <Navigate to="/hall" replace />
+  }
 
   // Нет открытой смены — не пускаем к продажам
   if (!shiftLoading && !shift) {
@@ -222,7 +309,7 @@ export default function SellPage() {
             onChange={(e) => setSearch(e.target.value)}
           />
 
-          <div className="flex gap-2 overflow-x-auto py-4">
+          <div className="flex gap-2 overflow-x-auto py-4 short:py-2">
             {hasFavorites && (
               <Chip active={!search && currentCat === 'fav'} onClick={() => { setSearch(''); setActiveCat('fav') }}>
                 ★ {t(lang, 'favorites')}
@@ -240,7 +327,7 @@ export default function SellPage() {
           {visibleItems.length === 0 ? (
             <p className="text-gray-300 text-sm text-center pt-20">{t(lang, 'nothingFound')}</p>
           ) : (
-            <div className="grid grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-3">
               {visibleItems.map((item) => (
                 <button
                   key={item.id}
@@ -281,7 +368,7 @@ export default function SellPage() {
         </div>
 
         {/* Ряд действий */}
-        <div className="shrink-0 border-t border-gray-100 px-5 pt-3 pb-5 flex gap-2 overflow-x-auto">
+        <div className="shrink-0 border-t border-gray-100 px-5 pt-3 pb-5 short:pb-3 flex gap-2 overflow-x-auto">
           <ActionButton icon="customItem" label={t(lang, 'customItem')} onClick={() => setShowCustom(true)} />
           <ActionButton
             icon="discount"
@@ -295,7 +382,7 @@ export default function SellPage() {
       </main>
 
       {/* ── Заказ ───────────────────────────────────── */}
-      <aside className="w-[400px] shrink-0 bg-white rounded-3xl flex flex-col overflow-hidden">
+      <aside className="w-[clamp(320px,28vw,400px)] shrink-0 bg-white rounded-3xl flex flex-col overflow-hidden">
         <div className="p-4 pb-3 shrink-0">
           {tableCtx ? (
             /* Режим столов: работаем со счётом конкретного стола */
@@ -349,7 +436,26 @@ export default function SellPage() {
         </div>
 
         <div className="flex-1 overflow-y-auto px-4 space-y-2">
-          {cart.lines.length === 0 && (
+          {/* Режим стола: уже заказанные позиции. Свайп влево → снять с счёта (void). */}
+          {tableCtx && existingLines.length > 0 && (
+            <div className="rounded-2xl bg-gray-50 border border-gray-100 p-3 space-y-1.5">
+              <div className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-1">{t(lang, 'alreadyInBill')}</div>
+              {existingLines.map((l) => (
+                <ExistingBillRow
+                  key={l.id}
+                  line={l}
+                  lang={lang}
+                  isRtl={isRtl}
+                  busy={voidItem.isPending}
+                  onVoid={() => {
+                    if (confirm(t(lang, 'confirmVoidItem'))) voidItem.mutate(l.id)
+                  }}
+                />
+              ))}
+            </div>
+          )}
+
+          {cart.lines.length === 0 && (!tableCtx || existingLines.length === 0) && (
             <p className="text-gray-300 text-sm text-center pt-16">
               {t(lang, tableCtx ? 'addToBill' : 'cartEmptyHint')}
             </p>
@@ -357,54 +463,23 @@ export default function SellPage() {
           {cart.lines.map((l) => {
             const item = items.find((i) => i.id === l.itemId)
             return (
-              <div key={l.key} className="rounded-2xl border border-gray-100 p-3 animate-[rise-in_0.18s_ease-out]">
-                <div className="flex items-start gap-2.5">
-                  {item && <ItemImage item={item} size="line" />}
-                  <button
-                    className="text-start flex-1 min-w-0"
-                    onClick={() => (item ? setPicker({ item, line: l }) : setEditingPrice(l))}
-                  >
-                    <span className="font-semibold text-gray-900 text-sm block leading-tight">
-                      {l.name}
-                      {l.variantName && <span className="text-gray-500 font-medium"> · {l.variantName}</span>}
-                    </span>
-                    {(l.mods.length > 0 || l.notes || l.priceOverride !== null) && (
-                      <span className="block text-xs text-gray-500 mt-0.5 truncate">
-                        {[
-                          ...l.mods.map((m) => m.name),
-                          l.notes,
-                          l.priceOverride !== null ? t(lang, 'priceOverridden') : '',
-                        ]
-                          .filter(Boolean)
-                          .join(' · ')}
-                      </span>
-                    )}
-                  </button>
-                  <div className="flex flex-col items-end gap-1.5 shrink-0">
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        onClick={() => setEditingPrice(l)}
-                        className={`font-bold text-sm tabular-nums ${
-                          l.priceOverride !== null ? 'text-gray-900 underline decoration-dotted underline-offset-2' : 'text-gray-900'
-                        }`}
-                      >
-                        {formatMoney(lineUnitPrice(l) * l.qty, lang)}
-                      </button>
-                      <button onClick={() => cart.removeLine(l.key)} className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-red-500">✕</button>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Stepper onClick={() => cart.updateQty(l.key, l.qty - 1)}>−</Stepper>
-                      <span className="w-6 text-center font-bold text-sm tabular-nums">{l.qty}</span>
-                      <Stepper onClick={() => cart.updateQty(l.key, l.qty + 1)}>+</Stepper>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              <CartLineRow
+                key={l.key}
+                line={l}
+                item={item}
+                lang={lang}
+                isRtl={isRtl}
+                onOpen={() => (item ? setPicker({ item, line: l }) : setEditingPrice(l))}
+                onEditPrice={() => setEditingPrice(l)}
+                onRemove={() => cart.removeLine(l.key)}
+                onDec={() => cart.updateQty(l.key, l.qty - 1)}
+                onInc={() => cart.updateQty(l.key, l.qty + 1)}
+              />
             )
           })}
         </div>
 
-        <div className="p-4 pt-3 shrink-0 border-t border-gray-100 space-y-1.5">
+        <div className="p-4 pt-3 short:pt-2 shrink-0 border-t border-gray-100 space-y-1.5 short:space-y-1">
           {cart.discount && discAmount > 0 && (
             <>
               <div className="flex justify-between text-sm text-gray-500">
@@ -424,15 +499,27 @@ export default function SellPage() {
               </button>
             </>
           )}
+          {/* В режиме стола итог = уже в счёте + добавленное */}
+          {tableCtx && cart.lines.length > 0 && (
+            <div className="flex justify-between text-sm text-gray-500">
+              <span>{t(lang, 'alreadyInBill')}</span>
+              <span className="tabular-nums">{formatMoney(tableCtx.existingTotal, lang)}</span>
+            </div>
+          )}
           <div className="flex justify-between text-sm text-gray-500">
             <span>{t(lang, 'vatIncl')} 18%</span>
             <span className="tabular-nums">{formatMoney(vatIncluded, lang)}</span>
           </div>
           <div className="flex justify-between items-baseline pt-1">
             <span className="font-bold text-gray-900">{t(lang, 'total')}</span>
-            <span key={total} className="text-2xl font-black text-gray-900 tabular-nums inline-block cart-bump">
-              {formatMoney(total, lang)}
-            </span>
+            {(() => {
+              const shown = tableCtx ? tableCtx.existingTotal + total : total
+              return (
+                <span key={shown} className="text-2xl short:text-xl font-black text-gray-900 tabular-nums inline-block cart-bump">
+                  {formatMoney(shown, lang)}
+                </span>
+              )
+            })()}
           </div>
           {tableCtx ? (
             /* Столы: сохранить дозаказ ИЛИ оплатить весь счёт */
@@ -445,7 +532,7 @@ export default function SellPage() {
                   <button
                     onClick={() => saveBill.mutate()}
                     disabled={busy || !hasNew}
-                    className="btn-primary w-full !py-4 !text-base !rounded-2xl mt-2 flex items-center justify-between !px-5"
+                    className="btn-primary w-full !py-4 short:!py-3 !text-base !rounded-2xl mt-2 flex items-center justify-between !px-5"
                   >
                     <span>{t(lang, 'saveBill')}</span>
                     {hasNew && <span className="tabular-nums">{formatMoney(total, lang)}</span>}
@@ -459,7 +546,7 @@ export default function SellPage() {
                       {emptyBill ? t(lang, 'voidBill') : t(lang, 'payBill')}
                     </button>
                     <button
-                      onClick={() => { cart.clear(); navigate('/hall') }}
+                      onClick={exitTable}
                       disabled={busy}
                       className="btn-ghost min-h-[52px] !rounded-2xl"
                     >
@@ -477,7 +564,7 @@ export default function SellPage() {
                   <button
                     onClick={() => place.mutate('choose')}
                     disabled={disabled}
-                    className="btn-primary w-full !py-4 !text-base !rounded-2xl mt-2 flex items-center justify-between !px-5"
+                    className="btn-primary w-full !py-4 short:!py-3 !text-base !rounded-2xl mt-2 flex items-center justify-between !px-5"
                   >
                     <span>{place.isPending ? t(lang, 'charging') : t(lang, 'charge')}</span>
                     {cart.lines.length > 0 && <span className="tabular-nums">{formatMoney(total, lang)}</span>}
@@ -506,13 +593,24 @@ export default function SellPage() {
       </aside>
 
       {/* Оплата созданного заказа (наличные с расчётом сдачи или выбор способа) */}
-      {payingOrder && (
+      {payingOrder && !showSplit && (
         <PaymentSheet
           total={payingOrder.total}
           startMode={payingOrder.intent === 'cash' ? 'cash' : 'choose'}
           busy={pay.isPending}
           onCancel={() => setPayingOrder(null)}
           onPay={(payments) => pay.mutate({ orderId: payingOrder.orderId, dailyNumber: payingOrder.dailyNumber, payments })}
+          onSplitItems={() => setShowSplit(true)}
+        />
+      )}
+
+      {payingOrder && showSplit && (
+        <SplitItemsSheet
+          orderId={payingOrder.orderId}
+          hasDiscount={!!cart.discount}
+          busy={split.isPending}
+          onConfirm={(items) => split.mutate(items)}
+          onCancel={() => setShowSplit(false)}
         />
       )}
 
@@ -589,13 +687,277 @@ export default function SellPage() {
       )}
 
       {placedNumber !== null && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center" onClick={() => setPlacedNumber(null)}>
-          <div className="card px-16 py-12 text-center animate-[pop-in_0.35s_cubic-bezier(0.34,1.56,0.64,1)]">
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center">
+          <div className="card px-12 py-10 text-center animate-[pop-in_0.35s_cubic-bezier(0.34,1.56,0.64,1)]">
             <div className="text-sm text-gray-500 mb-2">{t(lang, 'orderPlaced')}</div>
-            <div className="text-7xl font-black text-gray-900 tabular-nums">#{placedNumber}</div>
+            <div className="text-7xl font-black text-gray-900 tabular-nums mb-8">#{placedNumber}</div>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => setShowReceipt(true)}
+                disabled={!paidOrderId}
+                className="btn-secondary !py-3.5 !rounded-2xl"
+              >
+                {t(lang, 'receipt')}
+              </button>
+              <button onClick={dismissPlaced} className="btn-primary !py-3.5 !rounded-2xl">
+                {splitRemainder ? t(lang, 'payRemainder') : t(lang, 'done')}
+              </button>
+            </div>
           </div>
         </div>
       )}
+
+      {showReceipt && paidOrderId && (
+        <ReceiptSheet orderId={paidOrderId} onClose={() => setShowReceipt(false)} />
+      )}
+    </div>
+  )
+}
+
+/** Порог свайпа (px), после которого позиция удаляется на отпускании */
+const SWIPE_DELETE_THRESHOLD = 96
+/** Ширина зоны удаления, до которой строка «прилипает» */
+const SWIPE_REVEAL_WIDTH = 80
+
+/** Строка счёта со свайпом на удаление (влево в LTR, вправо в RTL) */
+function CartLineRow({
+  line: l,
+  item,
+  lang,
+  isRtl,
+  onOpen,
+  onEditPrice,
+  onRemove,
+  onDec,
+  onInc,
+}: {
+  line: CartLine
+  item: MenuItem | undefined
+  lang: 'ru' | 'he'
+  isRtl: boolean
+  onOpen: () => void
+  onEditPrice: () => void
+  onRemove: () => void
+  onDec: () => void
+  onInc: () => void
+}) {
+  // dx < 0 — строка уехала «в сторону удаления» (нормализовано под RTL)
+  const [dx, setDx] = useState(0)
+  const [dragging, setDragging] = useState(false)
+  const [removing, setRemoving] = useState(false)
+  const start = useRef<{ x: number; y: number } | null>(null)
+  // Пока не решили, что это горизонтальный свайп — не перехватываем тап
+  const locked = useRef(false)
+
+  // В RTL логическое «влево» — это движение вправо по экрану
+  const sign = isRtl ? -1 : 1
+
+  function onPointerDown(e: React.PointerEvent) {
+    if (e.pointerType === 'mouse' && e.button !== 0) return
+    start.current = { x: e.clientX, y: e.clientY }
+    locked.current = false
+  }
+
+  function onPointerMove(e: React.PointerEvent) {
+    if (!start.current) return
+    const rawX = (e.clientX - start.current.x) * sign
+    const rawY = e.clientY - start.current.y
+    if (!locked.current) {
+      // Определяем ось: горизонталь с явным преобладанием — это свайп
+      if (Math.abs(rawX) > 8 && Math.abs(rawX) > Math.abs(rawY)) {
+        locked.current = true
+        setDragging(true)
+        e.currentTarget.setPointerCapture(e.pointerId)
+      } else if (Math.abs(rawY) > 10) {
+        // Вертикальный скролл — отпускаем строку
+        start.current = null
+        return
+      }
+    }
+    if (locked.current) {
+      e.preventDefault()
+      // Только влево; вправо — резинка с затуханием
+      const next = rawX < 0 ? rawX : rawX * 0.25
+      setDx(Math.max(next, -160))
+    }
+  }
+
+  function onPointerUp() {
+    if (!start.current && !dragging) {
+      setDx(0)
+      return
+    }
+    start.current = null
+    setDragging(false)
+    if (-dx >= SWIPE_DELETE_THRESHOLD) {
+      // Уводим за край и удаляем
+      setRemoving(true)
+      setDx(-window.innerWidth)
+      setTimeout(onRemove, 180)
+    } else if (-dx >= SWIPE_REVEAL_WIDTH / 2) {
+      setDx(-SWIPE_REVEAL_WIDTH) // прилипнуть к раскрытой зоне
+    } else {
+      setDx(0)
+    }
+  }
+
+  const revealed = dx <= -SWIPE_REVEAL_WIDTH / 2
+
+  return (
+    <div className="relative overflow-hidden rounded-2xl animate-[rise-in_0.18s_ease-out]">
+      {/* Красная подложка удаления */}
+      <button
+        onClick={() => { setRemoving(true); setDx(-window.innerWidth); setTimeout(onRemove, 180) }}
+        aria-label={t(lang, 'delete')}
+        className="absolute inset-0 flex items-center justify-end bg-red-500 text-white pe-6"
+        style={{ opacity: -dx > 8 ? 1 : 0 }}
+      >
+        <span className="text-sm font-semibold">{t(lang, 'delete')}</span>
+      </button>
+
+      {/* Сама строка — двигается поверх подложки */}
+      <div
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
+        className="relative border border-gray-100 bg-white rounded-2xl p-3 touch-pan-y"
+        style={{
+          transform: `translateX(${dx}px)`,
+          transition: dragging ? 'none' : `transform ${removing ? 0.18 : 0.25}s ease-out`,
+        }}
+      >
+        <div className="flex items-start gap-2.5">
+          {item && <ItemImage item={item} size="line" />}
+          <button
+            className="text-start flex-1 min-w-0"
+            // Игнорируем клик, если строка раскрыта свайпом (сначала закрываем)
+            onClick={() => (revealed ? setDx(0) : onOpen())}
+          >
+            <span className="font-semibold text-gray-900 text-sm block leading-tight">
+              {l.name}
+              {l.variantName && <span className="text-gray-500 font-medium"> · {l.variantName}</span>}
+            </span>
+            {(l.mods.length > 0 || l.notes || l.priceOverride !== null) && (
+              <span className="block text-xs text-gray-500 mt-0.5 truncate">
+                {[
+                  ...l.mods.map((m) => m.name),
+                  l.notes,
+                  l.priceOverride !== null ? t(lang, 'priceOverridden') : '',
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </span>
+            )}
+          </button>
+          <div className="flex flex-col items-end gap-1.5 shrink-0">
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={onEditPrice}
+                className={`font-bold text-sm tabular-nums ${
+                  l.priceOverride !== null ? 'text-gray-900 underline decoration-dotted underline-offset-2' : 'text-gray-900'
+                }`}
+              >
+                {formatMoney(lineUnitPrice(l) * l.qty, lang)}
+              </button>
+              <button onClick={onRemove} className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-red-500">✕</button>
+            </div>
+            <div className="flex items-center gap-1">
+              <Stepper onClick={onDec}>−</Stepper>
+              <span className="w-6 text-center font-bold text-sm tabular-nums">{l.qty}</span>
+              <Stepper onClick={onInc}>+</Stepper>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/** Строка уже заказанной позиции (счёт стола) со свайпом на снятие (void) */
+function ExistingBillRow({
+  line: l,
+  lang,
+  isRtl,
+  busy,
+  onVoid,
+}: {
+  line: BillLine
+  lang: 'ru' | 'he'
+  isRtl: boolean
+  busy: boolean
+  onVoid: () => void
+}) {
+  const [dx, setDx] = useState(0)
+  const [dragging, setDragging] = useState(false)
+  const start = useRef<{ x: number; y: number } | null>(null)
+  const locked = useRef(false)
+  const sign = isRtl ? -1 : 1
+
+  function onPointerDown(e: React.PointerEvent) {
+    if (busy) return
+    if (e.pointerType === 'mouse' && e.button !== 0) return
+    start.current = { x: e.clientX, y: e.clientY }
+    locked.current = false
+  }
+  function onPointerMove(e: React.PointerEvent) {
+    if (!start.current) return
+    const rawX = (e.clientX - start.current.x) * sign
+    const rawY = e.clientY - start.current.y
+    if (!locked.current) {
+      if (Math.abs(rawX) > 8 && Math.abs(rawX) > Math.abs(rawY)) {
+        locked.current = true
+        setDragging(true)
+        e.currentTarget.setPointerCapture(e.pointerId)
+      } else if (Math.abs(rawY) > 10) {
+        start.current = null
+        return
+      }
+    }
+    if (locked.current) {
+      e.preventDefault()
+      const next = rawX < 0 ? rawX : rawX * 0.25
+      setDx(Math.max(next, -140))
+    }
+  }
+  function onPointerUp() {
+    start.current = null
+    setDragging(false)
+    if (-dx >= 88) onVoid()
+    setDx(0)
+  }
+
+  return (
+    <div className="relative overflow-hidden rounded-xl">
+      <div
+        className="absolute inset-0 flex items-center justify-end bg-red-500 text-white pe-4 rounded-xl"
+        style={{ opacity: -dx > 8 ? 1 : 0 }}
+      >
+        <span className="text-xs font-semibold">{t(lang, 'delete')}</span>
+      </div>
+      <div
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
+        className="relative bg-gray-50 flex items-start justify-between gap-2 text-sm py-1 touch-pan-y"
+        style={{
+          transform: `translateX(${dx}px)`,
+          transition: dragging ? 'none' : 'transform 0.22s ease-out',
+        }}
+      >
+        <div className="min-w-0">
+          <span className="font-semibold text-gray-700">
+            {l.qty > 1 && <span className="text-gray-400">{l.qty}× </span>}
+            {l.name}
+            {l.variant_name && <span className="text-gray-500 font-medium"> · {l.variant_name}</span>}
+          </span>
+          {l.modifiers.length > 0 && (
+            <span className="block text-xs text-gray-400 truncate">{l.modifiers.join(' · ')}</span>
+          )}
+        </div>
+        <span className="font-bold text-gray-600 tabular-nums shrink-0">{formatMoney(l.line_total, lang)}</span>
+      </div>
     </div>
   )
 }

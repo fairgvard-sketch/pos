@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuthStore } from '../store/authStore'
 import { useLangStore } from '../store/langStore'
+import { useCartStore } from '../store/cartStore'
 import { fetchCurrentLocation } from '../features/auth/api'
+import { voidTableOrder } from '../features/tables/api'
 import { t } from '../lib/i18n'
 import Icon from './Icon'
 import type { IconName } from './Icon'
@@ -18,10 +20,31 @@ export default function AppSidebar({ active }: { active: SidebarPage }) {
   const lock = useAuthStore((s) => s.lock)
 
   const { data: location } = useQuery({ queryKey: ['current_location'], queryFn: fetchCurrentLocation })
+  const qc = useQueryClient()
+  const tableCtx = useCartStore((s) => s.tableCtx)
+  const lines = useCartStore((s) => s.lines)
+  const clearCart = useCartStore((s) => s.clear)
+
+  // Уход в зал. Если открытый счёт стола так и остался пустым (зашли и вышли,
+  // ничего не заказав) — отменяем пустышку, чтобы стол не числился занятым.
+  function goHall() {
+    const emptyOrder = !!tableCtx && tableCtx.existingTotal === 0 && lines.length === 0
+    if (emptyOrder) {
+      voidTableOrder(tableCtx!.orderId)
+        .catch(() => {})
+        .finally(() => qc.invalidateQueries({ queryKey: ['open_table_orders'] }))
+    }
+    clearCart()
+    navigate('/hall')
+  }
 
   if (!staff) return null
   const isManager = staff.role === 'owner' || staff.role === 'manager'
-  const showHall = location?.service_mode === 'tables'
+  const tablesMode = location?.service_mode === 'tables'
+  const showHall = tablesMode
+  // В режиме столов «Продажа» — не точка входа: она открывается только когда
+  // выбран стол (есть tableCtx). Без стола пункт скрыт, вход через зал.
+  const showSell = !tablesMode || !!tableCtx
 
   return (
     <aside className="w-52 shrink-0 bg-white rounded-3xl flex flex-col p-4">
@@ -31,9 +54,19 @@ export default function AppSidebar({ active }: { active: SidebarPage }) {
       </div>
 
       <nav className="space-y-1">
-        <SideLink active={active === 'sell'} label={t(lang, 'sell')} iconName="orders" onClick={() => navigate('/sell')} />
+        {/* Режим столов: вход через зал, «Продажа» появляется только с выбранным столом */}
         {showHall && (
-          <SideLink active={active === 'hall'} label={t(lang, 'hall')} iconName="customers" onClick={() => navigate('/hall')} />
+          <SideLink
+            active={active === 'hall'}
+            label={t(lang, 'hall')}
+            iconName="customers"
+            // Выход в зал сбрасывает контекст стола → «Продажа» снова скрывается,
+            // пустой счёт отменяется, черновик дозаказа отбрасывается.
+            onClick={goHall}
+          />
+        )}
+        {showSell && (
+          <SideLink active={active === 'sell'} label={t(lang, 'sell')} iconName="orders" onClick={() => navigate('/sell')} />
         )}
         <SideLink active={active === 'queue'} label={t(lang, 'queue')} iconName="queue" onClick={() => navigate('/queue')} />
         <SideLink active={active === 'shift'} label={t(lang, 'shift')} iconName="shift" onClick={() => navigate('/shift')} />

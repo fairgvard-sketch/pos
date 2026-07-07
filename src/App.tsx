@@ -19,6 +19,15 @@ const queryClient = new QueryClient({
     queries: {
       retry: 1,
       refetchOnWindowFocus: false,
+      // Данные из кэша остаются валидными и офлайн — не мигают при обрыве
+      refetchOnReconnect: true,
+    },
+    mutations: {
+      // При коротком обрыве сети мутация ставится на паузу (networkMode 'online' по
+      // умолчанию) и автоматически выполнится, когда сеть вернётся — вместо мгновенной
+      // ошибки. Уровень A офлайна; полная офлайн-очередь — фаза 7.
+      retry: 2,
+      retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000),
     },
   },
 })

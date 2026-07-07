@@ -16,6 +16,12 @@ export interface Location {
   vat_rate: number
   timezone: string
   service_mode: ServiceMode
+  // Реквизиты для чека (все необязательные)
+  receipt_business_name: string | null
+  receipt_address: string | null
+  receipt_tax_id: string | null
+  receipt_phone: string | null
+  receipt_footer: string | null
   created_at: string
 }
 
@@ -50,6 +56,9 @@ export interface StaffSession {
 // ── Каталог ──────────────────────────────────────────────
 // Все цены — целые агороты (см. lib/money.ts)
 
+export type TableStatus = 'free' | 'reserved' | 'disabled'
+export type TableShape = 'square' | 'circle'
+
 export interface Table {
   id: string
   org_id: string
@@ -58,6 +67,12 @@ export interface Table {
   zone: string | null
   sort_order: number
   is_active: boolean
+  status: TableStatus
+  pos_x: number | null   // 0..100, % от ширины холста; null = не размещён
+  pos_y: number | null   // 0..100, % от высоты холста
+  width: number          // % от ширины холста
+  height: number         // % от высоты холста
+  shape: TableShape
   created_at: string
 }
 

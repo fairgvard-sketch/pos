@@ -54,11 +54,39 @@ export interface PaymentInput {
   change_due?: number
 }
 
-/** Принять оплату по заказу и перевести его в paid */
+export interface SplitResult {
+  new_order_id: string
+  new_total: number
+  daily_number: number
+  remaining_total: number
+}
+
+/**
+ * Разделить open-заказ: выбранные позиции (частичное qty поддерживается)
+ * уезжают в новый заказ с отдельным чеком. Возвращает новый заказ и остаток.
+ */
+export async function splitOrder(
+  orderId: string,
+  staffId: string,
+  items: { item_id: string; qty: number }[],
+): Promise<SplitResult> {
+  const { data, error } = await supabase.rpc('split_order', {
+    p_order_id: orderId,
+    p_staff_id: staffId,
+    p_items: items,
+  })
+  if (error) throw new Error(error.message)
+  return data as SplitResult
+}
+
+/** Принять оплату по заказу, перевести в paid и присвоить фискальный номер документа */
 export async function payOrder(orderId: string, payments: PaymentInput[]): Promise<void> {
   const { error } = await supabase.rpc('pay_order', {
     p_order_id: orderId,
     p_payments: payments,
   })
   if (error) throw new Error(error.message)
+  // Сквозной номер документа (Израиль): присваивается после оплаты, идемпотентно.
+  const { error: numErr } = await supabase.rpc('assign_receipt_number', { p_order_id: orderId })
+  if (numErr) throw new Error(numErr.message)
 }

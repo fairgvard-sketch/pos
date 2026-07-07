@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { fetchCurrentLocation, updateServiceMode } from '../auth/api'
+import { fetchCurrentLocation, updateServiceMode, updateReceiptDetails, type ReceiptDetails } from '../auth/api'
 import { fetchTables, createTable, deleteTable } from '../tables/api'
 import { useLangStore } from '../../store/langStore'
 import { t, type TranslationKey } from '../../lib/i18n'
@@ -63,6 +63,29 @@ export default function SettingsPage() {
     onSuccess: () => toast.success(t(lang, 'saved')),
   })
 
+  // ── Реквизиты чека ──
+  const [receipt, setReceipt] = useState<ReceiptDetails>({
+    receipt_business_name: '', receipt_address: '', receipt_tax_id: '', receipt_phone: '', receipt_footer: '',
+  })
+  // Заполняем форму из локации, когда та подгрузилась
+  useEffect(() => {
+    if (location) {
+      setReceipt({
+        receipt_business_name: location.receipt_business_name ?? '',
+        receipt_address: location.receipt_address ?? '',
+        receipt_tax_id: location.receipt_tax_id ?? '',
+        receipt_phone: location.receipt_phone ?? '',
+        receipt_footer: location.receipt_footer ?? '',
+      })
+    }
+  }, [location])
+
+  const saveReceipt = useMutation({
+    mutationFn: () => updateReceiptDetails(receipt),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['current_location'] }); toast.success(t(lang, 'saved')) },
+    onError: (e) => toast.error(e.message),
+  })
+
   const current = location?.service_mode
 
   return (
@@ -107,6 +130,34 @@ export default function SettingsPage() {
               )
             })}
           </div>
+        </section>
+
+        {/* Реквизиты чека */}
+        <section className="max-w-2xl mt-10">
+          <h2 className="text-base font-bold text-gray-900">{t(lang, 'receiptDetailsTitle')}</h2>
+          <p className="text-sm text-gray-500 mt-1 mb-4">{t(lang, 'receiptDetailsHint')}</p>
+
+          <div className="space-y-3">
+            <Field label={t(lang, 'receiptBusinessName')} value={receipt.receipt_business_name ?? ''}
+              placeholder={location?.name ?? ''}
+              onChange={(v) => setReceipt((r) => ({ ...r, receipt_business_name: v }))} />
+            <Field label={t(lang, 'receiptTaxId')} value={receipt.receipt_tax_id ?? ''}
+              onChange={(v) => setReceipt((r) => ({ ...r, receipt_tax_id: v }))} />
+            <Field label={t(lang, 'receiptAddress')} value={receipt.receipt_address ?? ''}
+              onChange={(v) => setReceipt((r) => ({ ...r, receipt_address: v }))} />
+            <Field label={t(lang, 'receiptPhone')} value={receipt.receipt_phone ?? ''}
+              onChange={(v) => setReceipt((r) => ({ ...r, receipt_phone: v }))} />
+            <Field label={t(lang, 'receiptFooter')} value={receipt.receipt_footer ?? ''}
+              onChange={(v) => setReceipt((r) => ({ ...r, receipt_footer: v }))} />
+          </div>
+
+          <button
+            onClick={() => saveReceipt.mutate()}
+            disabled={saveReceipt.isPending}
+            className="btn-primary !py-2.5 !px-6 mt-4"
+          >
+            {t(lang, 'save')}
+          </button>
         </section>
 
         {/* Управление столами — только в режиме столов */}
@@ -160,5 +211,16 @@ export default function SettingsPage() {
         )}
       </main>
     </div>
+  )
+}
+
+function Field({
+  label, value, placeholder, onChange,
+}: { label: string; value: string; placeholder?: string; onChange: (v: string) => void }) {
+  return (
+    <label className="block">
+      <span className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-1">{label}</span>
+      <input className="input" value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} />
+    </label>
   )
 }
