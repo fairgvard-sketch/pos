@@ -3,7 +3,7 @@ import { useNavigate, Navigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { fetchCategories, fetchItems, fetchModifierGroups } from '../menu/api'
-import { placeOrder, payOrder, type PaymentInput } from './api'
+import { placeOrder, payOrder, splitOrder, type PaymentInput } from './api'
 import { fetchCurrentShift } from '../shift/api'
 import { fetchCurrentLocation } from '../auth/api'
 import { appendToOrder, voidTableOrder, fetchOrderLines, voidOrderItem, type BillLine } from '../tables/api'
@@ -19,6 +19,8 @@ import DiscountSheet from './DiscountSheet'
 import PriceSheet from './PriceSheet'
 import TableSheet from './TableSheet'
 import ShiftGate from '../shift/ShiftGate'
+import ReceiptSheet from '../receipt/ReceiptSheet'
+import SplitItemsSheet from './SplitItemsSheet'
 import AppSidebar from '../../components/AppSidebar'
 import ItemImage from '../../components/ItemImage'
 import Icon from '../../components/Icon'
@@ -71,12 +73,19 @@ export default function SellPage() {
   // Строка, у которой правим цену вручную (edit-режим PriceSheet)
   const [editingPrice, setEditingPrice] = useState<CartLine | null>(null)
   const [placedNumber, setPlacedNumber] = useState<number | null>(null)
+  const [paidOrderId, setPaidOrderId] = useState<string | null>(null)  // последний оплаченный — для чека
+  const [showReceipt, setShowReceipt] = useState(false)
   const [clientUuid, setClientUuid] = useState(() => crypto.randomUUID())
   // Заказ, ожидающий оплаты (после place, до pay).
   // intent: 'card' — оплатить сразу картой; 'cash'/'choose' — открыть диалог
   const [payingOrder, setPayingOrder] = useState<
     { orderId: string; dailyNumber: number; total: number; intent: 'cash' | 'card' | 'choose' } | null
   >(null)
+  // Раздельная оплата по позициям: выбор позиций + остаток после оплаты части
+  const [showSplit, setShowSplit] = useState(false)
+  const [splitRemainder, setSplitRemainder] = useState<{ orderId: string; total: number } | null>(null)
+  // Режим столов: после финальной части цепочки сплита вернуться в зал
+  const returnToHall = useRef(false)
 
   // Стартовая вкладка — первая категория по списку (иначе всё)
   const firstCat = categories.find((c) => c.is_active)?.id
@@ -109,23 +118,58 @@ export default function SellPage() {
     cart.addLine(defaultConfig(item, groups))
   }
 
-  function finishPaid(num: number) {
+  function finishPaid(num: number, orderId: string) {
     const wasTable = !!cart.tableCtx
     setPayingOrder(null)
     cart.clear()
     setClientUuid(crypto.randomUUID())
+    setPaidOrderId(orderId)  // для кнопки «Чек»
     qc.invalidateQueries({ queryKey: ['orders'] })
     qc.invalidateQueries({ queryKey: ['current_shift'] })
     qc.invalidateQueries({ queryKey: ['open_table_orders'] })
     qc.invalidateQueries({ queryKey: ['order_lines'] })
     qc.invalidateQueries({ queryKey: ['queue'] })
-    if (wasTable) {
+    // Цепочка сплита не закончена: показать номер/чек части,
+    // по «Готово» откроется оплата остатка (не уходим в зал)
+    if (splitRemainder) {
+      if (wasTable) returnToHall.current = true
+      setPlacedNumber(num)
+      return
+    }
+    if (wasTable || returnToHall.current) {
+      returnToHall.current = false
       navigate('/hall')  // счёт стола закрыт — назад в зал
       return
     }
     setPlacedNumber(num)
-    setTimeout(() => setPlacedNumber(null), 2500)
+    // Авто-скрытие убрано: закрывается по «Готово» или показу чека
   }
+
+  // «Готово» в модалке номера: если остался неоплаченный остаток сплита —
+  // сразу открываем его оплату
+  function dismissPlaced() {
+    const num = placedNumber ?? 0
+    setPlacedNumber(null)
+    if (splitRemainder) {
+      setPayingOrder({ orderId: splitRemainder.orderId, dailyNumber: num, total: splitRemainder.total, intent: 'choose' })
+      setSplitRemainder(null)
+    }
+  }
+
+  // Раздельная оплата: выбранные позиции → отдельный заказ со своим чеком
+  const split = useMutation({
+    mutationFn: (items: { item_id: string; qty: number }[]) =>
+      splitOrder(payingOrder!.orderId, staff!.id, items),
+    onSuccess: (res) => {
+      setShowSplit(false)
+      // Сначала платим за выделенную часть; остаток — следом
+      setSplitRemainder({ orderId: payingOrder!.orderId, total: res.remaining_total })
+      setPayingOrder({ orderId: res.new_order_id, dailyNumber: res.daily_number, total: res.new_total, intent: 'choose' })
+      qc.invalidateQueries({ queryKey: ['order_lines'] })
+      qc.invalidateQueries({ queryKey: ['queue'] })
+    },
+    onError: (e) => toast.error(e.message),
+  })
 
   // Шаг 1: создать заказ. intent решает, что дальше:
   //   card   → сразу оплатить картой
@@ -148,7 +192,7 @@ export default function SellPage() {
   const pay = useMutation({
     mutationFn: (v: { orderId: string; dailyNumber: number; payments: PaymentInput[] }) =>
       payOrder(v.orderId, v.payments),
-    onSuccess: (_r, v) => finishPaid(v.dailyNumber),
+    onSuccess: (_r, v) => finishPaid(v.dailyNumber, v.orderId),
     onError: (e) => toast.error(e.message),
   })
   const payWithClose = (v: { orderId: string; dailyNumber: number; payments: PaymentInput[] }) => pay.mutate(v)
@@ -549,13 +593,24 @@ export default function SellPage() {
       </aside>
 
       {/* Оплата созданного заказа (наличные с расчётом сдачи или выбор способа) */}
-      {payingOrder && (
+      {payingOrder && !showSplit && (
         <PaymentSheet
           total={payingOrder.total}
           startMode={payingOrder.intent === 'cash' ? 'cash' : 'choose'}
           busy={pay.isPending}
           onCancel={() => setPayingOrder(null)}
           onPay={(payments) => pay.mutate({ orderId: payingOrder.orderId, dailyNumber: payingOrder.dailyNumber, payments })}
+          onSplitItems={() => setShowSplit(true)}
+        />
+      )}
+
+      {payingOrder && showSplit && (
+        <SplitItemsSheet
+          orderId={payingOrder.orderId}
+          hasDiscount={!!cart.discount}
+          busy={split.isPending}
+          onConfirm={(items) => split.mutate(items)}
+          onCancel={() => setShowSplit(false)}
         />
       )}
 
@@ -632,12 +687,28 @@ export default function SellPage() {
       )}
 
       {placedNumber !== null && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center" onClick={() => setPlacedNumber(null)}>
-          <div className="card px-16 py-12 text-center animate-[pop-in_0.35s_cubic-bezier(0.34,1.56,0.64,1)]">
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center">
+          <div className="card px-12 py-10 text-center animate-[pop-in_0.35s_cubic-bezier(0.34,1.56,0.64,1)]">
             <div className="text-sm text-gray-500 mb-2">{t(lang, 'orderPlaced')}</div>
-            <div className="text-7xl font-black text-gray-900 tabular-nums">#{placedNumber}</div>
+            <div className="text-7xl font-black text-gray-900 tabular-nums mb-8">#{placedNumber}</div>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => setShowReceipt(true)}
+                disabled={!paidOrderId}
+                className="btn-secondary !py-3.5 !rounded-2xl"
+              >
+                {t(lang, 'receipt')}
+              </button>
+              <button onClick={dismissPlaced} className="btn-primary !py-3.5 !rounded-2xl">
+                {splitRemainder ? t(lang, 'payRemainder') : t(lang, 'done')}
+              </button>
+            </div>
           </div>
         </div>
+      )}
+
+      {showReceipt && paidOrderId && (
+        <ReceiptSheet orderId={paidOrderId} onClose={() => setShowReceipt(false)} />
       )}
     </div>
   )

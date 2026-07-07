@@ -16,6 +16,12 @@ export interface Location {
   vat_rate: number
   timezone: string
   service_mode: ServiceMode
+  // Реквизиты для чека (все необязательные)
+  receipt_business_name: string | null
+  receipt_address: string | null
+  receipt_tax_id: string | null
+  receipt_phone: string | null
+  receipt_footer: string | null
   created_at: string
 }
 
