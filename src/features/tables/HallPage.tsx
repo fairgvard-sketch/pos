@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { fetchTables, fetchOpenTableOrders, openTableOrder, setTableStatus, type TableOccupancy } from './api'
+import { fetchTables, fetchOpenTableOrders, openTableOrder, setTableStatus, setTableLayout, type TableOccupancy } from './api'
 import { fetchCurrentLocation } from '../auth/api'
 import { fetchCurrentShift } from '../shift/api'
 import { useCartStore } from '../../store/cartStore'
@@ -58,16 +58,9 @@ export default function HallPage() {
     return map
   }, [open])
 
-  // Группировка по зонам (без зоны → «—»)
-  const zones = useMemo(() => {
-    const byZone = new Map<string, typeof tables>()
-    for (const tb of tables) {
-      const z = tb.zone || ''
-      if (!byZone.has(z)) byZone.set(z, [])
-      byZone.get(z)!.push(tb)
-    }
-    return [...byZone.entries()]
-  }, [tables])
+  // Раскладка на холсте: у неразмещённых столов (pos_x=null) — дефолтная
+  // сетка, чтобы их можно было увидеть и растащить. Размещённые — как есть.
+  const layout = useMemo(() => tablesWithLayout(tables), [tables])
 
   // Занятый стол, по которому открыто меню действий (долгий тап)
   const [actionTable, setActionTable] = useState<{ table: Table; occ: TableOccupancy } | null>(null)
@@ -87,6 +80,82 @@ export default function HallPage() {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['tables'] }); setStatusTable(null) },
     onError: (e) => toast.error(e.message),
   })
+
+  // ── Drag столов по плану (только в режиме редактирования) ──
+  const canvasRef = useRef<HTMLDivElement | null>(null)
+  // Локальный оверрайд позиции таскаемого стола (%), чтобы не ждать сеть
+  const [dragPos, setDragPos] = useState<{ id: string; x: number; y: number } | null>(null)
+  const dragMoved = useRef(false)
+  // Локальный оверрайд размера (%) при ресайзе. axis: обе оси / ширина / высота
+  const [resize, setResize] = useState<
+    { id: string; width: number; height: number; cx: number; cy: number; axis: 'both' | 'x' | 'y' } | null
+  >(null)
+
+  const MIN_W = 5, MAX_W = 30   // ширина стола, % холста
+  const MIN_H = 5, MAX_H = 40   // высота стола, % холста
+
+  const layoutMut = useMutation({
+    mutationFn: ({ id, x, y, width, height }: { id: string; x: number; y: number; width?: number; height?: number }) =>
+      setTableLayout(id, x, y, width, undefined, height),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['tables'] }),
+    onError: (e) => toast.error(e.message),
+  })
+
+  function startDrag(e: React.PointerEvent, tb: Table, x: number, y: number) {
+    if (!editMode) return
+    e.stopPropagation()
+    dragMoved.current = false
+    ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+    setDragPos({ id: tb.id, x, y })
+  }
+  function onDragMove(e: React.PointerEvent) {
+    if (resize && canvasRef.current) { onResizeMove(e); return }
+    if (!dragPos || !canvasRef.current) return
+    const r = canvasRef.current.getBoundingClientRect()
+    const x = Math.max(0, Math.min(100, ((e.clientX - r.left) / r.width) * 100))
+    const y = Math.max(0, Math.min(100, ((e.clientY - r.top) / r.height) * 100))
+    dragMoved.current = true
+    setDragPos({ id: dragPos.id, x, y })
+  }
+  function endDrag() {
+    if (resize) { endResize(); return }
+    if (dragPos && dragMoved.current) {
+      layoutMut.mutate({ id: dragPos.id, x: dragPos.x, y: dragPos.y })
+    }
+    setDragPos(null)
+  }
+
+  // Ресайз: размер = 2 × расстояние от курсора до центра (в % холста).
+  // axis 'both' — угол (обе оси), 'x' — правый край, 'y' — нижний край.
+  function startResize(e: React.PointerEvent, tb: Table, cx: number, cy: number, axis: 'both' | 'x' | 'y') {
+    e.stopPropagation()
+    dragMoved.current = false
+    ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+    setResize({ id: tb.id, width: tb.width, height: tb.height, cx, cy, axis })
+  }
+  function onResizeMove(e: React.PointerEvent) {
+    if (!resize || !canvasRef.current) return
+    const r = canvasRef.current.getBoundingClientRect()
+    const px = ((e.clientX - r.left) / r.width) * 100
+    const py = ((e.clientY - r.top) / r.height) * 100
+    const nextW = Math.max(MIN_W, Math.min(MAX_W, Math.abs(px - resize.cx) * 2))
+    const nextH = Math.max(MIN_H, Math.min(MAX_H, Math.abs(py - resize.cy) * 2))
+    dragMoved.current = true  // подавить клик по столу после ресайза
+    setResize({
+      ...resize,
+      width: resize.axis === 'y' ? resize.width : nextW,
+      height: resize.axis === 'x' ? resize.height : nextH,
+    })
+  }
+  function endResize() {
+    if (resize) {
+      const tb = tables.find((t) => t.id === resize.id)
+      const x = tb?.pos_x ?? layout.find((l) => l.table.id === resize.id)?.x ?? 50
+      const y = tb?.pos_y ?? layout.find((l) => l.table.id === resize.id)?.y ?? 50
+      layoutMut.mutate({ id: resize.id, x, y, width: resize.width, height: resize.height })
+    }
+    setResize(null)
+  }
 
   function startHold(tb: Table) {
     holdFired.current = false
@@ -151,90 +220,128 @@ export default function HallPage() {
             )}
           </div>
         ) : (
-          <div className="space-y-8">
-            {/* Пустой зал в режиме редактирования: одна зона без имени, чтобы была кнопка «+» */}
-            {(zones.length === 0 ? [['', []]] as [string, Table[]][] : zones).map(([zone, zTables]) => (
-              <section key={zone}>
-                {zone && <h2 className="text-sm font-bold text-gray-500 mb-3">{zone}</h2>}
-                <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-3">
-                  {zTables.map((tb) => {
-                    const occ = occupancyByTable.get(tb.id)
-                    const busy = !!occ
-                    const disabled = !busy && tb.status === 'disabled'
-                    const reserved = !busy && tb.status === 'reserved'
-                    // Приоритет рамки: занят(красный) > резерв(синий) > недоступен(серый) > свободен(зелёный)
-                    const border = busy
-                      ? 'border-red-500'
-                      : reserved
-                        ? 'border-blue-500'
-                        : disabled
-                          ? 'border-gray-200 opacity-50'
-                          : 'border-emerald-500 hover:border-emerald-600'
-                    return (
-                      <button
-                        key={tb.id}
-                        onClick={() => {
-                          if (editMode) { setEditTable(tb); return }
-                          if (!disabled) openTable(tb.id, tb.label)
-                        }}
-                        onPointerDown={() => { if (!editMode) startHold(tb) }}
-                        onPointerUp={cancelHold}
-                        onPointerLeave={cancelHold}
-                        onContextMenu={(e) => e.preventDefault()}
-                        className={`relative aspect-square rounded-2xl border-2 bg-white p-3 flex flex-col items-center justify-center gap-1 transition-all active:scale-[0.97] select-none text-gray-900 ${
-                          editMode ? 'border-dashed border-gray-300 hover:border-gray-500' : border
-                        }`}
-                      >
-                        {editMode && (
-                          <span className="absolute top-2 end-2 text-gray-400">
-                            <Icon name="settings" size={14} />
-                          </span>
-                        )}
-                        <span className="text-2xl font-black tabular-nums leading-none">{tb.label}</span>
-                        {editMode ? (
-                          <span className="text-[11px] text-gray-400">{tb.zone || t(lang, 'tableTapToEdit')}</span>
-                        ) : busy ? (
-                          <>
-                            {/* Сумма в углу — не смещает центрированный номер */}
-                            <span className="absolute top-3 end-3 text-sm font-bold tabular-nums text-red-500 leading-none">
-                              {formatMoney(occ!.total, lang)}
-                            </span>
-                            <div className="absolute bottom-3 start-3 text-start space-y-0.5">
-                              <div className="flex items-center gap-1.5 text-[11px] text-gray-500">
-                                <span className="tabular-nums">{elapsedShort(occ!.opened_at, nowTs, lang)}</span>
-                                <span className="text-gray-300">·</span>
-                                <span className="tabular-nums">{occ!.item_count} {t(lang, 'itemsShort')}</span>
-                              </div>
-                              {occ!.staff_name && (
-                                <div className="text-[11px] text-gray-400 truncate max-w-[90%]">{occ!.staff_name}</div>
-                              )}
-                            </div>
-                          </>
-                        ) : reserved ? (
-                          <span className="text-[11px] font-semibold text-blue-500">{t(lang, 'tableReserved')}</span>
-                        ) : disabled ? (
-                          <span className="text-[11px] text-gray-400">{t(lang, 'tableDisabled')}</span>
-                        ) : (
-                          <span className="text-[11px] text-emerald-600">{t(lang, 'tableFree')}</span>
-                        )}
-                      </button>
-                    )
-                  })}
+          <>
+            {editMode && (
+              <div className="flex items-center gap-3 mb-3">
+                <button onClick={() => setEditTable({ zone: null })} className="btn-secondary !py-2 !px-4">
+                  {t(lang, 'addTable')}
+                </button>
+                <span className="text-xs text-gray-400">{t(lang, 'hallEditHint')}</span>
+              </div>
+            )}
 
-                  {/* Плитка добавления стола в эту зону */}
-                  {editMode && (
-                    <button
-                      onClick={() => setEditTable({ zone: zone || null })}
-                      className="aspect-square rounded-2xl border-2 border-dashed border-gray-300 flex flex-col items-center justify-center gap-1 text-gray-400 hover:border-gray-500 hover:text-gray-600 transition-all active:scale-[0.97]"
-                    >
-                      <span className="text-3xl font-light leading-none">+</span>
-                      <span className="text-[11px] font-semibold">{t(lang, 'addTable')}</span>
-                    </button>
-                  )}
-                </div>
-              </section>
-            ))}
-          </div>
+            {/* Холст плана: столы позиционируются в % от его размера */}
+            <div
+              ref={canvasRef}
+              onPointerMove={editMode ? onDragMove : undefined}
+              onPointerUp={editMode ? endDrag : undefined}
+              className={`relative w-full aspect-[16/10] rounded-2xl ${
+                editMode ? 'bg-gray-50 ring-1 ring-inset ring-gray-200' : ''
+              }`}
+            >
+              {layout.map(({ table: tb, x: baseX, y: baseY }) => {
+                const dp = dragPos?.id === tb.id ? dragPos : null
+                const x = dp ? dp.x : baseX
+                const y = dp ? dp.y : baseY
+                const rz = resize?.id === tb.id ? resize : null
+                const w = rz ? rz.width : tb.width
+                const h = rz ? rz.height : tb.height
+                const occ = occupancyByTable.get(tb.id)
+                const busy = !!occ
+                const disabled = !busy && tb.status === 'disabled'
+                const reserved = !busy && tb.status === 'reserved'
+                const border = busy
+                  ? 'border-red-500'
+                  : reserved
+                    ? 'border-blue-500'
+                    : disabled
+                      ? 'border-gray-200 opacity-50'
+                      : 'border-emerald-500 hover:border-emerald-600'
+                return (
+                  <button
+                    key={tb.id}
+                    onClick={() => {
+                      if (dragMoved.current) return  // это был drag, не клик
+                      if (editMode) { setEditTable(tb); return }
+                      if (!disabled) openTable(tb.id, tb.label)
+                    }}
+                    onPointerDown={(e) => {
+                      if (editMode) startDrag(e, tb, baseX, baseY)
+                      else startHold(tb)
+                    }}
+                    onPointerUp={cancelHold}
+                    onPointerLeave={cancelHold}
+                    onContextMenu={(e) => e.preventDefault()}
+                    style={{
+                      left: `${x}%`,
+                      top: `${y}%`,
+                      width: `${w}%`,
+                      height: `${h}%`,
+                      transform: 'translate(-50%, -50%)',
+                    }}
+                    className={`absolute border-2 bg-white p-2 flex flex-col items-center justify-center gap-0.5 transition-shadow select-none text-gray-900 ${
+                      tb.shape === 'circle' ? 'rounded-full' : 'rounded-2xl'
+                    } ${editMode ? `border-dashed ${dp || rz ? 'shadow-lg z-10' : 'cursor-grab'} border-gray-400` : `${border} active:scale-[0.97]`}`}
+                  >
+                    {editMode && (
+                      <>
+                        {/* Правый край — ширина */}
+                        <span
+                          onPointerDown={(e) => startResize(e, tb, x, y, 'x')}
+                          onPointerMove={onResizeMove}
+                          onPointerUp={endResize}
+                          className="absolute top-1/2 -end-1.5 -translate-y-1/2 w-3 h-6 rounded-full bg-white border-2 border-gray-400 cursor-ew-resize z-20"
+                        />
+                        {/* Нижний край — высота */}
+                        <span
+                          onPointerDown={(e) => startResize(e, tb, x, y, 'y')}
+                          onPointerMove={onResizeMove}
+                          onPointerUp={endResize}
+                          className="absolute -bottom-1.5 start-1/2 -translate-x-1/2 w-6 h-3 rounded-full bg-white border-2 border-gray-400 cursor-ns-resize z-20"
+                        />
+                        {/* Угол — обе оси */}
+                        <span
+                          onPointerDown={(e) => startResize(e, tb, x, y, 'both')}
+                          onPointerMove={onResizeMove}
+                          onPointerUp={endResize}
+                          className="absolute -bottom-1.5 -end-1.5 w-4 h-4 rounded-full bg-white border-2 border-gray-500 cursor-nwse-resize z-20"
+                        />
+                      </>
+                    )}
+                    {editMode && (
+                      <span className="absolute top-1.5 end-1.5 text-gray-400">
+                        <Icon name="settings" size={13} />
+                      </span>
+                    )}
+                    <span className="text-xl font-black tabular-nums leading-none">{tb.label}</span>
+                    {editMode ? null : busy ? (
+                      <>
+                        <span className="absolute top-2 end-2 text-xs font-bold tabular-nums text-red-500 leading-none">
+                          {formatMoney(occ!.total, lang)}
+                        </span>
+                        <div className="absolute bottom-2 start-2 text-start">
+                          <div className="flex items-center gap-1 text-[10px] text-gray-500">
+                            <span className="tabular-nums">{elapsedShort(occ!.opened_at, nowTs, lang)}</span>
+                            <span className="text-gray-300">·</span>
+                            <span className="tabular-nums">{occ!.item_count}</span>
+                          </div>
+                          {occ!.staff_name && (
+                            <div className="text-[10px] text-gray-400 truncate max-w-[90%]">{occ!.staff_name}</div>
+                          )}
+                        </div>
+                      </>
+                    ) : reserved ? (
+                      <span className="text-[10px] font-semibold text-blue-500">{t(lang, 'tableReserved')}</span>
+                    ) : disabled ? (
+                      <span className="text-[10px] text-gray-400">{t(lang, 'tableDisabled')}</span>
+                    ) : (
+                      <span className="text-[10px] text-emerald-600">{t(lang, 'tableFree')}</span>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          </>
         )}
       </main>
 
@@ -294,6 +401,26 @@ export default function HallPage() {
       )}
     </div>
   )
+}
+
+/**
+ * Позиции столов на холсте (%). Размещённые (pos_x!=null) — как есть.
+ * Неразмещённые раскладываем дефолтной сеткой в свободные слоты, чтобы их
+ * было видно и можно было растащить; при первом drag позиция сохранится.
+ */
+function tablesWithLayout(tables: Table[]): { table: Table; x: number; y: number }[] {
+  const placed = tables.filter((t) => t.pos_x !== null && t.pos_y !== null)
+  const unplaced = tables.filter((t) => t.pos_x === null || t.pos_y === null)
+  const result = placed.map((t) => ({ table: t, x: t.pos_x!, y: t.pos_y! }))
+
+  // Сетка для неразмещённых: 6 колонок, шаг ~15%, старт от 10%/12%
+  const COLS = 6
+  unplaced.forEach((t, i) => {
+    const col = i % COLS
+    const row = Math.floor(i / COLS)
+    result.push({ table: t, x: 10 + col * 15, y: 12 + row * 20 })
+  })
+  return result
 }
 
 /** Компактное «сколько прошло»: «5 мин», «1 ч 20 мин». nowTs — для реактивности. */

@@ -226,6 +226,14 @@ export const translations = {
     tableTapToEdit: 'Изменить',
     confirmDeleteTable: 'Удалить стол? Его можно будет завести заново.',
     hallEmptyHintEdit: 'Добавьте столы прямо здесь',
+    hallEditHint: 'Перетаскивайте столы, тап — настройки',
+    tableShape: 'Форма',
+    shapeSquare: 'Квадрат',
+    shapeCircle: 'Круг',
+    tableSize: 'Размер',
+    sizeSm: 'S',
+    sizeMd: 'M',
+    sizeLg: 'L',
 
     // Настройки
     settingsTitle: 'Настройки',
@@ -501,6 +509,14 @@ export const translations = {
     tableTapToEdit: 'לעריכה',
     confirmDeleteTable: 'למחוק את השולחן? אפשר יהיה ליצור אותו מחדש.',
     hallEmptyHintEdit: 'הוסיפו שולחנות כאן',
+    hallEditHint: 'גררו שולחנות, הקשה — הגדרות',
+    tableShape: 'צורה',
+    shapeSquare: 'ריבוע',
+    shapeCircle: 'עיגול',
+    tableSize: 'גודל',
+    sizeSm: 'S',
+    sizeMd: 'M',
+    sizeLg: 'L',
 
     // Настройки
     settingsTitle: 'הגדרות',

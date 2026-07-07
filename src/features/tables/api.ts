@@ -1,7 +1,7 @@
 import { supabase } from '../../lib/supabase'
 import { getDeviceContext } from '../auth/api'
 import type { CartLine } from '../../store/cartStore'
-import type { Table, TableStatus } from '../../types'
+import type { Table, TableStatus, TableShape } from '../../types'
 
 // ── Справочник столов ────────────────────────────────────
 
@@ -42,6 +42,30 @@ export async function deleteTable(id: string): Promise<void> {
 /** Ручной статус стола: free / reserved / disabled */
 export async function setTableStatus(id: string, status: TableStatus): Promise<void> {
   const { error } = await supabase.rpc('set_table_status', { p_table_id: id, p_status: status })
+  if (error) throw new Error(error.message)
+}
+
+/**
+ * Сохранить раскладку стола на плане: позиция (%), размер (%), форма.
+ * Прямой UPDATE (не RPC): координаты клампятся на клиенте при drag,
+ * RLS-политика tables_all скоупит по org. Так же, как updateTable/deleteTable.
+ */
+export async function setTableLayout(
+  id: string,
+  x: number,
+  y: number,
+  width?: number,
+  shape?: TableShape,
+  height?: number,
+): Promise<void> {
+  const patch: { pos_x: number; pos_y: number; width?: number; height?: number; shape?: TableShape } = {
+    pos_x: Math.round(x * 100) / 100,
+    pos_y: Math.round(y * 100) / 100,
+  }
+  if (width !== undefined) patch.width = Math.round(width * 100) / 100
+  if (height !== undefined) patch.height = Math.round(height * 100) / 100
+  if (shape !== undefined) patch.shape = shape
+  const { error } = await supabase.from('tables').update(patch).eq('id', id)
   if (error) throw new Error(error.message)
 }
 
