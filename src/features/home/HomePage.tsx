@@ -17,6 +17,7 @@ const TILES: Tile[] = [
   { key: 'sell', path: '/sell', ready: true },
   { key: 'queue', path: '/queue', ready: true },
   { key: 'shift', path: '/shift', ready: true },
+  { key: 'timesheet', path: '/timesheet', ready: true },
   { key: 'menu', path: '/menu', ready: true, minRole: 'manager' },
   { key: 'reports', path: '/reports', ready: false, minRole: 'manager' },
   { key: 'settings', path: '/settings', ready: true, minRole: 'manager' },

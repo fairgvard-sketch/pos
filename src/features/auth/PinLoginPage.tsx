@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { verifyStaffPin } from './api'
+import { fetchOpenEntry, clockIn } from '../timesheet/api'
 import { useAuthStore } from '../../store/authStore'
 import { useLangStore } from '../../store/langStore'
 import { t } from '../../lib/i18n'
+import type { StaffSession } from '../../types'
 import LangToggle from '../../components/ui/LangToggle'
 
 const PIN_LENGTH = 4
@@ -22,6 +24,8 @@ export default function PinLoginPage() {
   const [checking, setChecking] = useState(false)
   const [shake, setShake] = useState(false)
   const submitting = useRef(false)
+  // Развилка табеля: сотрудник вошёл, но рабочий день не начат
+  const [pending, setPending] = useState<StaffSession | null>(null)
 
   const submit = useCallback(
     async (fullPin: string) => {
@@ -31,7 +35,15 @@ export default function PinLoginPage() {
       try {
         const staff = await verifyStaffPin(fullPin)
         setStaff(staff)
-        navigate('/home', { replace: true })
+        // Табель: если день не начат — предложить отметиться (не блокируя вход).
+        // Ошибку проверки табеля глотаем — вход важнее учёта часов.
+        let open = null
+        try { open = await fetchOpenEntry(staff.id) } catch { /* ignore */ }
+        if (open) {
+          navigate('/home', { replace: true })
+        } else {
+          setPending(staff)
+        }
       } catch {
         setShake(true)
         setTimeout(() => setShake(false), 400)
@@ -67,6 +79,35 @@ export default function PinLoginPage() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [press, backspace])
+
+  async function beginDay() {
+    if (!pending) return
+    try { await clockIn(pending.id) } catch { /* ignore — вход важнее */ }
+    navigate('/home', { replace: true })
+  }
+
+  // Развилка табеля: вошёл, день не начат → предложить отметиться
+  if (pending) {
+    return (
+      <div dir={isRtl ? 'rtl' : 'ltr'} className="min-h-screen bg-[#f8f9fb] flex flex-col items-center justify-center p-6">
+        <div className="card px-10 py-8 text-center max-w-sm w-full">
+          <div className="text-sm text-gray-400 mb-1">{t(lang, 'goodMorning')}, {pending.name}</div>
+          <div className="text-xl font-black text-gray-900 mb-8">{t(lang, 'startDayQuestion')}</div>
+          <div className="space-y-2">
+            <button onClick={beginDay} className="btn-primary w-full !py-3.5 !rounded-2xl">
+              {t(lang, 'startWorkday')}
+            </button>
+            <button
+              onClick={() => navigate('/home', { replace: true })}
+              className="btn-ghost w-full !py-3.5 !rounded-2xl"
+            >
+              {t(lang, 'skip')}
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div dir={isRtl ? 'rtl' : 'ltr'} className="min-h-screen bg-[#f8f9fb] flex flex-col items-center justify-center p-6">

@@ -294,6 +294,22 @@ export const translations = {
     onlyOwnerEditsOwner: 'Владельца может менять только владелец',
     itsYou: 'Это вы',
 
+    // Табель рабочего времени
+    timesheet: 'Табель',
+    startWorkday: 'Начать рабочий день',
+    endWorkday: 'Завершить день',
+    onShiftNow: 'Сейчас на смене',
+    goodMorning: 'Доброе утро',
+    startDayQuestion: 'Начать рабочий день?',
+    skip: 'Пропустить',
+    hoursWorked: 'Отработано',
+    workdayStarted: 'Рабочий день начат',
+    workdayEnded: 'Рабочий день завершён',
+    today: 'Сегодня',
+    thisWeek: 'Неделя',
+    noEntriesYet: 'Пока нет отметок',
+    since: 'с',
+
     // Смены
     shift: 'Смена',
     openShift: 'Открыть смену',
@@ -624,6 +640,22 @@ export const translations = {
     pinChanged: 'ה-PIN שונה',
     onlyOwnerEditsOwner: 'רק בעלים יכול לערוך בעלים',
     itsYou: 'זה אתה',
+
+    // Табель рабочего времени
+    timesheet: 'שעון נוכחות',
+    startWorkday: 'התחלת יום עבודה',
+    endWorkday: 'סיום יום',
+    onShiftNow: 'כרגע במשמרת',
+    goodMorning: 'בוקר טוב',
+    startDayQuestion: 'להתחיל יום עבודה?',
+    skip: 'דלג',
+    hoursWorked: 'שעות עבודה',
+    workdayStarted: 'יום העבודה התחיל',
+    workdayEnded: 'יום העבודה הסתיים',
+    today: 'היום',
+    thisWeek: 'שבוע',
+    noEntriesYet: 'אין עדיין רישומים',
+    since: 'מ-',
 
     // Смены
     shift: 'משמרת',
