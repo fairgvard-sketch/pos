@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Kassa</string>
+    <!-- ЗАМЕНИ на URL твоего деплоя Vercel (без слэша в конце) -->
+    <string name="app_url">https://YOUR-APP.vercel.app</string>
+</resources>

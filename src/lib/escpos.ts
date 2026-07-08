@@ -8,15 +8,20 @@
  * отрисовано на canvas.
  */
 
-/** Собрать rawbt:-ссылку с ESC/POS байтами картинки (переход по ней откроет RawBT) */
-export function canvasToRawbtUrl(canvas: HTMLCanvasElement): string {
+/** ESC/POS байты картинки в base64 — для моста APK (KassaAndroid) и RawBT */
+export function canvasToEscposBase64(canvas: HTMLCanvasElement): string {
   const bytes = canvasToEscposRaster(canvas)
   let bin = ''
   const CHUNK = 0x8000
   for (let i = 0; i < bytes.length; i += CHUNK) {
     bin += String.fromCharCode(...bytes.subarray(i, i + CHUNK))
   }
-  return 'rawbt:base64,' + btoa(bin)
+  return btoa(bin)
+}
+
+/** Собрать rawbt:-ссылку с ESC/POS байтами картинки (переход по ней откроет RawBT) */
+export function canvasToRawbtUrl(canvas: HTMLCanvasElement): string {
+  return 'rawbt:base64,' + canvasToEscposBase64(canvas)
 }
 
 /** Canvas → ESC/POS: init, растр GS v 0 (1 бит/пиксель), прогон, отрез */

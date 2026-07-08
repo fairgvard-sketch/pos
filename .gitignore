@@ -18,6 +18,12 @@ dist-ssr
 # Reference mockups / scratch screenshots (not part of the app)
 /*.png
 
+# Android wrapper build artifacts
+android/.gradle
+android/build
+android/app/build
+android/local.properties
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

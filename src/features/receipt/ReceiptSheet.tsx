@@ -4,7 +4,7 @@ import { renderReceiptCanvas } from './printCanvas'
 import { fetchCurrentLocation } from '../auth/api'
 import { useLangStore } from '../../store/langStore'
 import { useDeviceStore } from '../../store/deviceStore'
-import { canvasToRawbtUrl } from '../../lib/escpos'
+import { canvasToRawbtUrl, canvasToEscposBase64 } from '../../lib/escpos'
 import { t } from '../../lib/i18n'
 import type { Location } from '../../types'
 
@@ -25,13 +25,20 @@ export default function ReceiptSheet({ orderId, onClose }: Props) {
   const { data: location } = useQuery({ queryKey: ['current_location'], queryFn: fetchCurrentLocation })
 
   /**
-   * Печать чека — по настройке кассы (Настройки → Касса → Способ печати):
-   *  - browser: системный диалог печати (обычный принтер / PDF)
-   *  - rawbt: чек рендерится в картинку → ESC/POS растр → приложение RawBT
-   *    печатает на встроенный термопринтер Sunmi (браузер его не видит).
+   * Печать чека, по приоритету:
+   *  1. APK-обёртка (window.KassaAndroid): тихая печать на встроенный
+   *     принтер Sunmi через мост — как у нативных POS. Перекрывает настройку.
+   *  2. rawbt: картинка → ESC/POS растр → приложение RawBT (Sunmi без APK).
+   *  3. browser: системный диалог печати (обычный принтер / PDF).
    */
   function handlePrint() {
     if (!receipt) return
+    const bridge = window.KassaAndroid
+    if (bridge?.isAvailable()) {
+      const canvas = renderReceiptCanvas(receipt, location)
+      bridge.printBase64(canvasToEscposBase64(canvas))
+      return
+    }
     if (printMode === 'rawbt') {
       const canvas = renderReceiptCanvas(receipt, location)
       window.location.href = canvasToRawbtUrl(canvas)
