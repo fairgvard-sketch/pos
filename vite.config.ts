@@ -23,8 +23,10 @@ export default defineConfig({
         short_name: 'Kassa',
         description: 'POS для кофеен и пекарен',
         lang: 'ru',
-        // Тач-касса: во весь экран, только альбомная ориентация
-        display: 'fullscreen',
+        // Тач-касса, альбомная ориентация. standalone (не fullscreen!):
+        // браузерный UI скрыт, но системная навигация Android (назад/домой)
+        // остаётся — иначе с терминала нельзя свернуть кассу.
+        display: 'standalone',
         orientation: 'landscape',
         background_color: '#eceef1',
         theme_color: '#111827',
