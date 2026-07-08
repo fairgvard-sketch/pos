@@ -194,3 +194,101 @@ export function renderReceiptCanvas(r: Receipt, location: Location | undefined):
   octx.drawImage(tall, 0, 0)
   return out
 }
+
+// ── Тикет на кухню/бар ────────────────────────────────────
+
+export interface KitchenTicketLine {
+  qty: number
+  name: string
+  variantName: string | null
+  modifiers: string[]
+  notes: string
+}
+
+export interface KitchenTicketData {
+  /** Номер заказа (#42); null для дозаказа стола */
+  dailyNumber: number | null
+  orderType: 'here' | 'takeaway'
+  customerName: string
+  tableLabel: string
+  lines: KitchenTicketLine[]
+  /** Локализованные подписи (тикет — на языке интерфейса кассы) */
+  labels: { takeaway: string; here: string; table: string; addon: string }
+}
+
+/**
+ * Бегунок для бариста/кухни: номер крупно, тип, стол, позиции с
+ * модификаторами и заметками. БЕЗ цен. Печатается при оплате
+ * (весь заказ) или при дозаказе стола (только новые позиции).
+ */
+export function renderKitchenTicketCanvas(d: KitchenTicketData): HTMLCanvasElement {
+  const tall = document.createElement('canvas')
+  tall.width = W
+  tall.height = 2000
+  const ctx = tall.getContext('2d')!
+  ctx.fillStyle = '#fff'
+  ctx.fillRect(0, 0, W, tall.height)
+  ctx.fillStyle = '#000'
+
+  let y = 44
+
+  // Номер — очень крупно (виден с расстояния); дозаказ — метка стола
+  ctx.textAlign = 'center'
+  if (d.dailyNumber !== null) {
+    ctx.font = FONT(72, true)
+    ctx.fillText(`#${d.dailyNumber}`, W / 2, y + 28)
+    y += 100
+  } else {
+    ctx.font = FONT(48, true)
+    ctx.fillText(d.labels.addon, W / 2, y + 12)
+    y += 72
+  }
+
+  // Тип заказа / стол / имя / время
+  ctx.font = FONT(28, true)
+  const meta: string[] = []
+  if (d.tableLabel) meta.push(`${d.labels.table} ${d.tableLabel}`)
+  else meta.push(d.orderType === 'takeaway' ? d.labels.takeaway : d.labels.here)
+  if (d.customerName) meta.push(d.customerName)
+  meta.push(new Date().toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' }))
+  ctx.fillText(meta.join(' · '), W / 2, y)
+  y += 44
+
+  // Разделитель
+  ctx.save()
+  ctx.setLineDash([8, 8])
+  ctx.beginPath()
+  ctx.moveTo(MX, y - 16)
+  ctx.lineTo(RIGHT, y - 16)
+  ctx.stroke()
+  ctx.restore()
+  y += 12
+
+  // Позиции: 2× Капучино Большой
+  for (const l of d.lines) {
+    ctx.font = FONT(34, true)
+    ctx.textAlign = 'right'
+    const name = l.variantName ? `${l.name} ${l.variantName}` : l.name
+    ctx.fillText(`${l.qty > 1 ? `${l.qty}× ` : ''}${name}`, RIGHT, y)
+    y += 44
+    ctx.font = FONT(28)
+    for (const m of l.modifiers) {
+      ctx.fillText(`← ${m}`, RIGHT - 24, y)
+      y += 38
+    }
+    if (l.notes) {
+      ctx.fillText(`✎ ${l.notes}`, RIGHT - 24, y)
+      y += 38
+    }
+    y += 8
+  }
+
+  const out = document.createElement('canvas')
+  out.width = W
+  out.height = Math.min(tall.height, y + 24)
+  const octx = out.getContext('2d')!
+  octx.fillStyle = '#fff'
+  octx.fillRect(0, 0, out.width, out.height)
+  octx.drawImage(tall, 0, 0)
+  return out
+}

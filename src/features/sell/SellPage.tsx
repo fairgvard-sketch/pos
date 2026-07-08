@@ -12,6 +12,8 @@ import { useAuthStore } from '../../store/authStore'
 import { useLangStore } from '../../store/langStore'
 import { useDeviceStore } from '../../store/deviceStore'
 import { playPaymentChime } from '../../lib/sound'
+import { autoPrintReceipt, printKitchenTicket } from '../receipt/printService'
+import type { KitchenTicketLine } from '../receipt/printCanvas'
 import { t } from '../../lib/i18n'
 import { formatMoney, formatMoneyList } from '../../lib/money'
 import type { MenuItem, ModifierGroup } from '../../types'
@@ -48,6 +50,27 @@ function defaultConfig(item: MenuItem, groups: ModifierGroup[]) {
   }
 }
 
+/** Строка корзины → строка кухонного тикета (с заметками) */
+function toTicketLine(l: CartLine): KitchenTicketLine {
+  return {
+    qty: l.qty,
+    name: l.name,
+    variantName: l.variantName,
+    modifiers: l.mods.map((m) => m.name),
+    notes: l.notes,
+  }
+}
+
+/** Подписи тикета на языке интерфейса кассы */
+function ticketLabels(lang: 'ru' | 'he') {
+  return {
+    takeaway: t(lang, 'takeaway'),
+    here: t(lang, 'here'),
+    table: t(lang, 'tableLabel'),
+    addon: t(lang, 'kitchenAddon'),
+  }
+}
+
 export default function SellPage() {
   const lang = useLangStore((s) => s.lang)
   const isRtl = lang === 'he'
@@ -55,6 +78,9 @@ export default function SellPage() {
   const lockStaff = useAuthStore((s) => s.lock)
   const lockAfterSale = useDeviceStore((s) => s.lockAfterSale)
   const paymentSound = useDeviceStore((s) => s.paymentSound)
+  const printMode = useDeviceStore((s) => s.printMode)
+  const autoPrintOn = useDeviceStore((s) => s.autoPrintReceipt)
+  const kitchenTicketOn = useDeviceStore((s) => s.printKitchenTicket)
   const qc = useQueryClient()
   const navigate = useNavigate()
 
@@ -134,6 +160,23 @@ export default function SellPage() {
 
   function finishPaid(num: number, orderId: string) {
     const wasTable = !!cart.tableCtx
+    // Автопечать — ДО очистки корзины (тикету нужны заметки позиций).
+    // Тикет печатается один раз на заказ: при сплите остаток его не дублирует
+    // (корзина к тому моменту уже пуста).
+    if (kitchenTicketOn && cart.lines.length > 0) {
+      printKitchenTicket(
+        {
+          dailyNumber: num,
+          orderType: cart.orderType,
+          customerName: cart.customerName,
+          tableLabel: cart.tableCtx?.tableLabel ?? cart.tableLabel,
+          lines: cart.lines.map(toTicketLine),
+          labels: ticketLabels(lang),
+        },
+        printMode === 'rawbt'
+      )
+    }
+    if (autoPrintOn) void autoPrintReceipt(orderId, location, printMode === 'rawbt')
     setPayingOrder(null)
     cart.clear()
     setClientUuid(crypto.randomUUID())
@@ -244,6 +287,20 @@ export default function SellPage() {
     mutationFn: () => appendToOrder(tableCtx!.orderId, staff!.id, cart.lines),
     onSuccess: () => {
       toast.success(t(lang, 'billSaved'))
+      // Тикет на кухню для дозаказа: только новые позиции, без номера
+      if (kitchenTicketOn && cart.lines.length > 0) {
+        printKitchenTicket(
+          {
+            dailyNumber: null,
+            orderType: 'here',
+            customerName: cart.customerName,
+            tableLabel: tableCtx!.tableLabel,
+            lines: cart.lines.map(toTicketLine),
+            labels: ticketLabels(lang),
+          },
+          printMode === 'rawbt'
+        )
+      }
       qc.invalidateQueries({ queryKey: ['order_lines', tableCtx!.orderId] })
       cart.clear()
       qc.invalidateQueries({ queryKey: ['open_table_orders'] })

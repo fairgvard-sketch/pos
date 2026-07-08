@@ -22,10 +22,14 @@ export default function DeviceTab() {
   const lockAfterSale = useDeviceStore((s) => s.lockAfterSale)
   const paymentSound = useDeviceStore((s) => s.paymentSound)
   const printMode = useDeviceStore((s) => s.printMode)
+  const autoPrintReceipt = useDeviceStore((s) => s.autoPrintReceipt)
+  const printKitchenTicket = useDeviceStore((s) => s.printKitchenTicket)
   const setAutoLockSec = useDeviceStore((s) => s.setAutoLockSec)
   const setLockAfterSale = useDeviceStore((s) => s.setLockAfterSale)
   const setPaymentSound = useDeviceStore((s) => s.setPaymentSound)
   const setPrintMode = useDeviceStore((s) => s.setPrintMode)
+  const setAutoPrintReceipt = useDeviceStore((s) => s.setAutoPrintReceipt)
+  const setPrintKitchenTicket = useDeviceStore((s) => s.setPrintKitchenTicket)
 
   return (
     <div className="max-w-xl space-y-8">
@@ -94,6 +98,22 @@ export default function DeviceTab() {
           <p className="text-xs text-amber-600 mt-2">{t(lang, 'printModeRawbtHint')}</p>
         )}
       </section>
+
+      {/* Автопечать чека после оплаты */}
+      <ToggleRow
+        title={t(lang, 'autoPrintTitle')}
+        hint={t(lang, 'autoPrintHint')}
+        checked={autoPrintReceipt}
+        onChange={setAutoPrintReceipt}
+      />
+
+      {/* Тикет на кухню/бар */}
+      <ToggleRow
+        title={t(lang, 'kitchenTicketTitle')}
+        hint={t(lang, 'kitchenTicketHint')}
+        checked={printKitchenTicket}
+        onChange={setPrintKitchenTicket}
+      />
     </div>
   )
 }

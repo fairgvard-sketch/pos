@@ -24,6 +24,25 @@ export function canvasToRawbtUrl(canvas: HTMLCanvasElement): string {
   return 'rawbt:base64,' + canvasToEscposBase64(canvas)
 }
 
+/**
+ * Тихая печать canvas (без диалогов): мост APK → RawBT (если разрешён) → false.
+ * Для автопечати (чек после оплаты, тикет на кухню): если тихого пути
+ * нет — НЕ открываем браузерный диалог, просто возвращаем false.
+ * allowRawbt — только когда способ печати кассы = 'rawbt' (иначе на
+ * устройствах без RawBT дёргали бы несуществующую схему).
+ */
+export function printCanvasSilently(canvas: HTMLCanvasElement, allowRawbt: boolean): boolean {
+  const bridge = window.KassaAndroid
+  if (bridge?.isAvailable()) {
+    return bridge.printBase64(canvasToEscposBase64(canvas))
+  }
+  if (allowRawbt) {
+    window.location.href = canvasToRawbtUrl(canvas)
+    return true
+  }
+  return false
+}
+
 /** Canvas → ESC/POS: init, растр GS v 0 (1 бит/пиксель), прогон, отрез */
 function canvasToEscposRaster(canvas: HTMLCanvasElement): Uint8Array {
   const ctx = canvas.getContext('2d')!
