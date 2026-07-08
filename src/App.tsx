@@ -14,6 +14,7 @@ import TimesheetPage from './features/timesheet/TimesheetPage'
 import TransactionsPage from './features/transactions/TransactionsPage'
 import QueuePage from './features/queue/QueuePage'
 import SettingsPage from './features/settings/SettingsPage'
+import ReportsPage from './features/reports/ReportsPage'
 import HallPage from './features/tables/HallPage'
 import AutoLock from './components/AutoLock'
 
@@ -133,6 +134,15 @@ export default function App() {
             element={
               <ProtectedRoute allowedRoles={['owner', 'manager']}>
                 <MenuPage />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/reports"
+            element={
+              <ProtectedRoute allowedRoles={['owner', 'manager']}>
+                <ReportsPage />
               </ProtectedRoute>
             }
           />

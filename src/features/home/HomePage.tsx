@@ -19,7 +19,7 @@ const TILES: Tile[] = [
   { key: 'shift', path: '/shift', ready: true },
   { key: 'timesheet', path: '/timesheet', ready: true },
   { key: 'menu', path: '/menu', ready: true, minRole: 'manager' },
-  { key: 'reports', path: '/reports', ready: false, minRole: 'manager' },
+  { key: 'reports', path: '/reports', ready: true, minRole: 'manager' },
   { key: 'settings', path: '/settings', ready: true, minRole: 'manager' },
 ]
 
