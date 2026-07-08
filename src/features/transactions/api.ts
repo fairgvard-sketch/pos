@@ -23,7 +23,9 @@ export interface Transaction {
 export async function fetchTransactions(): Promise<Transaction[]> {
   const { data, error } = await supabase
     .from('orders')
-    .select('id, daily_number, receipt_number, total, status, paid_at, created_at, customer_name, table_label, staff(name), payments(method, amount)')
+    // staff указываем через явный FK: после 025 у orders ДВА FK на staff
+    // (staff_id и refunded_by) — без уточнения embedded-join неоднозначен
+    .select('id, daily_number, receipt_number, total, status, paid_at, created_at, customer_name, table_label, staff:staff!orders_staff_id_fkey(name), payments(method, amount)')
     .in('status', ['paid', 'fulfilled', 'refunded'])
     .order('paid_at', { ascending: false })
     .limit(200)

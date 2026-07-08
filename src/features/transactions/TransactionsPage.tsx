@@ -22,7 +22,7 @@ export default function TransactionsPage() {
   const qc = useQueryClient()
   const isManager = staff?.role === 'owner' || staff?.role === 'manager'
 
-  const { data: txs = [], isLoading } = useQuery({ queryKey: ['transactions'], queryFn: fetchTransactions })
+  const { data: txs = [], isLoading, error } = useQuery({ queryKey: ['transactions'], queryFn: fetchTransactions })
   const [search, setSearch] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [showReceipt, setShowReceipt] = useState(false)
@@ -94,6 +94,8 @@ export default function TransactionsPage() {
         <div className="flex-1 overflow-y-auto px-2 pb-4">
           {isLoading ? (
             <p className="text-center text-gray-400 pt-16">…</p>
+          ) : error ? (
+            <p className="text-center text-red-500 text-sm pt-16 px-4">{(error as Error).message}</p>
           ) : byDay.length === 0 ? (
             <p className="text-center text-gray-400 text-sm pt-16">{t(lang, 'noTransactions')}</p>
           ) : (
