@@ -19,6 +19,8 @@ interface DeviceState {
   printMode: PrintMode
   /** Автопечать чека сразу после оплаты (тихие пути: мост APK / RawBT) */
   autoPrintReceipt: boolean
+  /** Спрашивать после оплаты, как выдать чек (печать / телефон / без чека). Приоритетнее автопечати */
+  receiptPrompt: boolean
   /** Печать тикета на кухню/бар при оплате и дозаказе стола */
   printKitchenTicket: boolean
   setAutoLockSec: (sec: number) => void
@@ -26,6 +28,7 @@ interface DeviceState {
   setPaymentSound: (v: boolean) => void
   setPrintMode: (m: PrintMode) => void
   setAutoPrintReceipt: (v: boolean) => void
+  setReceiptPrompt: (v: boolean) => void
   setPrintKitchenTicket: (v: boolean) => void
 }
 
@@ -37,12 +40,14 @@ export const useDeviceStore = create<DeviceState>()(
       paymentSound: true,
       printMode: 'browser',
       autoPrintReceipt: false,
+      receiptPrompt: false,
       printKitchenTicket: false,
       setAutoLockSec: (autoLockSec) => set({ autoLockSec }),
       setLockAfterSale: (lockAfterSale) => set({ lockAfterSale }),
       setPaymentSound: (paymentSound) => set({ paymentSound }),
       setPrintMode: (printMode) => set({ printMode }),
       setAutoPrintReceipt: (autoPrintReceipt) => set({ autoPrintReceipt }),
+      setReceiptPrompt: (receiptPrompt) => set({ receiptPrompt }),
       setPrintKitchenTicket: (printKitchenTicket) => set({ printKitchenTicket }),
     }),
     { name: 'kassa-device-settings' }

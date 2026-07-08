@@ -23,12 +23,14 @@ export default function DeviceTab() {
   const paymentSound = useDeviceStore((s) => s.paymentSound)
   const printMode = useDeviceStore((s) => s.printMode)
   const autoPrintReceipt = useDeviceStore((s) => s.autoPrintReceipt)
+  const receiptPrompt = useDeviceStore((s) => s.receiptPrompt)
   const printKitchenTicket = useDeviceStore((s) => s.printKitchenTicket)
   const setAutoLockSec = useDeviceStore((s) => s.setAutoLockSec)
   const setLockAfterSale = useDeviceStore((s) => s.setLockAfterSale)
   const setPaymentSound = useDeviceStore((s) => s.setPaymentSound)
   const setPrintMode = useDeviceStore((s) => s.setPrintMode)
   const setAutoPrintReceipt = useDeviceStore((s) => s.setAutoPrintReceipt)
+  const setReceiptPrompt = useDeviceStore((s) => s.setReceiptPrompt)
   const setPrintKitchenTicket = useDeviceStore((s) => s.setPrintKitchenTicket)
 
   return (
@@ -105,6 +107,14 @@ export default function DeviceTab() {
         hint={t(lang, 'autoPrintHint')}
         checked={autoPrintReceipt}
         onChange={setAutoPrintReceipt}
+      />
+
+      {/* Спрашивать, как выдать чек (печать / телефон / без чека) */}
+      <ToggleRow
+        title={t(lang, 'receiptPromptTitle')}
+        hint={t(lang, 'receiptPromptHint')}
+        checked={receiptPrompt}
+        onChange={setReceiptPrompt}
       />
 
       {/* Тикет на кухню/бар */}

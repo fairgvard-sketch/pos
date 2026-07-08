@@ -5,13 +5,15 @@ interface Props {
   decimal?: boolean
   // Макс. знаков в дробной части
   maxDecimals?: number
+  // Не схлопывать ведущие нули (ввод телефона: 05x...)
+  allowLeadingZeros?: boolean
 }
 
 /**
  * Цифровая клавиатура для тач-планшета — POS без физической клавиатуры.
  * Работает со строкой (контролируется извне), крупные тач-мишени.
  */
-export default function NumPad({ value, onChange, decimal = true, maxDecimals = 2 }: Props) {
+export default function NumPad({ value, onChange, decimal = true, maxDecimals = 2, allowLeadingZeros = false }: Props) {
   function press(d: string) {
     if (d === '.') {
       if (!decimal || value.includes('.')) return
@@ -24,7 +26,7 @@ export default function NumPad({ value, onChange, decimal = true, maxDecimals = 
       if (dec.length >= maxDecimals) return
     }
     // Не копим ведущие нули
-    if (value === '0' && d !== '.') { onChange(d); return }
+    if (!allowLeadingZeros && value === '0' && d !== '.') { onChange(d); return }
     onChange(value + d)
   }
 

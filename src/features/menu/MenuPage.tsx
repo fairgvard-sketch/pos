@@ -9,7 +9,7 @@ import {
   SortableContext, verticalListSortingStrategy, arrayMove, useSortable,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { fetchCategories, createCategory, updateCategory, deleteCategory, fetchItems, reorderItems, reorderCategories } from './api'
+import { fetchCategories, createCategory, updateCategory, deleteCategory, fetchItems, reorderItems, reorderCategories, fetchModifierGroups, fetchStations } from './api'
 import type { MenuItem, MenuCategory } from '../../types'
 import { useLangStore } from '../../store/langStore'
 import { t, type TranslationKey } from '../../lib/i18n'
@@ -24,6 +24,35 @@ type Tab = 'items' | 'modifiers' | 'stations'
 
 const CATEGORY_ICONS = ['☕', '🍵', '🥤', '🧃', '🥐', '🍞', '🥪', '🍰', '🍪', '🥗', '🛍', '🎁']
 
+// Иконки секций (stroke=currentColor — перекрашиваются состоянием кнопки)
+const SECTION_ICONS: Record<Tab, React.ReactNode> = {
+  items: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <rect x="3.5" y="3.5" width="7" height="7" rx="2" stroke="currentColor" strokeWidth="1.8" />
+      <rect x="13.5" y="3.5" width="7" height="7" rx="2" stroke="currentColor" strokeWidth="1.8" />
+      <rect x="3.5" y="13.5" width="7" height="7" rx="2" stroke="currentColor" strokeWidth="1.8" />
+      <rect x="13.5" y="13.5" width="7" height="7" rx="2" stroke="currentColor" strokeWidth="1.8" />
+    </svg>
+  ),
+  modifiers: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M4 8H12.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M18.5 8H20" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <circle cx="15.5" cy="8" r="2.4" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M4 16H5.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M11.5 16H20" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <circle cx="8.5" cy="16" r="2.4" stroke="currentColor" strokeWidth="1.8" />
+    </svg>
+  ),
+  stations: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M7 8.5V4h10v4.5" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+      <path d="M7 16H5.5a2 2 0 0 1-2-2v-3.5a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2V14a2 2 0 0 1-2 2H17" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M7 13.5h10V20H7z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+    </svg>
+  ),
+}
+
 const TABS: { id: Tab; label: TranslationKey }[] = [
   { id: 'items', label: 'items' },
   { id: 'modifiers', label: 'modifiersTab' },
@@ -37,6 +66,9 @@ export default function MenuPage() {
 
   const { data: categories = [] } = useQuery({ queryKey: ['menu_categories'], queryFn: fetchCategories })
   const { data: items = [] } = useQuery({ queryKey: ['menu_items'], queryFn: fetchItems })
+  // Счётчики для навигации секций (оба ключа уже греются другими экранами)
+  const { data: modGroups = [] } = useQuery({ queryKey: ['modifier_groups'], queryFn: fetchModifierGroups })
+  const { data: stations = [] } = useQuery({ queryKey: ['stations'], queryFn: fetchStations })
 
   const [tab, setTab] = useState<Tab>('items')
   const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null)
@@ -156,22 +188,28 @@ export default function MenuPage() {
       {/* ── Колонка каталога ──────────────────────── */}
       <div className="w-64 shrink-0 bg-white rounded-3xl flex flex-col overflow-hidden">
         <div className="p-4 pb-0 shrink-0">
-          <h1 className="font-black text-gray-900 mb-3">{t(lang, 'menu')}</h1>
-          <div className="flex rounded-xl overflow-hidden border border-gray-100 bg-gray-50 p-0.5 gap-0.5 mb-4">
-            {TABS.map((tb) => (
-              <button
-                key={tb.id}
-                onClick={() => setTab(tb.id)}
-                className={`flex-1 px-2 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                  tab === tb.id
-                    ? 'bg-white text-gray-900 shadow-[0_1px_2px_rgba(0,0,0,0.08)]'
-                    : 'text-gray-400 hover:text-gray-600'
-                }`}
-              >
-                {t(lang, tb.label)}
-              </button>
-            ))}
-          </div>
+          <h1 className="text-2xl font-black text-gray-900 mb-3">{t(lang, 'menu')}</h1>
+          {/* Секции вертикально: полные названия, иконки, счётчики — ничего не обрезается */}
+          <nav className="space-y-1">
+            {TABS.map((tb) => {
+              const active = tab === tb.id
+              const count = tb.id === 'items' ? items.length : tb.id === 'modifiers' ? modGroups.length : stations.length
+              return (
+                <button
+                  key={tb.id}
+                  onClick={() => setTab(tb.id)}
+                  className={`w-full h-11 px-3 rounded-xl flex items-center gap-2.5 text-sm font-semibold transition-all active:scale-[0.98] ${
+                    active ? 'bg-gray-900 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-50'
+                  }`}
+                >
+                  {SECTION_ICONS[tb.id]}
+                  <span className="flex-1 min-w-0 text-start truncate">{t(lang, tb.label)}</span>
+                  <span className={`text-xs tabular-nums ${active ? 'text-white/50' : 'text-gray-300'}`}>{count}</span>
+                </button>
+              )
+            })}
+          </nav>
+          <div className="h-px bg-gray-100 -mx-4 mt-4 mb-4" />
         </div>
 
         {tab === 'items' && (
@@ -292,7 +330,13 @@ export default function MenuPage() {
           </div>
         )}
 
-        {tab !== 'items' && <div className="flex-1" />}
+        {tab !== 'items' && (
+          <div className="flex-1 px-4">
+            <p className="text-xs text-gray-400 leading-relaxed">
+              {t(lang, tab === 'modifiers' ? 'modifiersColHint' : 'stationsColHint')}
+            </p>
+          </div>
+        )}
       </div>
 
       {/* ── Основная область ──────────────────────── */}

@@ -24,6 +24,7 @@ import PriceSheet from './PriceSheet'
 import TableSheet from './TableSheet'
 import ShiftGate from '../shift/ShiftGate'
 import ReceiptSheet from '../receipt/ReceiptSheet'
+import ReceiptChoiceSheet from '../receipt/ReceiptChoiceSheet'
 import SplitItemsSheet from './SplitItemsSheet'
 import AppSidebar from '../../components/AppSidebar'
 import ItemImage from '../../components/ItemImage'
@@ -80,6 +81,7 @@ export default function SellPage() {
   const paymentSound = useDeviceStore((s) => s.paymentSound)
   const printMode = useDeviceStore((s) => s.printMode)
   const autoPrintOn = useDeviceStore((s) => s.autoPrintReceipt)
+  const receiptPromptOn = useDeviceStore((s) => s.receiptPrompt)
   const kitchenTicketOn = useDeviceStore((s) => s.printKitchenTicket)
   const qc = useQueryClient()
   const navigate = useNavigate()
@@ -106,11 +108,16 @@ export default function SellPage() {
   const [placedNumber, setPlacedNumber] = useState<number | null>(null)
   const [paidOrderId, setPaidOrderId] = useState<string | null>(null)  // последний оплаченный — для чека
   const [showReceipt, setShowReceipt] = useState(false)
+  // Окно «Как выдать чек?» (настройка receiptPrompt); after — отложенное продолжение потока
+  const [receiptChoice, setReceiptChoice] = useState<{ orderId: string; after: () => void } | null>(null)
   const [clientUuid, setClientUuid] = useState(() => crypto.randomUUID())
   // Заказ, ожидающий оплаты (после place, до pay).
   // intent: 'card' — оплатить сразу картой; 'cash'/'choose' — открыть диалог
+  // fromCart: свежий заказ из корзины (place_order) — при отмене оплаты его
+  // нужно аннулировать и сменить clientUuid, иначе повторный place_order
+  // по тому же UUID молча вернёт этот заказ со старой суммой
   const [payingOrder, setPayingOrder] = useState<
-    { orderId: string; dailyNumber: number; total: number; intent: 'cash' | 'card' | 'choose' } | null
+    { orderId: string; dailyNumber: number; total: number; intent: 'cash' | 'card' | 'choose'; fromCart?: boolean } | null
   >(null)
   // Раздельная оплата по позициям: выбор позиций + остаток после оплаты части
   const [showSplit, setShowSplit] = useState(false)
@@ -176,7 +183,8 @@ export default function SellPage() {
         printMode === 'rawbt'
       )
     }
-    if (autoPrintOn) void autoPrintReceipt(orderId, location, printMode === 'rawbt')
+    // «Как выдать чек?» заменяет автопечать: печать — только по выбору кассира
+    if (!receiptPromptOn && autoPrintOn) void autoPrintReceipt(orderId, location, printMode === 'rawbt')
     setPayingOrder(null)
     cart.clear()
     setClientUuid(crypto.randomUUID())
@@ -187,21 +195,26 @@ export default function SellPage() {
     qc.invalidateQueries({ queryKey: ['open_table_orders'] })
     qc.invalidateQueries({ queryKey: ['order_lines'] })
     qc.invalidateQueries({ queryKey: ['queue'] })
-    // Цепочка сплита не закончена: показать номер/чек части,
-    // по «Готово» откроется оплата остатка (не уходим в зал)
-    if (splitRemainder) {
-      if (wasTable) returnToHall.current = true
+    const continueFlow = () => {
+      // Цепочка сплита не закончена: показать номер/чек части,
+      // по «Готово» откроется оплата остатка (не уходим в зал)
+      if (splitRemainder) {
+        if (wasTable) returnToHall.current = true
+        setPlacedNumber(num)
+        return
+      }
+      if (wasTable || returnToHall.current) {
+        returnToHall.current = false
+        if (maybeLockAfterSale()) return
+        navigate('/hall')  // счёт стола закрыт — назад в зал
+        return
+      }
       setPlacedNumber(num)
-      return
+      // Авто-скрытие убрано: закрывается по «Готово» или показу чека
     }
-    if (wasTable || returnToHall.current) {
-      returnToHall.current = false
-      if (maybeLockAfterSale()) return
-      navigate('/hall')  // счёт стола закрыт — назад в зал
-      return
-    }
-    setPlacedNumber(num)
-    // Авто-скрытие убрано: закрывается по «Готово» или показу чека
+    // Сначала выбор чека (навигация/номер заказа ждут его), потом обычный поток
+    if (receiptPromptOn) setReceiptChoice({ orderId, after: continueFlow })
+    else continueFlow()
   }
 
   // «Готово» в модалке номера: если остался неоплаченный остаток сплита —
@@ -243,7 +256,7 @@ export default function SellPage() {
       if (res.intent === 'card') {
         payWithClose({ orderId: res.order_id, dailyNumber: res.daily_number, payments: [{ method: 'card', amount: res.total }] })
       } else {
-        setPayingOrder({ orderId: res.order_id, dailyNumber: res.daily_number, total: res.total, intent: res.intent })
+        setPayingOrder({ orderId: res.order_id, dailyNumber: res.daily_number, total: res.total, intent: res.intent, fromCart: true })
       }
     },
     onError: (e) => toast.error(e.message),
@@ -707,7 +720,16 @@ export default function SellPage() {
           total={payingOrder.total}
           startMode={payingOrder.intent === 'cash' ? 'cash' : 'choose'}
           busy={pay.isPending}
-          onCancel={() => setPayingOrder(null)}
+          onCancel={() => {
+            const o = payingOrder
+            setPayingOrder(null)
+            // Свежий заказ из корзины брошен: аннулировать (аудит цел, void не delete)
+            // и сменить UUID — корзина осталась, следующий «Оформить» создаст новый заказ
+            if (o.fromCart) {
+              setClientUuid(crypto.randomUUID())
+              voidTableOrder(o.orderId).catch(() => {})
+            }
+          }}
           onPay={(payments) => pay.mutate({ orderId: payingOrder.orderId, dailyNumber: payingOrder.dailyNumber, payments })}
           onSplitItems={() => setShowSplit(true)}
         />
@@ -826,6 +848,19 @@ export default function SellPage() {
 
       {showReceipt && paidOrderId && (
         <ReceiptSheet orderId={paidOrderId} onClose={() => setShowReceipt(false)} />
+      )}
+
+      {/* «Как выдать чек?» — после оплаты, до номера заказа/возврата в зал */}
+      {receiptChoice && (
+        <ReceiptChoiceSheet
+          orderId={receiptChoice.orderId}
+          location={location}
+          onDone={() => {
+            const after = receiptChoice.after
+            setReceiptChoice(null)
+            after()
+          }}
+        />
       )}
     </div>
   )

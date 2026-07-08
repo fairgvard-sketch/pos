@@ -4,6 +4,7 @@ import { t } from '../../lib/i18n'
 import { formatMoney, parseMoney } from '../../lib/money'
 import type { PaymentInput } from './api'
 import Icon from '../../components/Icon'
+import NumPad from '../../components/NumPad'
 
 interface Props {
   total: number
@@ -14,6 +15,8 @@ interface Props {
   onSplitItems?: () => void
   busy: boolean
 }
+
+type Method = 'card' | 'cash' | 'mixed'
 
 /** Быстрые купюры для расчёта сдачи (₪): округления вверх + типовые банкноты */
 function quickCashOptions(total: number): number[] {
@@ -30,7 +33,8 @@ function quickCashOptions(total: number): number[] {
 
 export default function PaymentSheet({ total, startMode = 'choose', onCancel, onPay, onSplitItems, busy }: Props) {
   const lang = useLangStore((s) => s.lang)
-  const [mode, setMode] = useState<'choose' | 'cash' | 'mixed'>(startMode)
+  // Карта — самый частый способ, выбрана по умолчанию (наличные — если пришли с кнопки «Наличные»)
+  const [method, setMethod] = useState<Method>(startMode === 'cash' ? 'cash' : 'card')
   const [tenderedStr, setTenderedStr] = useState('')
   // Смешанная оплата: сумма наличными; карта добирает остаток
   const [mixedCashStr, setMixedCashStr] = useState('')
@@ -64,143 +68,184 @@ export default function PaymentSheet({ total, startMode = 'choose', onCancel, on
     ])
   }
 
+  const methods: { id: Method; icon: 'card' | 'cash'; label: string }[] = [
+    { id: 'card', icon: 'card', label: t(lang, 'payCard') },
+    { id: 'cash', icon: 'cash', label: t(lang, 'payCash') },
+    { id: 'mixed', icon: 'card', label: t(lang, 'payMixed') },
+  ]
+
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center p-4">
-      <div className="card w-full max-w-md p-6 animate-[rise-in_0.2s_ease-out]">
-        <div className="flex justify-between items-baseline mb-5">
-          <span className="text-sm text-gray-400">{t(lang, 'toPay')}</span>
-          <span className="text-3xl font-black text-gray-900 tabular-nums">{formatMoney(total, lang)}</span>
+    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl overflow-hidden animate-[rise-in_0.2s_ease-out]">
+
+        {/* Шапка: заголовок + сумма + закрыть */}
+        <div className="flex items-center justify-between gap-4 px-6 py-4 border-b border-gray-100">
+          <h2 className="text-lg font-bold text-gray-900">{t(lang, 'payment')}</h2>
+          <div className="flex items-center gap-4">
+            <div className="flex items-baseline gap-2">
+              <span className="text-sm text-gray-500">{t(lang, 'toPay')}</span>
+              <span className="text-2xl font-black text-gray-900 tabular-nums">{formatMoney(total, lang)}</span>
+            </div>
+            <button
+              onClick={onCancel}
+              disabled={busy}
+              aria-label={t(lang, 'close')}
+              className="w-11 h-11 -me-2 rounded-full flex items-center justify-center text-gray-400
+                         hover:bg-gray-100 hover:text-gray-900 transition-all active:scale-[0.94]"
+            >
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                <path d="M5 5L15 15M15 5L5 15" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+              </svg>
+            </button>
+          </div>
         </div>
 
-        {mode === 'choose' && (
-          <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                onClick={() => setMode('cash')}
-                disabled={busy}
-                className="rounded-2xl border-2 border-gray-200 hover:border-gray-900 py-8 flex flex-col items-center gap-3 transition-all active:scale-[0.97]"
-              >
-                <Icon name="cash" size={32} />
-                <span className="font-bold text-gray-900">{t(lang, 'payCash')}</span>
-              </button>
-              <button
-                onClick={payCard}
-                disabled={busy}
-                className="rounded-2xl border-2 border-gray-200 hover:border-gray-900 py-8 flex flex-col items-center gap-3 transition-all active:scale-[0.97]"
-              >
-                <Icon name="card" size={32} />
-                <span className="font-bold text-gray-900">{t(lang, 'payCard')}</span>
-              </button>
-            </div>
-            <div className={`grid gap-2 ${onSplitItems ? 'grid-cols-2' : 'grid-cols-1'}`}>
-              <button
-                onClick={() => setMode('mixed')}
-                disabled={busy}
-                className="rounded-2xl border border-gray-200 hover:border-gray-900 py-3.5 text-sm font-semibold text-gray-900 transition-all active:scale-[0.98]"
-              >
-                {t(lang, 'payMixed')}
-              </button>
-              {onSplitItems && (
+        <div className="grid sm:grid-cols-[248px_1fr]">
+
+          {/* Способы оплаты — всегда на виду */}
+          <div className="flex sm:flex-col gap-2 p-4 bg-gray-50 sm:border-e border-b sm:border-b-0 border-gray-100">
+            {methods.map((m) => {
+              const selected = method === m.id
+              return (
+                <button
+                  key={m.id}
+                  onClick={() => setMethod(m.id)}
+                  disabled={busy}
+                  className={`flex-1 sm:flex-none h-14 px-4 rounded-2xl flex items-center gap-3 font-semibold text-sm
+                              transition-all active:scale-[0.97] ${
+                    selected
+                      ? 'bg-gray-900 text-white shadow-sm'
+                      : 'bg-white text-gray-900 border border-gray-200 hover:border-gray-400'
+                  }`}
+                >
+                  <Icon name={m.icon} size={22} />
+                  <span className="truncate">{m.label}</span>
+                </button>
+              )
+            })}
+
+            {onSplitItems && (
+              <>
+                <div className="hidden sm:block mt-auto pt-3 border-t border-gray-200" />
                 <button
                   onClick={onSplitItems}
                   disabled={busy}
-                  className="rounded-2xl border border-gray-200 hover:border-gray-900 py-3.5 text-sm font-semibold text-gray-900 transition-all active:scale-[0.98]"
+                  className="flex-1 sm:flex-none h-12 px-4 rounded-2xl flex items-center gap-3 text-sm font-semibold
+                             text-gray-500 hover:text-gray-900 hover:bg-white transition-all active:scale-[0.97]"
                 >
-                  {t(lang, 'splitByItems')}
+                  <Icon name="refund" size={20} />
+                  <span className="truncate">{t(lang, 'splitByItems')}</span>
                 </button>
-              )}
-            </div>
-          </div>
-        )}
-
-        {mode === 'cash' && (
-          <div className="space-y-4">
-            {/* Быстрые суммы */}
-            <div className="grid grid-cols-3 gap-2">
-              {quick.map((amt) => (
-                <button
-                  key={amt}
-                  onClick={() => payCash(amt)}
-                  disabled={busy}
-                  className="rounded-xl border border-gray-200 hover:border-gray-900 py-3 font-bold text-gray-900 tabular-nums transition-all active:scale-[0.96]"
-                >
-                  {amt === total ? t(lang, 'exactAmount') : formatMoney(amt, lang)}
-                </button>
-              ))}
-            </div>
-
-            {/* Ручной ввод полученной суммы */}
-            <div>
-              <label className="text-xs font-medium text-gray-500 mb-1 block">{t(lang, 'tendered')}</label>
-              <input
-                className="input tabular-nums text-lg"
-                inputMode="decimal"
-                autoFocus
-                placeholder="0"
-                value={tenderedStr}
-                onChange={(e) => setTenderedStr(e.target.value)}
-              />
-            </div>
-
-            {change !== null && (
-              <div className="flex justify-between items-baseline px-1">
-                <span className="text-sm text-gray-500">{t(lang, 'change')}</span>
-                <span className="text-2xl font-black text-emerald-600 tabular-nums">{formatMoney(change, lang)}</span>
-              </div>
+              </>
             )}
-
-            <button
-              onClick={() => tendered !== null && tendered >= total && payCash(tendered)}
-              disabled={busy || tendered === null || tendered < total}
-              className="btn-primary w-full !py-3.5 !rounded-2xl"
-            >
-              {t(lang, 'confirmPayment')}
-            </button>
           </div>
-        )}
 
-        {mode === 'mixed' && (
-          <div className="space-y-4">
-            <div>
-              <label className="text-xs font-medium text-gray-500 mb-1 flex items-center gap-1.5">
-                <Icon name="cash" size={14} /> {t(lang, 'payCash')}
-              </label>
-              <input
-                className="input tabular-nums text-lg"
-                inputMode="decimal"
-                autoFocus
-                placeholder="0"
-                value={mixedCashStr}
-                onChange={(e) => setMixedCashStr(e.target.value)}
-              />
+          {/* Контекстная панель выбранного способа */}
+          <div className="p-6 min-h-[520px] flex flex-col">
+            <div className="w-full max-w-[360px] mx-auto flex-1 flex flex-col">
+
+              {method === 'card' && (
+                <>
+                  <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center">
+                    <div className="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center text-gray-900">
+                      <Icon name="card" size={36} />
+                    </div>
+                    <div className="text-4xl font-black text-gray-900 tabular-nums">{formatMoney(total, lang)}</div>
+                    <p className="text-sm text-gray-500">{t(lang, 'cardHint')}</p>
+                  </div>
+                  <button
+                    onClick={payCard}
+                    disabled={busy}
+                    className="btn-primary w-full !py-4 !text-base !rounded-2xl"
+                  >
+                    {busy ? '…' : `${t(lang, 'confirmPayment')} · ${formatMoney(total, lang)}`}
+                  </button>
+                </>
+              )}
+
+              {method === 'cash' && (
+                <div className="flex-1 flex flex-col gap-4">
+                  {/* Быстрые купюры: 1 тап = оплачено */}
+                  <div className="grid grid-cols-3 gap-2">
+                    {quick.map((amt) => (
+                      <button
+                        key={amt}
+                        onClick={() => payCash(amt)}
+                        disabled={busy}
+                        className="h-11 rounded-xl border border-gray-200 hover:border-gray-900 font-bold text-sm
+                                   text-gray-900 tabular-nums transition-all active:scale-[0.96]"
+                      >
+                        {amt === total ? t(lang, 'exactAmount') : formatMoney(amt, lang)}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Получено (набирается нумпадом) */}
+                  <div className="flex items-baseline justify-between px-1">
+                    <span className="text-sm text-gray-500">{t(lang, 'tendered')}</span>
+                    <span className={`text-3xl font-black tabular-nums ${tendered !== null ? 'text-gray-900' : 'text-gray-300'}`}>
+                      {tendered !== null ? formatMoney(tendered, lang) : formatMoney(0, lang)}
+                    </span>
+                  </div>
+
+                  <NumPad value={tenderedStr} onChange={setTenderedStr} />
+
+                  {/* Сдача — строка всегда на месте, чтобы вёрстка не прыгала */}
+                  <div className="flex items-baseline justify-between px-1">
+                    <span className="text-sm text-gray-500">{t(lang, 'change')}</span>
+                    <span className={`text-2xl font-black tabular-nums ${change !== null ? 'text-emerald-600' : 'text-gray-300'}`}>
+                      {change !== null ? formatMoney(change, lang) : '—'}
+                    </span>
+                  </div>
+
+                  <button
+                    onClick={() => tendered !== null && tendered >= total && payCash(tendered)}
+                    disabled={busy || tendered === null || tendered < total}
+                    className="btn-primary w-full !py-4 !text-base !rounded-2xl mt-auto"
+                  >
+                    {t(lang, 'confirmPayment')}
+                  </button>
+                </div>
+              )}
+
+              {method === 'mixed' && (
+                <div className="flex-1 flex flex-col gap-4">
+                  <p className="text-sm text-gray-500">{t(lang, 'mixedHint')}</p>
+
+                  <div className="flex items-baseline justify-between px-1">
+                    <span className="text-sm text-gray-500 flex items-center gap-1.5">
+                      <Icon name="cash" size={14} /> {t(lang, 'payCash')}
+                    </span>
+                    <span className={`text-3xl font-black tabular-nums ${mixedCash !== null ? 'text-gray-900' : 'text-gray-300'}`}>
+                      {mixedCash !== null ? formatMoney(mixedCash, lang) : formatMoney(0, lang)}
+                    </span>
+                  </div>
+
+                  <NumPad value={mixedCashStr} onChange={setMixedCashStr} />
+
+                  {/* Карта добирает остаток автоматически */}
+                  <div className="flex items-baseline justify-between px-1">
+                    <span className="text-sm text-gray-500 flex items-center gap-1.5">
+                      <Icon name="card" size={14} /> {t(lang, 'payCard')}
+                    </span>
+                    <span className="text-2xl font-black text-gray-900 tabular-nums">
+                      {mixedCard !== null ? formatMoney(mixedCard, lang) : '—'}
+                    </span>
+                  </div>
+
+                  <button
+                    onClick={payMixed}
+                    disabled={busy || !mixedValid}
+                    className="btn-primary w-full !py-4 !text-base !rounded-2xl mt-auto"
+                  >
+                    {t(lang, 'confirmPayment')}
+                  </button>
+                </div>
+              )}
+
             </div>
-
-            {/* Карта добирает остаток автоматически */}
-            <div className="flex justify-between items-baseline px-1">
-              <span className="text-sm text-gray-500 flex items-center gap-1.5">
-                <Icon name="card" size={14} /> {t(lang, 'payCard')}
-              </span>
-              <span className="text-2xl font-black text-gray-900 tabular-nums">
-                {mixedCard !== null ? formatMoney(mixedCard, lang) : '—'}
-              </span>
-            </div>
-
-            <button
-              onClick={payMixed}
-              disabled={busy || !mixedValid}
-              className="btn-primary w-full !py-3.5 !rounded-2xl"
-            >
-              {t(lang, 'confirmPayment')}
-            </button>
-            <button onClick={() => setMode('choose')} disabled={busy} className="btn-ghost w-full">
-              {t(lang, 'back')}
-            </button>
           </div>
-        )}
-
-        <button onClick={onCancel} disabled={busy} className="btn-ghost w-full mt-3">
-          {t(lang, 'cancel')}
-        </button>
+        </div>
       </div>
     </div>
   )
