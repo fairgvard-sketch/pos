@@ -1,4 +1,4 @@
-import type { Receipt } from './api'
+import type { Receipt, RefundReceipt } from './api'
 import type { Location } from '../../types'
 
 /**
@@ -185,6 +185,119 @@ export function renderReceiptCanvas(r: Receipt, location: Location | undefined):
   }
 
   // Обрезать по фактической высоте
+  const out = document.createElement('canvas')
+  out.width = W
+  out.height = Math.min(tall.height, y + 24)
+  const octx = out.getContext('2d')!
+  octx.fillStyle = '#fff'
+  octx.fillRect(0, 0, out.width, out.height)
+  octx.drawImage(tall, 0, 0)
+  return out
+}
+
+// ── תעודת זיכוי — чек возврата ────────────────────────────
+
+/**
+ * Кредитный документ возврата: своя сквозная нумерация, ссылка на
+ * исходный чек, возвращённые позиции (или одна строка суммой),
+ * доля НДС, способ выдачи. Иврит/RTL, раскладка как у чека.
+ */
+export function renderRefundReceiptCanvas(r: RefundReceipt, location: Location | undefined): HTMLCanvasElement {
+  const tall = document.createElement('canvas')
+  tall.width = W
+  tall.height = 2000
+  const ctx = tall.getContext('2d')!
+  ctx.fillStyle = '#fff'
+  ctx.fillRect(0, 0, W, tall.height)
+  ctx.fillStyle = '#000'
+
+  let y = 30
+
+  const center = (text: string, size: number, bold = false, gap = 8) => {
+    ctx.font = FONT(size, bold)
+    ctx.textAlign = 'center'
+    ctx.fillText(text, W / 2, y)
+    y += size + gap
+  }
+  const metaRow = (label: string, value: string, size = 26, bold = false) => {
+    ctx.font = FONT(size, bold)
+    ctx.textAlign = 'right'
+    ctx.fillText(label, RIGHT, y)
+    ctx.textAlign = 'left'
+    ctx.fillText(value, MX, y)
+    y += size + 8
+  }
+  const divider = () => {
+    ctx.save()
+    ctx.strokeStyle = '#000'
+    ctx.setLineDash([6, 6])
+    ctx.beginPath()
+    ctx.moveTo(MX, y - 8)
+    ctx.lineTo(RIGHT, y - 8)
+    ctx.stroke()
+    ctx.restore()
+    y += 16
+  }
+  const fitText = (text: string, maxWidth: number): string => {
+    if (ctx.measureText(text).width <= maxWidth) return text
+    let s = text
+    while (s.length > 1 && ctx.measureText(s + '…').width > maxWidth) s = s.slice(0, -1)
+    return s + '…'
+  }
+
+  // ── Шапка (реквизиты бизнеса) ──
+  const businessName = location?.receipt_business_name || location?.name || ''
+  if (businessName) center(businessName, 34, true, 10)
+  if (location?.receipt_address) center(location.receipt_address, 24)
+  if (location?.receipt_phone) center(`טל׳: ${location.receipt_phone}`, 24)
+  if (location?.receipt_tax_id) center(`ע.מ/ח.פ: ${location.receipt_tax_id}`, 24)
+  y += 6
+
+  // ── Тип документа + номер ──
+  center(`תעודת זיכוי ${r.refund_number ?? '—'}`, 28, true, 6)
+  center('*מקור*', 22, false, 4)
+  divider()
+
+  // ── Мета: дата, исходный документ ──
+  const dt = new Date(r.created_at)
+  const dateStr = dt.toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  const timeStr = dt.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })
+  metaRow('תאריך:', `${timeStr} ${dateStr}`)
+  if (r.receipt_number != null) metaRow('עבור חשבונית:', String(r.receipt_number))
+  metaRow('הזמנה:', `#${r.daily_number}`)
+  if (r.staff_name) metaRow('מוכר/ת:', r.staff_name)
+  if (r.reason) metaRow('סיבה:', fitText(r.reason, RIGHT - 200))
+  divider()
+
+  // ── Возвращённые позиции (или одна строка суммой) ──
+  if (r.items && r.items.length > 0) {
+    for (const l of r.items) {
+      ctx.font = FONT(26)
+      ctx.textAlign = 'right'
+      ctx.fillText(fitText(`${l.qty > 1 ? `${l.qty}× ` : ''}${l.name}`, NAME_MAX + 150), RIGHT, y)
+      ctx.textAlign = 'left'
+      ctx.fillText(`−${fmt(l.amount)}`, COL_TOTAL, y)
+      y += 34
+    }
+    y += 4
+  }
+
+  // ── Итог зикуя крупно ──
+  center(`סה"כ זיכוי: −${fmt(r.amount)}`, 36, true, 16)
+
+  // НДС (доля в возвращённой сумме)
+  metaRow('סה"כ חייב במע"מ', `−${fmt(r.amount - r.vat_amount)}`)
+  metaRow(`מע"מ ${Number(r.vat_rate).toFixed(1)}%`, `−${fmt(r.vat_amount)}`)
+
+  // Способ выдачи
+  divider()
+  metaRow(r.method === 'cash' ? 'מזומן' : 'אשראי', `−${fmt(r.amount)}`)
+
+  if (location?.receipt_footer) {
+    divider()
+    center(location.receipt_footer, 24)
+  }
+
   const out = document.createElement('canvas')
   out.width = W
   out.height = Math.min(tall.height, y + 24)

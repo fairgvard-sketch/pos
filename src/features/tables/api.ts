@@ -208,7 +208,8 @@ interface OpenOrderRow {
 export async function fetchOpenTableOrders(): Promise<TableOccupancy[]> {
   const { data, error } = await supabase
     .from('orders')
-    .select('id, table_id, total, daily_number, created_at, staff(name), order_items(qty, voided_at)')
+    // staff через явный FK: после 025 у orders два FK на staff (staff_id, refunded_by)
+    .select('id, table_id, total, daily_number, created_at, staff:staff!orders_staff_id_fkey(name), order_items(qty, voided_at)')
     .eq('status', 'open')
     .not('table_id', 'is', null)
   if (error) throw new Error(error.message)

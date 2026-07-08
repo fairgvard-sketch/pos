@@ -1,5 +1,5 @@
-import { fetchReceipt } from './api'
-import { renderReceiptCanvas, renderKitchenTicketCanvas, type KitchenTicketData } from './printCanvas'
+import { fetchReceipt, fetchRefundReceipt } from './api'
+import { renderReceiptCanvas, renderRefundReceiptCanvas, renderKitchenTicketCanvas, type KitchenTicketData } from './printCanvas'
 import { printCanvasSilently } from '../../lib/escpos'
 import type { Location } from '../../types'
 
@@ -18,6 +18,20 @@ export async function autoPrintReceipt(
     const receipt = await fetchReceipt(orderId)
     const canvas = renderReceiptCanvas(receipt, location)
     return printCanvasSilently(canvas, allowRawbt)
+  } catch {
+    return false
+  }
+}
+
+/** Автопечать תעודת זיכוי после оформления возврата (тихие пути) */
+export async function autoPrintRefundReceipt(
+  refundId: string,
+  location: Location | undefined,
+  allowRawbt: boolean,
+): Promise<boolean> {
+  try {
+    const receipt = await fetchRefundReceipt(refundId)
+    return printCanvasSilently(renderRefundReceiptCanvas(receipt, location), allowRawbt)
   } catch {
     return false
   }
