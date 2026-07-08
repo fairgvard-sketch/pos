@@ -243,6 +243,13 @@ export const translations = {
     tableActions: 'Действия',
     openTableBill: 'Открыть счёт',
     viewBill: 'Посмотреть счёт',
+    tableInfo: 'Информация по столу',
+    closeShiftOpenOrders: 'Есть открытые заказы — закройте или отмените их перед закрытием смены',
+    infoOrderNo: 'Заказ',
+    infoOpenedAt: 'Открыт',
+    infoOccupied: 'Сколько занят',
+    infoStaff: 'Открыл',
+    infoItems: 'Позиций',
     moveTable: 'Перенести на другой стол',
     mergeTable: 'Объединить со столом',
     freeTable: 'Освободить стол',
@@ -728,6 +735,13 @@ export const translations = {
     tableActions: 'פעולות',
     openTableBill: 'פתח חשבון',
     viewBill: 'צפה בחשבון',
+    tableInfo: 'פרטי שולחן',
+    closeShiftOpenOrders: 'יש הזמנות פתוחות — סגרו או בטלו אותן לפני סגירת המשמרת',
+    infoOrderNo: 'הזמנה',
+    infoOpenedAt: 'נפתח',
+    infoOccupied: 'משך ישיבה',
+    infoStaff: 'נפתח ע"י',
+    infoItems: 'פריטים',
     moveTable: 'העבר לשולחן אחר',
     mergeTable: 'אחד עם שולחן',
     freeTable: 'פנה שולחן',
@@ -985,4 +999,24 @@ export function t(lang: Lang, key: TranslationKey): string {
 
 export function formatDate(date: string | Date, lang: Lang): string {
   return new Date(date).toLocaleString(lang === 'he' ? 'he-IL' : 'ru-RU')
+}
+
+/** Только время «22:34» — для «стол открыт в …» и подобного */
+export function formatTime(date: string | Date, lang: Lang): string {
+  return new Date(date).toLocaleTimeString(lang === 'he' ? 'he-IL' : 'ru-RU', {
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+/** Компактное «сколько прошло»: «5 мин», «1 ч 20 мин». nowTs — для реактивности. */
+export function formatElapsed(iso: string, nowTs: number, lang: Lang): string {
+  const mins = Math.max(0, Math.floor((nowTs - new Date(iso).getTime()) / 60000))
+  if (mins < 1) return t(lang, 'justNow')
+  if (mins < 60) return `${mins} ${t(lang, 'minShort')}`
+  const h = Math.floor(mins / 60)
+  const m = mins % 60
+  return m === 0
+    ? `${h} ${t(lang, 'hourShort')}`
+    : `${h} ${t(lang, 'hourShort')} ${m} ${t(lang, 'minShort')}`
 }

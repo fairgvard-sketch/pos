@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { moveTableOrder, mergeTableOrders, voidTableOrder, fetchOrderLines, type TableOccupancy } from './api'
 import { useLangStore } from '../../store/langStore'
-import { t } from '../../lib/i18n'
+import { t, formatTime, formatElapsed } from '../../lib/i18n'
 import { formatMoney } from '../../lib/money'
 import type { Table } from '../../types'
 import Icon, { type IconName } from '../../components/Icon'
@@ -77,7 +77,7 @@ export default function TableActionSheet({ table, occ, tables, occupancy, onOpen
         {screen === 'menu' && (
           <div className="space-y-2">
             <ActionRow icon="orders" label={t(lang, 'openTableBill')} onClick={onOpenBill} />
-            <ActionRow icon="note" label={t(lang, 'viewBill')} onClick={() => setScreen('view')} />
+            <ActionRow icon="note" label={t(lang, 'tableInfo')} onClick={() => setScreen('view')} />
             <ActionRow
               icon="customers"
               label={t(lang, 'moveTable')}
@@ -96,7 +96,7 @@ export default function TableActionSheet({ table, occ, tables, occupancy, onOpen
           </div>
         )}
 
-        {screen === 'view' && <BillPreview orderId={occ.order_id} onBack={() => setScreen('menu')} />}
+        {screen === 'view' && <TableInfo occ={occ} onBack={() => setScreen('menu')} />}
 
         {screen === 'move' && (
           <TablePicker
@@ -213,16 +213,35 @@ function TablePicker({
   )
 }
 
-function BillPreview({ orderId, onBack }: { orderId: string; onBack: () => void }) {
+/** Вся информация по столу: заказ, время, кассир + сам счёт */
+function TableInfo({ occ, onBack }: { occ: TableOccupancy; onBack: () => void }) {
   const lang = useLangStore((s) => s.lang)
   const { data: lines = [], isLoading } = useQuery({
-    queryKey: ['order_lines', orderId],
-    queryFn: () => fetchOrderLines(orderId),
+    queryKey: ['order_lines', occ.order_id],
+    queryFn: () => fetchOrderLines(occ.order_id),
   })
+
+  const meta: { label: string; value: string }[] = [
+    { label: t(lang, 'infoOrderNo'), value: `#${occ.daily_number}` },
+    { label: t(lang, 'infoOpenedAt'), value: formatTime(occ.opened_at, lang) },
+    { label: t(lang, 'infoOccupied'), value: formatElapsed(occ.opened_at, Date.now(), lang) },
+    ...(occ.staff_name ? [{ label: t(lang, 'infoStaff'), value: occ.staff_name }] : []),
+    { label: t(lang, 'infoItems'), value: String(occ.item_count) },
+  ]
 
   return (
     <div>
       <button onClick={onBack} className="text-sm text-gray-400 hover:text-gray-600 mb-3">← {t(lang, 'back')}</button>
+
+      <div className="rounded-2xl bg-gray-50 border border-gray-100 p-4 mb-3 space-y-1.5">
+        {meta.map((row) => (
+          <div key={row.label} className="flex justify-between gap-3 text-sm">
+            <span className="text-gray-500">{row.label}</span>
+            <span className="font-semibold text-gray-900 tabular-nums text-end">{row.value}</span>
+          </div>
+        ))}
+      </div>
+
       {isLoading ? (
         <p className="text-sm text-gray-400 text-center py-8">…</p>
       ) : lines.length === 0 ? (

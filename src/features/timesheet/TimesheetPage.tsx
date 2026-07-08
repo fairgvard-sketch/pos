@@ -173,10 +173,11 @@ export default function TimesheetPage() {
     <div dir={isRtl ? 'rtl' : 'ltr'} className="h-screen bg-[#eceef1] flex gap-3 p-3 overflow-hidden">
       <AppSidebar active="timesheet" />
 
-      <main className="flex-1 bg-white rounded-3xl overflow-y-auto p-6">
-        <div className="max-w-4xl mx-auto grid md:grid-cols-[280px_1fr] gap-10">
+      {/* Две панели, как на продаже: слева PIN-терминал (по центру), справа статистика */}
+      <div className="flex-1 min-w-0 flex gap-3">
           {/* ── PIN-терминал отметки ── */}
-          <section className="shrink-0 text-center">
+          <section className="w-[clamp(300px,26vw,380px)] shrink-0 bg-white rounded-3xl
+                              flex flex-col items-center justify-center p-6 text-center">
             <h1 className="text-2xl font-black text-gray-900 mb-1">{t(lang, 'timesheet')}</h1>
             <p className="text-sm text-gray-500 mb-6">{t(lang, 'enterPin')}</p>
 
@@ -203,7 +204,7 @@ export default function TimesheetPage() {
           </section>
 
           {/* ── Статусы и статистика ── */}
-          <div className="min-w-0">
+          <main className="flex-1 min-w-0 bg-white rounded-3xl overflow-y-auto p-6">
             <section className="mb-8">
               <h2 className="text-base font-bold text-gray-900 mb-3 h-9 flex items-center">{t(lang, 'onShiftNow')}</h2>
               {openEntries.length === 0 ? (
@@ -342,9 +343,8 @@ export default function TimesheetPage() {
                 </>
               )}
             </section>
-          </div>
-        </div>
-      </main>
+          </main>
+      </div>
 
       {editTarget && <EntryEditSheet target={editTarget} onClose={() => setEditTarget(null)} />}
     </div>

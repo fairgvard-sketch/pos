@@ -8,8 +8,7 @@ import { fetchCurrentShift } from '../shift/api'
 import { useCartStore } from '../../store/cartStore'
 import { useAuthStore } from '../../store/authStore'
 import { useLangStore } from '../../store/langStore'
-import { t } from '../../lib/i18n'
-import { formatMoney } from '../../lib/money'
+import { t, formatElapsed } from '../../lib/i18n'
 import { supabase } from '../../lib/supabase'
 import type { Table, TableStatus } from '../../types'
 import AppSidebar from '../../components/AppSidebar'
@@ -17,6 +16,9 @@ import Icon from '../../components/Icon'
 import ShiftGate from '../shift/ShiftGate'
 import TableActionSheet from './TableActionSheet'
 import TableEditSheet from './TableEditSheet'
+
+/** Порог «стол сидит долго» (мин): до него жёлтая рамка, после — красная */
+const TABLE_WARN_MIN = 30
 
 export default function HallPage() {
   const lang = useLangStore((s) => s.lang)
@@ -250,8 +252,11 @@ export default function HallPage() {
                 const busy = !!occ
                 const disabled = !busy && tb.status === 'disabled'
                 const reserved = !busy && tb.status === 'reserved'
+                // Возраст счёта красит стол: до 30 мин — жёлтый, дальше — красный
+                const ageMin = occ ? Math.floor((nowTs - new Date(occ.opened_at).getTime()) / 60000) : 0
+                const overdue = ageMin >= TABLE_WARN_MIN
                 const border = busy
-                  ? 'border-red-500'
+                  ? overdue ? 'border-red-500' : 'border-amber-400'
                   : reserved
                     ? 'border-blue-500'
                     : disabled
@@ -314,22 +319,11 @@ export default function HallPage() {
                       </span>
                     )}
                     <span className="text-xl font-black tabular-nums leading-none">{tb.label}</span>
+                    {/* Карточка чистая: только статус, детали — в окне стола (долгий тап) */}
                     {editMode ? null : busy ? (
-                      <>
-                        <span className="absolute top-2 end-2 text-xs font-bold tabular-nums text-red-500 leading-none">
-                          {formatMoney(occ!.total, lang)}
-                        </span>
-                        <div className="absolute bottom-2 start-2 text-start">
-                          <div className="flex items-center gap-1 text-[11px] text-gray-500">
-                            <span className="tabular-nums">{elapsedShort(occ!.opened_at, nowTs, lang)}</span>
-                            <span className="text-gray-300">·</span>
-                            <span className="tabular-nums">{occ!.item_count}</span>
-                          </div>
-                          {occ!.staff_name && (
-                            <div className="text-[11px] text-gray-400 truncate max-w-[90%]">{occ!.staff_name}</div>
-                          )}
-                        </div>
-                      </>
+                      <span className={`text-[11px] font-semibold ${overdue ? 'text-red-500' : 'text-amber-600'}`}>
+                        {t(lang, 'tableBusy')} · {formatElapsed(occ!.opened_at, nowTs, lang)}
+                      </span>
                     ) : reserved ? (
                       <span className="text-[11px] font-semibold text-blue-500">{t(lang, 'tableReserved')}</span>
                     ) : disabled ? (
@@ -421,16 +415,4 @@ function tablesWithLayout(tables: Table[]): { table: Table; x: number; y: number
     result.push({ table: t, x: 10 + col * 15, y: 12 + row * 20 })
   })
   return result
-}
-
-/** Компактное «сколько прошло»: «5 мин», «1 ч 20 мин». nowTs — для реактивности. */
-function elapsedShort(iso: string, nowTs: number, lang: 'ru' | 'he'): string {
-  const mins = Math.max(0, Math.floor((nowTs - new Date(iso).getTime()) / 60000))
-  if (mins < 1) return t(lang, 'justNow')
-  if (mins < 60) return `${mins} ${t(lang, 'minShort')}`
-  const h = Math.floor(mins / 60)
-  const m = mins % 60
-  return m === 0
-    ? `${h} ${t(lang, 'hourShort')}`
-    : `${h} ${t(lang, 'hourShort')} ${m} ${t(lang, 'minShort')}`
 }

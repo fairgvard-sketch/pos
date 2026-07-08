@@ -40,7 +40,10 @@ export default function ShiftPage() {
       setClosing(false)
       qc.invalidateQueries({ queryKey: ['current_shift'] })
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e) =>
+      toast.error(
+        e.message.includes('open orders') ? t(lang, 'closeShiftOpenOrders') : e.message
+      ),
   })
 
   if (!staff) return null
