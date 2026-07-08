@@ -10,6 +10,8 @@ import { appendToOrder, voidTableOrder, fetchOrderLines, voidOrderItem, type Bil
 import { useCartStore, cartSubtotal, cartTotal, discountAmount, lineUnitPrice, type CartLine, type CartMod } from '../../store/cartStore'
 import { useAuthStore } from '../../store/authStore'
 import { useLangStore } from '../../store/langStore'
+import { useDeviceStore } from '../../store/deviceStore'
+import { playPaymentChime } from '../../lib/sound'
 import { t } from '../../lib/i18n'
 import { formatMoney, formatMoneyList } from '../../lib/money'
 import type { MenuItem, ModifierGroup } from '../../types'
@@ -50,6 +52,9 @@ export default function SellPage() {
   const lang = useLangStore((s) => s.lang)
   const isRtl = lang === 'he'
   const staff = useAuthStore((s) => s.staff)
+  const lockStaff = useAuthStore((s) => s.lock)
+  const lockAfterSale = useDeviceStore((s) => s.lockAfterSale)
+  const paymentSound = useDeviceStore((s) => s.paymentSound)
   const qc = useQueryClient()
   const navigate = useNavigate()
 
@@ -118,12 +123,22 @@ export default function SellPage() {
     cart.addLine(defaultConfig(item, groups))
   }
 
+  // Настройка кассы «PIN после каждой продажи» (Square: after each sale) —
+  // по завершении продажи сбрасываем сотрудника и уводим на PIN
+  function maybeLockAfterSale(): boolean {
+    if (!lockAfterSale) return false
+    lockStaff()
+    navigate('/pin', { replace: true })
+    return true
+  }
+
   function finishPaid(num: number, orderId: string) {
     const wasTable = !!cart.tableCtx
     setPayingOrder(null)
     cart.clear()
     setClientUuid(crypto.randomUUID())
     setPaidOrderId(orderId)  // для кнопки «Чек»
+    if (paymentSound) playPaymentChime()
     qc.invalidateQueries({ queryKey: ['orders'] })
     qc.invalidateQueries({ queryKey: ['current_shift'] })
     qc.invalidateQueries({ queryKey: ['open_table_orders'] })
@@ -138,6 +153,7 @@ export default function SellPage() {
     }
     if (wasTable || returnToHall.current) {
       returnToHall.current = false
+      if (maybeLockAfterSale()) return
       navigate('/hall')  // счёт стола закрыт — назад в зал
       return
     }
@@ -153,7 +169,9 @@ export default function SellPage() {
     if (splitRemainder) {
       setPayingOrder({ orderId: splitRemainder.orderId, dailyNumber: num, total: splitRemainder.total, intent: 'choose' })
       setSplitRemainder(null)
+      return
     }
+    maybeLockAfterSale()
   }
 
   // Раздельная оплата: выбранные позиции → отдельный заказ со своим чеком

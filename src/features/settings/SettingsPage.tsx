@@ -7,13 +7,15 @@ import AppSidebar from '../../components/AppSidebar'
 import BusinessTab from './BusinessTab'
 import ServiceTab from './ServiceTab'
 import StaffTab from './StaffTab'
+import DeviceTab from './DeviceTab'
 
-type Tab = 'business' | 'service' | 'staff'
+type Tab = 'business' | 'service' | 'staff' | 'device'
 
 const TABS: { id: Tab; label: TranslationKey }[] = [
   { id: 'business', label: 'tabBusiness' },
   { id: 'service', label: 'tabService' },
   { id: 'staff', label: 'tabStaff' },
+  { id: 'device', label: 'tabDevice' },
 ]
 
 /** Настройки точки: табы «Бизнес / Обслуживание / Сотрудники» (доступ manager+) */
@@ -53,6 +55,7 @@ export default function SettingsPage() {
           {tab === 'business' && <BusinessTab location={location} />}
           {tab === 'service' && <ServiceTab location={location} />}
           {tab === 'staff' && <StaffTab />}
+          {tab === 'device' && <DeviceTab />}
         </div>
       </main>
     </div>

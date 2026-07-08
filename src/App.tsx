@@ -14,6 +14,7 @@ import TimesheetPage from './features/timesheet/TimesheetPage'
 import QueuePage from './features/queue/QueuePage'
 import SettingsPage from './features/settings/SettingsPage'
 import HallPage from './features/tables/HallPage'
+import AutoLock from './components/AutoLock'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -57,6 +58,7 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
+        <AutoLock />
         <Routes>
           <Route path="/" element={<RootRedirect />} />
           <Route path="/setup" element={<DeviceSetupPage />} />

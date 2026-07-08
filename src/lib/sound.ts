@@ -14,6 +14,32 @@ function getCtx(): AudioContext | null {
   return ctx
 }
 
+/** Успешная оплата: короткое восходящее арпеджио (C6 → E6 → G6) */
+export function playPaymentChime() {
+  const ac = getCtx()
+  if (!ac) return
+  if (ac.state === 'suspended') ac.resume().catch(() => {})
+
+  const now = ac.currentTime
+  const notes = [
+    { freq: 1046.5, at: 0 },     // C6
+    { freq: 1318.5, at: 0.09 },  // E6
+    { freq: 1568.0, at: 0.18 },  // G6
+  ]
+  for (const n of notes) {
+    const osc = ac.createOscillator()
+    const gain = ac.createGain()
+    osc.type = 'sine'
+    osc.frequency.value = n.freq
+    gain.gain.setValueAtTime(0, now + n.at)
+    gain.gain.linearRampToValueAtTime(0.15, now + n.at + 0.01)
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + n.at + 0.3)
+    osc.connect(gain).connect(ac.destination)
+    osc.start(now + n.at)
+    osc.stop(now + n.at + 0.31)
+  }
+}
+
 /** Двухнотный колокольчик (E6 → A6) */
 export function playNewOrderChime() {
   const ac = getCtx()
