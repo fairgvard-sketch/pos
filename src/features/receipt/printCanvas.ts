@@ -158,6 +158,11 @@ export function renderReceiptCanvas(r: Receipt, location: Location | undefined):
     )
   }
 
+  // Вычет лояльности (бесплатный напиток / баллы)
+  if (r.loyalty_discount > 0) {
+    metaRow('הטבת מועדון', `−${fmt(r.loyalty_discount)}`)
+  }
+
   // Итого крупно
   y += 10
   center(`לתשלום: ${fmt(r.total)}`, 36, true, 16)

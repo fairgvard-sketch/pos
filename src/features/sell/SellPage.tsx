@@ -7,7 +7,7 @@ import { placeOrder, payOrder, splitOrder, type PaymentInput } from './api'
 import { fetchCurrentShift } from '../shift/api'
 import { fetchCurrentLocation } from '../auth/api'
 import { appendToOrder, voidTableOrder, fetchOrderLines, voidOrderItem, setOrderDiscount, type BillLine } from '../tables/api'
-import { useCartStore, cartSubtotal, cartTotal, discountAmount, lineUnitPrice, type CartLine, type CartMod, type CartDiscount } from '../../store/cartStore'
+import { useCartStore, cartSubtotal, cartTotal, discountAmount, loyaltyAmount, lineUnitPrice, type CartLine, type CartMod, type CartDiscount } from '../../store/cartStore'
 import { useAuthStore } from '../../store/authStore'
 import { useLangStore } from '../../store/langStore'
 import { useDeviceStore } from '../../store/deviceStore'
@@ -26,6 +26,8 @@ import ShiftGate from '../shift/ShiftGate'
 import ReceiptSheet from '../receipt/ReceiptSheet'
 import ReceiptChoiceSheet from '../receipt/ReceiptChoiceSheet'
 import SplitItemsSheet from './SplitItemsSheet'
+import GuestSheet from '../loyalty/GuestSheet'
+import { formatPhone } from '../loyalty/api'
 import AppSidebar from '../../components/AppSidebar'
 import ItemImage from '../../components/ItemImage'
 import Icon from '../../components/Icon'
@@ -101,6 +103,7 @@ export default function SellPage() {
   const [search, setSearch] = useState('')
   const [picker, setPicker] = useState<{ item: MenuItem; line: CartLine | null } | null>(null)
   const [showDiscount, setShowDiscount] = useState(false)
+  const [showGuest, setShowGuest] = useState(false)
   const [showCustom, setShowCustom] = useState(false)
   const [showTableSheet, setShowTableSheet] = useState(false)
   // Строка, у которой правим цену вручную (edit-режим PriceSheet)
@@ -251,7 +254,7 @@ export default function SellPage() {
   //   choose → открыть диалог выбора способа
   const place = useMutation({
     mutationFn: (intent: 'cash' | 'card' | 'choose') =>
-      placeOrder(clientUuid, staff!.id, cart.orderType, cart.customerName, cart.lines, cart.discount, cart.tableLabel).then((r) => ({ ...r, intent })),
+      placeOrder(clientUuid, staff!.id, cart.orderType, cart.customerName, cart.lines, cart.discount, cart.tableLabel, cart.guest?.id ?? null, cart.redeem).then((r) => ({ ...r, intent })),
     onSuccess: (res) => {
       if (res.intent === 'card') {
         payWithClose({ orderId: res.order_id, dailyNumber: res.daily_number, payments: [{ method: 'card', amount: res.total }] })
@@ -383,7 +386,38 @@ export default function SellPage() {
 
   const subtotal = cartSubtotal(cart.lines)
   const discAmount = discountAmount(subtotal, cart.discount)
-  const total = cartTotal(cart.lines, cart.discount)
+
+  // ── Лояльность: доступна в counter-потоке, если включена на точке ──
+  const loyaltyMode = location?.loyalty_mode ?? 'off'
+  const loyaltyOn = loyaltyMode !== 'off' && !tableCtx
+  const stampCatIds = useMemo(
+    () => new Set(categories.filter((c) => c.loyalty_stamps).map((c) => c.id)),
+    [categories]
+  )
+  // Самая дешёвая штампуемая позиция корзины — кандидат «бесплатного напитка»
+  const freeItemPrice = useMemo(() => {
+    let min: number | null = null
+    for (const l of cart.lines) {
+      if (!l.itemId) continue
+      const item = items.find((i) => i.id === l.itemId)
+      if (!item || !stampCatIds.has(item.category_id)) continue
+      const p = lineUnitPrice(l)
+      if (min === null || p < min) min = p
+    }
+    return min
+  }, [cart.lines, items, stampCatIds])
+
+  // Корзина изменилась → «бесплатный напиток» следует за ней (или отменяется)
+  const setRedeem = cart.setRedeem
+  const stampRedeemAmount = cart.redeem?.type === 'stamps' ? cart.redeem.amount : null
+  useEffect(() => {
+    if (stampRedeemAmount === null) return
+    if (freeItemPrice === null) setRedeem(null)
+    else if (stampRedeemAmount !== freeItemPrice) setRedeem({ type: 'stamps', amount: freeItemPrice })
+  }, [stampRedeemAmount, freeItemPrice, setRedeem])
+
+  const loyAmount = loyaltyAmount(subtotal, cart.discount, cart.redeem)
+  const total = cartTotal(cart.lines, cart.discount, cart.redeem)
   // НДС включён в цену — показываем справочно по ставке точки (снапшот считает сервер)
   const vatRate = Number(location?.vat_rate ?? 18)
   const vatIncluded = Math.round((total * vatRate) / (100 + vatRate))
@@ -539,6 +573,28 @@ export default function SellPage() {
                   </button>
                 )}
               </div>
+              {loyaltyOn && (
+                <button
+                  onClick={() => setShowGuest(true)}
+                  className="input !py-2 mt-2.5 w-full text-start flex items-center gap-2"
+                >
+                  <Icon name="customers" size={16} />
+                  {cart.guest ? (
+                    <>
+                      <span className="font-semibold text-gray-900 truncate">
+                        {cart.guest.name || formatPhone(cart.guest.phone)}
+                      </span>
+                      <span className="ms-auto text-sm font-bold text-gray-500 tabular-nums shrink-0">
+                        {loyaltyMode === 'stamps'
+                          ? `${cart.guest.stamps}/${location?.loyalty_stamps_goal ?? 10}`
+                          : formatMoney(cart.guest.points, lang)}
+                      </span>
+                    </>
+                  ) : (
+                    <span className="text-gray-400">{t(lang, 'guestAdd')}</span>
+                  )}
+                </button>
+              )}
             </>
           )}
         </div>
@@ -588,24 +644,36 @@ export default function SellPage() {
         </div>
 
         <div className="p-4 pt-3 short:pt-2 shrink-0 border-t border-gray-100 space-y-1.5 short:space-y-1">
+          {((cart.discount && discAmount > 0) || loyAmount > 0) && (
+            <div className="flex justify-between text-sm text-gray-500">
+              <span>{t(lang, 'subtotal')}</span>
+              <span className="tabular-nums">{formatMoney(subtotal, lang)}</span>
+            </div>
+          )}
           {cart.discount && discAmount > 0 && (
-            <>
-              <div className="flex justify-between text-sm text-gray-500">
-                <span>{t(lang, 'subtotal')}</span>
-                <span className="tabular-nums">{formatMoney(subtotal, lang)}</span>
-              </div>
-              <button
-                onClick={() => setShowDiscount(true)}
-                className="flex justify-between w-full text-sm text-emerald-600 font-medium"
-              >
-                <span>
-                  {t(lang, 'discountLabel')}
-                  {cart.discount.type === 'percent' && ` ${cart.discount.value}%`}
-                  {cart.discount.reason && ` · ${cart.discount.reason}`}
-                </span>
-                <span className="tabular-nums">−{formatMoney(discAmount, lang)}</span>
-              </button>
-            </>
+            <button
+              onClick={() => setShowDiscount(true)}
+              className="flex justify-between w-full text-sm text-emerald-600 font-medium"
+            >
+              <span>
+                {t(lang, 'discountLabel')}
+                {cart.discount.type === 'percent' && ` ${cart.discount.value}%`}
+                {cart.discount.reason && ` · ${cart.discount.reason}`}
+              </span>
+              <span className="tabular-nums">−{formatMoney(discAmount, lang)}</span>
+            </button>
+          )}
+          {loyAmount > 0 && cart.redeem && (
+            <button
+              onClick={() => setShowGuest(true)}
+              className="flex justify-between w-full text-sm text-emerald-600 font-medium"
+            >
+              <span>
+                {t(lang, 'loyaltyLabel')}
+                {cart.redeem.type === 'stamps' && ` · ${t(lang, 'freeDrink')}`}
+              </span>
+              <span className="tabular-nums">−{formatMoney(loyAmount, lang)}</span>
+            </button>
           )}
           {/* Скидка на счёт стола (хранится на заказе) */}
           {tableCtx && tableDiscount && (
@@ -731,7 +799,8 @@ export default function SellPage() {
             }
           }}
           onPay={(payments) => pay.mutate({ orderId: payingOrder.orderId, dailyNumber: payingOrder.dailyNumber, payments })}
-          onSplitItems={() => setShowSplit(true)}
+          // split_order пересчитывает итоги без loyalty_discount — при выбранной награде сплит недоступен
+          onSplitItems={cart.redeem ? undefined : () => setShowSplit(true)}
         />
       )}
 
@@ -777,6 +846,24 @@ export default function SellPage() {
             }
           }}
           onCancel={() => setShowDiscount(false)}
+        />
+      )}
+
+      {showGuest && location && loyaltyMode !== 'off' && (
+        <GuestSheet
+          mode={loyaltyMode}
+          stampsGoal={location.loyalty_stamps_goal}
+          minRedeem={location.loyalty_points_min_redeem}
+          freeItemPrice={freeItemPrice}
+          maxRedeem={subtotal - discAmount}
+          current={cart.guest}
+          currentRedeem={cart.redeem}
+          onApply={(g, r) => {
+            cart.setGuest(g)
+            cart.setRedeem(r)
+            setShowGuest(false)
+          }}
+          onCancel={() => setShowGuest(false)}
         />
       )}
 

@@ -163,6 +163,14 @@ function ReceiptBody({ receipt: r, location }: { receipt: Receipt; location: Loc
         </div>
       )}
 
+      {/* Вычет лояльности (бесплатный напиток / баллы) */}
+      {r.loyalty_discount > 0 && (
+        <div className="flex justify-between text-sm mt-1">
+          <span>הטבת מועדון</span>
+          <span className="tabular-nums">−{fmt(r.loyalty_discount)}</span>
+        </div>
+      )}
+
       {/* Итого к оплате — крупно */}
       <div className="text-center font-bold text-lg my-3">
         לתשלום: {fmt(r.total)}

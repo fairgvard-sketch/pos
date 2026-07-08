@@ -40,6 +40,7 @@ function buildReceiptText(r: Receipt, location: Location | undefined, lang: Lang
   }
   out.push('—'.repeat(16))
   if (r.discount_amount > 0) out.push(`${t(lang, 'discount')}: -${formatMoney(r.discount_amount, lang)}`)
+  if (r.loyalty_discount > 0) out.push(`${t(lang, 'loyaltyLabel')}: -${formatMoney(r.loyalty_discount, lang)}`)
   out.push(`${t(lang, 'toPay')}: ${formatMoney(r.total, lang)}`)
   out.push(`${t(lang, 'vatIncl')} ${r.vat_rate}%: ${formatMoney(r.vat_amount, lang)}`)
   if (location?.receipt_footer) out.push(location.receipt_footer)

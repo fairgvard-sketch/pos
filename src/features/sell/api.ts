@@ -1,5 +1,6 @@
 import { supabase } from '../../lib/supabase'
-import type { CartDiscount, CartLine, OrderType } from '../../store/cartStore'
+import type { CartDiscount, CartLine, CartRedeem, OrderType } from '../../store/cartStore'
+import { applyLoyalty } from '../loyalty/api'
 
 export interface PlaceOrderResult {
   order_id: string
@@ -19,7 +20,9 @@ export async function placeOrder(
   customerName: string,
   lines: CartLine[],
   discount: CartDiscount | null = null,
-  tableLabel: string = ''
+  tableLabel: string = '',
+  guestId: string | null = null,
+  redeem: CartRedeem | null = null
 ): Promise<PlaceOrderResult> {
   const { data, error } = await supabase.rpc('place_order', {
     p_client_uuid: clientUuid,
@@ -44,7 +47,16 @@ export async function placeOrder(
         : null,
   })
   if (error) throw new Error(error.message)
-  return data as PlaceOrderResult
+  const result = data as PlaceOrderResult
+
+  // Лояльность вторым шагом: скидку и балансы валидирует сервер.
+  // При ретрае после сбоя place_order вернёт duplicate — apply_loyalty
+  // идемпотентен (перезаписывает привязку), итог остаётся верным.
+  if (guestId) {
+    const loy = await applyLoyalty(result.order_id, guestId, redeem)
+    return { ...result, total: loy.total }
+  }
+  return result
 }
 
 export interface PaymentInput {

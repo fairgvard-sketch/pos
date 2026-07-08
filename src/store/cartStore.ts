@@ -35,6 +35,25 @@ export interface CartDiscount {
   reason: string
 }
 
+/** Гость лояльности, привязанный к заказу (снапшот для рендера) */
+export interface CartGuest {
+  id: string
+  phone: string
+  name: string | null
+  stamps: number
+  points: number // агороты
+}
+
+/**
+ * Награда лояльности. amount — оценка вычета для показа в корзине
+ * (штампы: цена бесплатной позиции; баллы: списываемые агороты).
+ * Настоящую скидку считает сервер в apply_loyalty.
+ */
+export interface CartRedeem {
+  type: 'stamps' | 'points'
+  amount: number
+}
+
 export function lineUnitPrice(l: CartLine): number {
   if (l.priceOverride !== null) return l.priceOverride
   return l.basePrice + l.mods.reduce((s, m) => s + m.priceDelta, 0)
@@ -52,10 +71,16 @@ export function discountAmount(subtotal: number, d: CartDiscount | null): number
   return Math.min(amount, subtotal)
 }
 
-/** Итог заказа с учётом скидки */
-export function cartTotal(lines: CartLine[], discount: CartDiscount | null = null): number {
+/** Вычет лояльности: не больше остатка после ручной скидки */
+export function loyaltyAmount(subtotal: number, discount: CartDiscount | null, redeem: CartRedeem | null): number {
+  if (!redeem || redeem.amount <= 0) return 0
+  return Math.min(redeem.amount, subtotal - discountAmount(subtotal, discount))
+}
+
+/** Итог заказа с учётом скидки и лояльности */
+export function cartTotal(lines: CartLine[], discount: CartDiscount | null = null, redeem: CartRedeem | null = null): number {
   const subtotal = cartSubtotal(lines)
-  return subtotal - discountAmount(subtotal, discount)
+  return subtotal - discountAmount(subtotal, discount) - loyaltyAmount(subtotal, discount, redeem)
 }
 
 function makeKey() {
@@ -94,6 +119,8 @@ interface CartState {
   customerName: string
   tableLabel: string // подпись стола (режим counter_tables); '' = не указан
   discount: CartDiscount | null
+  guest: CartGuest | null
+  redeem: CartRedeem | null
   tableCtx: TableCtx | null
   addLine: (line: Omit<CartLine, 'key' | 'qty'>) => void
   updateQty: (key: string, qty: number) => void
@@ -103,6 +130,8 @@ interface CartState {
   setCustomerName: (name: string) => void
   setTableLabel: (label: string) => void
   setDiscount: (d: CartDiscount | null) => void
+  setGuest: (g: CartGuest | null) => void
+  setRedeem: (r: CartRedeem | null) => void
   setTableCtx: (ctx: TableCtx | null) => void
   clear: () => void
 }
@@ -113,6 +142,8 @@ export const useCartStore = create<CartState>((set) => ({
   customerName: '',
   tableLabel: '',
   discount: null,
+  guest: null,
+  redeem: null,
   tableCtx: null,
 
   // Одинаковые конфигурации схлопываются в qty — меньше строк, быстрее чтение
@@ -149,6 +180,9 @@ export const useCartStore = create<CartState>((set) => ({
   setCustomerName: (customerName) => set({ customerName }),
   setTableLabel: (tableLabel) => set({ tableLabel }),
   setDiscount: (discount) => set({ discount }),
+  // Смена/снятие гостя отменяет и выбранную награду — она была его
+  setGuest: (guest) => set((s) => ({ guest, redeem: guest && guest.id === s.guest?.id ? s.redeem : null })),
+  setRedeem: (redeem) => set({ redeem }),
   setTableCtx: (tableCtx) => set({ tableCtx }),
-  clear: () => set({ lines: [], customerName: '', orderType: 'here', tableLabel: '', discount: null, tableCtx: null }),
+  clear: () => set({ lines: [], customerName: '', orderType: 'here', tableLabel: '', discount: null, guest: null, redeem: null, tableCtx: null }),
 }))

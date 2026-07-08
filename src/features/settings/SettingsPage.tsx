@@ -8,12 +8,14 @@ import BusinessTab from './BusinessTab'
 import ServiceTab from './ServiceTab'
 import StaffTab from './StaffTab'
 import DeviceTab from './DeviceTab'
+import LoyaltyTab from './LoyaltyTab'
 
-type Tab = 'business' | 'service' | 'staff' | 'device'
+type Tab = 'business' | 'service' | 'loyalty' | 'staff' | 'device'
 
 const TABS: { id: Tab; label: TranslationKey }[] = [
   { id: 'business', label: 'tabBusiness' },
   { id: 'service', label: 'tabService' },
+  { id: 'loyalty', label: 'tabLoyalty' },
   { id: 'staff', label: 'tabStaff' },
   { id: 'device', label: 'tabDevice' },
 ]
@@ -54,6 +56,7 @@ export default function SettingsPage() {
         <div className="flex-1 overflow-y-auto p-6">
           {tab === 'business' && <BusinessTab location={location} />}
           {tab === 'service' && <ServiceTab location={location} />}
+          {tab === 'loyalty' && <LoyaltyTab location={location} />}
           {tab === 'staff' && <StaffTab />}
           {tab === 'device' && <DeviceTab />}
         </div>

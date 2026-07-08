@@ -30,6 +30,7 @@ export interface Receipt {
   discount_type: 'percent' | 'fixed' | null
   discount_value: number | null
   discount_amount: number
+  loyalty_discount: number
   vat_rate: number
   vat_amount: number
   total: number
@@ -109,6 +110,7 @@ interface OrderRow {
   discount_type: 'percent' | 'fixed' | null
   discount_value: number | null
   discount_amount: number
+  loyalty_discount: number
   vat_rate: number
   vat_amount: number
   total: number
@@ -134,7 +136,7 @@ export async function fetchReceipt(orderId: string): Promise<Receipt> {
     .select(`
       id, daily_number, receipt_number, doc_type, allocation_number,
       order_type, customer_name, table_label, status,
-      subtotal, discount_type, discount_value, discount_amount, vat_rate, vat_amount, total,
+      subtotal, discount_type, discount_value, discount_amount, loyalty_discount, vat_rate, vat_amount, total,
       paid_at, created_at,
       staff:staff!orders_staff_id_fkey(name),
       order_items(name, variant_name, qty, unit_price, line_total, voided_at, order_item_modifiers(name, price_delta)),
@@ -158,6 +160,7 @@ export async function fetchReceipt(orderId: string): Promise<Receipt> {
     discount_type: o.discount_type,
     discount_value: o.discount_value,
     discount_amount: o.discount_amount,
+    loyalty_discount: o.loyalty_discount,
     vat_rate: o.vat_rate,
     vat_amount: o.vat_amount,
     total: o.total,

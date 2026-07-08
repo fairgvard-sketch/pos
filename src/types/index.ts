@@ -22,6 +22,11 @@ export interface Location {
   receipt_tax_id: string | null
   receipt_phone: string | null
   receipt_footer: string | null
+  // Программа лояльности (031)
+  loyalty_mode: 'off' | 'stamps' | 'points'
+  loyalty_stamps_goal: number
+  loyalty_points_percent: number
+  loyalty_points_min_redeem: number
   created_at: string
 }
 
@@ -92,6 +97,7 @@ export interface MenuCategory {
   icon: string | null
   sort_order: number
   is_active: boolean
+  loyalty_stamps: boolean
 }
 
 export interface MenuItem {
