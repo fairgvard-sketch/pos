@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { fetchRefundableItems, issueRefund, type Transaction } from './api'
@@ -36,12 +36,25 @@ export default function RefundSheet({ tx, remaining, onClose, onDone }: Props) {
     queryFn: () => fetchRefundableItems(tx.id),
   })
 
+  // Возврат тем же способом, которым платили: нал → нал, карта → карта.
+  // Доступно по способу = оплачено им минус уже возвращено им
+  // (в payments возвраты — отрицательные строки, сумма нетто).
+  const avail = useMemo(() => {
+    const a: Record<'cash' | 'card', number> = { cash: 0, card: 0 }
+    for (const p of tx.payments) a[p.method] += p.amount
+    return a
+  }, [tx.payments])
+  const methods = useMemo(
+    () => (['cash', 'card'] as const).filter((m) => tx.payments.some((p) => p.method === m && p.amount > 0)),
+    [tx.payments],
+  )
+
   const [step, setStep] = useState<1 | 2>(1)
   const [tab, setTab] = useState<'items' | 'amount'>('items')
   const [picked, setPicked] = useState<Set<string>>(new Set())
   const [amountStr, setAmountStr] = useState('')
   const [method, setMethod] = useState<'cash' | 'card'>(
-    () => tx.payments.find((p) => p.amount > 0)?.method ?? 'cash'
+    () => (avail.card > avail.cash ? 'card' : 'cash')
   )
   const [reasonKey, setReasonKey] = useState<ReasonKey | null>(null)
   const [otherReason, setOtherReason] = useState('')
@@ -51,6 +64,17 @@ export default function RefundSheet({ tx, remaining, onClose, onDone }: Props) {
   // Суммы позиций после округления скидки могут превысить остаток — режем по нему
   const amount = tab === 'items' ? Math.min(pickedSum, remaining) : (parseMoney(amountStr) ?? 0)
   const amountValid = amount > 0 && amount <= remaining
+  // Выбранный способ покрывает сумму; иначе — смешанная оплата, нужно два возврата
+  const methodValid = amount <= avail[method]
+  const anyMethodCovers = methods.some((m) => avail[m] >= amount)
+
+  // Сумма изменилась и текущий способ её не тянет — переключиться на тот, что тянет
+  useEffect(() => {
+    if (!methodValid) {
+      const other = methods.find((m) => avail[m] >= amount)
+      if (other) setMethod(other)
+    }
+  }, [amount, methodValid, methods, avail])
 
   const togglePick = (id: string) =>
     setPicked((prev) => {
@@ -185,26 +209,44 @@ export default function RefundSheet({ tx, remaining, onClose, onDone }: Props) {
           </>
         ) : (
           <>
-            {/* Куда вернуть */}
+            {/* Куда вернуть — только способы, которыми платили (нал → нал, карта → карта) */}
             <div className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-1">
               {t(lang, 'refundTo')}
             </div>
             <div className="mb-4">
-              {(['cash', 'card'] as const).map((m) => (
-                <label key={m} className="flex items-center gap-3 h-12 px-2 border-b border-gray-100 cursor-pointer">
-                  <Icon name={m} size={20} />
-                  <span className="flex-1 font-semibold text-gray-900">
-                    {t(lang, m === 'cash' ? 'payCash' : 'payCard')}
-                  </span>
-                  <input
-                    type="radio"
-                    name="refund-method"
-                    className="w-5 h-5 accent-gray-900"
-                    checked={method === m}
-                    onChange={() => setMethod(m)}
-                  />
-                </label>
-              ))}
+              {methods.map((m) => {
+                const covers = avail[m] >= amount
+                return (
+                  <label
+                    key={m}
+                    className={`flex items-center gap-3 h-12 px-2 border-b border-gray-100 ${
+                      covers ? 'cursor-pointer' : 'opacity-40'
+                    }`}
+                  >
+                    <Icon name={m} size={20} />
+                    <span className="flex-1 font-semibold text-gray-900">
+                      {t(lang, m === 'cash' ? 'payCash' : 'payCard')}
+                      {/* Смешанная оплата: показать потолок каждого способа */}
+                      {methods.length > 1 && (
+                        <span className="font-normal text-gray-400 text-sm">
+                          {' '}· {t(lang, 'upTo')} {formatMoney(avail[m], lang)}
+                        </span>
+                      )}
+                    </span>
+                    <input
+                      type="radio"
+                      name="refund-method"
+                      className="w-5 h-5 accent-gray-900"
+                      disabled={!covers}
+                      checked={method === m}
+                      onChange={() => setMethod(m)}
+                    />
+                  </label>
+                )
+              })}
+              {!anyMethodCovers && (
+                <p className="text-xs text-amber-600 mt-2">{t(lang, 'refundSplitHint')}</p>
+              )}
             </div>
 
             {/* Причина */}
@@ -237,7 +279,7 @@ export default function RefundSheet({ tx, remaining, onClose, onDone }: Props) {
 
             <button
               onClick={() => refund.mutate()}
-              disabled={refund.isPending || !amountValid || !reasonKey}
+              disabled={refund.isPending || !amountValid || !methodValid || !reasonKey}
               className="btn-danger w-full !py-3.5 !rounded-2xl disabled:opacity-40"
             >
               {t(lang, 'refundConfirmBtn')} {formatMoney(amount, lang)}

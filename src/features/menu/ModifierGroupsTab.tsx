@@ -9,6 +9,8 @@ import { useLangStore } from '../../store/langStore'
 import { t } from '../../lib/i18n'
 import { formatMoney, parseMoney } from '../../lib/money'
 import type { ModifierGroup } from '../../types'
+import InlineRename from '../../components/InlineRename'
+import ConfirmDeleteButton from '../../components/ConfirmDeleteButton'
 
 export default function ModifierGroupsTab() {
   const lang = useLangStore((s) => s.lang)
@@ -111,16 +113,13 @@ export default function ModifierGroupsTab() {
 
             {expanded && (
               <div className="px-5 pb-5 border-t border-gray-100 pt-4">
-                <div className="flex items-center justify-between mb-3">
-                  <button
-                    className="text-sm text-gray-500 hover:text-gray-900 hover:underline"
-                    onClick={() => {
-                      const name = prompt(t(lang, 'groupName'), g.name)
-                      if (name?.trim()) patchGroup.mutate({ id: g.id, patch: { name: name.trim() } })
-                    }}
-                  >
-                    ✎ {g.name}
-                  </button>
+                <div className="flex items-center justify-between mb-3 gap-3">
+                  <InlineRename
+                    value={g.name}
+                    placeholder={t(lang, 'groupName')}
+                    className="text-sm font-semibold text-gray-700"
+                    onSave={(name) => patchGroup.mutate({ id: g.id, patch: { name } })}
+                  />
                   <div className="flex items-center gap-3">
                     <label className="text-xs text-gray-400 flex items-center gap-1">
                       {t(lang, 'minSelect')}
@@ -138,12 +137,7 @@ export default function ModifierGroupsTab() {
                         onBlur={(e) => patchGroup.mutate({ id: g.id, patch: { max_select: Number(e.target.value) || 0 } })}
                       />
                     </label>
-                    <button
-                      onClick={() => confirm(t(lang, 'confirmDelete')) && removeGroup.mutate(g.id)}
-                      className="text-gray-300 hover:text-red-500"
-                    >
-                      ✕
-                    </button>
+                    <ConfirmDeleteButton onConfirm={() => removeGroup.mutate(g.id)} />
                   </div>
                 </div>
 
@@ -165,7 +159,7 @@ export default function ModifierGroupsTab() {
                       >
                         {m.is_default ? '✓ ' : ''}{t(lang, 'defaultLabel')}
                       </button>
-                      <button onClick={() => removeModifier.mutate(m.id)} className="text-gray-300 hover:text-red-500 text-sm">✕</button>
+                      <ConfirmDeleteButton onConfirm={() => removeModifier.mutate(m.id)} className="text-gray-300 hover:text-red-500 text-sm" />
                     </div>
                   ))}
                 </div>

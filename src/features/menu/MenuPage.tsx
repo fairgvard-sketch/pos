@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import {
@@ -266,12 +266,10 @@ export default function MenuPage() {
                         cat={c}
                         active={!search && c.id === activeCat}
                         count={items.filter((i) => i.category_id === c.id).length}
+                        placeholder={t(lang, 'categoryName')}
                         onSelect={() => { setActiveCategoryId(c.id); setSearch('') }}
-                        onRename={() => {
-                          const name = prompt(t(lang, 'categoryName'), c.name)
-                          if (name?.trim()) renameCategory.mutate({ id: c.id, name: name.trim() })
-                        }}
-                        onDelete={() => confirm(t(lang, 'confirmDelete')) && removeCategory.mutate(c.id)}
+                        onRename={(name) => renameCategory.mutate({ id: c.id, name })}
+                        onDelete={() => removeCategory.mutate(c.id)}
                       />
                     ))}
                   </div>
@@ -403,13 +401,31 @@ interface CatRowProps {
   cat: MenuCategory
   active: boolean
   count: number
+  placeholder: string
   onSelect: () => void
-  onRename: () => void
+  onRename: (name: string) => void
   onDelete: () => void
 }
 
-function SortableCategoryRow({ cat, active, count, onSelect, onRename, onDelete }: CatRowProps) {
+function SortableCategoryRow({ cat, active, count, placeholder, onSelect, onRename, onDelete }: CatRowProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: cat.id })
+  // Инлайн-режимы прямо в строке сайдбара (поле не влезает в 16rem — правим на месте)
+  const [editing, setEditing] = useState(false)
+  const [confirming, setConfirming] = useState(false)
+  const [draft, setDraft] = useState(cat.name)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (editing) { inputRef.current?.focus(); inputRef.current?.select() }
+  }, [editing])
+
+  function startEdit() { setDraft(cat.name); setEditing(true) }
+  function commit() {
+    setEditing(false)
+    const next = draft.trim()
+    if (next && next !== cat.name) onRename(next)
+  }
+
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition,
@@ -417,6 +433,27 @@ function SortableCategoryRow({ cat, active, count, onSelect, onRename, onDelete 
     zIndex: isDragging ? 10 : undefined,
     position: 'relative',
   }
+
+  // Режим переименования — строка целиком превращается в поле
+  if (editing) {
+    return (
+      <div ref={setNodeRef} style={style} className="flex items-center gap-1 ps-5 pe-1">
+        <input
+          ref={inputRef}
+          className="input !py-1.5 !px-2.5 !text-sm"
+          value={draft}
+          placeholder={placeholder}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') { e.preventDefault(); commit() }
+            if (e.key === 'Escape') { e.preventDefault(); setEditing(false) }
+          }}
+        />
+      </div>
+    )
+  }
+
   return (
     <div ref={setNodeRef} style={style} className="group relative flex items-center">
       <button
@@ -437,12 +474,32 @@ function SortableCategoryRow({ cat, active, count, onSelect, onRename, onDelete 
           {cat.icon && <span className="me-1.5">{cat.icon}</span>}
           {cat.name}
         </span>
-        <span className="text-xs text-gray-300 group-hover:hidden">{count}</span>
+        <span className={`text-xs text-gray-300 ${confirming ? '' : 'group-hover:hidden'}`}>{count}</span>
       </button>
-      <div className="absolute top-1/2 -translate-y-1/2 end-2 hidden group-hover:flex gap-1 bg-inherit">
-        <button onClick={onRename} className="text-xs text-gray-400 hover:text-gray-700">✎</button>
-        <button onClick={onDelete} className="text-xs text-gray-400 hover:text-red-500">✕</button>
-      </div>
+      {/* Подтверждение удаления — компактная инлайн-плашка вместо системного confirm() */}
+      {confirming ? (
+        <div className="absolute top-1/2 -translate-y-1/2 end-1 flex gap-1 bg-white rounded-lg shadow-sm border border-gray-100 p-0.5">
+          <button
+            onClick={() => { onDelete(); setConfirming(false) }}
+            className="h-7 w-7 rounded-md bg-red-500 text-white text-xs hover:bg-red-600 flex items-center justify-center"
+            aria-label="confirm-delete"
+          >
+            ✓
+          </button>
+          <button
+            onClick={() => setConfirming(false)}
+            className="h-7 w-7 rounded-md bg-gray-100 text-gray-500 text-xs hover:bg-gray-200 flex items-center justify-center"
+            aria-label="cancel-delete"
+          >
+            ✕
+          </button>
+        </div>
+      ) : (
+        <div className="absolute top-1/2 -translate-y-1/2 end-2 hidden group-hover:flex gap-1 bg-inherit">
+          <button onClick={startEdit} className="text-xs text-gray-400 hover:text-gray-700">✎</button>
+          <button onClick={() => setConfirming(true)} className="text-xs text-gray-400 hover:text-red-500">✕</button>
+        </div>
+      )}
     </div>
   )
 }

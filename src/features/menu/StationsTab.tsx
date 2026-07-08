@@ -4,6 +4,8 @@ import toast from 'react-hot-toast'
 import { fetchStations, createStation, updateStation, deleteStation } from './api'
 import { useLangStore } from '../../store/langStore'
 import { t } from '../../lib/i18n'
+import InlineRename from '../../components/InlineRename'
+import ConfirmDeleteButton from '../../components/ConfirmDeleteButton'
 
 export default function StationsTab() {
   const lang = useLangStore((s) => s.lang)
@@ -46,22 +48,14 @@ export default function StationsTab() {
       </form>
 
       {stations.map((s) => (
-        <div key={s.id} className="card px-4 py-3 flex items-center justify-between">
-          <button
-            className="font-semibold text-gray-900 hover:underline"
-            onClick={() => {
-              const name = prompt(t(lang, 'stationName'), s.name)
-              if (name?.trim()) rename.mutate({ id: s.id, name: name.trim() })
-            }}
-          >
-            {s.name}
-          </button>
-          <button
-            onClick={() => confirm(t(lang, 'confirmDelete')) && remove.mutate(s.id)}
-            className="text-gray-300 hover:text-red-500"
-          >
-            ✕
-          </button>
+        <div key={s.id} className="card px-4 py-3 flex items-center justify-between gap-3">
+          <InlineRename
+            value={s.name}
+            placeholder={t(lang, 'stationName')}
+            className="font-semibold text-gray-900"
+            onSave={(name) => rename.mutate({ id: s.id, name })}
+          />
+          <ConfirmDeleteButton onConfirm={() => remove.mutate(s.id)} />
         </div>
       ))}
     </div>
