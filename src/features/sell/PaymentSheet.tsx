@@ -130,14 +130,16 @@ export default function PaymentSheet({ total, startMode = 'choose', onCancel, on
             {onSplitItems && (
               <>
                 <div className="hidden sm:block mt-auto pt-3 border-t border-gray-200" />
+                {/* Такой же вес, как у способов оплаты — кассир должен её видеть */}
                 <button
                   onClick={onSplitItems}
                   disabled={busy}
-                  className="flex-1 sm:flex-none h-12 px-4 rounded-2xl flex items-center gap-3 text-sm font-semibold
-                             text-gray-500 hover:text-gray-900 hover:bg-white transition-all active:scale-[0.97]"
+                  className="flex-1 sm:flex-none h-14 px-4 rounded-2xl flex items-center gap-3 font-semibold text-sm
+                             bg-white text-gray-900 border border-gray-200 hover:border-gray-400
+                             transition-all active:scale-[0.97]"
                 >
-                  <Icon name="refund" size={20} />
-                  <span className="truncate">{t(lang, 'splitByItems')}</span>
+                  <Icon name="refund" size={22} />
+                  <span className="truncate">{t(lang, 'splitShort')}</span>
                 </button>
               </>
             )}
