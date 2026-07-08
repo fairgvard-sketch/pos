@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, Navigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
@@ -6,8 +6,8 @@ import { fetchCategories, fetchItems, fetchModifierGroups } from '../menu/api'
 import { placeOrder, payOrder, splitOrder, type PaymentInput } from './api'
 import { fetchCurrentShift } from '../shift/api'
 import { fetchCurrentLocation } from '../auth/api'
-import { appendToOrder, voidTableOrder, fetchOrderLines, voidOrderItem, type BillLine } from '../tables/api'
-import { useCartStore, cartSubtotal, cartTotal, discountAmount, lineUnitPrice, type CartLine, type CartMod } from '../../store/cartStore'
+import { appendToOrder, voidTableOrder, fetchOrderLines, voidOrderItem, setOrderDiscount, type BillLine } from '../tables/api'
+import { useCartStore, cartSubtotal, cartTotal, discountAmount, lineUnitPrice, type CartLine, type CartMod, type CartDiscount } from '../../store/cartStore'
 import { useAuthStore } from '../../store/authStore'
 import { useLangStore } from '../../store/langStore'
 import { useDeviceStore } from '../../store/deviceStore'
@@ -268,6 +268,25 @@ export default function SellPage() {
     queryFn: () => fetchOrderLines(tableCtx!.orderId),
     enabled: !!tableCtx,
   })
+  const existingSubtotal = existingLines.reduce((s, l) => s + l.line_total, 0)
+
+  // Скидка на счёт стола живёт на ЗАКАЗЕ (не в корзине): ставится RPC
+  // set_order_discount. Локально помним последнюю применённую — для бейджа
+  // и предзаполнения диалога в рамках текущего захода на стол.
+  const [tableDiscount, setTableDiscount] = useState<(CartDiscount & { amount: number }) | null>(null)
+  useEffect(() => setTableDiscount(null), [tableCtx?.orderId])
+
+  const orderDiscount = useMutation({
+    mutationFn: (d: CartDiscount | null) =>
+      setOrderDiscount(tableCtx!.orderId, d?.type ?? null, d?.value, d?.reason),
+    onSuccess: (res, d) => {
+      cart.setTableCtx({ ...tableCtx!, existingTotal: res.total })
+      setTableDiscount(d ? { ...d, amount: res.discount_amount } : null)
+      qc.invalidateQueries({ queryKey: ['open_table_orders'] })
+      setShowDiscount(false)
+    },
+    onError: (e) => toast.error(e.message),
+  })
 
   // Снять уже заказанную позицию с открытого счёта (мягкий void)
   const voidItem = useMutation({
@@ -449,7 +468,7 @@ export default function SellPage() {
           <ActionButton
             icon="discount"
             label={t(lang, 'discount')}
-            active={!!cart.discount}
+            active={tableCtx ? !!tableDiscount : !!cart.discount}
             onClick={() => setShowDiscount(true)}
           />
           <ActionButton icon="note" label={t(lang, 'note')} onClick={() => toast(`${t(lang, 'note')} — ${t(lang, 'comingSoon')}`)} />
@@ -574,6 +593,20 @@ export default function SellPage() {
                 <span className="tabular-nums">−{formatMoney(discAmount, lang)}</span>
               </button>
             </>
+          )}
+          {/* Скидка на счёт стола (хранится на заказе) */}
+          {tableCtx && tableDiscount && (
+            <button
+              onClick={() => setShowDiscount(true)}
+              className="flex justify-between w-full text-sm text-emerald-600 font-medium"
+            >
+              <span>
+                {t(lang, 'discountLabel')}
+                {tableDiscount.type === 'percent' && ` ${tableDiscount.value}%`}
+                {tableDiscount.reason && ` · ${tableDiscount.reason}`}
+              </span>
+              <span className="tabular-nums">−{formatMoney(tableDiscount.amount, lang)}</span>
+            </button>
           )}
           {/* В режиме стола итог = уже в счёте + добавленное */}
           {tableCtx && cart.lines.length > 0 && (
@@ -710,9 +743,17 @@ export default function SellPage() {
 
       {showDiscount && (
         <DiscountSheet
-          subtotal={subtotal}
-          current={cart.discount}
-          onApply={(d) => { cart.setDiscount(d); setShowDiscount(false) }}
+          // Стол: скидка на ВЕСЬ счёт (уже заказанное + добавляемое)
+          subtotal={tableCtx ? existingSubtotal + subtotal : subtotal}
+          current={tableCtx ? tableDiscount : cart.discount}
+          onApply={(d) => {
+            if (tableCtx) {
+              orderDiscount.mutate(d)  // диалог закроется по успеху RPC
+            } else {
+              cart.setDiscount(d)
+              setShowDiscount(false)
+            }
+          }}
           onCancel={() => setShowDiscount(false)}
         />
       )}

@@ -154,6 +154,23 @@ export async function fetchOrderLines(orderId: string): Promise<BillLine[]> {
   }))
 }
 
+/** Скидка на существующий открытый счёт (стол). type=null — снять скидку. */
+export async function setOrderDiscount(
+  orderId: string,
+  type: 'percent' | 'fixed' | null,
+  value?: number,
+  reason?: string,
+): Promise<{ total: number; discount_amount: number; subtotal: number }> {
+  const { data, error } = await supabase.rpc('set_order_discount', {
+    p_order_id: orderId,
+    p_type: type,
+    p_value: value ?? null,
+    p_reason: reason ?? null,
+  })
+  if (error) throw new Error(error.message)
+  return data as { total: number; discount_amount: number; subtotal: number }
+}
+
 /** Снять позицию с открытого счёта (мягкий void, аудируемо) */
 export async function voidOrderItem(itemId: string, staffId: string, reason?: string): Promise<{ total: number }> {
   const { data, error } = await supabase.rpc('void_order_item', {
