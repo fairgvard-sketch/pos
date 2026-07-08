@@ -1,11 +1,19 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import legacy from '@vitejs/plugin-legacy'
 import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
     react(),
+    // Целевое железо: Sunmi T2 mini, Android 7.1 → системный WebView ~Chrome 52-58.
+    // Он не знает ES-модули (нужен Chrome 61+), поэтому получает nomodule-бандл:
+    // SystemJS + транспиляция + core-js полифиллы. Современные браузеры берут
+    // обычный модульный бандл — для них ничего не меняется.
+    legacy({
+      targets: ['chrome >= 52'],
+    }),
     VitePWA({
       // SW обновляется сам, без диалогов — касса всегда на свежей версии
       registerType: 'autoUpdate',
