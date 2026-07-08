@@ -1,7 +1,10 @@
 import { useQuery } from '@tanstack/react-query'
 import { fetchReceipt, type Receipt } from './api'
+import { renderReceiptCanvas } from './printCanvas'
 import { fetchCurrentLocation } from '../auth/api'
 import { useLangStore } from '../../store/langStore'
+import { useDeviceStore } from '../../store/deviceStore'
+import { canvasToRawbtUrl } from '../../lib/escpos'
 import { t } from '../../lib/i18n'
 import type { Location } from '../../types'
 
@@ -17,17 +20,23 @@ interface Props {
  */
 export default function ReceiptSheet({ orderId, onClose }: Props) {
   const lang = useLangStore((s) => s.lang)
+  const printMode = useDeviceStore((s) => s.printMode)
   const { data: receipt, isLoading } = useQuery({ queryKey: ['receipt', orderId], queryFn: () => fetchReceipt(orderId) })
   const { data: location } = useQuery({ queryKey: ['current_location'], queryFn: fetchCurrentLocation })
 
   /**
-   * Печать чека. Пока — браузерная печать (window.print), которая на терминале
-   * Sunmi с установленным SunmiPrinterPlugin уходит на встроенный термопринтер.
-   * Точка расширения: когда подключим Sunmi JS SDK (автопечать без диалога),
-   * мост встанет сюда с graceful fallback на window.print().
+   * Печать чека — по настройке кассы (Настройки → Касса → Способ печати):
+   *  - browser: системный диалог печати (обычный принтер / PDF)
+   *  - rawbt: чек рендерится в картинку → ESC/POS растр → приложение RawBT
+   *    печатает на встроенный термопринтер Sunmi (браузер его не видит).
    */
   function handlePrint() {
     if (!receipt) return
+    if (printMode === 'rawbt') {
+      const canvas = renderReceiptCanvas(receipt, location)
+      window.location.href = canvasToRawbtUrl(canvas)
+      return
+    }
     window.print()
   }
 

@@ -1,0 +1,196 @@
+import type { Receipt } from './api'
+import type { Location } from '../../types'
+
+/**
+ * Рендер чека в canvas для печати картинкой (ESC/POS растр через RawBT).
+ * Раскладка повторяет ReceiptBody (иврит, RTL): метки справа, значения
+ * слева, таблица позиций שם|מחיר|כמות|לתשלום. fillText сам корректно
+ * рисует иврит (bidi внутри строки), выравнивание задаём вручную.
+ */
+
+const W = 576              // ширина головки 80мм @ 203dpi
+const MX = 12              // поля
+const RIGHT = W - MX
+// Колонки таблицы (x в пикселях): в RTL название справа, суммы к левому краю
+const COL_TOTAL = MX       // לתשלום (левый край, textAlign left)
+const COL_QTY = 150        // כמות (центр)
+const COL_PRICE = 200      // מחיר (left)
+const NAME_MAX = RIGHT - 290 // максимум ширины названия
+
+const FONT = (size: number, bold = false) => `${bold ? '700' : '400'} ${size}px monospace`
+
+function fmt(agorot: number): string {
+  return (agorot / 100).toFixed(2)
+}
+
+function docTypeLabel(dt: Receipt['doc_type']): string {
+  switch (dt) {
+    case 'receipt': return 'קבלה'
+    case 'tax_invoice': return 'חשבונית מס'
+    case 'invoice_receipt': return 'חשבונית מס/קבלה'
+  }
+}
+
+export function renderReceiptCanvas(r: Receipt, location: Location | undefined): HTMLCanvasElement {
+  // Рисуем на заведомо высоком холсте, затем обрезаем по факту
+  const tall = document.createElement('canvas')
+  tall.width = W
+  tall.height = 3000
+  const ctx = tall.getContext('2d')!
+  ctx.fillStyle = '#fff'
+  ctx.fillRect(0, 0, W, tall.height)
+  ctx.fillStyle = '#000'
+
+  let y = 30
+
+  const center = (text: string, size: number, bold = false, gap = 8) => {
+    ctx.font = FONT(size, bold)
+    ctx.textAlign = 'center'
+    ctx.fillText(text, W / 2, y)
+    y += size + gap
+  }
+  // Метка справа, значение слева (RTL-строка)
+  const metaRow = (label: string, value: string, size = 26, bold = false) => {
+    ctx.font = FONT(size, bold)
+    ctx.textAlign = 'right'
+    ctx.fillText(label, RIGHT, y)
+    ctx.textAlign = 'left'
+    ctx.fillText(value, MX, y)
+    y += size + 8
+  }
+  const divider = () => {
+    ctx.save()
+    ctx.strokeStyle = '#000'
+    ctx.setLineDash([6, 6])
+    ctx.beginPath()
+    ctx.moveTo(MX, y - 8)
+    ctx.lineTo(RIGHT, y - 8)
+    ctx.stroke()
+    ctx.restore()
+    y += 16
+  }
+  // Обрезка длинного названия под максимальную ширину
+  const fitText = (text: string, maxWidth: number): string => {
+    if (ctx.measureText(text).width <= maxWidth) return text
+    let s = text
+    while (s.length > 1 && ctx.measureText(s + '…').width > maxWidth) s = s.slice(0, -1)
+    return s + '…'
+  }
+
+  // ── Шапка ──
+  const businessName = location?.receipt_business_name || location?.name || ''
+  if (businessName) center(businessName, 34, true, 10)
+  if (location?.receipt_address) center(location.receipt_address, 24)
+  if (location?.receipt_phone) center(`טל׳: ${location.receipt_phone}`, 24)
+  if (location?.receipt_tax_id) center(`ע.מ/ח.פ: ${location.receipt_tax_id}`, 24)
+  y += 6
+
+  // ── Тип документа + номер ──
+  center(`${docTypeLabel(r.doc_type)} ${r.receipt_number ?? '—'}`, 28, true, 6)
+  center('*מקור*', 22, false, 4)
+  divider()
+
+  // ── Мета ──
+  const dt = new Date(r.paid_at ?? r.created_at)
+  const dateStr = dt.toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  const timeStr = dt.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })
+  metaRow('תאריך:', `${timeStr} ${dateStr}`)
+  metaRow('הזמנה:', `#${r.daily_number}`)
+  if (r.table_label) metaRow('שולחן:', r.table_label)
+  if (r.customer_name) metaRow('לקוח/ה:', r.customer_name)
+  if (r.staff_name) metaRow('מוכר/ת:', r.staff_name)
+  if (r.allocation_number) metaRow('מספר הקצאה:', r.allocation_number)
+  divider()
+
+  // ── Таблица позиций ──
+  ctx.font = FONT(22, true)
+  ctx.textAlign = 'right'
+  ctx.fillText('שם', RIGHT, y)
+  ctx.textAlign = 'left'
+  ctx.fillText('מחיר', COL_PRICE, y)
+  ctx.textAlign = 'center'
+  ctx.fillText('כמות', COL_QTY, y)
+  ctx.textAlign = 'left'
+  ctx.fillText('לתשלום', COL_TOTAL, y)
+  y += 28
+  ctx.save()
+  ctx.beginPath()
+  ctx.moveTo(MX, y - 20)
+  ctx.lineTo(RIGHT, y - 20)
+  ctx.stroke()
+  ctx.restore()
+
+  for (const l of r.lines) {
+    ctx.font = FONT(26)
+    const name = l.variant_name ? `${l.name} ${l.variant_name}` : l.name
+    ctx.textAlign = 'right'
+    ctx.fillText(fitText(name, NAME_MAX), RIGHT, y)
+    ctx.textAlign = 'left'
+    ctx.fillText(fmt(l.unit_price), COL_PRICE, y)
+    ctx.textAlign = 'center'
+    ctx.fillText(String(l.qty), COL_QTY, y)
+    ctx.textAlign = 'left'
+    ctx.fillText(fmt(l.line_total), COL_TOTAL, y)
+    y += 34
+    for (const m of l.modifiers) {
+      ctx.font = FONT(22)
+      ctx.textAlign = 'right'
+      ctx.fillText(fitText(`← ${m.name}`, NAME_MAX + 80), RIGHT - 16, y)
+      y += 28
+    }
+  }
+
+  // Кол-во позиций
+  ctx.save()
+  ctx.beginPath()
+  ctx.moveTo(MX, y - 22)
+  ctx.lineTo(RIGHT, y - 22)
+  ctx.stroke()
+  ctx.restore()
+  const itemCount = r.lines.reduce((s, l) => s + l.qty, 0)
+  metaRow('סה"כ פריטים', String(itemCount), 26, true)
+
+  // Скидка
+  if (r.discount_amount > 0) {
+    metaRow(
+      `הנחה${r.discount_type === 'percent' ? ` ${r.discount_value}%` : ''}`,
+      `−${fmt(r.discount_amount)}`
+    )
+  }
+
+  // Итого крупно
+  y += 10
+  center(`לתשלום: ${fmt(r.total)}`, 36, true, 16)
+
+  // НДС
+  metaRow('סה"כ חייב במע"מ', fmt(r.total - r.vat_amount))
+  metaRow(`מע"מ ${Number(r.vat_rate).toFixed(1)}%`, fmt(r.vat_amount))
+
+  // Оплата
+  if (r.payments.length > 0) {
+    divider()
+    for (const p of r.payments) {
+      metaRow(p.method === 'cash' ? 'מזומן' : 'אשראי', fmt(p.amount))
+      if (p.method === 'cash' && p.tendered != null && p.change_due != null && p.change_due > 0) {
+        metaRow('שולם', fmt(p.tendered))
+        metaRow('עודף', fmt(p.change_due))
+      }
+    }
+  }
+
+  // Футер
+  if (location?.receipt_footer) {
+    divider()
+    center(location.receipt_footer, 24)
+  }
+
+  // Обрезать по фактической высоте
+  const out = document.createElement('canvas')
+  out.width = W
+  out.height = Math.min(tall.height, y + 24)
+  const octx = out.getContext('2d')!
+  octx.fillStyle = '#fff'
+  octx.fillRect(0, 0, out.width, out.height)
+  octx.drawImage(tall, 0, 0)
+  return out
+}

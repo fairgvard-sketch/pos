@@ -1,5 +1,5 @@
 import { useLangStore } from '../../store/langStore'
-import { useDeviceStore } from '../../store/deviceStore'
+import { useDeviceStore, type PrintMode } from '../../store/deviceStore'
 import { playPaymentChime } from '../../lib/sound'
 import { t } from '../../lib/i18n'
 
@@ -21,9 +21,11 @@ export default function DeviceTab() {
   const autoLockSec = useDeviceStore((s) => s.autoLockSec)
   const lockAfterSale = useDeviceStore((s) => s.lockAfterSale)
   const paymentSound = useDeviceStore((s) => s.paymentSound)
+  const printMode = useDeviceStore((s) => s.printMode)
   const setAutoLockSec = useDeviceStore((s) => s.setAutoLockSec)
   const setLockAfterSale = useDeviceStore((s) => s.setLockAfterSale)
   const setPaymentSound = useDeviceStore((s) => s.setPaymentSound)
+  const setPrintMode = useDeviceStore((s) => s.setPrintMode)
 
   return (
     <div className="max-w-xl space-y-8">
@@ -68,6 +70,30 @@ export default function DeviceTab() {
           if (v) playPaymentChime() // сразу дать послушать
         }}
       />
+
+      {/* Способ печати чека */}
+      <section>
+        <h3 className="font-bold text-gray-900 mb-1">{t(lang, 'printModeTitle')}</h3>
+        <p className="text-sm text-gray-500 mb-3">{t(lang, 'printModeHint')}</p>
+        <div className="flex gap-2 flex-wrap">
+          {(['browser', 'rawbt'] as PrintMode[]).map((m) => (
+            <button
+              key={m}
+              onClick={() => setPrintMode(m)}
+              className={`h-11 px-4 rounded-xl text-sm font-semibold transition-all active:scale-[0.96] ${
+                printMode === m
+                  ? 'bg-gray-900 text-white'
+                  : 'bg-white border border-gray-200 text-gray-700 hover:border-gray-400'
+              }`}
+            >
+              {t(lang, m === 'browser' ? 'printModeBrowser' : 'printModeRawbt')}
+            </button>
+          ))}
+        </div>
+        {printMode === 'rawbt' && (
+          <p className="text-xs text-amber-600 mt-2">{t(lang, 'printModeRawbtHint')}</p>
+        )}
+      </section>
     </div>
   )
 }
