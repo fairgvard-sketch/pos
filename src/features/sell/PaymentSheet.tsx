@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useLangStore } from '../../store/langStore'
+import { useDeviceStore } from '../../store/deviceStore'
 import { t } from '../../lib/i18n'
 import { formatMoney, parseMoney } from '../../lib/money'
 import type { PaymentInput } from './api'
@@ -33,8 +34,9 @@ function quickCashOptions(total: number): number[] {
 
 export default function PaymentSheet({ total, startMode = 'choose', onCancel, onPay, onSplitItems, busy }: Props) {
   const lang = useLangStore((s) => s.lang)
-  // Карта — самый частый способ, выбрана по умолчанию (наличные — если пришли с кнопки «Наличные»)
-  const [method, setMethod] = useState<Method>(startMode === 'cash' ? 'cash' : 'card')
+  // Первый способ настраивается на кассе (Настройки → Касса); «Наличные» с кнопки перебивают
+  const firstPayMethod = useDeviceStore((s) => s.firstPayMethod)
+  const [method, setMethod] = useState<Method>(startMode === 'cash' ? 'cash' : firstPayMethod)
   const [tenderedStr, setTenderedStr] = useState('')
   // Смешанная оплата: сумма наличными; карта добирает остаток
   const [mixedCashStr, setMixedCashStr] = useState('')
@@ -68,9 +70,10 @@ export default function PaymentSheet({ total, startMode = 'choose', onCancel, on
     ])
   }
 
+  const card = { id: 'card', icon: 'card', label: t(lang, 'payCard') } as const
+  const cash = { id: 'cash', icon: 'cash', label: t(lang, 'payCash') } as const
   const methods: { id: Method; icon: 'card' | 'cash'; label: string }[] = [
-    { id: 'card', icon: 'card', label: t(lang, 'payCard') },
-    { id: 'cash', icon: 'cash', label: t(lang, 'payCash') },
+    ...(firstPayMethod === 'cash' ? [cash, card] : [card, cash]),
     { id: 'mixed', icon: 'card', label: t(lang, 'payMixed') },
   ]
 

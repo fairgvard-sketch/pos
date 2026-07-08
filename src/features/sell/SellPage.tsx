@@ -85,6 +85,7 @@ export default function SellPage() {
   const autoPrintOn = useDeviceStore((s) => s.autoPrintReceipt)
   const receiptPromptOn = useDeviceStore((s) => s.receiptPrompt)
   const kitchenTicketOn = useDeviceStore((s) => s.printKitchenTicket)
+  const firstPayMethod = useDeviceStore((s) => s.firstPayMethod)
   const qc = useQueryClient()
   const navigate = useNavigate()
 
@@ -760,20 +761,17 @@ export default function SellPage() {
                     {cart.lines.length > 0 && <span className="tabular-nums">{formatMoney(total, lang)}</span>}
                   </button>
                   <div className="grid grid-cols-2 gap-2 mt-2">
-                    <button
-                      onClick={() => place.mutate('cash')}
-                      disabled={disabled}
-                      className="btn-secondary min-h-[52px] !rounded-2xl flex items-center justify-center gap-2"
-                    >
-                      <Icon name="cash" size={18} /> {t(lang, 'payCash')}
-                    </button>
-                    <button
-                      onClick={() => place.mutate('card')}
-                      disabled={disabled}
-                      className="btn-secondary min-h-[52px] !rounded-2xl flex items-center justify-center gap-2"
-                    >
-                      <Icon name="card" size={18} /> {t(lang, 'payCard')}
-                    </button>
+                    {/* Порядок кнопок = настройке «первый способ оплаты» этой кассы */}
+                    {(firstPayMethod === 'cash' ? (['cash', 'card'] as const) : (['card', 'cash'] as const)).map((m) => (
+                      <button
+                        key={m}
+                        onClick={() => place.mutate(m)}
+                        disabled={disabled}
+                        className="btn-secondary min-h-[52px] !rounded-2xl flex items-center justify-center gap-2"
+                      >
+                        <Icon name={m} size={18} /> {t(lang, m === 'cash' ? 'payCash' : 'payCard')}
+                      </button>
+                    ))}
                   </div>
                 </>
               )

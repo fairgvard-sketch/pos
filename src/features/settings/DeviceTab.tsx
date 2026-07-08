@@ -1,5 +1,5 @@
 import { useLangStore } from '../../store/langStore'
-import { useDeviceStore, type PrintMode } from '../../store/deviceStore'
+import { useDeviceStore, type PrintMode, type FirstPayMethod } from '../../store/deviceStore'
 import { playPaymentChime } from '../../lib/sound'
 import { t } from '../../lib/i18n'
 
@@ -25,6 +25,7 @@ export default function DeviceTab() {
   const autoPrintReceipt = useDeviceStore((s) => s.autoPrintReceipt)
   const receiptPrompt = useDeviceStore((s) => s.receiptPrompt)
   const printKitchenTicket = useDeviceStore((s) => s.printKitchenTicket)
+  const firstPayMethod = useDeviceStore((s) => s.firstPayMethod)
   const setAutoLockSec = useDeviceStore((s) => s.setAutoLockSec)
   const setLockAfterSale = useDeviceStore((s) => s.setLockAfterSale)
   const setPaymentSound = useDeviceStore((s) => s.setPaymentSound)
@@ -32,6 +33,7 @@ export default function DeviceTab() {
   const setAutoPrintReceipt = useDeviceStore((s) => s.setAutoPrintReceipt)
   const setReceiptPrompt = useDeviceStore((s) => s.setReceiptPrompt)
   const setPrintKitchenTicket = useDeviceStore((s) => s.setPrintKitchenTicket)
+  const setFirstPayMethod = useDeviceStore((s) => s.setFirstPayMethod)
 
   return (
     <div className="max-w-xl space-y-8">
@@ -76,6 +78,27 @@ export default function DeviceTab() {
           if (v) playPaymentChime() // сразу дать послушать
         }}
       />
+
+      {/* Первый способ оплаты в окне оплаты */}
+      <section>
+        <h3 className="font-bold text-gray-900 mb-1">{t(lang, 'firstPayTitle')}</h3>
+        <p className="text-sm text-gray-500 mb-3">{t(lang, 'firstPayHint')}</p>
+        <div className="flex gap-2 flex-wrap">
+          {(['cash', 'card'] as FirstPayMethod[]).map((m) => (
+            <button
+              key={m}
+              onClick={() => setFirstPayMethod(m)}
+              className={`h-11 px-4 rounded-xl text-sm font-semibold transition-all active:scale-[0.96] ${
+                firstPayMethod === m
+                  ? 'bg-gray-900 text-white'
+                  : 'bg-white border border-gray-200 text-gray-700 hover:border-gray-400'
+              }`}
+            >
+              {t(lang, m === 'cash' ? 'payCash' : 'payCard')}
+            </button>
+          ))}
+        </div>
+      </section>
 
       {/* Способ печати чека */}
       <section>

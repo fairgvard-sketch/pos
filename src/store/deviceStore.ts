@@ -9,6 +9,9 @@ import { persist } from 'zustand/middleware'
 /** Способ печати чека: браузерный диалог / RawBT (встроенный принтер Sunmi) */
 export type PrintMode = 'browser' | 'rawbt'
 
+/** Какой способ оплаты идёт первым в окне оплаты (и выбран по умолчанию) */
+export type FirstPayMethod = 'cash' | 'card'
+
 interface DeviceState {
   /** Автоблокировка: секунд бездействия до экрана PIN. 0 = выключена */
   autoLockSec: number
@@ -23,6 +26,8 @@ interface DeviceState {
   receiptPrompt: boolean
   /** Печать тикета на кухню/бар при оплате и дозаказе стола */
   printKitchenTicket: boolean
+  /** Порядок способов в окне оплаты: этот — первым и выбран по умолчанию */
+  firstPayMethod: FirstPayMethod
   setAutoLockSec: (sec: number) => void
   setLockAfterSale: (v: boolean) => void
   setPaymentSound: (v: boolean) => void
@@ -30,6 +35,7 @@ interface DeviceState {
   setAutoPrintReceipt: (v: boolean) => void
   setReceiptPrompt: (v: boolean) => void
   setPrintKitchenTicket: (v: boolean) => void
+  setFirstPayMethod: (m: FirstPayMethod) => void
 }
 
 export const useDeviceStore = create<DeviceState>()(
@@ -42,6 +48,7 @@ export const useDeviceStore = create<DeviceState>()(
       autoPrintReceipt: false,
       receiptPrompt: false,
       printKitchenTicket: false,
+      firstPayMethod: 'cash',
       setAutoLockSec: (autoLockSec) => set({ autoLockSec }),
       setLockAfterSale: (lockAfterSale) => set({ lockAfterSale }),
       setPaymentSound: (paymentSound) => set({ paymentSound }),
@@ -49,6 +56,7 @@ export const useDeviceStore = create<DeviceState>()(
       setAutoPrintReceipt: (autoPrintReceipt) => set({ autoPrintReceipt }),
       setReceiptPrompt: (receiptPrompt) => set({ receiptPrompt }),
       setPrintKitchenTicket: (printKitchenTicket) => set({ printKitchenTicket }),
+      setFirstPayMethod: (firstPayMethod) => set({ firstPayMethod }),
     }),
     { name: 'kassa-device-settings' }
   )
