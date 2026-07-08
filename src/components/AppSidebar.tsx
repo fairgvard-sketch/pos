@@ -10,7 +10,7 @@ import { t } from '../lib/i18n'
 import Icon from './Icon'
 import type { IconName } from './Icon'
 
-export type SidebarPage = 'sell' | 'hall' | 'queue' | 'shift' | 'timesheet' | 'menu' | 'analytics' | 'settings'
+export type SidebarPage = 'sell' | 'hall' | 'queue' | 'transactions' | 'shift' | 'timesheet' | 'menu' | 'analytics' | 'settings'
 
 /** Общий сайдбар кассы: навигация, часы, сотрудник */
 export default function AppSidebar({ active }: { active: SidebarPage }) {
@@ -69,6 +69,7 @@ export default function AppSidebar({ active }: { active: SidebarPage }) {
           <SideLink active={active === 'sell'} label={t(lang, 'sell')} iconName="orders" onClick={() => navigate('/sell')} />
         )}
         <SideLink active={active === 'queue'} label={t(lang, 'queue')} iconName="queue" onClick={() => navigate('/queue')} />
+        <SideLink active={active === 'transactions'} label={t(lang, 'transactions')} iconName="card" onClick={() => navigate('/transactions')} />
         <SideLink active={active === 'shift'} label={t(lang, 'shift')} iconName="shift" onClick={() => navigate('/shift')} />
         <SideLink active={active === 'timesheet'} label={t(lang, 'timesheet')} iconName="customers" onClick={() => navigate('/timesheet')} />
         {isManager && (

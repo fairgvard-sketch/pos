@@ -472,7 +472,7 @@ export default function SellPage() {
             onClick={() => setShowDiscount(true)}
           />
           <ActionButton icon="note" label={t(lang, 'note')} onClick={() => toast(`${t(lang, 'note')} — ${t(lang, 'comingSoon')}`)} />
-          <ActionButton icon="refund" label={t(lang, 'refund')} onClick={() => toast(`${t(lang, 'refund')} — ${t(lang, 'comingSoon')}`)} />
+          <ActionButton icon="refund" label={t(lang, 'refund')} onClick={() => navigate('/transactions')} />
         </div>
       </main>
 

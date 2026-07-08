@@ -11,6 +11,7 @@ import MenuPage from './features/menu/MenuPage'
 import SellPage from './features/sell/SellPage'
 import ShiftPage from './features/shift/ShiftPage'
 import TimesheetPage from './features/timesheet/TimesheetPage'
+import TransactionsPage from './features/transactions/TransactionsPage'
 import QueuePage from './features/queue/QueuePage'
 import SettingsPage from './features/settings/SettingsPage'
 import HallPage from './features/tables/HallPage'
@@ -114,6 +115,15 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <TimesheetPage />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/transactions"
+            element={
+              <ProtectedRoute>
+                <TransactionsPage />
               </ProtectedRoute>
             }
           />
