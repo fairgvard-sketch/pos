@@ -16,6 +16,7 @@ import { t, formatTime } from '../../lib/i18n'
 import { can } from '../../lib/perms'
 import { formatMoney, parseMoney } from '../../lib/money'
 import AppSidebar from '../../components/AppSidebar'
+import BackButton from '../../components/BackButton'
 import type { Location } from '../../types'
 
 /** Данные печатного דו"ח Z из результата close_shift (поля 037 с фолбэками) */
@@ -152,7 +153,7 @@ export default function ShiftPage() {
   if (result) {
     const diff = result.cash_diff
     return (
-      <Shell isRtl={isRtl} lang={lang} onBack={() => navigate(backRoute)}>
+      <Shell isRtl={isRtl} onBack={() => navigate(backRoute)}>
         <div className="max-w-md mx-auto w-full">
           <div className="text-center mb-6">
             <div className="text-4xl mb-2">✓</div>
@@ -209,7 +210,7 @@ export default function ShiftPage() {
   }
 
   return (
-    <Shell isRtl={isRtl} lang={lang} onBack={() => navigate(backRoute)}>
+    <Shell isRtl={isRtl} onBack={() => navigate(backRoute)}>
       <div className="max-w-md mx-auto w-full">
         <h1 className="text-2xl font-black text-gray-900 mb-1">{t(lang, 'shift')}</h1>
         {shift && (
@@ -543,14 +544,12 @@ function CloseShiftDialog({
   )
 }
 
-function Shell({ isRtl, lang, onBack, children }: { isRtl: boolean; lang: 'ru' | 'he'; onBack: () => void; children: React.ReactNode }) {
+function Shell({ isRtl, onBack, children }: { isRtl: boolean; onBack: () => void; children: React.ReactNode }) {
   return (
     <div dir={isRtl ? 'rtl' : 'ltr'} className="h-screen bg-[#eceef1] flex gap-3 p-3 overflow-hidden">
       <AppSidebar active="shift" />
       <main className="flex-1 bg-white rounded-3xl overflow-y-auto p-6">
-        <button onClick={onBack} className="btn-ghost !px-2 -ms-2 mb-4 text-sm">
-          {isRtl ? '→' : '←'} {t(lang, 'back')}
-        </button>
+        <BackButton onClick={onBack} className="mb-4" />
         {children}
       </main>
     </div>

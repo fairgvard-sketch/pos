@@ -12,6 +12,7 @@ import { t } from '../../lib/i18n'
 import { parseMoney } from '../../lib/money'
 import type { MenuItem, ModifierGroup } from '../../types'
 import ItemPreview from './ItemPreview'
+import BackButton from '../../components/BackButton'
 
 interface VariantDraft {
   name: string
@@ -31,7 +32,6 @@ interface Props {
 /** Полноэкранный редактор товара (родитель передаёт key={item.id} для сброса формы) */
 export default function ItemEditor({ item, defaultCategoryId, onSaved, onDeleted, onBack }: Props) {
   const lang = useLangStore((s) => s.lang)
-  const isRtl = lang === 'he'
   const qc = useQueryClient()
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -166,9 +166,7 @@ export default function ItemEditor({ item, defaultCategoryId, onSaved, onDeleted
         {/* Шапка */}
         <div className="px-8 pt-5 shrink-0">
           <div className="flex items-center justify-between">
-            <button onClick={onBack} className="btn-ghost !px-2 -ms-2 text-sm">
-              {isRtl ? '→' : '←'} {t(lang, 'back')}
-            </button>
+            <BackButton onClick={onBack} />
             <div className="flex items-center gap-4">
               <label className="flex items-center gap-2 text-sm text-gray-500 cursor-pointer">
                 {t(lang, 'available')}
