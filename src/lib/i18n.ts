@@ -409,6 +409,9 @@ export const translations = {
     cashWarnHint: 'Предупреждение в смене, когда наличных в кассе больше указанной суммы. Пусто — выключено.',
     closeReminderBanner: 'Пора закрыть смену',
     cashWarnBanner: 'Много наличных в кассе — сделайте инкассацию',
+    printZReport: 'Напечатать Z-отчёт',
+    refundsTotal: 'Возвраты',
+    vatOfSales: 'В т.ч. НДС',
 
     // Права доступа (точка)
     permsTitle: 'Права доступа',
@@ -982,6 +985,9 @@ export const translations = {
     cashWarnHint: 'אזהרה במשמרת כשהמזומן בקופה עולה על הסכום. ריק — כבוי.',
     closeReminderBanner: 'הגיע הזמן לסגור את המשמרת',
     cashWarnBanner: 'יש הרבה מזומן בקופה — מומלץ לבצע הפקדה',
+    printZReport: 'הדפסת דו"ח Z',
+    refundsTotal: 'החזרים',
+    vatOfSales: 'מתוך זה מע"מ',
 
     // הרשאות (נקודה)
     permsTitle: 'הרשאות',

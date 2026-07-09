@@ -336,6 +336,129 @@ export function renderRefundReceiptCanvas(r: RefundReceipt, location: Location |
   return out
 }
 
+// ── דו"ח Z — отчёт закрытия смены ─────────────────────────
+
+export interface ZReportData {
+  zNumber: number | null
+  openedAt: string | null
+  closedAt: string | null
+  staffName: string | null
+  ordersCount: number
+  grossCash: number
+  grossCard: number
+  refundsTotal: number
+  /** Нетто-выручка (продажи − возвраты) */
+  netTotal: number
+  vatTotal: number | null
+  tipsTotal: number
+  openingFloat: number | null
+  expectedCash: number
+  countedCash: number
+  cashDiff: number
+  note?: string | null
+}
+
+/**
+ * Печатный דו"ח Z: реквизиты бизнеса, сквозной номер Z (037), период
+ * смены, брутто-продажи по способам, возвраты, НДС, кассовая сверка.
+ * Иврит/RTL, раскладка как у чека.
+ */
+export function renderZReportCanvas(z: ZReportData, location: Location | undefined): HTMLCanvasElement {
+  const tall = document.createElement('canvas')
+  tall.width = W
+  tall.height = 2000
+  const ctx = tall.getContext('2d')!
+  ctx.fillStyle = '#fff'
+  ctx.fillRect(0, 0, W, tall.height)
+  ctx.fillStyle = '#000'
+
+  let y = 30
+
+  const center = (text: string, size: number, bold = false, gap = 8) => {
+    ctx.font = FONT(size, bold)
+    ctx.textAlign = 'center'
+    ctx.fillText(text, W / 2, y)
+    y += size + gap
+  }
+  const metaRow = (label: string, value: string, size = 26, bold = false) => {
+    ctx.font = FONT(size, bold)
+    ctx.textAlign = 'right'
+    ctx.fillText(label, RIGHT, y)
+    ctx.textAlign = 'left'
+    ctx.fillText(value, MX, y)
+    y += size + 8
+  }
+  const divider = () => {
+    ctx.save()
+    ctx.strokeStyle = '#000'
+    ctx.setLineDash([6, 6])
+    ctx.beginPath()
+    ctx.moveTo(MX, y - 8)
+    ctx.lineTo(RIGHT, y - 8)
+    ctx.stroke()
+    ctx.restore()
+    y += 16
+  }
+  const dtParts = (iso: string) => {
+    const d = new Date(iso)
+    return `${d.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })} ${d.toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' })}`
+  }
+
+  // ── Шапка (реквизиты бизнеса) ──
+  const businessName = location?.receipt_business_name || location?.name || ''
+  if (businessName) center(businessName, 34, true, 10)
+  if (location?.receipt_address) center(location.receipt_address, 24)
+  if (location?.receipt_phone) center(`טל׳: ${location.receipt_phone}`, 24)
+  if (location?.receipt_tax_id) center(`ע.מ/ח.פ: ${location.receipt_tax_id}`, 24)
+  y += 6
+
+  center(`דו"ח Z מס' ${z.zNumber ?? '—'}`, 30, true, 6)
+  center('סגירת משמרת', 24, false, 4)
+  divider()
+
+  if (z.openedAt) metaRow('נפתחה:', dtParts(z.openedAt))
+  metaRow('נסגרה:', dtParts(z.closedAt ?? new Date().toISOString()))
+  if (z.staffName) metaRow('נסגרה ע"י:', z.staffName)
+  metaRow('עסקאות:', String(z.ordersCount))
+  divider()
+
+  // ── Продажи (брутто) ──
+  metaRow('מכירות מזומן', fmt(z.grossCash))
+  metaRow('מכירות אשראי', fmt(z.grossCard))
+  metaRow('סה"כ מכירות', fmt(z.grossCash + z.grossCard), 28, true)
+  if (z.refundsTotal > 0) metaRow('החזרים', `−${fmt(z.refundsTotal)}`)
+  metaRow('סה"כ נטו', fmt(z.netTotal), 28, true)
+  if (z.vatTotal != null) metaRow('מתוך זה מע"מ', fmt(z.vatTotal))
+  if (z.tipsTotal > 0) metaRow('טיפים', fmt(z.tipsTotal))
+  divider()
+
+  // ── Кассовая сверка ──
+  if (z.openingFloat != null) metaRow('עודף פתיחה', fmt(z.openingFloat))
+  metaRow('מזומן צפוי', fmt(z.expectedCash))
+  metaRow('מזומן שנספר', fmt(z.countedCash))
+  metaRow(
+    z.cashDiff === 0 ? 'התאמה מלאה' : z.cashDiff < 0 ? 'חוסר' : 'עודף',
+    z.cashDiff === 0 ? '✓' : `${z.cashDiff < 0 ? '−' : '+'}${fmt(Math.abs(z.cashDiff))}`,
+    28, true
+  )
+  if (z.note) {
+    divider()
+    center(z.note, 24)
+  }
+
+  y += 6
+  center('— סוף דו"ח —', 22, false, 4)
+
+  const out = document.createElement('canvas')
+  out.width = W
+  out.height = Math.min(tall.height, y + 24)
+  const octx = out.getContext('2d')!
+  octx.fillStyle = '#fff'
+  octx.fillRect(0, 0, out.width, out.height)
+  octx.drawImage(tall, 0, 0)
+  return out
+}
+
 // ── Тикет на кухню/бар ────────────────────────────────────
 
 export interface KitchenTicketLine {

@@ -6,12 +6,38 @@ import { fetchCurrentShift, fetchShiftReport, closeShift, type CloseResult } fro
 import { fetchOnShiftStaff, clockOutStaff } from '../timesheet/api'
 import { fetchCurrentLocation } from '../auth/api'
 import { useCloseReminder } from './reminder'
+import { renderZReportCanvas, type ZReportData } from '../receipt/printCanvas'
+import { canvasToRawbtUrl, canvasToEscposBase64, printCanvasSilently } from '../../lib/escpos'
 import { useAuthStore } from '../../store/authStore'
 import { useLangStore } from '../../store/langStore'
+import { useDeviceStore } from '../../store/deviceStore'
 import { t } from '../../lib/i18n'
 import { can } from '../../lib/perms'
 import { formatMoney, parseMoney } from '../../lib/money'
 import AppSidebar from '../../components/AppSidebar'
+import type { Location } from '../../types'
+
+/** Данные печатного דו"ח Z из результата close_shift (поля 037 с фолбэками) */
+function toZReportData(res: CloseResult, openedAt: string | undefined, staffName: string | null, note: string): ZReportData {
+  return {
+    zNumber: res.z_number ?? null,
+    openedAt: res.opened_at ?? openedAt ?? null,
+    closedAt: res.closed_at ?? new Date().toISOString(),
+    staffName,
+    ordersCount: res.orders_count,
+    grossCash: res.gross_cash ?? res.cash_sales,
+    grossCard: res.gross_card ?? res.card_sales,
+    refundsTotal: res.refunds_total ?? 0,
+    netTotal: res.total_sales,
+    vatTotal: res.vat_total ?? null,
+    tipsTotal: res.tips_total,
+    openingFloat: res.opening_float ?? null,
+    expectedCash: res.expected_cash,
+    countedCash: res.counted_cash,
+    cashDiff: res.cash_diff,
+    note: note || null,
+  }
+}
 
 export default function ShiftPage() {
   const navigate = useNavigate()
@@ -39,6 +65,10 @@ export default function ShiftPage() {
   const [countedStr, setCountedStr] = useState('')
   const [note, setNote] = useState('')
   const [result, setResult] = useState<CloseResult | null>(null)
+  // Данные печатного Z-отчёта — снимаются в момент закрытия (после
+  // закрытия current_shift обнуляется, opened_at оттуда уже не взять)
+  const [zData, setZData] = useState<ZReportData | null>(null)
+  const printMode = useDeviceStore((s) => s.printMode)
   // Диалог подтверждения закрытия (заменяет window.confirm — тот не работает
   // в APK-обёртке Sunmi). Внутри — проверка, кто на смене в табеле.
   const [confirmOpen, setConfirmOpen] = useState(false)
@@ -54,9 +84,14 @@ export default function ShiftPage() {
       return closeShift(shift!.id, staff!.id, counted, note)
     },
     onSuccess: (res) => {
+      const z = toZReportData(res, shift?.opened_at, staff?.name ?? null, note)
       setResult(res)
+      setZData(z)
       setClosing(false)
       setConfirmOpen(false)
+      // דו"ח Z печатается при закрытии автоматически (тихие пути:
+      // мост APK / RawBT); в браузерном режиме — кнопкой на экране итога
+      printCanvasSilently(renderZReportCanvas(z, location), printMode === 'rawbt')
       qc.invalidateQueries({ queryKey: ['current_shift'] })
       qc.invalidateQueries({ queryKey: ['timesheet'] })
     },
@@ -74,6 +109,21 @@ export default function ShiftPage() {
 
   if (!staff) return null
 
+  // Печать דו"ח Z с экрана итога: мост APK → RawBT → браузерный диалог
+  function printZ() {
+    if (!zData) return
+    const bridge = window.KassaAndroid
+    if (bridge?.isAvailable()) {
+      bridge.printBase64(canvasToEscposBase64(renderZReportCanvas(zData, location)))
+      return
+    }
+    if (printMode === 'rawbt') {
+      window.location.href = canvasToRawbtUrl(renderZReportCanvas(zData, location))
+      return
+    }
+    window.print()
+  }
+
   // Экран итога после закрытия
   if (result) {
     const diff = result.cash_diff
@@ -83,12 +133,22 @@ export default function ShiftPage() {
           <div className="text-center mb-6">
             <div className="text-4xl mb-2">✓</div>
             <h1 className="text-xl font-black text-gray-900">{t(lang, 'shiftClosed')}</h1>
+            {result.z_number != null && (
+              <p className="text-sm text-gray-500 mt-1">{t(lang, 'zReport')} №{result.z_number}</p>
+            )}
           </div>
           <div className="card p-5 space-y-1">
             <Row label={t(lang, 'zReport')} bold />
-            <Line label={t(lang, 'cashSales')} value={formatMoney(result.cash_sales, lang)} />
-            <Line label={t(lang, 'cardSales')} value={formatMoney(result.card_sales, lang)} />
+            <Line label={t(lang, 'ordersCount')} value={String(result.orders_count)} />
+            <Line label={t(lang, 'cashSales')} value={formatMoney(result.gross_cash ?? result.cash_sales, lang)} />
+            <Line label={t(lang, 'cardSales')} value={formatMoney(result.gross_card ?? result.card_sales, lang)} />
+            {(result.refunds_total ?? 0) > 0 && (
+              <Line label={t(lang, 'refundsTotal')} value={`−${formatMoney(result.refunds_total!, lang)}`} />
+            )}
             <Line label={t(lang, 'totalSales')} value={formatMoney(result.total_sales, lang)} bold />
+            {result.vat_total != null && (
+              <Line label={t(lang, 'vatOfSales')} value={formatMoney(result.vat_total, lang)} />
+            )}
             {result.tips_total > 0 && (
               <Line label={t(lang, 'tipsTotal')} value={formatMoney(result.tips_total, lang)} />
             )}
@@ -102,10 +162,18 @@ export default function ShiftPage() {
               bold
             />
           </div>
-          <button onClick={() => navigate('/home')} className="btn-primary w-full mt-5 !rounded-2xl">
-            {t(lang, 'back')}
-          </button>
+          <div className="grid grid-cols-2 gap-2 mt-5">
+            <button onClick={printZ} className="btn-secondary !rounded-2xl">
+              {t(lang, 'printZReport')}
+            </button>
+            <button onClick={() => navigate('/home')} className="btn-primary !rounded-2xl">
+              {t(lang, 'back')}
+            </button>
+          </div>
         </div>
+        {/* Печатная версия דו"ח Z для браузерного диалога: на экране спрятана
+            за пределами вьюпорта, @media print показывает только её */}
+        {zData && <ZReportPrintBody z={zData} location={location} />}
       </Shell>
     )
   }
@@ -326,6 +394,79 @@ function Shell({ isRtl, lang, onBack, children }: { isRtl: boolean; lang: 'ru' |
         </button>
         {children}
       </main>
+    </div>
+  )
+}
+
+/**
+ * Печатная версия דו"ח Z (иврит/RTL, как чек) для браузерного пути печати.
+ * На экране уводится за вьюпорт; @media print (index.css) показывает
+ * только .receipt-print и позиционирует её в 0,0.
+ */
+function ZReportPrintBody({ z, location }: { z: ZReportData; location: Location | undefined }) {
+  const fmt = (agorot: number) => (agorot / 100).toFixed(2)
+  const dt = (iso: string) => {
+    const d = new Date(iso)
+    return `${d.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })} ${d.toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' })}`
+  }
+  const businessName = location?.receipt_business_name || location?.name || ''
+
+  return (
+    <div dir="rtl" className="receipt-print fixed start-[-9999px] top-0 w-[300px] font-mono text-[13px] text-gray-900 leading-snug bg-white">
+      <div className="text-center mb-2">
+        <div className="font-bold text-base">{businessName}</div>
+        {location?.receipt_address && <div className="text-xs">{location.receipt_address}</div>}
+        {location?.receipt_phone && <div className="text-xs">טל׳: {location.receipt_phone}</div>}
+        {location?.receipt_tax_id && <div className="text-xs">ע.מ/ח.פ: {location.receipt_tax_id}</div>}
+      </div>
+
+      <div className="text-center font-bold text-sm">דו"ח Z מס' {z.zNumber ?? '—'}</div>
+      <div className="text-center text-xs mb-1">סגירת משמרת</div>
+      <ZDivider />
+
+      {z.openedAt && <ZRow label="נפתחה:" value={dt(z.openedAt)} />}
+      <ZRow label="נסגרה:" value={dt(z.closedAt ?? new Date().toISOString())} />
+      {z.staffName && <ZRow label='נסגרה ע"י:' value={z.staffName} />}
+      <ZRow label="עסקאות:" value={String(z.ordersCount)} />
+      <ZDivider />
+
+      <ZRow label="מכירות מזומן" value={fmt(z.grossCash)} />
+      <ZRow label="מכירות אשראי" value={fmt(z.grossCard)} />
+      <ZRow label='סה"כ מכירות' value={fmt(z.grossCash + z.grossCard)} bold />
+      {z.refundsTotal > 0 && <ZRow label="החזרים" value={`−${fmt(z.refundsTotal)}`} />}
+      <ZRow label='סה"כ נטו' value={fmt(z.netTotal)} bold />
+      {z.vatTotal != null && <ZRow label='מתוך זה מע"מ' value={fmt(z.vatTotal)} />}
+      {z.tipsTotal > 0 && <ZRow label="טיפים" value={fmt(z.tipsTotal)} />}
+      <ZDivider />
+
+      {z.openingFloat != null && <ZRow label="עודף פתיחה" value={fmt(z.openingFloat)} />}
+      <ZRow label="מזומן צפוי" value={fmt(z.expectedCash)} />
+      <ZRow label="מזומן שנספר" value={fmt(z.countedCash)} />
+      <ZRow
+        label={z.cashDiff === 0 ? 'התאמה מלאה' : z.cashDiff < 0 ? 'חוסר' : 'עודף'}
+        value={z.cashDiff === 0 ? '✓' : `${z.cashDiff < 0 ? '−' : '+'}${fmt(Math.abs(z.cashDiff))}`}
+        bold
+      />
+      {z.note && (
+        <>
+          <ZDivider />
+          <div className="text-center text-xs">{z.note}</div>
+        </>
+      )}
+      <div className="text-center text-xs mt-2">— סוף דו"ח —</div>
+    </div>
+  )
+}
+
+function ZDivider() {
+  return <div className="border-t border-dashed border-gray-300 my-2" />
+}
+
+function ZRow({ label, value, bold }: { label: string; value: string; bold?: boolean }) {
+  return (
+    <div className={`flex justify-between text-sm ${bold ? 'font-bold' : ''}`}>
+      <span>{label}</span>
+      <span className="tabular-nums" dir="ltr">{value}</span>
     </div>
   )
 }

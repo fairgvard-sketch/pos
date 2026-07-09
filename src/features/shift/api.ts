@@ -35,6 +35,16 @@ export interface CloseResult {
   orders_count: number
   /** Сколько брошенных counter-заказов аннулировано при закрытии (035) */
   abandoned_voided?: number
+  // Поля Z-отчёта (037); отсутствуют, пока миграция не применена
+  z_number?: number
+  gross_cash?: number
+  gross_card?: number
+  gross_total?: number
+  refunds_total?: number
+  vat_total?: number
+  opened_at?: string
+  closed_at?: string
+  opening_float?: number
 }
 
 /** Открытая смена точки, либо null */
