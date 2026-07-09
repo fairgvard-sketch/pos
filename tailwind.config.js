@@ -15,6 +15,10 @@ export default {
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],
       },
+      spacing: {
+        // 52px — крупная сенсорная мишень для полей/кнопок мастера входа (Square-стиль)
+        13: '3.25rem',
+      },
       screens: {
         // Компактный режим для невысоких экранов (POS-терминалы Sunmi ~720–768px)
         short: { raw: '(max-height: 800px)' },

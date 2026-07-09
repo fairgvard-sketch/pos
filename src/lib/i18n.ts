@@ -34,6 +34,37 @@ export const translations = {
     createOrg: 'Начать работу',
     creating: 'Создаём...',
 
+    // Мастер входа/регистрации (бренд Arrow POS)
+    arrowBrand: 'Arrow POS',
+    setupSignInTitle: 'Вход в систему',
+    setupSignUpTitle: 'Создайте аккаунт',
+    setupSignInSub: 'Войдите в аккаунт вашего заведения. Это делается один раз на каждой кассе.',
+    setupSignUpSub: 'Регистрация быстрая и бесплатная — без обязательств и договоров.',
+    setupContinue: 'Продолжить',
+    setupCreateAccount: 'Создать аккаунт',
+    setupNewHere: 'Впервые здесь?',
+    setupAlready: 'Уже есть аккаунт Arrow?',
+    // Шаг «Бизнес» онбординга
+    bizStepTitle: 'Расскажите о вашем заведении',
+    bizStepHint: 'Эти данные попадут в шапку чека и письма клиентам.',
+    bizAddress: 'Адрес',
+    bizAddressPlaceholder: 'Улица, дом, город',
+    setupNext: 'Далее',
+    // Шаг «Владелец»
+    ownerStepTitle: 'Последний шаг — владелец',
+    ownerStepHint: 'PIN нужен для входа в кассу. Его можно будет сменить в настройках.',
+    stepOf: 'Шаг',
+    // Правая брендовая панель
+    arrowPanelTitle: 'Всё для кофейни — в одной кассе',
+    arrowFeatSpeed: 'Заказ за 3 тапа',
+    arrowFeatTables: 'Столы и открытые счета',
+    arrowFeatLoyalty: 'Программа лояльности',
+    arrowFeatTips: 'Чаевые и разделение счёта',
+    arrowFeatReceipts: 'Чеки-хешбонит и печать',
+    arrowFeatReports: 'Отчёты и Z-отчёт смены',
+    arrowFeatStaff: 'PIN-переключение сотрудников',
+    arrowFeatOffline: 'Работа без интернета',
+
     // PIN-вход
     enterPin: 'Введите PIN-код',
     wrongPin: 'Неверный PIN-код',
@@ -682,6 +713,37 @@ export const translations = {
     ownerPin: 'קוד PIN שלך (4 ספרות)',
     createOrg: 'להתחיל לעבוד',
     creating: 'יוצרים...',
+
+    // אשף התחברות/הרשמה (מותג Arrow POS)
+    arrowBrand: 'Arrow POS',
+    setupSignInTitle: 'כניסה למערכת',
+    setupSignUpTitle: 'יצירת חשבון',
+    setupSignInSub: 'התחברו לחשבון העסק שלכם. פעולה חד-פעמית לכל קופה.',
+    setupSignUpSub: 'ההרשמה מהירה וחינמית — ללא התחייבות וללא חוזים.',
+    setupContinue: 'המשך',
+    setupCreateAccount: 'יצירת חשבון',
+    setupNewHere: 'פעם ראשונה כאן?',
+    setupAlready: 'כבר יש חשבון Arrow?',
+    // שלב «עסק» באשף
+    bizStepTitle: 'ספרו לנו על העסק שלכם',
+    bizStepHint: 'הפרטים האלה יופיעו בראש הקבלה ובהודעות ללקוחות.',
+    bizAddress: 'כתובת',
+    bizAddressPlaceholder: 'רחוב, מספר, עיר',
+    setupNext: 'הבא',
+    // שלב «בעלים»
+    ownerStepTitle: 'שלב אחרון — הבעלים',
+    ownerStepHint: 'ה-PIN משמש לכניסה לקופה. אפשר לשנות אותו בהגדרות.',
+    stepOf: 'שלב',
+    // פאנל מיתוג ימני
+    arrowPanelTitle: 'כל מה שבית קפה צריך — בקופה אחת',
+    arrowFeatSpeed: 'הזמנה ב-3 הקשות',
+    arrowFeatTables: 'שולחנות וחשבונות פתוחים',
+    arrowFeatLoyalty: 'מועדון לקוחות',
+    arrowFeatTips: 'טיפים ופיצול חשבון',
+    arrowFeatReceipts: 'קבלות-חשבונית והדפסה',
+    arrowFeatReports: 'דוחות ו-Z של משמרת',
+    arrowFeatStaff: 'החלפת עובדים ב-PIN',
+    arrowFeatOffline: 'עבודה ללא אינטרנט',
 
     // PIN-вход
     enterPin: 'הזן קוד PIN',

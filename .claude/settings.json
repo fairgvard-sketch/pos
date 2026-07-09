@@ -9,7 +9,17 @@
       "Bash(echo \"EXIT: $?\")",
       "Bash(rm -f src/features/home/HomePage.tsx)",
       "Bash(ls src/features/home/)",
-      "Bash(node -e ' *)"
+      "Bash(node -e ' *)",
+      "Read(//c/Users/Hub/Desktop/in work projects/kassa/**)",
+      "PowerShell($p = Start-Process npm -ArgumentList 'run','dev' -PassThru -RedirectStandardOutput \"$env:TEMP\\\\arrow_dev.log\" -RedirectStandardError \"$env:TEMP\\\\arrow_dev.err.log\" -WindowStyle Hidden; Start-Sleep -Seconds 6; Get-Content \"$env:TEMP\\\\arrow_dev.log\" -Tail 15; Write-Host \"PID=$\\($p.Id\\)\")",
+      "PowerShell($job = Start-Job -ScriptBlock { Set-Location \"c:\\\\Users\\\\Hub\\\\Desktop\\\\in work projects\\\\kassa\"; & cmd /c \"npm run dev\" }; Start-Sleep -Seconds 8; try { $r = Invoke-WebRequest -Uri \"http://localhost:5173/setup\" -UseBasicParsing -TimeoutSec 5; Write-Host \"HTTP $\\($r.StatusCode\\), length=$\\($r.Content.Length\\)\" } catch { Write-Host \"Not reachable on 5173: $\\($_.Exception.Message\\)\"; Receive-Job $job | Select-Object -Last 15 })",
+      "PowerShell(Get-Job | Stop-Job; Get-Job | Remove-Job; Get-Process node -ErrorAction SilentlyContinue | Where-Object { $_.StartTime -gt \\(Get-Date\\).AddMinutes\\(-3\\) } | Stop-Process -Force -ErrorAction SilentlyContinue; Write-Host \"cleaned\")",
+      "PowerShell(npm run lint 2>&1)",
+      "PowerShell(npm run lint 2>&1 | Select-String -Pattern \"error|warning\" | Group-Object { \\($_ -split '\\\\s{2,}'\\)[2] } | Sort-Object Count -Descending | Select-Object Count, Name -First 12)",
+      "PowerShell(npm run lint 2>&1 | Select-String -Pattern \"react-hooks/|typescript-eslint/|react-refresh/\" -AllMatches | ForEach-Object { $_.Matches.Value } | Group-Object | Sort-Object Count -Descending | Format-Table Count, Name -AutoSize)",
+      "PowerShell(npx eslint . --format json 2>$null | Out-File -Encoding utf8 \"$env:TEMP\\\\lint.json\"; $r = Get-Content \"$env:TEMP\\\\lint.json\" -Raw | ConvertFrom-Json; $rules = @{}; $files = @{}; foreach \\($f in $r\\) { foreach \\($m in $f.messages\\) { $rules[$m.ruleId] = 1 + $rules[$m.ruleId]; $fn = Split-Path $f.filePath -Leaf; $files[$fn] = 1 + $files[$fn] } }; Write-Host \"=== BY RULE ===\"; $rules.GetEnumerator\\(\\) | Sort-Object Value -Descending | ForEach-Object { Write-Host \"$\\($_.Value\\)`t$\\($_.Key\\)\" }; Write-Host \"=== BY FILE ===\"; $files.GetEnumerator\\(\\) | Sort-Object Value -Descending | Select-Object -First 12 | ForEach-Object { Write-Host \"$\\($_.Value\\)`t$\\($_.Key\\)\" })",
+      "PowerShell(npm run build)",
+      "PowerShell(git push)"
     ]
   }
 }

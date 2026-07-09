@@ -113,7 +113,8 @@ export async function bootstrapOrg(
   orgName: string,
   locationName: string,
   ownerName: string,
-  ownerPin: string
+  ownerPin: string,
+  businessAddress?: string
 ) {
   const { error } = await supabase.rpc('bootstrap_org', {
     p_org_name: orgName,
@@ -126,6 +127,15 @@ export async function bootstrapOrg(
   // иначе RLS не увидит org_id до истечения старого токена
   const { error: refreshError } = await supabase.auth.refreshSession()
   if (refreshError) throw new Error(refreshError.message)
+  // Название бизнеса → шапка чека; адрес (если указан) → строка адреса чека.
+  // Ошибку здесь не роняем: онбординг уже прошёл, реквизиты правятся в настройках.
+  await updateReceiptDetails({
+    receipt_business_name: orgName || null,
+    receipt_address: businessAddress?.trim() || null,
+    receipt_tax_id: null,
+    receipt_phone: null,
+    receipt_footer: null,
+  }).catch(() => {})
 }
 
 export async function verifyStaffPin(pin: string): Promise<StaffSession> {
