@@ -6,7 +6,6 @@ import { supabase } from './lib/supabase'
 import DeviceSetupPage from './features/auth/DeviceSetupPage'
 import PinLoginPage from './features/auth/PinLoginPage'
 import ProtectedRoute from './features/auth/ProtectedRoute'
-import HomePage from './features/home/HomePage'
 import MenuPage from './features/menu/MenuPage'
 import SellPage from './features/sell/SellPage'
 import ShiftPage from './features/shift/ShiftPage'
@@ -65,15 +64,6 @@ export default function App() {
           <Route path="/" element={<RootRedirect />} />
           <Route path="/setup" element={<DeviceSetupPage />} />
           <Route path="/pin" element={<PinLoginPage />} />
-
-          <Route
-            path="/home"
-            element={
-              <ProtectedRoute>
-                <HomePage />
-              </ProtectedRoute>
-            }
-          />
 
           <Route
             path="/sell"

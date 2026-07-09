@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { verifyStaffPin } from './api'
+import { useQueryClient } from '@tanstack/react-query'
+import { verifyStaffPin, fetchCurrentLocation } from './api'
+import { landingRoute } from './landing'
 import { useAuthStore } from '../../store/authStore'
 import { useLangStore } from '../../store/langStore'
 import { t } from '../../lib/i18n'
@@ -14,6 +16,7 @@ const PIN_LENGTH = 4
  */
 export default function PinLoginPage() {
   const navigate = useNavigate()
+  const qc = useQueryClient()
   const lang = useLangStore((s) => s.lang)
   const setStaff = useAuthStore((s) => s.setStaff)
   const isRtl = lang === 'he'
@@ -31,7 +34,13 @@ export default function PinLoginPage() {
       try {
         const staff = await verifyStaffPin(fullPin)
         setStaff(staff)
-        navigate('/home', { replace: true })
+        // Сразу на рабочий экран (зал/продажа по режиму точки), минуя хаб.
+        // Режим берём из кэша, иначе тянем (кэшируется на будущее).
+        const location = await qc.ensureQueryData({
+          queryKey: ['current_location'],
+          queryFn: fetchCurrentLocation,
+        })
+        navigate(landingRoute(location.service_mode), { replace: true })
       } catch {
         setShake(true)
         setTimeout(() => setShake(false), 400)
@@ -41,7 +50,7 @@ export default function PinLoginPage() {
         submitting.current = false
       }
     },
-    [navigate, setStaff]
+    [navigate, setStaff, qc]
   )
 
   const press = useCallback(

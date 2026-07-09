@@ -5,6 +5,7 @@ import toast from 'react-hot-toast'
 import { fetchCurrentShift, fetchShiftReport, closeShift, addCashMovement, fetchShiftMovements, type CloseResult } from './api'
 import { fetchOnShiftStaff, clockOutStaff } from '../timesheet/api'
 import { fetchCurrentLocation } from '../auth/api'
+import { landingRoute } from '../auth/landing'
 import { useCloseReminder } from './reminder'
 import { renderZReportCanvas, type ZReportData } from '../receipt/printCanvas'
 import { canvasToRawbtUrl, canvasToEscposBase64, printCanvasSilently } from '../../lib/escpos'
@@ -56,6 +57,7 @@ export default function ShiftPage() {
     refetchInterval: 15_000,
   })
   const { data: location } = useQuery({ queryKey: ['current_location'], queryFn: fetchCurrentLocation })
+  const backRoute = landingRoute(location?.service_mode)
 
   // Настройки точки: право закрытия, напоминание, порог наличных
   const canCloseShift = can(staff?.role, 'close_shift', location?.settings)
@@ -150,7 +152,7 @@ export default function ShiftPage() {
   if (result) {
     const diff = result.cash_diff
     return (
-      <Shell isRtl={isRtl} lang={lang} onBack={() => navigate('/home')}>
+      <Shell isRtl={isRtl} lang={lang} onBack={() => navigate(backRoute)}>
         <div className="max-w-md mx-auto w-full">
           <div className="text-center mb-6">
             <div className="text-4xl mb-2">✓</div>
@@ -194,7 +196,7 @@ export default function ShiftPage() {
             <button onClick={printZ} className="btn-secondary !rounded-2xl">
               {t(lang, 'printZReport')}
             </button>
-            <button onClick={() => navigate('/home')} className="btn-primary !rounded-2xl">
+            <button onClick={() => navigate(backRoute)} className="btn-primary !rounded-2xl">
               {t(lang, 'back')}
             </button>
           </div>
@@ -207,7 +209,7 @@ export default function ShiftPage() {
   }
 
   return (
-    <Shell isRtl={isRtl} lang={lang} onBack={() => navigate('/home')}>
+    <Shell isRtl={isRtl} lang={lang} onBack={() => navigate(backRoute)}>
       <div className="max-w-md mx-auto w-full">
         <h1 className="text-2xl font-black text-gray-900 mb-1">{t(lang, 'shift')}</h1>
         {shift && (

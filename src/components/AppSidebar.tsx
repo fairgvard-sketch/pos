@@ -9,6 +9,7 @@ import { voidTableOrder } from '../features/tables/api'
 import { t } from '../lib/i18n'
 import Icon from './Icon'
 import type { IconName } from './Icon'
+import LangToggle from './ui/LangToggle'
 
 export type SidebarPage = 'sell' | 'hall' | 'queue' | 'transactions' | 'shift' | 'timesheet' | 'menu' | 'analytics' | 'settings'
 
@@ -85,6 +86,9 @@ export default function AppSidebar({ active }: { active: SidebarPage }) {
       </nav>
 
       <div className="mt-auto space-y-4">
+        <div className="px-2">
+          <LangToggle />
+        </div>
         <Clock lang={lang} />
         <div className="flex items-center gap-2.5 px-2">
           <div className="w-9 h-9 rounded-full bg-gray-900 text-white flex items-center justify-center text-sm font-bold shrink-0">

@@ -6,7 +6,9 @@
       "Bash(git reset *)",
       "Bash(git rm *)",
       "Bash(rm src/features/settings/BusinessTab.tsx src/features/settings/ServiceTab.tsx src/features/settings/LoyaltyTab.tsx src/features/settings/StaffTab.tsx src/features/settings/DeviceTab.tsx)",
-      "Bash(echo \"EXIT: $?\")"
+      "Bash(echo \"EXIT: $?\")",
+      "Bash(rm -f src/features/home/HomePage.tsx)",
+      "Bash(ls src/features/home/)"
     ]
   }
 }
