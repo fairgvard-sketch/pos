@@ -139,3 +139,13 @@ export async function verifyStaffPin(pin: string): Promise<StaffSession> {
 export async function signOutDevice() {
   await supabase.auth.signOut()
 }
+
+/**
+ * Сменить пароль аккаунта устройства (email+пароль Supabase Auth).
+ * Это пароль ВХОДА УСТРОЙСТВА, не PIN сотрудника. Supabase требует
+ * активную сессию — меняем «на месте», без старого пароля.
+ */
+export async function updateDevicePassword(newPassword: string): Promise<void> {
+  const { error } = await supabase.auth.updateUser({ password: newPassword })
+  if (error) throw new Error(error.message)
+}

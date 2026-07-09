@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useMutation } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { signOutDevice } from '../../auth/api'
+import { signOutDevice, updateDevicePassword } from '../../auth/api'
 import { supabase } from '../../../lib/supabase'
 import { useLangStore } from '../../../store/langStore'
 import { useDeviceStore } from '../../../store/deviceStore'
@@ -31,6 +32,20 @@ export default function DeviceSection({ location }: { location: Location | undef
   }, [])
 
   const [confirmUnlink, setConfirmUnlink] = useState(false)
+
+  // Смена пароля устройства (аккаунт Supabase, не PIN сотрудника)
+  const [pwOpen, setPwOpen] = useState(false)
+  const [pw1, setPw1] = useState('')
+  const [pw2, setPw2] = useState('')
+  const pwValid = pw1.length >= 6 && pw1 === pw2
+  const changePw = useMutation({
+    mutationFn: () => updateDevicePassword(pw1),
+    onSuccess: () => {
+      setPwOpen(false); setPw1(''); setPw2('')
+      toast.success(t(lang, 'devicePwChanged'))
+    },
+    onError: (e) => toast.error(e.message),
+  })
 
   const bridgeReady = typeof window !== 'undefined' && !!window.KassaAndroid?.isAvailable()
   const printStatus = bridgeReady
@@ -76,6 +91,46 @@ export default function DeviceSection({ location }: { location: Location | undef
         <InputRow label={t(lang, 'deviceAccount')}>
           <span className="text-sm text-gray-500 truncate max-w-[220px]">{email ?? '…'}</span>
         </InputRow>
+        <div>
+          <NavRow
+            label={t(lang, 'devicePwTitle')}
+            hint={t(lang, 'devicePwHint')}
+            onClick={() => { setPwOpen((v) => !v); setPw1(''); setPw2('') }}
+          />
+          {pwOpen && (
+            <div className="px-4 pb-4 pt-1 space-y-2">
+              <input
+                type="password"
+                className="input !py-2"
+                autoFocus
+                placeholder={t(lang, 'devicePwNew')}
+                value={pw1}
+                onChange={(e) => setPw1(e.target.value)}
+              />
+              <input
+                type="password"
+                className="input !py-2"
+                placeholder={t(lang, 'devicePwRepeat')}
+                value={pw2}
+                onChange={(e) => setPw2(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && pwValid && changePw.mutate()}
+              />
+              {pw1.length > 0 && pw1.length < 6 && (
+                <p className="text-xs text-amber-600">{t(lang, 'devicePwTooShort')}</p>
+              )}
+              {pw2.length > 0 && pw1 !== pw2 && (
+                <p className="text-xs text-red-500">{t(lang, 'devicePwMismatch')}</p>
+              )}
+              <button
+                onClick={() => changePw.mutate()}
+                disabled={!pwValid || changePw.isPending}
+                className="btn-primary !py-2.5 !px-6"
+              >
+                {t(lang, 'save')}
+              </button>
+            </div>
+          )}
+        </div>
       </Group>
 
       <Group title={t(lang, 'groupPrinting')}>

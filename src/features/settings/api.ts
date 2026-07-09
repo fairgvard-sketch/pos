@@ -47,3 +47,20 @@ export async function updateStaffMember(
   const { error } = await supabase.from('staff').update(patch).eq('id', staffId)
   if (error) throw new Error(error.message)
 }
+
+/**
+ * Удалить сотрудника (умное удаление, 040): проходит только если он
+ * никогда ничего не пробивал. Иначе сервер вернёт 'staff has records' —
+ * тогда предлагаем деактивацию. Флаг hasRecords в ошибке для UI.
+ */
+export async function deleteStaffMember(staffId: string): Promise<void> {
+  const { error } = await supabase.rpc('delete_staff', { p_staff_id: staffId })
+  if (error) {
+    if (error.message.includes('staff has records')) {
+      const e = new Error('staff has records') as Error & { hasRecords?: boolean }
+      e.hasRecords = true
+      throw e
+    }
+    throw new Error(error.message)
+  }
+}

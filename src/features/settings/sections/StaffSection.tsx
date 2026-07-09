@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { fetchStaffList, createStaffMember, setStaffPin, updateStaffMember, isValidPin } from '../api'
+import { fetchStaffList, createStaffMember, setStaffPin, updateStaffMember, deleteStaffMember, isValidPin } from '../api'
 import { fetchCurrentLocation } from '../../auth/api'
 import { useAuthStore } from '../../../store/authStore'
 import { useLangStore } from '../../../store/langStore'
@@ -68,6 +68,41 @@ export default function StaffSection({ openDetail }: { openDetail: (id: DetailId
     onError: (e) => toast.error(e.message),
   })
 
+  // ── Правка сотрудника (имя + роль): одна открытая строка за раз ──
+  const [editFor, setEditFor] = useState<string | null>(null)
+  const [editName, setEditName] = useState('')
+  const [editRole, setEditRole] = useState<Role>('barista')
+
+  function openEdit(s: Staff) {
+    setEditFor(editFor === s.id ? null : s.id)
+    setEditName(s.name)
+    setEditRole(s.role)
+    setPinFor(null)
+  }
+
+  const saveEdit = useMutation({
+    mutationFn: (staffId: string) => updateStaffMember(staffId, { name: editName.trim(), role: editRole }),
+    onSuccess: () => {
+      setEditFor(null)
+      qc.invalidateQueries({ queryKey: ['staff'] })
+      toast.success(t(lang, 'saved'))
+    },
+    onError: (e) => toast.error(e.message),
+  })
+
+  const removeStaff = useMutation({
+    mutationFn: (staffId: string) => deleteStaffMember(staffId),
+    onSuccess: () => {
+      setEditFor(null)
+      qc.invalidateQueries({ queryKey: ['staff'] })
+      toast.success(t(lang, 'staffDeleted'))
+    },
+    // Умное удаление: у работавшего сотрудника есть записи — предлагаем деактивацию
+    onError: (e: Error & { hasRecords?: boolean }) => {
+      toast.error(e.hasRecords ? t(lang, 'staffHasRecords') : e.message)
+    },
+  })
+
   /** Можно ли текущему пользователю править эту строку */
   function canEdit(s: Staff): boolean {
     if (s.role === 'owner' && !iAmOwner) return false
@@ -118,20 +153,18 @@ export default function StaffSection({ openDetail }: { openDetail: (id: DetailId
                   {editable && (
                     <div className="flex gap-2 shrink-0">
                       <button
-                        onClick={() => { setPinFor(pinFor === s.id ? null : s.id); setNewPin('') }}
+                        onClick={() => { setPinFor(pinFor === s.id ? null : s.id); setNewPin(''); setEditFor(null) }}
                         className="btn-secondary !py-2 !px-3 !text-xs"
                       >
                         {t(lang, 'changePin')}
                       </button>
-                      {!isMe && (
-                        <button
-                          onClick={() => toggleActive.mutate(s)}
-                          disabled={toggleActive.isPending}
-                          className={`!py-2 !px-3 !text-xs ${s.is_active ? 'btn-ghost' : 'btn-secondary'}`}
-                        >
-                          {s.is_active ? t(lang, 'deactivate') : t(lang, 'activate')}
-                        </button>
-                      )}
+                      <button
+                        onClick={() => openEdit(s)}
+                        aria-label={t(lang, 'edit')}
+                        className={`!py-2 !px-3 !text-xs ${editFor === s.id ? 'btn-secondary' : 'btn-ghost'}`}
+                      >
+                        {t(lang, 'edit')}
+                      </button>
                     </div>
                   )}
                 </div>
@@ -155,6 +188,74 @@ export default function StaffSection({ openDetail }: { openDetail: (id: DetailId
                     >
                       {t(lang, 'save')}
                     </button>
+                  </div>
+                )}
+
+                {/* Инлайн-редактор: имя + роль + деактивация/удаление */}
+                {editFor === s.id && (
+                  <div className="mt-3 pt-3 border-t border-gray-100 space-y-3">
+                    <div className="flex flex-wrap items-end gap-2">
+                      <label className="block">
+                        <span className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">
+                          {t(lang, 'staffName')}
+                        </span>
+                        <input
+                          className="input !py-2 max-w-[180px]"
+                          autoFocus
+                          value={editName}
+                          onChange={(e) => setEditName(e.target.value)}
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">
+                          {t(lang, 'staffRole')}
+                        </span>
+                        <div className="flex rounded-xl border border-gray-100 bg-gray-50 p-0.5 gap-0.5 h-[42px]">
+                          {assignableRoles.map((r) => (
+                            <button
+                              key={r}
+                              onClick={() => setEditRole(r)}
+                              className={`px-3 rounded-lg text-xs font-semibold transition-all ${
+                                editRole === r
+                                  ? 'bg-white text-gray-900 shadow-[0_1px_2px_rgba(0,0,0,0.08)]'
+                                  : 'text-gray-500 hover:text-gray-700'
+                              }`}
+                            >
+                              {t(lang, r)}
+                            </button>
+                          ))}
+                        </div>
+                      </label>
+                      <button
+                        onClick={() => saveEdit.mutate(s.id)}
+                        disabled={!editName.trim() || saveEdit.isPending}
+                        className="btn-primary !py-2.5 !px-5"
+                      >
+                        {t(lang, 'save')}
+                      </button>
+                    </div>
+
+                    {/* Деактивация и удаление — себя нельзя */}
+                    {!isMe && (
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          onClick={() => toggleActive.mutate(s)}
+                          disabled={toggleActive.isPending}
+                          className={`!py-2 !px-3 !text-xs ${s.is_active ? 'btn-ghost' : 'btn-secondary'}`}
+                        >
+                          {s.is_active ? t(lang, 'deactivate') : t(lang, 'activate')}
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (confirm(t(lang, 'staffDeleteConfirm'))) removeStaff.mutate(s.id)
+                          }}
+                          disabled={removeStaff.isPending}
+                          className="btn-ghost !py-2 !px-3 !text-xs !text-red-500 hover:!bg-red-50"
+                        >
+                          {t(lang, 'delete')}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
