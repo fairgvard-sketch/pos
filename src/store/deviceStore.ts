@@ -12,6 +12,14 @@ export type PrintMode = 'browser' | 'rawbt'
 /** Какой способ оплаты идёт первым в окне оплаты (и выбран по умолчанию) */
 export type FirstPayMethod = 'cash' | 'card'
 
+/**
+ * Быстрые суммы при оплате наличными (Square: Quick amounts):
+ *  smart  — авто по сумме заказа (округления вверх до круглых банкнот)
+ *  manual — свои фиксированные суммы (quickAmountsManual, до 3)
+ *  off    — только «Без сдачи» (ровно к оплате)
+ */
+export type QuickAmountsMode = 'smart' | 'manual' | 'off'
+
 interface DeviceState {
   /** Имя этой кассы (для отчётов/шапки настроек). Пусто = не задано */
   deviceName: string
@@ -30,6 +38,10 @@ interface DeviceState {
   printKitchenTicket: boolean
   /** Порядок способов в окне оплаты: этот — первым и выбран по умолчанию */
   firstPayMethod: FirstPayMethod
+  /** Режим быстрых сумм наличных (Square: Quick amounts) */
+  quickAmountsMode: QuickAmountsMode
+  /** Ручные быстрые суммы, агороты (для quickAmountsMode='manual', до 3) */
+  quickAmountsManual: number[]
   /** Чаевые включены на этой кассе (Square: Collect Tips) */
   collectTips: boolean
   /** Автоматический шаг чаевых перед оплатой; выкл — только кнопкой на экране продажи */
@@ -54,6 +66,8 @@ interface DeviceState {
   setReceiptPrompt: (v: boolean) => void
   setPrintKitchenTicket: (v: boolean) => void
   setFirstPayMethod: (m: FirstPayMethod) => void
+  setQuickAmountsMode: (m: QuickAmountsMode) => void
+  setQuickAmountsManual: (a: number[]) => void
   setCollectTips: (v: boolean) => void
   setTipAskBeforePayment: (v: boolean) => void
   setTipPresets: (p: number[]) => void
@@ -77,6 +91,8 @@ export const useDeviceStore = create<DeviceState>()(
       receiptPrompt: false,
       printKitchenTicket: false,
       firstPayMethod: 'cash',
+      quickAmountsMode: 'smart',
+      quickAmountsManual: [2000, 5000, 10000],  // 20/50/100 ₪
       collectTips: false,
       tipAskBeforePayment: true,
       tipPresets: [10, 12, 15],
@@ -93,6 +109,8 @@ export const useDeviceStore = create<DeviceState>()(
       setReceiptPrompt: (receiptPrompt) => set({ receiptPrompt }),
       setPrintKitchenTicket: (printKitchenTicket) => set({ printKitchenTicket }),
       setFirstPayMethod: (firstPayMethod) => set({ firstPayMethod }),
+      setQuickAmountsMode: (quickAmountsMode) => set({ quickAmountsMode }),
+      setQuickAmountsManual: (quickAmountsManual) => set({ quickAmountsManual }),
       setCollectTips: (collectTips) => set({ collectTips }),
       setTipAskBeforePayment: (tipAskBeforePayment) => set({ tipAskBeforePayment }),
       setTipPresets: (tipPresets) => set({ tipPresets }),

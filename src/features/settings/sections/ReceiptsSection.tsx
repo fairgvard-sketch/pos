@@ -1,7 +1,8 @@
+import toast from 'react-hot-toast'
 import { useLangStore } from '../../../store/langStore'
 import { useDeviceStore, type PrintMode } from '../../../store/deviceStore'
 import { t } from '../../../lib/i18n'
-import { Group, SegmentRow, ToggleRow } from '../ui'
+import { Group, SegmentRow, SoonRow, ToggleRow } from '../ui'
 import { useLocationSettings } from '../useLocationSettings'
 import type { Location } from '../../../types'
 
@@ -18,6 +19,7 @@ export default function ReceiptsSection({ location }: { location: Location | und
   const setPrintKitchenTicket = useDeviceStore((s) => s.setPrintKitchenTicket)
 
   const { settings, update } = useLocationSettings(location)
+  const soon = () => toast(t(lang, 'featureSoon'))
 
   return (
     <div className="space-y-6">
@@ -79,6 +81,11 @@ export default function ReceiptsSection({ location }: { location: Location | und
           value={settings.receipt?.copies ?? 1}
           onChange={(v) => update({ receipt: { copies: v } })}
         />
+      </Group>
+
+      {/* Запланировано (Square: Signature and receipt) */}
+      <Group title={t(lang, 'groupPlanned')}>
+        <SoonRow label={t(lang, 'signatureTitle')} hint={t(lang, 'signatureHint')} onTap={soon} />
       </Group>
     </div>
   )

@@ -393,6 +393,27 @@ export const translations = {
     settingOff: 'Выкл',
     groupPrinting: 'Печать',
     groupReceiptContent: 'Содержимое чека',
+    groupPlanned: 'Запланировано',
+    featureSoon: 'Скоро будет доступно',
+
+    // Быстрые суммы (Square: Quick amounts)
+    quickAmountsTitle: 'Быстрые суммы',
+    quickAmountsHint: 'Кнопки-номиналы при оплате наличными для расчёта сдачи.',
+    quickAmountsPageHint: 'При оплате наличными касса предлагает готовые суммы — быстрее считать сдачу.',
+    quickAmountsSmart: 'Авто',
+    quickAmountsManual: 'Свои',
+    quickAmountsManualLabel: 'Свои суммы (до 3)',
+    quickAmountsSmartHint: 'Касса сама подбирает круглые купюры выше суммы заказа.',
+
+    // Запланированные пункты (Square-паритет, пока заглушки)
+    serviceChargeTitle: 'Сервисный сбор',
+    serviceChargeHint: 'Процент к счёту (обслуживание). В планах.',
+    offlinePayTitle: 'Оплата без сети',
+    offlinePayHint: 'Приём оплаты при обрыве связи. В планах (офлайн-очередь).',
+    customerMgmtTitle: 'Шаг гостя при оплате',
+    customerMgmtHint: 'Предлагать привязать гостя лояльности перед оплатой. В планах.',
+    signatureTitle: 'Подпись на чеке',
+    signatureHint: 'Электронная подпись гостя при оплате картой. В планах.',
 
     // Настройки чека (точка)
     printModifiersTitle: 'Модификаторы в чеке',
@@ -996,6 +1017,27 @@ export const translations = {
     settingOff: 'כבוי',
     groupPrinting: 'הדפסה',
     groupReceiptContent: 'תוכן הקבלה',
+    groupPlanned: 'מתוכנן',
+    featureSoon: 'יהיה זמין בקרוב',
+
+    // סכומים מהירים (Square: Quick amounts)
+    quickAmountsTitle: 'סכומים מהירים',
+    quickAmountsHint: 'כפתורי סכומים בתשלום מזומן לחישוב עודף.',
+    quickAmountsPageHint: 'בתשלום מזומן הקופה מציעה סכומים מוכנים — קל יותר לחשב עודף.',
+    quickAmountsSmart: 'אוטומטי',
+    quickAmountsManual: 'ידני',
+    quickAmountsManualLabel: 'סכומים משלך (עד 3)',
+    quickAmountsSmartHint: 'הקופה בוחרת שטרות עגולים מעל סכום ההזמנה.',
+
+    // פריטים מתוכננים (התאמה ל-Square, בינתיים placeholder)
+    serviceChargeTitle: 'דמי שירות',
+    serviceChargeHint: 'אחוז לחשבון (שירות). מתוכנן.',
+    offlinePayTitle: 'תשלום ללא רשת',
+    offlinePayHint: 'קבלת תשלום בניתוק רשת. מתוכנן (תור אופליין).',
+    customerMgmtTitle: 'שלב לקוח בתשלום',
+    customerMgmtHint: 'להציע לצרף לקוח מועדון לפני התשלום. מתוכנן.',
+    signatureTitle: 'חתימה על הקבלה',
+    signatureHint: 'חתימת לקוח בתשלום באשראי. מתוכנן.',
 
     // הגדרות קבלה (נקודה)
     printModifiersTitle: 'תוספות בקבלה',

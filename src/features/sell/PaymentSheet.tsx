@@ -22,29 +22,42 @@ interface Props {
 
 type Method = 'card' | 'cash' | 'mixed'
 
-/** Быстрые купюры для расчёта сдачи (₪): округления вверх + типовые банкноты */
-function quickCashOptions(total: number): number[] {
-  const shekels = total / 100
-  const opts = new Set<number>()
-  opts.add(total) // без сдачи
-  // Ближайшие «круглые» суммы вверх
-  for (const step of [10, 20, 50, 100, 200]) {
-    const rounded = Math.ceil(shekels / step) * step
-    if (rounded * 100 >= total) opts.add(rounded * 100)
+/**
+ * Быстрые купюры для расчёта сдачи (Square: Quick amounts), по режиму кассы:
+ *  smart  — авто по сумме: «без сдачи» + округления вверх до круглых банкнот
+ *  manual — «без сдачи» + заданные суммы, отсекая те, что меньше итога
+ *  off    — только «без сдачи» (ровно к оплате)
+ * Первая опция всегда = total (кнопка «Без сдачи»).
+ */
+function quickCashOptions(total: number, mode: 'smart' | 'manual' | 'off', manual: number[]): number[] {
+  const opts = new Set<number>([total])
+  if (mode === 'smart') {
+    const shekels = total / 100
+    for (const step of [10, 20, 50, 100, 200]) {
+      const rounded = Math.ceil(shekels / step) * step
+      if (rounded * 100 >= total) opts.add(rounded * 100)
+    }
+  } else if (mode === 'manual') {
+    for (const a of manual) if (a >= total) opts.add(a)
   }
   return [...opts].sort((a, b) => a - b).slice(0, 5)
 }
 
 export default function PaymentSheet({ total, tip = 0, startMode = 'choose', onCancel, onPay, onSplitItems, busy }: Props) {
   const lang = useLangStore((s) => s.lang)
-  // Первый способ настраивается на кассе (Настройки → Касса); «Наличные» с кнопки перебивают
+  // Первый способ настраивается на кассе (Настройки → Оплата); «Наличные» с кнопки перебивают
   const firstPayMethod = useDeviceStore((s) => s.firstPayMethod)
+  const quickAmountsMode = useDeviceStore((s) => s.quickAmountsMode)
+  const quickAmountsManual = useDeviceStore((s) => s.quickAmountsManual)
   const [method, setMethod] = useState<Method>(startMode === 'cash' ? 'cash' : firstPayMethod)
   const [tenderedStr, setTenderedStr] = useState('')
   // Смешанная оплата: сумма наличными; карта добирает остаток
   const [mixedCashStr, setMixedCashStr] = useState('')
 
-  const quick = useMemo(() => quickCashOptions(total), [total])
+  const quick = useMemo(
+    () => quickCashOptions(total, quickAmountsMode, quickAmountsManual),
+    [total, quickAmountsMode, quickAmountsManual]
+  )
   const tendered = tenderedStr ? parseMoney(tenderedStr) : null
   const change = tendered !== null && tendered >= total ? tendered - total : null
 

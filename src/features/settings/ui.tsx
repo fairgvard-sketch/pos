@@ -73,6 +73,36 @@ export function NavRow({
   )
 }
 
+/**
+ * Строка-заглушка для запланированной настройки (Square-паритет):
+ * показывает пункт с бейджем «Скоро», кликом отвечает toast'ом.
+ * Тап не открывает drill-down — функции ещё нет.
+ */
+export function SoonRow({ label, hint, onTap }: { label: string; hint?: string; onTap: () => void }) {
+  return (
+    <button
+      onClick={onTap}
+      className="w-full min-h-[52px] px-4 py-3 flex items-center gap-3 text-start hover:bg-gray-50 transition-colors"
+    >
+      <span className="flex-1 min-w-0">
+        <span className="text-sm font-semibold text-gray-400">{label}</span>
+        {hint && <span className="block text-xs text-gray-400 mt-0.5">{hint}</span>}
+      </span>
+      <SoonBadge />
+    </button>
+  )
+}
+
+/** Бейдж «Скоро» — запланированная, но ещё не реализованная настройка */
+export function SoonBadge() {
+  const lang = useLangStore((s) => s.lang)
+  return (
+    <span className="shrink-0 inline-flex items-center rounded-full bg-gray-100 px-2.5 py-1 text-[10px] font-semibold text-gray-500 whitespace-nowrap">
+      {t(lang, 'comingSoon')}
+    </span>
+  )
+}
+
 /** Тумблер (перенесён из DeviceTab) */
 export function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
   return (
