@@ -132,20 +132,16 @@ function ReceiptBody({ receipt: r, location }: { receipt: Receipt; location: Loc
         <span className="text-center">כמות</span>
         <span className="text-left">לתשלום</span>
       </div>
+      {/* Модификаторы в чек не выводятся: цена строки уже включает их надбавки */}
       {r.lines.map((l, i) => (
-        <div key={i}>
-          <div className="grid grid-cols-[1fr_3.5rem_2rem_3.5rem] text-sm items-baseline">
-            <span className="truncate pl-2">
-              {l.name}
-              {l.variant_name && ` ${l.variant_name}`}
-            </span>
-            <span className="text-left tabular-nums">{fmt(l.unit_price)}</span>
-            <span className="text-center tabular-nums">{l.qty}</span>
-            <span className="text-left tabular-nums">{fmt(l.line_total)}</span>
-          </div>
-          {l.modifiers.map((m, j) => (
-            <div key={j} className="text-xs text-gray-600 pr-2">← {m.name}</div>
-          ))}
+        <div key={i} className="grid grid-cols-[1fr_3.5rem_2rem_3.5rem] text-sm items-baseline">
+          <span className="truncate pl-2">
+            {l.name}
+            {l.variant_name && ` ${l.variant_name}`}
+          </span>
+          <span className="text-left tabular-nums">{fmt(l.unit_price)}</span>
+          <span className="text-center tabular-nums">{l.qty}</span>
+          <span className="text-left tabular-nums">{fmt(l.line_total)}</span>
         </div>
       ))}
 

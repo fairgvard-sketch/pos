@@ -39,3 +39,11 @@ export function parseMoney(input: string): Agorot | null {
 export function percentOf(agorot: Agorot, pct: number): Agorot {
   return Math.round((agorot * pct) / 100)
 }
+
+/**
+ * Подгонка чаевых: итог к оплате (total + tip) — целое число шекелей
+ * (ближайший шекель). Чаевые не бывают отрицательными.
+ */
+export function roundTipToWholeTotal(total: Agorot, tip: Agorot): Agorot {
+  return Math.max(Math.round((total + tip) / 100) * 100 - total, 0)
+}

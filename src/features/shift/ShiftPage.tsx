@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { fetchCurrentShift, fetchShiftReport, closeShift, type CloseResult } from './api'
+import { fetchOnShiftStaff, clockOutStaff } from '../timesheet/api'
 import { useAuthStore } from '../../store/authStore'
 import { useLangStore } from '../../store/langStore'
 import { t } from '../../lib/i18n'
@@ -28,23 +29,38 @@ export default function ShiftPage() {
   const [countedStr, setCountedStr] = useState('')
   const [note, setNote] = useState('')
   const [result, setResult] = useState<CloseResult | null>(null)
+  // Диалог подтверждения закрытия (заменяет window.confirm — тот не работает
+  // в APK-обёртке Sunmi). Внутри — проверка, кто на смене в табеле.
+  const [confirmOpen, setConfirmOpen] = useState(false)
 
   const close = useMutation({
-    mutationFn: () => {
+    mutationFn: async (staffToClockOut: string[]) => {
       const counted = parseMoney(countedStr || '0')
       if (counted === null) throw new Error(t(lang, 'countedCash'))
+      // Сначала снимаем выбранных сотрудников с табеля, затем закрываем смену
+      for (const id of staffToClockOut) {
+        await clockOutStaff(id).catch(() => {})
+      }
       return closeShift(shift!.id, staff!.id, counted, note)
     },
     onSuccess: (res) => {
       setResult(res)
       setClosing(false)
+      setConfirmOpen(false)
       qc.invalidateQueries({ queryKey: ['current_shift'] })
+      qc.invalidateQueries({ queryKey: ['timesheet'] })
     },
     onError: (e) =>
       toast.error(
         e.message.includes('open orders') ? t(lang, 'closeShiftOpenOrders') : e.message
       ),
   })
+
+  // Нажали «Закрыть смену» в форме → открываем диалог (сам подтянет табель)
+  function requestClose() {
+    if (!countedStr.trim()) return
+    setConfirmOpen(true)
+  }
 
   if (!staff) return null
 
@@ -137,7 +153,7 @@ export default function ShiftPage() {
             />
             <div className="flex gap-2">
               <button
-                onClick={() => confirm(t(lang, 'confirmClose')) && close.mutate()}
+                onClick={requestClose}
                 disabled={close.isPending || !countedStr.trim()}
                 className="btn-danger flex-1 !rounded-2xl"
               >
@@ -148,7 +164,127 @@ export default function ShiftPage() {
           </div>
         )}
       </div>
+
+      {confirmOpen && (
+        <CloseShiftDialog
+          lang={lang}
+          isRtl={isRtl}
+          busy={close.isPending}
+          onCancel={() => setConfirmOpen(false)}
+          onConfirm={(ids) => close.mutate(ids)}
+        />
+      )}
     </Shell>
+  )
+}
+
+/**
+ * Подтверждение закрытия смены. Своя модалка вместо window.confirm —
+ * системный диалог не показывается в WebView-обёртке Sunmi. Если в
+ * табеле есть сотрудники на смене, показываем их галочками (по умолчанию
+ * все отмечены) и снимаем выбранных с табеля при закрытии.
+ */
+function CloseShiftDialog({
+  lang,
+  isRtl,
+  busy,
+  onCancel,
+  onConfirm,
+}: {
+  lang: 'ru' | 'he'
+  isRtl: boolean
+  busy: boolean
+  onCancel: () => void
+  onConfirm: (staffIds: string[]) => void
+}) {
+  const { data: onShift, isLoading } = useQuery({
+    queryKey: ['on_shift_staff'],
+    queryFn: fetchOnShiftStaff,
+  })
+  // По умолчанию отмечаем всех, кто на смене
+  const [picked, setPicked] = useState<Set<string>>(new Set())
+  const initialized = useRef(false)
+  useEffect(() => {
+    if (onShift && !initialized.current) {
+      initialized.current = true
+      setPicked(new Set(onShift.map((s) => s.staff_id)))
+    }
+  }, [onShift])
+
+  const locale = lang === 'he' ? 'he-IL' : 'ru-RU'
+  const hasStaff = (onShift?.length ?? 0) > 0
+
+  function toggle(id: string) {
+    setPicked((prev) => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  return (
+    <div dir={isRtl ? 'rtl' : 'ltr'} className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 animate-[rise-in_0.2s_ease-out]">
+        <h2 className="text-lg font-black text-gray-900 mb-2">{t(lang, 'closeShiftTitle')}</h2>
+
+        {isLoading ? (
+          <p className="text-center text-gray-400 py-6">…</p>
+        ) : (
+          <>
+            <p className="text-sm text-gray-500 mb-4">
+              {hasStaff ? t(lang, 'closeShiftStaffOnShift') : t(lang, 'confirmClose')}
+            </p>
+
+            {hasStaff && (
+              <>
+                <div className="text-xs font-semibold text-gray-500 mb-2">{t(lang, 'closeShiftPickStaff')}</div>
+                <div className="space-y-2 mb-5 max-h-64 overflow-y-auto">
+                  {onShift!.map((s) => {
+                    const on = picked.has(s.staff_id)
+                    return (
+                      <button
+                        key={s.staff_id}
+                        onClick={() => toggle(s.staff_id)}
+                        className={`w-full flex items-center gap-3 rounded-2xl border p-3 text-start transition-all min-h-[52px] ${
+                          on ? 'border-gray-900 bg-gray-50' : 'border-gray-200'
+                        }`}
+                      >
+                        <span
+                          className={`w-6 h-6 rounded-md border-2 flex items-center justify-center shrink-0 ${
+                            on ? 'bg-gray-900 border-gray-900 text-white' : 'border-gray-300'
+                          }`}
+                        >
+                          {on && '✓'}
+                        </span>
+                        <span className="flex-1 min-w-0 flex items-baseline justify-between gap-2">
+                          <span className="font-bold text-gray-900 truncate">{s.staff_name}</span>
+                          <span className="text-xs text-gray-500 tabular-nums shrink-0" dir="ltr">
+                            {t(lang, 'sinceShort')} {new Date(s.clock_in).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </>
+            )}
+
+            <div className="flex gap-2">
+              <button
+                onClick={() => onConfirm(Array.from(picked))}
+                disabled={busy}
+                className="btn-danger flex-1 !rounded-2xl"
+              >
+                {hasStaff && picked.size > 0 ? t(lang, 'closeAndClockOut') : t(lang, 'closeShiftOnly')}
+              </button>
+              <button onClick={onCancel} disabled={busy} className="btn-secondary">
+                {t(lang, 'cancel')}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
   )
 }
 

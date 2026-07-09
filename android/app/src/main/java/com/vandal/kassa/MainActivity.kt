@@ -6,9 +6,12 @@ import android.os.Bundle
 import android.util.Base64
 import android.view.WindowManager
 import android.webkit.JavascriptInterface
+import android.webkit.JsResult
+import android.webkit.WebChromeClient
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.app.AlertDialog
 import com.sunmi.peripheral.printer.InnerPrinterCallback
 import com.sunmi.peripheral.printer.InnerPrinterManager
 import com.sunmi.peripheral.printer.SunmiPrinterService
@@ -81,6 +84,29 @@ class MainActivity : Activity() {
                 setSupportZoom(false)
             }
             webViewClient = WebViewClient()          // навигация внутри WebView
+            // По умолчанию WebView игнорирует window.confirm/alert — тогда кассовые
+            // подтверждения (снять позицию, удалить стол) молча срабатывают/не
+            // срабатывают. Свой WebChromeClient рисует нативные диалоги.
+            webChromeClient = object : WebChromeClient() {
+                override fun onJsAlert(view: WebView, url: String, message: String, result: JsResult): Boolean {
+                    AlertDialog.Builder(this@MainActivity)
+                        .setMessage(message)
+                        .setPositiveButton(android.R.string.ok) { _, _ -> result.confirm() }
+                        .setOnCancelListener { result.cancel() }
+                        .show()
+                    return true
+                }
+
+                override fun onJsConfirm(view: WebView, url: String, message: String, result: JsResult): Boolean {
+                    AlertDialog.Builder(this@MainActivity)
+                        .setMessage(message)
+                        .setPositiveButton(android.R.string.ok) { _, _ -> result.confirm() }
+                        .setNegativeButton(android.R.string.cancel) { _, _ -> result.cancel() }
+                        .setOnCancelListener { result.cancel() }
+                        .show()
+                    return true
+                }
+            }
             addJavascriptInterface(Bridge(), "KassaAndroid")
         }
 

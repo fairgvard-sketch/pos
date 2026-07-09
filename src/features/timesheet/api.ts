@@ -84,6 +84,33 @@ export async function saveTimeEntry(params: {
   if (error) throw new Error(error.message)
 }
 
+/** Кто сейчас на смене (открытый рабочий день) — для закрытия кассовой смены */
+export interface OnShiftStaff {
+  staff_id: string
+  staff_name: string
+  clock_in: string
+}
+
+/**
+ * Список сотрудников с открытым рабочим днём. Читаем из отчёта за
+ * последние сутки (открытый день мог начаться вчера ночью) и берём
+ * записи без clock_out — этого достаточно для диалога закрытия смены.
+ */
+export async function fetchOnShiftStaff(): Promise<OnShiftStaff[]> {
+  const to = new Date()
+  const from = new Date(to.getTime() - 48 * 3600 * 1000)
+  const report = await fetchTimesheetReport(from, to)
+  return report.entries
+    .filter((e) => e.clock_out === null)
+    .map((e) => ({ staff_id: e.staff_id, staff_name: e.staff_name, clock_in: e.clock_in }))
+}
+
+/** Снять сотрудника со смены (clock-out по staff_id). Сервер сам находит открытый день. */
+export async function clockOutStaff(staffId: string): Promise<void> {
+  const { error } = await supabase.rpc('clock_out', { p_staff_id: staffId })
+  if (error) throw new Error(error.message)
+}
+
 /** Мягкое удаление ошибочной записи табеля (менеджер) */
 export async function deleteTimeEntry(entryId: string, actorId: string): Promise<void> {
   const { error } = await supabase.rpc('delete_time_entry', {

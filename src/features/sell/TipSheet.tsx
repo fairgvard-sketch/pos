@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useLangStore } from '../../store/langStore'
 import { t } from '../../lib/i18n'
-import { formatMoney, parseMoney } from '../../lib/money'
+import { formatMoney, parseMoney, roundTipToWholeTotal } from '../../lib/money'
 import NumPad from '../../components/NumPad'
 
 /** Вариант чаевых: процент (percent задан) или фиксированная сумма (умный режим) */
@@ -11,8 +11,10 @@ export interface TipOption {
 }
 
 interface Props {
-  /** Итог заказа (с НДС) — для шапки */
+  /** Итог заказа (с НДС) — для шапки и подгонки под круглый итог */
   total: number
+  /** База процента (итог с НДС или без — настройка кассы), для «своей суммы» в % */
+  percentBase: number
   /** Готовые варианты (проценты от базы или фиксированные суммы — считает вызывающий) */
   options: TipOption[]
   /** Кнопка «Своя сумма» (настройка кассы) */
@@ -28,13 +30,31 @@ interface Props {
  * 1 тап по пресету или «Без чаевых» — сразу дальше, к способу оплаты.
  * Планшет разворачивается к гостю — суммы крупные, выбор очевиден.
  */
-export default function TipSheet({ total, options, allowCustom, onCancel, onDone, busy }: Props) {
+export default function TipSheet({ total, percentBase, options, allowCustom, onCancel, onDone, busy }: Props) {
   const lang = useLangStore((s) => s.lang)
   const [custom, setCustom] = useState(false)
+  // Своя сумма: процент от базы или фикс. сумма в ₪
+  const [customType, setCustomType] = useState<'percent' | 'fixed'>('fixed')
   const [customStr, setCustomStr] = useState('')
 
-  const customTip = customStr ? parseMoney(customStr) : null
+  // Процент — целое 1..100; итог подгоняется до целых шекелей (как пресеты)
+  const customPct = /^\d{1,3}$/.test(customStr.trim()) ? parseInt(customStr, 10) : null
+  const pctValid = customPct !== null && customPct > 0 && customPct <= 100
+  const customTip =
+    customType === 'percent'
+      ? pctValid
+        ? roundTipToWholeTotal(total, Math.round((percentBase * customPct!) / 100))
+        : null
+      : customStr
+        ? parseMoney(customStr)
+        : null
+
   const shown = options.filter((o) => o.amount > 0)
+
+  function resetCustom(type: 'percent' | 'fixed') {
+    setCustomType(type)
+    setCustomStr('')
+  }
 
   return (
     <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
@@ -108,15 +128,38 @@ export default function TipSheet({ total, options, allowCustom, onCancel, onDone
             </>
           ) : (
             <>
-              {/* Своя сумма чаевых (₪, нумпадом) */}
+              {/* Своя сумма чаевых: процент от базы или ₪, нумпадом */}
+              <div className="grid grid-cols-2 gap-1 bg-gray-50 border border-gray-100 rounded-xl p-0.5">
+                {(['percent', 'fixed'] as const).map((tp) => (
+                  <button
+                    key={tp}
+                    onClick={() => resetCustom(tp)}
+                    disabled={busy}
+                    className={`h-11 rounded-lg text-sm font-semibold transition-all ${
+                      customType === tp
+                        ? 'bg-white text-gray-900 shadow-[0_1px_2px_rgba(0,0,0,0.08)]'
+                        : 'text-gray-400 hover:text-gray-600'
+                    }`}
+                  >
+                    {tp === 'percent' ? t(lang, 'discountPercent') + ' %' : t(lang, 'discountFixed') + ' ₪'}
+                  </button>
+                ))}
+              </div>
+
               <div className="flex items-baseline justify-between px-1">
-                <span className="text-sm text-gray-500">{t(lang, 'tipTitle')}</span>
+                {customType === 'percent' ? (
+                  <span className={`text-3xl font-black tabular-nums ${pctValid ? 'text-gray-900' : 'text-gray-300'}`}>
+                    {customStr || '0'}%
+                  </span>
+                ) : (
+                  <span className="text-sm text-gray-500">{t(lang, 'tipTitle')}</span>
+                )}
                 <span className={`text-3xl font-black tabular-nums ${customTip ? 'text-gray-900' : 'text-gray-300'}`}>
                   {formatMoney(customTip ?? 0, lang)}
                 </span>
               </div>
 
-              <NumPad value={customStr} onChange={setCustomStr} />
+              <NumPad value={customStr} onChange={setCustomStr} decimal={customType === 'fixed'} />
 
               <div className="grid grid-cols-2 gap-2">
                 <button

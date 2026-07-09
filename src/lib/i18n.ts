@@ -482,6 +482,12 @@ export const translations = {
     exactMatch: 'Сходится',
     openedAt: 'Открыта',
     confirmClose: 'Закрыть смену? Это действие завершит рабочий сеанс.',
+    closeShiftTitle: 'Закрыть смену',
+    closeShiftStaffOnShift: 'Есть сотрудники на смене. Закрыть смену и снять их с табеля?',
+    closeShiftPickStaff: 'Отметьте, кого снять со смены:',
+    closeAndClockOut: 'Закрыть и снять',
+    closeShiftOnly: 'Просто закрыть',
+    sinceShort: 'с',
 
     // Очередь бариста
     queueEmpty: 'Заказов пока нет',
@@ -997,6 +1003,12 @@ export const translations = {
     exactMatch: 'תואם',
     openedAt: 'נפתחה',
     confirmClose: 'לסגור משמרת? פעולה זו תסיים את סבב העבודה.',
+    closeShiftTitle: 'סגירת משמרת',
+    closeShiftStaffOnShift: 'יש עובדים במשמרת. לסגור את המשמרת ולהחתים אותם ביציאה?',
+    closeShiftPickStaff: 'סמנו את מי להוציא מהמשמרת:',
+    closeAndClockOut: 'סגור והוצא',
+    closeShiftOnly: 'רק לסגור',
+    sinceShort: 'מ־',
 
     // Очередь бариста
     queueEmpty: 'אין הזמנות עדיין',

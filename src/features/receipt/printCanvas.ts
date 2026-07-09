@@ -120,6 +120,8 @@ export function renderReceiptCanvas(r: Receipt, location: Location | undefined):
   ctx.stroke()
   ctx.restore()
 
+  // Модификаторы в чек не печатаются: строка = товар с итоговой ценой
+  // (цена уже включает надбавки модификаторов)
   for (const l of r.lines) {
     ctx.font = FONT(26)
     const name = l.variant_name ? `${l.name} ${l.variant_name}` : l.name
@@ -132,12 +134,6 @@ export function renderReceiptCanvas(r: Receipt, location: Location | undefined):
     ctx.textAlign = 'left'
     ctx.fillText(fmt(l.line_total), COL_TOTAL, y)
     y += 34
-    for (const m of l.modifiers) {
-      ctx.font = FONT(22)
-      ctx.textAlign = 'right'
-      ctx.fillText(fitText(`← ${m.name}`, NAME_MAX + 80), RIGHT - 16, y)
-      y += 28
-    }
   }
 
   // Кол-во позиций

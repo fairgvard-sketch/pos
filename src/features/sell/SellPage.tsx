@@ -15,7 +15,7 @@ import { playPaymentChime } from '../../lib/sound'
 import { autoPrintReceipt, printKitchenTicket } from '../receipt/printService'
 import type { KitchenTicketLine } from '../receipt/printCanvas'
 import { t } from '../../lib/i18n'
-import { formatMoney, formatMoneyList } from '../../lib/money'
+import { formatMoney, formatMoneyList, roundTipToWholeTotal } from '../../lib/money'
 import type { MenuItem, ModifierGroup } from '../../types'
 import ItemPicker from './ItemPicker'
 import PaymentSheet from './PaymentSheet'
@@ -193,14 +193,24 @@ export default function SellPage() {
     return true
   }
 
+  // База процента чаевых: итог с НДС или без (настройка кассы)
+  function tipPercentBase(total: number): number {
+    return tipBeforeTax ? total - Math.round((total * vatRate) / (100 + vatRate)) : total
+  }
+
   // Варианты чаевых для суммы: умный режим на мелких заказах — фиксированные ₪,
-  // иначе проценты от базы (итог с НДС или без — настройка кассы)
+  // иначе проценты от базы. Каждый вариант подгоняется так, чтобы итог
+  // к оплате (total + tip) был целым числом шекелей.
   function tipOptions(total: number): TipOption[] {
     if (tipSmartAmounts && total <= tipSmartThreshold) {
-      return tipSmartFixed.filter((a) => a > 0).map((amount) => ({ amount }))
+      return tipSmartFixed
+        .filter((a) => a > 0)
+        .map((a) => ({ amount: roundTipToWholeTotal(total, a) }))
     }
-    const base = tipBeforeTax ? total - Math.round((total * vatRate) / (100 + vatRate)) : total
-    return tipPresets.filter((p) => p > 0).map((p) => ({ percent: p, amount: Math.round((base * p) / 100) }))
+    const base = tipPercentBase(total)
+    return tipPresets
+      .filter((p) => p > 0)
+      .map((p) => ({ percent: p, amount: roundTipToWholeTotal(total, Math.round((base * p) / 100)) }))
   }
 
   // Вход в оплату заказа. Чаевые с кнопки — сразу в оплату (не спрашиваем
@@ -454,7 +464,7 @@ export default function SellPage() {
   }
 
   const subtotal = cartSubtotal(cart.lines)
-  const discAmount = discountAmount(subtotal, cart.discount)
+  const discAmount = discountAmount(subtotal, cart.discount, cart.redeem)
 
   // ── Лояльность: доступна в counter-потоке, если включена на точке ──
   const loyaltyMode = location?.loyalty_mode ?? 'off'
@@ -877,6 +887,7 @@ export default function SellPage() {
       {tipping && (
         <TipSheet
           total={tipping.total}
+          percentBase={tipPercentBase(tipping.total)}
           options={tipOptions(tipping.total)}
           allowCustom={tipAllowCustom}
           busy={pay.isPending}
@@ -889,6 +900,7 @@ export default function SellPage() {
       {showTipSheet && (
         <TipSheet
           total={shownTotal}
+          percentBase={tipPercentBase(shownTotal)}
           options={tipOptions(shownTotal)}
           allowCustom={tipAllowCustom}
           busy={false}
@@ -1185,7 +1197,7 @@ function CartLineRow({
               {l.variantName && <span className="text-gray-500 font-medium"> · {l.variantName}</span>}
             </span>
             {(l.mods.length > 0 || l.notes || l.priceOverride !== null) && (
-              <span className="block text-xs text-gray-500 mt-0.5 truncate">
+              <span className="block text-xs text-gray-500 mt-0.5 leading-snug">
                 {[
                   ...l.mods.map((m) => m.name),
                   l.notes,
@@ -1299,7 +1311,7 @@ function ExistingBillRow({
             {l.variant_name && <span className="text-gray-500 font-medium"> · {l.variant_name}</span>}
           </span>
           {l.modifiers.length > 0 && (
-            <span className="block text-xs text-gray-400 truncate">{l.modifiers.join(' · ')}</span>
+            <span className="block text-xs text-gray-400 leading-snug">{l.modifiers.join(' · ')}</span>
           )}
         </div>
         <span className="font-bold text-gray-600 tabular-nums shrink-0">{formatMoney(l.line_total, lang)}</span>
