@@ -1,7 +1,8 @@
-import { useState } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useEffect, useState } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { openShift } from './api'
+import { fetchCurrentLocation } from '../auth/api'
 import { useAuthStore } from '../../store/authStore'
 import { useLangStore } from '../../store/langStore'
 import { t } from '../../lib/i18n'
@@ -15,6 +16,17 @@ export default function ShiftGate() {
   const staff = useAuthStore((s) => s.staff)
   const qc = useQueryClient()
   const [floatStr, setFloatStr] = useState('')
+
+  // Префилл размена из настроек точки (Смена → стартовая сумма по умолчанию)
+  const { data: location } = useQuery({ queryKey: ['current_location'], queryFn: fetchCurrentLocation })
+  const defaultFloat = location?.settings?.shift?.default_opening_float ?? null
+  const [prefilled, setPrefilled] = useState(false)
+  useEffect(() => {
+    if (!prefilled && defaultFloat !== null && floatStr === '') {
+      setFloatStr(String(defaultFloat / 100))
+      setPrefilled(true)
+    }
+  }, [prefilled, defaultFloat, floatStr])
 
   const open = useMutation({
     mutationFn: () => {
@@ -36,9 +48,8 @@ export default function ShiftGate() {
           onSubmit={(e) => { e.preventDefault(); open.mutate() }}
           className="w-full max-w-sm p-6 text-center"
         >
-          <div className="text-5xl mb-4">🔒</div>
           <h1 className="text-xl font-black text-gray-900">{t(lang, 'noShiftTitle')}</h1>
-          <p className="text-sm text-gray-400 mt-1 mb-6">{t(lang, 'noShiftHint')}</p>
+          <p className="text-sm text-gray-500 mt-1 mb-6">{t(lang, 'noShiftHint')}</p>
 
           <div className="text-start mb-5">
             <label className="text-xs font-medium text-gray-500 mb-1 block">{t(lang, 'openingFloat')}</label>
@@ -50,7 +61,7 @@ export default function ShiftGate() {
               value={floatStr}
               onChange={(e) => setFloatStr(e.target.value)}
             />
-            <p className="text-[11px] text-gray-400 mt-1.5">{t(lang, 'openingFloatHint')}</p>
+            <p className="text-[11px] text-gray-500 mt-1.5">{t(lang, 'openingFloatHint')}</p>
           </div>
 
           <button type="submit" disabled={open.isPending} className="btn-primary w-full !py-3.5 !rounded-2xl">

@@ -22,8 +22,6 @@ import StationsTab from './StationsTab'
 
 type Tab = 'items' | 'modifiers' | 'stations'
 
-const CATEGORY_ICONS = ['☕', '🍵', '🥤', '🧃', '🥐', '🍞', '🥪', '🍰', '🍪', '🥗', '🛍', '🎁']
-
 // Иконки секций (stroke=currentColor — перекрашиваются состоянием кнопки)
 const SECTION_ICONS: Record<Tab, React.ReactNode> = {
   items: (
@@ -76,7 +74,6 @@ export default function MenuPage() {
   const [creating, setCreating] = useState(false)
   const [search, setSearch] = useState('')
   const [newCatName, setNewCatName] = useState('')
-  const [newCatIcon, setNewCatIcon] = useState<string | null>(null)
   const [showCatForm, setShowCatForm] = useState(false)
 
   const activeCat = activeCategoryId ?? categories[0]?.id ?? null
@@ -151,10 +148,9 @@ export default function MenuPage() {
   }
 
   const addCategory = useMutation({
-    mutationFn: () => createCategory(newCatName.trim(), categories.length, newCatIcon),
+    mutationFn: () => createCategory(newCatName.trim(), categories.length),
     onSuccess: () => {
       setNewCatName('')
-      setNewCatIcon(null)
       setShowCatForm(false)
       qc.invalidateQueries({ queryKey: ['menu_categories'] })
     },
@@ -228,7 +224,7 @@ export default function MenuPage() {
               {showCatForm && (
                 <form
                   onSubmit={(e) => { e.preventDefault(); if (newCatName.trim()) addCategory.mutate() }}
-                  className="mb-2 space-y-1.5"
+                  className="mb-2"
                 >
                   <div className="flex gap-1.5">
                     <input
@@ -239,20 +235,6 @@ export default function MenuPage() {
                       onChange={(e) => setNewCatName(e.target.value)}
                     />
                     <button type="submit" disabled={!newCatName.trim()} className="btn-secondary !px-2.5 !py-1.5 !text-xs">✓</button>
-                  </div>
-                  <div className="flex flex-wrap gap-1">
-                    {CATEGORY_ICONS.map((ic) => (
-                      <button
-                        key={ic}
-                        type="button"
-                        onClick={() => setNewCatIcon(newCatIcon === ic ? null : ic)}
-                        className={`w-7 h-7 rounded-lg text-sm flex items-center justify-center transition-all ${
-                          newCatIcon === ic ? 'bg-gray-900' : 'bg-gray-50 hover:bg-gray-100'
-                        }`}
-                      >
-                        {ic}
-                      </button>
-                    ))}
                   </div>
                 </form>
               )}

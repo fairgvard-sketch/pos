@@ -116,7 +116,7 @@ export default function GuestSheet({
                 </button>
               ))}
               {results.length === 0 && !isFetching && (
-                <p className="text-sm text-gray-400 text-center pt-8">{t(lang, 'guestNotFound')}</p>
+                <p className="text-sm text-gray-500 text-center pt-8">{t(lang, 'guestNotFound')}</p>
               )}
             </div>
 

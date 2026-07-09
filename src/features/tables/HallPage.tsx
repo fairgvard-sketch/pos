@@ -208,7 +208,7 @@ export default function HallPage() {
         </div>
 
         {!modeOk ? (
-          <p className="text-gray-400 text-sm">{t(lang, 'serviceModeHint')}</p>
+          <p className="text-gray-500 text-sm">{t(lang, 'serviceModeHint')}</p>
         ) : tables.length === 0 && !editMode ? (
           <div className="text-center pt-24">
             <p className="font-bold text-gray-900">{t(lang, 'hallEmpty')}</p>

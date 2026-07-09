@@ -15,6 +15,7 @@ import { playPaymentChime } from '../../lib/sound'
 import { autoPrintReceipt, printKitchenTicket } from '../receipt/printService'
 import type { KitchenTicketLine } from '../receipt/printCanvas'
 import { t } from '../../lib/i18n'
+import { can } from '../../lib/perms'
 import { formatMoney, formatMoneyList, roundTipToWholeTotal } from '../../lib/money'
 import type { MenuItem, ModifierGroup } from '../../types'
 import ItemPicker from './ItemPicker'
@@ -113,6 +114,19 @@ export default function SellPage() {
   const { data: location } = useQuery({ queryKey: ['current_location'], queryFn: fetchCurrentLocation })
   // Столы показываем, если точка не в режиме чистой стойки
   const showTable = location?.service_mode === 'counter_tables' || location?.service_mode === 'tables'
+
+  // Права по ролям (настройки точки → Сотрудники → Права доступа)
+  const canDiscount = can(staff?.role, 'discount', location?.settings)
+  const canPriceEdit = can(staff?.role, 'price_edit', location?.settings)
+  const canVoidOrder = can(staff?.role, 'void_order', location?.settings)
+  /** Выполнить действие, если хватает прав; иначе — подсказка про менеджера */
+  function requirePerm(allowed: boolean, fn: () => void) {
+    if (!allowed) {
+      toast.error(t(lang, 'permManagerToast'))
+      return
+    }
+    fn()
+  }
   const { data: categories = [] } = useQuery({ queryKey: ['menu_categories'], queryFn: fetchCategories })
   const { data: items = [] } = useQuery({ queryKey: ['menu_items'], queryFn: fetchItems })
   const { data: allGroups = [] } = useQuery({ queryKey: ['modifier_groups'], queryFn: fetchModifierGroups })
@@ -602,7 +616,8 @@ export default function SellPage() {
             icon="discount"
             label={t(lang, 'discount')}
             active={tableCtx ? !!tableDiscount : !!cart.discount}
-            onClick={() => setShowDiscount(true)}
+            dimmed={!canDiscount}
+            onClick={() => requirePerm(canDiscount, () => setShowDiscount(true))}
           />
           <ActionButton icon="note" label={t(lang, 'note')} onClick={() => toast(`${t(lang, 'note')} — ${t(lang, 'comingSoon')}`)} />
           <ActionButton icon="refund" label={t(lang, 'refund')} onClick={() => navigate('/transactions')} />
@@ -705,9 +720,9 @@ export default function SellPage() {
                   lang={lang}
                   isRtl={isRtl}
                   busy={voidItem.isPending}
-                  onVoid={() => {
+                  onVoid={() => requirePerm(canVoidOrder, () => {
                     if (confirm(t(lang, 'confirmVoidItem'))) voidItem.mutate(l.id)
-                  }}
+                  })}
                 />
               ))}
             </div>
@@ -727,8 +742,8 @@ export default function SellPage() {
                 item={item}
                 lang={lang}
                 isRtl={isRtl}
-                onOpen={() => (item ? setPicker({ item, line: l }) : setEditingPrice(l))}
-                onEditPrice={() => setEditingPrice(l)}
+                onOpen={() => (item ? setPicker({ item, line: l }) : requirePerm(canPriceEdit, () => setEditingPrice(l)))}
+                onEditPrice={() => requirePerm(canPriceEdit, () => setEditingPrice(l))}
                 onRemove={() => cart.removeLine(l.key)}
                 onDec={() => cart.updateQty(l.key, l.qty - 1)}
                 onInc={() => cart.updateQty(l.key, l.qty + 1)}
@@ -746,7 +761,7 @@ export default function SellPage() {
           )}
           {cart.discount && discAmount > 0 && (
             <button
-              onClick={() => setShowDiscount(true)}
+              onClick={() => requirePerm(canDiscount, () => setShowDiscount(true))}
               className="flex justify-between w-full text-sm text-emerald-600 font-medium"
             >
               <span>
@@ -772,7 +787,7 @@ export default function SellPage() {
           {/* Скидка на счёт стола (хранится на заказе) */}
           {tableCtx && tableDiscount && (
             <button
-              onClick={() => setShowDiscount(true)}
+              onClick={() => requirePerm(canDiscount, () => setShowDiscount(true))}
               className="flex justify-between w-full text-sm text-emerald-600 font-medium"
             >
               <span>
@@ -1325,11 +1340,14 @@ function ActionButton({
   label,
   onClick,
   active = false,
+  dimmed = false,
 }: {
   icon: 'customItem' | 'discount' | 'note' | 'refund' | 'cash'
   label: string
   onClick: () => void
   active?: boolean
+  /** Не хватает прав: кнопка приглушена, тап объясняет почему (см. requirePerm) */
+  dimmed?: boolean
 }) {
   return (
     <button
@@ -1338,7 +1356,9 @@ function ActionButton({
                  transition-all whitespace-nowrap active:scale-[0.97] ${
                    active
                      ? 'border-gray-900 bg-gray-900 text-white'
-                     : 'border-gray-200 text-gray-900 hover:border-gray-400'
+                     : dimmed
+                       ? 'border-gray-200 text-gray-400'
+                       : 'border-gray-200 text-gray-900 hover:border-gray-400'
                  }`}
     >
       <Icon name={icon} size={18} />

@@ -3,6 +3,8 @@ import { useQuery } from '@tanstack/react-query'
 import { useAuthStore } from '../../store/authStore'
 import { useLangStore } from '../../store/langStore'
 import { fetchCurrentLocation } from '../auth/api'
+import { fetchCurrentShift } from '../shift/api'
+import { useCloseReminder } from '../shift/reminder'
 import { t, type TranslationKey } from '../../lib/i18n'
 import LangToggle from '../../components/ui/LangToggle'
 
@@ -30,6 +32,8 @@ export default function HomePage() {
   const lang = useLangStore((s) => s.lang)
   const isRtl = lang === 'he'
   const { data: location } = useQuery({ queryKey: ['current_location'], queryFn: fetchCurrentLocation })
+  const { data: shift } = useQuery({ queryKey: ['current_shift'], queryFn: fetchCurrentShift })
+  const remindClose = useCloseReminder(shift?.opened_at, location?.settings?.shift?.close_reminder)
 
   if (!staff) return null
   const isManager = staff.role === 'owner' || staff.role === 'manager'
@@ -63,7 +67,16 @@ export default function HomePage() {
         </div>
       </header>
 
-      <main className="flex-1 flex items-center justify-center p-6">
+      <main className="flex-1 flex flex-col items-center justify-center gap-4 p-6">
+        {remindClose && (
+          <button
+            onClick={() => navigate('/shift')}
+            className="w-full max-w-3xl rounded-2xl bg-amber-50 border border-amber-200 px-4 py-3
+                       text-sm font-semibold text-amber-800 text-start active:scale-[0.99] transition-all"
+          >
+            {t(lang, 'closeReminderBanner')}
+          </button>
+        )}
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 w-full max-w-3xl">
           {visibleTiles.map((tile) => (
             <button

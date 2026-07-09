@@ -31,7 +31,16 @@ function docTypeLabel(dt: Receipt['doc_type']): string {
   }
 }
 
-export function renderReceiptCanvas(r: Receipt, location: Location | undefined): HTMLCanvasElement {
+export interface ReceiptRenderOpts {
+  /** Печать копии: *העתק* вместо *מקור* (второй экземпляр, перепечатка) */
+  copy?: boolean
+}
+
+export function renderReceiptCanvas(
+  r: Receipt,
+  location: Location | undefined,
+  opts: ReceiptRenderOpts = {}
+): HTMLCanvasElement {
   // Рисуем на заведомо высоком холсте, затем обрезаем по факту
   const tall = document.createElement('canvas')
   tall.width = W
@@ -87,7 +96,7 @@ export function renderReceiptCanvas(r: Receipt, location: Location | undefined):
 
   // ── Тип документа + номер ──
   center(`${docTypeLabel(r.doc_type)} ${r.receipt_number ?? '—'}`, 28, true, 6)
-  center('*מקור*', 22, false, 4)
+  center(opts.copy ? '*העתק*' : '*מקור*', 22, false, 4)
   divider()
 
   // ── Мета ──
@@ -120,8 +129,9 @@ export function renderReceiptCanvas(r: Receipt, location: Location | undefined):
   ctx.stroke()
   ctx.restore()
 
-  // Модификаторы в чек не печатаются: строка = товар с итоговой ценой
-  // (цена уже включает надбавки модификаторов)
+  // Цена строки уже включает надбавки модификаторов; их расшифровка —
+  // опция точки (Настройки → Чеки и печать → Модификаторы в чеке)
+  const printMods = location?.settings?.receipt?.print_modifiers ?? false
   for (const l of r.lines) {
     ctx.font = FONT(26)
     const name = l.variant_name ? `${l.name} ${l.variant_name}` : l.name
@@ -134,6 +144,18 @@ export function renderReceiptCanvas(r: Receipt, location: Location | undefined):
     ctx.textAlign = 'left'
     ctx.fillText(fmt(l.line_total), COL_TOTAL, y)
     y += 34
+    if (printMods) {
+      for (const m of l.modifiers) {
+        ctx.font = FONT(22)
+        ctx.textAlign = 'right'
+        ctx.fillText(fitText(`+ ${m.name}`, NAME_MAX), RIGHT - 18, y)
+        if (m.price_delta !== 0) {
+          ctx.textAlign = 'left'
+          ctx.fillText(fmt(m.price_delta), COL_PRICE, y)
+        }
+        y += 28
+      }
+    }
   }
 
   // Кол-во позиций

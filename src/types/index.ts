@@ -8,6 +8,35 @@ export interface Org {
 
 export type ServiceMode = 'counter' | 'counter_tables' | 'tables'
 
+/** Кто может выполнять действие: все сотрудники или только manager+owner */
+export type PermLevel = 'all' | 'manager'
+
+/**
+ * Мелкие настройки точки — jsonb locations.settings (миграция 036).
+ * Все ключи опциональны: отсутствие = дефолт (см. src/lib/perms.ts).
+ */
+export interface LocationSettings {
+  perms?: {
+    discount?: PermLevel
+    price_edit?: PermLevel
+    refund?: PermLevel
+    void_order?: PermLevel
+    close_shift?: PermLevel
+  }
+  receipt?: {
+    print_modifiers?: boolean
+    copies?: 1 | 2
+  }
+  shift?: {
+    /** Стартовая сумма в кассе по умолчанию, агороты (префилл при открытии смены) */
+    default_opening_float?: number | null
+    /** Напоминание о закрытии смены, 'HH:MM' локального времени */
+    close_reminder?: string | null
+    /** Порог предупреждения «много наличных в кассе», агороты */
+    cash_warn_threshold?: number | null
+  }
+}
+
 export interface Location {
   id: string
   org_id: string
@@ -27,6 +56,8 @@ export interface Location {
   loyalty_stamps_goal: number
   loyalty_points_percent: number
   loyalty_points_min_redeem: number
+  // Мелкие настройки точки (036): права, опции чека, смена
+  settings: LocationSettings
   created_at: string
 }
 

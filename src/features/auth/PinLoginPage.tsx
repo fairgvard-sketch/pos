@@ -75,7 +75,7 @@ export default function PinLoginPage() {
       </div>
 
       <h1 className="text-2xl font-black text-gray-900 mb-2">{t(lang, 'appName')}</h1>
-      <p className="text-sm text-gray-400 mb-8">
+      <p className="text-sm text-gray-500 mb-8">
         {checking ? t(lang, 'checking') : t(lang, 'enterPin')}
       </p>
 

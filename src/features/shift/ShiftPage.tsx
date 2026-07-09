@@ -4,9 +4,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { fetchCurrentShift, fetchShiftReport, closeShift, type CloseResult } from './api'
 import { fetchOnShiftStaff, clockOutStaff } from '../timesheet/api'
+import { fetchCurrentLocation } from '../auth/api'
+import { useCloseReminder } from './reminder'
 import { useAuthStore } from '../../store/authStore'
 import { useLangStore } from '../../store/langStore'
 import { t } from '../../lib/i18n'
+import { can } from '../../lib/perms'
 import { formatMoney, parseMoney } from '../../lib/money'
 import AppSidebar from '../../components/AppSidebar'
 
@@ -24,6 +27,13 @@ export default function ShiftPage() {
     enabled: !!shift,
     refetchInterval: 15_000,
   })
+  const { data: location } = useQuery({ queryKey: ['current_location'], queryFn: fetchCurrentLocation })
+
+  // Настройки точки: право закрытия, напоминание, порог наличных
+  const canCloseShift = can(staff?.role, 'close_shift', location?.settings)
+  const remindClose = useCloseReminder(shift?.opened_at, location?.settings?.shift?.close_reminder)
+  const cashWarnAt = location?.settings?.shift?.cash_warn_threshold ?? null
+  const tooMuchCash = report != null && cashWarnAt != null && cashWarnAt > 0 && report.expected_cash > cashWarnAt
 
   const [closing, setClosing] = useState(false)
   const [countedStr, setCountedStr] = useState('')
@@ -105,9 +115,21 @@ export default function ShiftPage() {
       <div className="max-w-md mx-auto w-full">
         <h1 className="text-2xl font-black text-gray-900 mb-1">{t(lang, 'shift')}</h1>
         {shift && (
-          <p className="text-sm text-gray-400 mb-5">
+          <p className="text-sm text-gray-500 mb-5">
             {t(lang, 'openedAt')}: {new Date(shift.opened_at).toLocaleString(lang === 'he' ? 'he-IL' : 'ru-RU')}
           </p>
+        )}
+
+        {/* Баннеры: пора закрывать / много наличных (настройки точки «Смена») */}
+        {remindClose && (
+          <div className="rounded-2xl bg-amber-50 border border-amber-200 px-4 py-3 mb-3 text-sm font-semibold text-amber-800">
+            {t(lang, 'closeReminderBanner')}
+          </div>
+        )}
+        {tooMuchCash && (
+          <div className="rounded-2xl bg-amber-50 border border-amber-200 px-4 py-3 mb-3 text-sm font-semibold text-amber-800">
+            {t(lang, 'cashWarnBanner')} · {formatMoney(report!.expected_cash, lang)}
+          </div>
         )}
 
         {/* X-отчёт (живой) */}
@@ -128,7 +150,13 @@ export default function ShiftPage() {
         )}
 
         {!closing ? (
-          <button onClick={() => setClosing(true)} className="btn-danger w-full !rounded-2xl">
+          <button
+            onClick={() => {
+              if (!canCloseShift) { toast.error(t(lang, 'permManagerToast')); return }
+              setClosing(true)
+            }}
+            className={`btn-danger w-full !rounded-2xl ${canCloseShift ? '' : '!opacity-40'}`}
+          >
             {t(lang, 'closeShift')}
           </button>
         ) : (
@@ -143,7 +171,7 @@ export default function ShiftPage() {
                 value={countedStr}
                 onChange={(e) => setCountedStr(e.target.value)}
               />
-              <p className="text-[11px] text-gray-400 mt-1.5">{t(lang, 'countCashHint')}</p>
+              <p className="text-[11px] text-gray-500 mt-1.5">{t(lang, 'countCashHint')}</p>
             </div>
             <input
               className="input"

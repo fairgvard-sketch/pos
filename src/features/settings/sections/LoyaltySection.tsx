@@ -1,17 +1,21 @@
 import { useEffect, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { fetchCategories, updateCategory } from '../menu/api'
-import { updateLoyaltySettings, searchGuests, formatPhone, type LoyaltySettings } from '../loyalty/api'
-import { useLangStore } from '../../store/langStore'
-import { t, formatDate } from '../../lib/i18n'
-import { formatMoney, parseMoney } from '../../lib/money'
-import type { Location } from '../../types'
+import { fetchCategories, updateCategory } from '../../menu/api'
+import { updateLoyaltySettings, type LoyaltySettings } from '../../loyalty/api'
+import { useLangStore } from '../../../store/langStore'
+import { t } from '../../../lib/i18n'
+import { parseMoney } from '../../../lib/money'
+import { Group, NavRow, Segment, Toggle } from '../ui'
+import type { DetailId } from '../registry'
+import type { Location } from '../../../types'
 
 const MODES = ['off', 'stamps', 'points'] as const
 
-/** Таб «Лояльность»: механика точки + штампуемые категории + гости */
-export default function LoyaltyTab({ location }: { location: Location | undefined }) {
+/** Категория «Лояльность»: механика точки + штампуемые категории + гости (drill-down) */
+export default function LoyaltySection({
+  location, openDetail,
+}: { location: Location | undefined; openDetail: (id: DetailId) => void }) {
   const lang = useLangStore((s) => s.lang)
   const qc = useQueryClient()
 
@@ -55,40 +59,27 @@ export default function LoyaltyTab({ location }: { location: Location | undefine
     onError: (e) => toast.error(e.message),
   })
 
-  // ── Гости ──
-  const [guestQuery, setGuestQuery] = useState('')
-  const { data: guests = [] } = useQuery({
-    queryKey: ['guests', guestQuery],
-    queryFn: () => searchGuests(guestQuery),
-    placeholderData: (prev) => prev,
-  })
-
   return (
-    <>
-      <section className="max-w-2xl">
-        <h2 className="text-base font-bold text-gray-900">{t(lang, 'loyaltyTitle')}</h2>
-        <p className="text-sm text-gray-500 mt-1 mb-4">{t(lang, 'loyaltyHint')}</p>
+    <div className="space-y-6">
+      <section>
+        <h3 className="text-xs font-bold uppercase tracking-wide text-gray-500 mb-2 px-1">
+          {t(lang, 'loyaltyTitle')}
+        </h3>
+        <p className="text-sm text-gray-500 mb-3 px-1">{t(lang, 'loyaltyHint')}</p>
 
-        <div className="inline-flex rounded-xl border border-gray-100 bg-gray-50 p-0.5 gap-0.5 mb-4">
-          {MODES.map((m) => (
-            <button
-              key={m}
-              onClick={() => setMode(m)}
-              className={`h-11 px-4 rounded-lg text-sm font-semibold transition-all ${
-                mode === m
-                  ? 'bg-white text-gray-900 shadow-[0_1px_2px_rgba(0,0,0,0.08)]'
-                  : 'text-gray-400 hover:text-gray-600'
-              }`}
-            >
-              {t(lang, m === 'off' ? 'loyaltyModeOff' : m === 'stamps' ? 'loyaltyModeStamps' : 'loyaltyModePoints')}
-            </button>
-          ))}
-        </div>
+        <Segment
+          options={MODES.map((m) => ({
+            value: m,
+            label: t(lang, m === 'off' ? 'loyaltyModeOff' : m === 'stamps' ? 'loyaltyModeStamps' : 'loyaltyModePoints'),
+          }))}
+          value={mode}
+          onChange={setMode}
+        />
 
         {mode === 'stamps' && (
-          <div className="space-y-4">
+          <div className="space-y-4 mt-4">
             <label className="block">
-              <span className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-1">
+              <span className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">
                 {t(lang, 'stampsGoalLabel')}
               </span>
               <input
@@ -99,7 +90,7 @@ export default function LoyaltyTab({ location }: { location: Location | undefine
               />
             </label>
             <div>
-              <span className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-2">
+              <span className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">
                 {t(lang, 'stampCategoriesLabel')}
               </span>
               <div className="space-y-1.5">
@@ -111,16 +102,8 @@ export default function LoyaltyTab({ location }: { location: Location | undefine
                                justify-between gap-3 hover:border-gray-400 transition-all active:scale-[0.99]"
                   >
                     <span className="font-semibold text-gray-900 text-sm">{c.name}</span>
-                    <span
-                      className={`w-10 h-6 rounded-full p-0.5 transition-colors ${
-                        c.loyalty_stamps ? 'bg-gray-900' : 'bg-gray-200'
-                      }`}
-                    >
-                      <span
-                        className={`block w-5 h-5 rounded-full bg-white shadow transition-transform ${
-                          c.loyalty_stamps ? 'translate-x-4 rtl:-translate-x-4' : ''
-                        }`}
-                      />
+                    <span className="pointer-events-none">
+                      <Toggle checked={c.loyalty_stamps} onChange={() => {}} />
                     </span>
                   </button>
                 ))}
@@ -130,9 +113,9 @@ export default function LoyaltyTab({ location }: { location: Location | undefine
         )}
 
         {mode === 'points' && (
-          <div className="flex gap-4">
+          <div className="flex gap-4 mt-4">
             <label className="block">
-              <span className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-1">
+              <span className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">
                 {t(lang, 'pointsPercentLabel')}
               </span>
               <input
@@ -143,7 +126,7 @@ export default function LoyaltyTab({ location }: { location: Location | undefine
               />
             </label>
             <label className="block">
-              <span className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-1">
+              <span className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">
                 {t(lang, 'minRedeemLabel')}
               </span>
               <input
@@ -165,38 +148,9 @@ export default function LoyaltyTab({ location }: { location: Location | undefine
         </button>
       </section>
 
-      <section className="max-w-2xl mt-10">
-        <h2 className="text-base font-bold text-gray-900 mb-3">{t(lang, 'guestsTitle')}</h2>
-        <input
-          className="input mb-3"
-          placeholder={t(lang, 'guestSearchPh')}
-          value={guestQuery}
-          onChange={(e) => setGuestQuery(e.target.value)}
-        />
-        <div className="space-y-1.5">
-          {guests.map((g) => (
-            <div
-              key={g.id}
-              className="px-4 py-2.5 rounded-xl border border-gray-100 bg-white flex items-center justify-between gap-3"
-            >
-              <div className="min-w-0">
-                <div className="font-semibold text-gray-900 text-sm truncate">{g.name || formatPhone(g.phone)}</div>
-                <div className="text-xs text-gray-500 tabular-nums">
-                  {g.name && `${formatPhone(g.phone)} · `}
-                  {t(lang, 'guestVisits')}: {g.visits}
-                  {g.last_visit_at && ` · ${formatDate(g.last_visit_at, lang)}`}
-                </div>
-              </div>
-              <div className="shrink-0 text-sm font-bold text-gray-900 tabular-nums text-end">
-                {mode === 'points' || location?.loyalty_mode === 'points'
-                  ? formatMoney(g.points, lang)
-                  : `${g.stamps} ${t(lang, 'stampsShort')}`}
-              </div>
-            </div>
-          ))}
-          {guests.length === 0 && <p className="text-sm text-gray-400 text-center py-6">{t(lang, 'guestNotFound')}</p>}
-        </div>
-      </section>
-    </>
+      <Group>
+        <NavRow label={t(lang, 'guestsTitle')} onClick={() => openDetail('guests')} />
+      </Group>
+    </div>
   )
 }
