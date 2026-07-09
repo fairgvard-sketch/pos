@@ -41,6 +41,19 @@ export function percentOf(agorot: Agorot, pct: number): Agorot {
 }
 
 /**
+ * Разделить сумму на n равных долей БЕЗ потери агорот: первые
+ * (total mod n) долей на 1 агорот больше, поэтому сумма частей
+ * точно равна total (деньги — целые агороты, инвариант №1).
+ * Пример: splitEvenly(10000, 3) → [3334, 3333, 3333].
+ */
+export function splitEvenly(total: Agorot, n: number): Agorot[] {
+  if (n < 1) return [total]
+  const base = Math.floor(total / n)
+  const remainder = total - base * n
+  return Array.from({ length: n }, (_, i) => base + (i < remainder ? 1 : 0))
+}
+
+/**
  * Подгонка чаевых: итог к оплате (total + tip) — целое число шекелей
  * (ближайший шекель). Чаевые не бывают отрицательными.
  *

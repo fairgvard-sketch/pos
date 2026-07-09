@@ -28,6 +28,7 @@ import ShiftGate from '../shift/ShiftGate'
 import ReceiptSheet from '../receipt/ReceiptSheet'
 import ReceiptChoiceSheet from '../receipt/ReceiptChoiceSheet'
 import SplitItemsSheet from './SplitItemsSheet'
+import EqualSplitSheet from './EqualSplitSheet'
 import GuestSheet from '../loyalty/GuestSheet'
 import { formatPhone } from '../loyalty/api'
 import AppSidebar from '../../components/AppSidebar'
@@ -164,6 +165,8 @@ export default function SellPage() {
   const [showTipSheet, setShowTipSheet] = useState(false)
   // Раздельная оплата по позициям: выбор позиций + остаток после оплаты части
   const [showSplit, setShowSplit] = useState(false)
+  // Разделить поровну на N гостей (один чек, N платежей)
+  const [showEqualSplit, setShowEqualSplit] = useState(false)
   const [splitRemainder, setSplitRemainder] = useState<{ orderId: string; total: number } | null>(null)
   // Режим столов: после финальной части цепочки сплита вернуться в зал
   const returnToHall = useRef(false)
@@ -287,6 +290,7 @@ export default function SellPage() {
     // «Как выдать чек?» заменяет автопечать: печать — только по выбору кассира
     if (!receiptPromptOn && autoPrintOn) void autoPrintReceipt(orderId, location, printMode === 'rawbt')
     setPayingOrder(null)
+    setShowEqualSplit(false)
     cart.clear()
     setClientUuid(crypto.randomUUID())
     setPaidOrderId(orderId)  // для кнопки «Чек»
@@ -928,7 +932,7 @@ export default function SellPage() {
       )}
 
       {/* Оплата созданного заказа (наличные с расчётом сдачи или выбор способа) */}
-      {payingOrder && !showSplit && (
+      {payingOrder && !showSplit && !showEqualSplit && (
         <PaymentSheet
           total={payingOrder.total + (payingOrder.tip ?? 0)}
           tip={payingOrder.tip ?? 0}
@@ -938,6 +942,7 @@ export default function SellPage() {
           onPay={(payments) => pay.mutate({ orderId: payingOrder.orderId, dailyNumber: payingOrder.dailyNumber, payments, tip: payingOrder.tip ?? 0 })}
           // split_order пересчитывает итоги без loyalty_discount — при выбранной награде сплит недоступен
           onSplitItems={cart.redeem ? undefined : () => setShowSplit(true)}
+          onSplitEqually={() => setShowEqualSplit(true)}
         />
       )}
 
@@ -948,6 +953,17 @@ export default function SellPage() {
           busy={split.isPending}
           onConfirm={(items) => split.mutate(items)}
           onCancel={() => setShowSplit(false)}
+        />
+      )}
+
+      {/* Разделить поровну на N гостей: один чек, N платежей (тот же pay_order) */}
+      {payingOrder && showEqualSplit && (
+        <EqualSplitSheet
+          total={payingOrder.total + (payingOrder.tip ?? 0)}
+          busy={pay.isPending}
+          onBack={() => setShowEqualSplit(false)}
+          onCancel={() => { setShowEqualSplit(false); cancelPayFlow(payingOrder) }}
+          onPay={(payments) => pay.mutate({ orderId: payingOrder.orderId, dailyNumber: payingOrder.dailyNumber, payments, tip: payingOrder.tip ?? 0 })}
         />
       )}
 

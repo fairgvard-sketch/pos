@@ -17,6 +17,8 @@ interface Props {
   onPay: (payments: PaymentInput[]) => void
   /** Разделить по позициям (отдельные чеки). Не передан — кнопка скрыта. */
   onSplitItems?: () => void
+  /** Разделить поровну на N гостей (один чек). Не передан — кнопка скрыта. */
+  onSplitEqually?: () => void
   busy: boolean
 }
 
@@ -43,7 +45,7 @@ function quickCashOptions(total: number, mode: 'smart' | 'manual' | 'off', manua
   return [...opts].sort((a, b) => a - b).slice(0, 5)
 }
 
-export default function PaymentSheet({ total, tip = 0, startMode = 'choose', onCancel, onPay, onSplitItems, busy }: Props) {
+export default function PaymentSheet({ total, tip = 0, startMode = 'choose', onCancel, onPay, onSplitItems, onSplitEqually, busy }: Props) {
   const lang = useLangStore((s) => s.lang)
   // Порядок способов настраивается на кассе (Настройки → Оплата → Способы оплаты);
   // первый — выбран по умолчанию. «Наличные» с кнопки перебивают
@@ -154,21 +156,34 @@ export default function PaymentSheet({ total, tip = 0, startMode = 'choose', onC
               )
             })}
 
+            {(onSplitItems || onSplitEqually) && (
+              <div className="hidden sm:block mt-auto pt-3 border-t border-gray-200" />
+            )}
+            {/* Разделить поровну на N (один чек) */}
+            {onSplitEqually && (
+              <button
+                onClick={onSplitEqually}
+                disabled={busy}
+                className="flex-1 sm:flex-none h-14 px-4 rounded-2xl flex items-center gap-3 font-semibold text-sm
+                           bg-white text-gray-900 border border-gray-200 hover:border-gray-400
+                           transition-all active:scale-[0.97]"
+              >
+                <Icon name="customers" size={22} />
+                <span className="truncate">{t(lang, 'splitEqualShort')}</span>
+              </button>
+            )}
+            {/* Разделить по позициям (отдельные чеки) */}
             {onSplitItems && (
-              <>
-                <div className="hidden sm:block mt-auto pt-3 border-t border-gray-200" />
-                {/* Такой же вес, как у способов оплаты — кассир должен её видеть */}
-                <button
-                  onClick={onSplitItems}
-                  disabled={busy}
-                  className="flex-1 sm:flex-none h-14 px-4 rounded-2xl flex items-center gap-3 font-semibold text-sm
-                             bg-white text-gray-900 border border-gray-200 hover:border-gray-400
-                             transition-all active:scale-[0.97]"
-                >
-                  <Icon name="refund" size={22} />
-                  <span className="truncate">{t(lang, 'splitShort')}</span>
-                </button>
-              </>
+              <button
+                onClick={onSplitItems}
+                disabled={busy}
+                className="flex-1 sm:flex-none h-14 px-4 rounded-2xl flex items-center gap-3 font-semibold text-sm
+                           bg-white text-gray-900 border border-gray-200 hover:border-gray-400
+                           transition-all active:scale-[0.97]"
+              >
+                <Icon name="refund" size={22} />
+                <span className="truncate">{t(lang, 'splitShort')}</span>
+              </button>
             )}
           </div>
 
