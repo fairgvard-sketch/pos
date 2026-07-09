@@ -16,8 +16,15 @@ export async function autoPrintReceipt(
   try {
     // Номер чека присвоен внутри pay_order — можно читать сразу
     const receipt = await fetchReceipt(orderId)
-    const canvas = renderReceiptCanvas(receipt, location)
-    return printCanvasSilently(canvas, allowRawbt)
+    const ok = printCanvasSilently(renderReceiptCanvas(receipt, location), allowRawbt)
+    // Второй экземпляр (настройка точки) — как *העתק*; RawBT принимает
+    // по одной ссылке за раз, поэтому с паузой
+    if (ok && (location?.settings?.receipt?.copies ?? 1) === 2) {
+      setTimeout(() => {
+        printCanvasSilently(renderReceiptCanvas(receipt, location, { copy: true }), allowRawbt)
+      }, 3000)
+    }
+    return ok
   } catch {
     return false
   }

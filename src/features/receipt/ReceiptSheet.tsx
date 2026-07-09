@@ -33,17 +33,27 @@ export default function ReceiptSheet({ orderId, onClose }: Props) {
    */
   function handlePrint() {
     if (!receipt) return
+    // Второй экземпляр (настройка точки) печатается как *העתק*
+    const copies = location?.settings?.receipt?.copies ?? 1
     const bridge = window.KassaAndroid
     if (bridge?.isAvailable()) {
-      const canvas = renderReceiptCanvas(receipt, location)
-      bridge.printBase64(canvasToEscposBase64(canvas))
+      bridge.printBase64(canvasToEscposBase64(renderReceiptCanvas(receipt, location)))
+      if (copies === 2) {
+        bridge.printBase64(canvasToEscposBase64(renderReceiptCanvas(receipt, location, { copy: true })))
+      }
       return
     }
     if (printMode === 'rawbt') {
-      const canvas = renderReceiptCanvas(receipt, location)
-      window.location.href = canvasToRawbtUrl(canvas)
+      window.location.href = canvasToRawbtUrl(renderReceiptCanvas(receipt, location))
+      if (copies === 2) {
+        // RawBT принимает по одной ссылке за раз — копию отправляем с паузой
+        setTimeout(() => {
+          window.location.href = canvasToRawbtUrl(renderReceiptCanvas(receipt, location, { copy: true }))
+        }, 3000)
+      }
       return
     }
+    // Браузерный диалог: количество копий выбирается в самом диалоге
     window.print()
   }
 
@@ -132,16 +142,25 @@ function ReceiptBody({ receipt: r, location }: { receipt: Receipt; location: Loc
         <span className="text-center">כמות</span>
         <span className="text-left">לתשלום</span>
       </div>
-      {/* Модификаторы в чек не выводятся: цена строки уже включает их надбавки */}
+      {/* Цена строки уже включает модификаторы; их расшифровка — опция точки */}
       {r.lines.map((l, i) => (
-        <div key={i} className="grid grid-cols-[1fr_3.5rem_2rem_3.5rem] text-sm items-baseline">
-          <span className="truncate pl-2">
-            {l.name}
-            {l.variant_name && ` ${l.variant_name}`}
-          </span>
-          <span className="text-left tabular-nums">{fmt(l.unit_price)}</span>
-          <span className="text-center tabular-nums">{l.qty}</span>
-          <span className="text-left tabular-nums">{fmt(l.line_total)}</span>
+        <div key={i}>
+          <div className="grid grid-cols-[1fr_3.5rem_2rem_3.5rem] text-sm items-baseline">
+            <span className="truncate pl-2">
+              {l.name}
+              {l.variant_name && ` ${l.variant_name}`}
+            </span>
+            <span className="text-left tabular-nums">{fmt(l.unit_price)}</span>
+            <span className="text-center tabular-nums">{l.qty}</span>
+            <span className="text-left tabular-nums">{fmt(l.line_total)}</span>
+          </div>
+          {(location?.settings?.receipt?.print_modifiers ?? false) &&
+            l.modifiers.map((m, j) => (
+              <div key={j} className="grid grid-cols-[1fr_3.5rem_2rem_3.5rem] text-xs text-gray-700 items-baseline">
+                <span className="truncate pe-3">+ {m.name}</span>
+                <span className="text-left tabular-nums">{m.price_delta !== 0 ? fmt(m.price_delta) : ''}</span>
+              </div>
+            ))}
         </div>
       ))}
 

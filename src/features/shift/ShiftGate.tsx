@@ -1,7 +1,8 @@
-import { useState } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useEffect, useState } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { openShift } from './api'
+import { fetchCurrentLocation } from '../auth/api'
 import { useAuthStore } from '../../store/authStore'
 import { useLangStore } from '../../store/langStore'
 import { t } from '../../lib/i18n'
@@ -15,6 +16,17 @@ export default function ShiftGate() {
   const staff = useAuthStore((s) => s.staff)
   const qc = useQueryClient()
   const [floatStr, setFloatStr] = useState('')
+
+  // Префилл размена из настроек точки (Смена → стартовая сумма по умолчанию)
+  const { data: location } = useQuery({ queryKey: ['current_location'], queryFn: fetchCurrentLocation })
+  const defaultFloat = location?.settings?.shift?.default_opening_float ?? null
+  const [prefilled, setPrefilled] = useState(false)
+  useEffect(() => {
+    if (!prefilled && defaultFloat !== null && floatStr === '') {
+      setFloatStr(String(defaultFloat / 100))
+      setPrefilled(true)
+    }
+  }, [prefilled, defaultFloat, floatStr])
 
   const open = useMutation({
     mutationFn: () => {

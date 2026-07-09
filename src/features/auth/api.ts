@@ -1,5 +1,5 @@
 import { supabase } from '../../lib/supabase'
-import type { Location, ServiceMode, StaffSession } from '../../types'
+import type { Location, LocationSettings, ServiceMode, StaffSession } from '../../types'
 
 export interface DeviceContext {
   orgId: string | null
@@ -64,6 +64,21 @@ export async function updateReceiptDetails(details: ReceiptDetails): Promise<voi
       receipt_phone: details.receipt_phone || null,
       receipt_footer: details.receipt_footer || null,
     })
+    .eq('id', ctx.locationId)
+  if (error) throw new Error(error.message)
+}
+
+/**
+ * Сохранить мелкие настройки точки (locations.settings, 036).
+ * Пишем ЦЕЛИКОМ смерженный объект: вызывающий берёт текущие settings
+ * из кеша current_location и накладывает свой раздел (perms/receipt/shift).
+ */
+export async function updateLocationSettings(settings: LocationSettings): Promise<void> {
+  const ctx = await getDeviceContext()
+  if (!ctx?.locationId) throw new Error('Device not bootstrapped')
+  const { error } = await supabase
+    .from('locations')
+    .update({ settings })
     .eq('id', ctx.locationId)
   if (error) throw new Error(error.message)
 }

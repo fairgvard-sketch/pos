@@ -1,20 +1,23 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { fetchStaffList, createStaffMember, setStaffPin, updateStaffMember, isValidPin } from './api'
-import { useAuthStore } from '../../store/authStore'
-import { useLangStore } from '../../store/langStore'
-import { t } from '../../lib/i18n'
-import type { Role, Staff } from '../../types'
+import { fetchStaffList, createStaffMember, setStaffPin, updateStaffMember, isValidPin } from '../api'
+import { useAuthStore } from '../../../store/authStore'
+import { useLangStore } from '../../../store/langStore'
+import { t } from '../../../lib/i18n'
+import { Group, NavRow } from '../ui'
+import type { DetailId } from '../registry'
+import type { Role, Staff } from '../../../types'
 
 /**
- * Таб «Сотрудники»: список, добавление (имя+роль+PIN), смена PIN, деактивация.
+ * Категория «Сотрудники»: список, добавление (имя+роль+PIN), смена PIN,
+ * деактивация + drill-down «Права доступа».
  * Ролевые правила (клиентские, модель авторизации доверяет устройству):
  * - владельца может править только владелец;
  * - менеджер создаёт бариста и менеджеров, роль owner доступна только владельцу;
  * - себя деактивировать нельзя.
  */
-export default function StaffTab() {
+export default function StaffSection({ openDetail }: { openDetail: (id: DetailId) => void }) {
   const lang = useLangStore((s) => s.lang)
   const me = useAuthStore((s) => s.staff)
   const qc = useQueryClient()
@@ -66,10 +69,16 @@ export default function StaffTab() {
   }
 
   return (
-    <>
-      <section className="max-w-2xl">
-        <h2 className="text-base font-bold text-gray-900">{t(lang, 'staffTitle')}</h2>
-        <p className="text-sm text-gray-500 mt-1 mb-4">{t(lang, 'staffHint')}</p>
+    <div className="space-y-6">
+      <Group>
+        <NavRow label={t(lang, 'permsTitle')} hint={t(lang, 'permsHint')} onClick={() => openDetail('perms')} />
+      </Group>
+
+      <section>
+        <h3 className="text-xs font-bold uppercase tracking-wide text-gray-500 mb-2 px-1">
+          {t(lang, 'staffTitle')}
+        </h3>
+        <p className="text-sm text-gray-500 mb-3 px-1">{t(lang, 'staffHint')}</p>
 
         {/* Список */}
         <div className="space-y-2 mb-6">
@@ -146,14 +155,14 @@ export default function StaffTab() {
         <h3 className="text-sm font-bold text-gray-900 mb-3">{t(lang, 'addStaff')}</h3>
         <div className="flex flex-wrap items-end gap-2">
           <label className="block">
-            <span className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-1">
+            <span className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">
               {t(lang, 'staffName')}
             </span>
             <input className="input !py-2 max-w-[180px]" value={name} onChange={(e) => setName(e.target.value)} />
           </label>
 
           <label className="block">
-            <span className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-1">
+            <span className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">
               {t(lang, 'staffRole')}
             </span>
             <div className="flex rounded-xl border border-gray-100 bg-gray-50 p-0.5 gap-0.5 h-[42px]">
@@ -164,7 +173,7 @@ export default function StaffTab() {
                   className={`px-3 rounded-lg text-xs font-semibold transition-all ${
                     role === r
                       ? 'bg-white text-gray-900 shadow-[0_1px_2px_rgba(0,0,0,0.08)]'
-                      : 'text-gray-400 hover:text-gray-600'
+                      : 'text-gray-500 hover:text-gray-700'
                   }`}
                 >
                   {t(lang, r)}
@@ -174,7 +183,7 @@ export default function StaffTab() {
           </label>
 
           <label className="block">
-            <span className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-1">
+            <span className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">
               {t(lang, 'staffPin')} · {t(lang, 'pinFormatHint')}
             </span>
             <input
@@ -191,6 +200,6 @@ export default function StaffTab() {
           </button>
         </div>
       </section>
-    </>
+    </div>
   )
 }

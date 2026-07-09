@@ -13,17 +13,17 @@ import Icon from '../../components/Icon'
 import { useAuthStore } from '../../store/authStore'
 import { useLangStore } from '../../store/langStore'
 import { t } from '../../lib/i18n'
+import { can } from '../../lib/perms'
 import { formatMoney } from '../../lib/money'
 
 /**
  * Журнал операций (Square: Transactions): платежи по дням, поиск,
- * детали заказа, перепечатка чека, возврат (manager+).
+ * детали заказа, перепечатка чека, возврат (право refund, по умолчанию manager+).
  */
 export default function TransactionsPage() {
   const lang = useLangStore((s) => s.lang)
   const isRtl = lang === 'he'
   const staff = useAuthStore((s) => s.staff)
-  const isManager = staff?.role === 'owner' || staff?.role === 'manager'
 
   const { data: txs = [], isLoading, error } = useQuery({ queryKey: ['transactions'], queryFn: fetchTransactions })
   const [search, setSearch] = useState('')
@@ -35,6 +35,7 @@ export default function TransactionsPage() {
   const autoPrintOn = useDeviceStore((s) => s.autoPrintReceipt)
   const printMode = useDeviceStore((s) => s.printMode)
   const { data: location } = useQuery({ queryKey: ['current_location'], queryFn: fetchCurrentLocation })
+  const canRefund = can(staff?.role, 'refund', location?.settings)
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -167,7 +168,7 @@ export default function TransactionsPage() {
             <div className="grid grid-cols-2 gap-2 mb-8">
               <button
                 onClick={() => setRefunding(true)}
-                disabled={remaining <= 0 || !isManager}
+                disabled={remaining <= 0 || !canRefund}
                 className="btn-secondary !py-3.5 !rounded-2xl disabled:opacity-40"
               >
                 {t(lang, 'issueRefund')}

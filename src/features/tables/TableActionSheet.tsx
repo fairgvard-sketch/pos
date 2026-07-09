@@ -2,8 +2,11 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { moveTableOrder, mergeTableOrders, voidTableOrder, fetchOrderLines, type TableOccupancy } from './api'
+import { fetchCurrentLocation } from '../auth/api'
+import { useAuthStore } from '../../store/authStore'
 import { useLangStore } from '../../store/langStore'
 import { t, formatTime, formatElapsed } from '../../lib/i18n'
+import { can } from '../../lib/perms'
 import { formatMoney } from '../../lib/money'
 import type { Table } from '../../types'
 import Icon, { type IconName } from '../../components/Icon'
@@ -30,6 +33,11 @@ export default function TableActionSheet({ table, occ, tables, occupancy, onOpen
   const isRtl = lang === 'he'
   const qc = useQueryClient()
   const [screen, setScreen] = useState<Screen>('menu')
+
+  // Освобождение стола аннулирует счёт → право void_order (настройки точки)
+  const staff = useAuthStore((s) => s.staff)
+  const { data: location } = useQuery({ queryKey: ['current_location'], queryFn: fetchCurrentLocation })
+  const canVoidOrder = can(staff?.role, 'void_order', location?.settings)
 
   const refresh = () => qc.invalidateQueries({ queryKey: ['open_table_orders'] })
 
@@ -91,6 +99,7 @@ export default function TableActionSheet({ table, occ, tables, occupancy, onOpen
               onClick={() => setScreen('merge')}
             />
             <ActionRow icon="refund" label={t(lang, 'freeTable')} danger onClick={() => {
+              if (!canVoidOrder) { toast.error(t(lang, 'permManagerToast')); return }
               if (confirm(t(lang, 'confirmFreeTable'))) free.mutate()
             }} />
           </div>
