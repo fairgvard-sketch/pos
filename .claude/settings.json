@@ -19,7 +19,15 @@
       "PowerShell(npm run lint 2>&1 | Select-String -Pattern \"react-hooks/|typescript-eslint/|react-refresh/\" -AllMatches | ForEach-Object { $_.Matches.Value } | Group-Object | Sort-Object Count -Descending | Format-Table Count, Name -AutoSize)",
       "PowerShell(npx eslint . --format json 2>$null | Out-File -Encoding utf8 \"$env:TEMP\\\\lint.json\"; $r = Get-Content \"$env:TEMP\\\\lint.json\" -Raw | ConvertFrom-Json; $rules = @{}; $files = @{}; foreach \\($f in $r\\) { foreach \\($m in $f.messages\\) { $rules[$m.ruleId] = 1 + $rules[$m.ruleId]; $fn = Split-Path $f.filePath -Leaf; $files[$fn] = 1 + $files[$fn] } }; Write-Host \"=== BY RULE ===\"; $rules.GetEnumerator\\(\\) | Sort-Object Value -Descending | ForEach-Object { Write-Host \"$\\($_.Value\\)`t$\\($_.Key\\)\" }; Write-Host \"=== BY FILE ===\"; $files.GetEnumerator\\(\\) | Sort-Object Value -Descending | Select-Object -First 12 | ForEach-Object { Write-Host \"$\\($_.Value\\)`t$\\($_.Key\\)\" })",
       "PowerShell(npm run build)",
-      "PowerShell(git push)"
+      "PowerShell(git push)",
+      "PowerShell(Add-Type -AssemblyName System.Drawing; $img = [System.Drawing.Image]::FromFile\\(\"c:\\\\Users\\\\Hub\\\\Desktop\\\\in work projects\\\\kassa\\\\src\\\\assets\\\\logo\\\\logo.png\"\\); Write-Host \"$\\($img.Width\\)x$\\($img.Height\\), format=$\\($img.PixelFormat\\)\"; $img.Dispose\\(\\))",
+      "PowerShell(node -e \"try{require\\('sharp'\\);console.log\\('sharp: yes'\\)}catch{console.log\\('sharp: no'\\)}\"; \\(Get-Command magick -ErrorAction SilentlyContinue\\).Source; \\(Get-Command cwebp -ErrorAction SilentlyContinue\\).Source)",
+      "PowerShell(node -e \"const sharp=require\\('sharp'\\);const src='src/assets/logo/logo.png';sharp\\(src\\).webp\\({quality:82}\\).toFile\\('src/assets/logo/logo.webp'\\).then\\(i=>console.log\\('webp:',i.size,'bytes'\\)\\)\")",
+      "PowerShell(git rm -q src/assets/logo/logo.png)",
+      "PowerShell(git add src/assets/logo/logo.webp)",
+      "PowerShell(npm install @fontsource/inter 2>&1)",
+      "PowerShell(npm uninstall recharts @tanstack/react-query-devtools 2>&1)",
+      "PowerShell(git add src/components/ui/ArrowLogo.tsx src/features/auth/DeviceSetupPage.tsx src/features/auth/PinLoginPage.tsx src/lib/i18n.ts)"
     ]
   }
 }

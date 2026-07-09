@@ -6,7 +6,8 @@ import tseslint from 'typescript-eslint'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  // legacy/ — только референс старой версии, не линтуем (и не собираем)
+  globalIgnores(['dist', 'legacy']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [
@@ -17,6 +18,10 @@ export default defineConfig([
     ],
     languageOptions: {
       globals: globals.browser,
+    },
+    rules: {
+      // Паттерн «{ omitted, ...rest }» для выбрасывания поля — легален
+      '@typescript-eslint/no-unused-vars': ['error', { ignoreRestSiblings: true, argsIgnorePattern: '^_' }],
     },
   },
 ])

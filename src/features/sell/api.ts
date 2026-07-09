@@ -93,6 +93,8 @@ export async function splitOrder(
 
 /** Принять оплату по заказу, перевести в paid и присвоить фискальный номер документа */
 export async function payOrder(orderId: string, payments: PaymentInput[], tip: number = 0): Promise<void> {
+  // Один round-trip: фискальный номер присваивает сам pay_order (041) —
+  // отдельный вызов assign_receipt_number больше не нужен.
   // p_tip только при чаевых: до применения миграции 033 в БД живёт
   // двухаргументная pay_order — обычная оплата не должна ломаться
   const { error } = await supabase.rpc('pay_order', {
@@ -101,7 +103,4 @@ export async function payOrder(orderId: string, payments: PaymentInput[], tip: n
     ...(tip > 0 ? { p_tip: tip } : {}),
   })
   if (error) throw new Error(error.message)
-  // Сквозной номер документа (Израиль): присваивается после оплаты, идемпотентно.
-  const { error: numErr } = await supabase.rpc('assign_receipt_number', { p_order_id: orderId })
-  if (numErr) throw new Error(numErr.message)
 }

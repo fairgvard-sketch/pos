@@ -1,4 +1,16 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+/* Inter self-hosted (@fontsource): без рантайм-запроса к Google — быстрее
+   первая отрисовка и работает офлайн (woff2 попадают в precache PWA).
+   Только latin+cyrillic: иврита в Inter нет, он идёт системным шрифтом. */
+@import '@fontsource/inter/latin-400.css';
+@import '@fontsource/inter/latin-500.css';
+@import '@fontsource/inter/latin-600.css';
+@import '@fontsource/inter/latin-700.css';
+@import '@fontsource/inter/latin-800.css';
+@import '@fontsource/inter/cyrillic-400.css';
+@import '@fontsource/inter/cyrillic-500.css';
+@import '@fontsource/inter/cyrillic-600.css';
+@import '@fontsource/inter/cyrillic-700.css';
+@import '@fontsource/inter/cyrillic-800.css';
 
 @tailwind base;
 @tailwind components;
