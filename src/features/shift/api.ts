@@ -33,6 +33,8 @@ export interface CloseResult {
   counted_cash: number
   cash_diff: number
   orders_count: number
+  /** Сколько брошенных counter-заказов аннулировано при закрытии (035) */
+  abandoned_voided?: number
 }
 
 /** Открытая смена точки, либо null */
