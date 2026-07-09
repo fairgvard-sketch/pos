@@ -27,7 +27,7 @@ function BrandPanel({ lang }: { lang: Lang }) {
   return (
     <div className="hidden lg:flex flex-col justify-between bg-gray-900 text-white rounded-3xl p-10 xl:p-12 h-full">
       <div className="flex items-center gap-3">
-        <ArrowLogo className="w-8 h-8 text-white/90" />
+        <ArrowLogo className="w-8 h-8" invert />
         <span className="text-lg font-bold tracking-tight">{t(lang, 'arrowBrand')}</span>
       </div>
 

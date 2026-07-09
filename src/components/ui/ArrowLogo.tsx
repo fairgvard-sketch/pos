@@ -1,16 +1,25 @@
-/** Логотип Arrow POS — стрелка в скруглённом квадрате (в духе значка Square). */
-export default function ArrowLogo({ className = '' }: { className?: string }) {
+import logoUrl from '../../assets/logo/logo.webp'
+
+/**
+ * Логотип Arrow POS. Единая точка: меняешь файл assets/logo/logo.webp —
+ * обновляется везде (мастер входа, PIN-экран). className задаёт размер.
+ *
+ * Логотип чёрный на прозрачном фоне. На тёмных подложках передавай
+ * invert — CSS-фильтр перекрашивает его в белый, без второго файла.
+ */
+export default function ArrowLogo({
+  className = '',
+  invert = false,
+}: {
+  className?: string
+  invert?: boolean
+}) {
   return (
-    <svg viewBox="0 0 32 32" className={className} aria-hidden="true">
-      <rect x="1" y="1" width="30" height="30" rx="8" className="fill-current" />
-      <path
-        d="M11 16h10m0 0-4-4m4 4-4 4"
-        fill="none"
-        stroke="white"
-        strokeWidth="2.4"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
+    <img
+      src={logoUrl}
+      alt="Arrow POS"
+      className={`object-contain ${invert ? 'invert' : ''} ${className}`}
+      draggable={false}
+    />
   )
 }

@@ -27,7 +27,11 @@
       "PowerShell(git add src/assets/logo/logo.webp)",
       "PowerShell(npm install @fontsource/inter 2>&1)",
       "PowerShell(npm uninstall recharts @tanstack/react-query-devtools 2>&1)",
-      "PowerShell(git add src/components/ui/ArrowLogo.tsx src/features/auth/DeviceSetupPage.tsx src/features/auth/PinLoginPage.tsx src/lib/i18n.ts)"
+      "PowerShell(git add src/components/ui/ArrowLogo.tsx src/features/auth/DeviceSetupPage.tsx src/features/auth/PinLoginPage.tsx src/lib/i18n.ts)",
+      "PowerShell(Copy-Item \"src\\\\assets\\\\logo\\\\logo.webp\" \"src\\\\assets\\\\logo\\\\logo-original-backup.webp\" -Force)",
+      "PowerShell(node \"C:\\\\Users\\\\Hub\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-Hub-Desktop-in-work-projects-kassa\\\\66886456-182d-4620-a57f-17f2aecf848a\\\\scratchpad\\\\prep-logo.mjs\")",
+      "PowerShell(node prep-logo.mjs)",
+      "PowerShell($job = Start-Job -ScriptBlock { Set-Location \"c:\\\\Users\\\\Hub\\\\Desktop\\\\in work projects\\\\kassa\"; & cmd /c \"npm run preview\" }; Start-Sleep -Seconds 6; try { $r = Invoke-WebRequest \"http://localhost:4173/setup\" -UseBasicParsing -TimeoutSec 5; Write-Host \"HTTP $\\($r.StatusCode\\)\" } catch { Write-Host \"err: $\\($_.Exception.Message\\)\" }; Get-Job | Stop-Job; Get-Job | Remove-Job)"
     ]
   }
 }
