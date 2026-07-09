@@ -19,7 +19,7 @@ import { formatMoney, formatMoneyList } from '../../lib/money'
 import type { MenuItem, ModifierGroup } from '../../types'
 import ItemPicker from './ItemPicker'
 import PaymentSheet from './PaymentSheet'
-import TipSheet from './TipSheet'
+import TipSheet, { type TipOption } from './TipSheet'
 import DiscountSheet from './DiscountSheet'
 import PriceSheet from './PriceSheet'
 import TableSheet from './TableSheet'
@@ -99,7 +99,13 @@ export default function SellPage() {
   const kitchenTicketOn = useDeviceStore((s) => s.printKitchenTicket)
   const firstPayMethod = useDeviceStore((s) => s.firstPayMethod)
   const collectTips = useDeviceStore((s) => s.collectTips)
+  const tipAskBeforePayment = useDeviceStore((s) => s.tipAskBeforePayment)
   const tipPresets = useDeviceStore((s) => s.tipPresets)
+  const tipAllowCustom = useDeviceStore((s) => s.tipAllowCustom)
+  const tipBeforeTax = useDeviceStore((s) => s.tipBeforeTax)
+  const tipSmartAmounts = useDeviceStore((s) => s.tipSmartAmounts)
+  const tipSmartThreshold = useDeviceStore((s) => s.tipSmartThreshold)
+  const tipSmartFixed = useDeviceStore((s) => s.tipSmartFixed)
   const qc = useQueryClient()
   const navigate = useNavigate()
 
@@ -137,6 +143,10 @@ export default function SellPage() {
   const [payingOrder, setPayingOrder] = useState<PayingOrder | null>(null)
   // Шаг чаевых (настройка «Собирать чаевые»): показывается ПЕРЕД окном оплаты
   const [tipping, setTipping] = useState<PayingOrder | null>(null)
+  // Чаевые, добавленные вручную кнопкой на экране продажи (до оформления).
+  // Расходуются при входе в оплату — авто-шаг тогда не показывается
+  const [cartTip, setCartTip] = useState(0)
+  const [showTipSheet, setShowTipSheet] = useState(false)
   // Раздельная оплата по позициям: выбор позиций + остаток после оплаты части
   const [showSplit, setShowSplit] = useState(false)
   const [splitRemainder, setSplitRemainder] = useState<{ orderId: string; total: number } | null>(null)
@@ -183,12 +193,29 @@ export default function SellPage() {
     return true
   }
 
-  // Вход в оплату заказа. При включённых чаевых сначала шаг TipSheet,
-  // дальше proceedPayment; иначе — сразу к оплате (как раньше)
+  // Варианты чаевых для суммы: умный режим на мелких заказах — фиксированные ₪,
+  // иначе проценты от базы (итог с НДС или без — настройка кассы)
+  function tipOptions(total: number): TipOption[] {
+    if (tipSmartAmounts && total <= tipSmartThreshold) {
+      return tipSmartFixed.filter((a) => a > 0).map((amount) => ({ amount }))
+    }
+    const base = tipBeforeTax ? total - Math.round((total * vatRate) / (100 + vatRate)) : total
+    return tipPresets.filter((p) => p > 0).map((p) => ({ percent: p, amount: Math.round((base * p) / 100) }))
+  }
+
+  // Вход в оплату заказа. Чаевые с кнопки — сразу в оплату (не спрашиваем
+  // второй раз, расходуем); иначе авто-шаг TipSheet, если включён
   function startPayment(o: PayingOrder) {
     setPayingOrder(null)
-    if (collectTips && o.total > 0) setTipping(o)
-    else proceedPayment(o, 0)
+    if (collectTips && cartTip > 0) {
+      const tip = cartTip
+      setCartTip(0)
+      proceedPayment(o, tip)
+    } else if (collectTips && tipAskBeforePayment && o.total > 0) {
+      setTipping(o)
+    } else {
+      proceedPayment(o, 0)
+    }
   }
 
   // Чаевые выбраны (или шаг пропущен): карта-intent платит сразу
@@ -463,6 +490,13 @@ export default function SellPage() {
   // НДС включён в цену — показываем справочно по ставке точки (снапшот считает сервер)
   const vatRate = Number(location?.vat_rate ?? 18)
   const vatIncluded = Math.round((total * vatRate) / (100 + vatRate))
+  // Итог панели заказа: в режиме стола — уже в счёте + добавленное
+  const shownTotal = tableCtx ? tableCtx.existingTotal + total : total
+
+  // Корзина опустела (сняли позиции) — ручные чаевые больше не к чему
+  useEffect(() => {
+    if (shownTotal === 0 && cartTip > 0) setCartTip(0)
+  }, [shownTotal, cartTip])
 
   if (!staff) return null
 
@@ -562,6 +596,14 @@ export default function SellPage() {
           />
           <ActionButton icon="note" label={t(lang, 'note')} onClick={() => toast(`${t(lang, 'note')} — ${t(lang, 'comingSoon')}`)} />
           <ActionButton icon="refund" label={t(lang, 'refund')} onClick={() => navigate('/transactions')} />
+          {collectTips && (
+            <ActionButton
+              icon="cash"
+              label={t(lang, 'tipTitle')}
+              active={cartTip > 0}
+              onClick={() => { if (shownTotal > 0) setShowTipSheet(true) }}
+            />
+          )}
         </div>
       </main>
 
@@ -742,10 +784,20 @@ export default function SellPage() {
             <span>{t(lang, 'vatIncl')} {vatRate}%</span>
             <span className="tabular-nums">{formatMoney(vatIncluded, lang)}</span>
           </div>
+          {/* Чаевые с кнопки — тап по строке меняет сумму */}
+          {cartTip > 0 && (
+            <button
+              onClick={() => setShowTipSheet(true)}
+              className="flex justify-between w-full text-sm text-emerald-600 font-medium"
+            >
+              <span>{t(lang, 'tipTitle')}</span>
+              <span className="tabular-nums">+{formatMoney(cartTip, lang)}</span>
+            </button>
+          )}
           <div className="flex justify-between items-baseline pt-1">
             <span className="font-bold text-gray-900">{t(lang, 'total')}</span>
             {(() => {
-              const shown = tableCtx ? tableCtx.existingTotal + total : total
+              const shown = shownTotal + cartTip
               return (
                 <span key={shown} className="text-2xl short:text-xl font-black text-gray-900 tabular-nums inline-block cart-bump">
                   {formatMoney(shown, lang)}
@@ -799,7 +851,7 @@ export default function SellPage() {
                     className="btn-primary w-full !py-4 short:!py-3 !text-base !rounded-2xl mt-2 flex items-center justify-between !px-5"
                   >
                     <span>{place.isPending ? t(lang, 'charging') : t(lang, 'charge')}</span>
-                    {cart.lines.length > 0 && <span className="tabular-nums">{formatMoney(total, lang)}</span>}
+                    {cart.lines.length > 0 && <span className="tabular-nums">{formatMoney(total + cartTip, lang)}</span>}
                   </button>
                   <div className="grid grid-cols-2 gap-2 mt-2">
                     {/* Порядок кнопок = настройке «первый способ оплаты» этой кассы */}
@@ -825,10 +877,23 @@ export default function SellPage() {
       {tipping && (
         <TipSheet
           total={tipping.total}
-          presets={tipPresets}
+          options={tipOptions(tipping.total)}
+          allowCustom={tipAllowCustom}
           busy={pay.isPending}
           onCancel={() => cancelPayFlow(tipping)}
           onDone={(tip) => proceedPayment(tipping, tip)}
+        />
+      )}
+
+      {/* Чаевые с кнопки на экране продажи — до оформления заказа */}
+      {showTipSheet && (
+        <TipSheet
+          total={shownTotal}
+          options={tipOptions(shownTotal)}
+          allowCustom={tipAllowCustom}
+          busy={false}
+          onCancel={() => setShowTipSheet(false)}
+          onDone={(tip) => { setCartTip(tip); setShowTipSheet(false) }}
         />
       )}
 
@@ -1249,7 +1314,7 @@ function ActionButton({
   onClick,
   active = false,
 }: {
-  icon: 'customItem' | 'discount' | 'note' | 'refund'
+  icon: 'customItem' | 'discount' | 'note' | 'refund' | 'cash'
   label: string
   onClick: () => void
   active?: boolean

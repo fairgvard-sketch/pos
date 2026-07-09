@@ -27,7 +27,13 @@ export default function DeviceTab() {
   const printKitchenTicket = useDeviceStore((s) => s.printKitchenTicket)
   const firstPayMethod = useDeviceStore((s) => s.firstPayMethod)
   const collectTips = useDeviceStore((s) => s.collectTips)
+  const tipAskBeforePayment = useDeviceStore((s) => s.tipAskBeforePayment)
   const tipPresets = useDeviceStore((s) => s.tipPresets)
+  const tipAllowCustom = useDeviceStore((s) => s.tipAllowCustom)
+  const tipBeforeTax = useDeviceStore((s) => s.tipBeforeTax)
+  const tipSmartAmounts = useDeviceStore((s) => s.tipSmartAmounts)
+  const tipSmartThreshold = useDeviceStore((s) => s.tipSmartThreshold)
+  const tipSmartFixed = useDeviceStore((s) => s.tipSmartFixed)
   const setAutoLockSec = useDeviceStore((s) => s.setAutoLockSec)
   const setLockAfterSale = useDeviceStore((s) => s.setLockAfterSale)
   const setPaymentSound = useDeviceStore((s) => s.setPaymentSound)
@@ -37,7 +43,13 @@ export default function DeviceTab() {
   const setPrintKitchenTicket = useDeviceStore((s) => s.setPrintKitchenTicket)
   const setFirstPayMethod = useDeviceStore((s) => s.setFirstPayMethod)
   const setCollectTips = useDeviceStore((s) => s.setCollectTips)
+  const setTipAskBeforePayment = useDeviceStore((s) => s.setTipAskBeforePayment)
   const setTipPresets = useDeviceStore((s) => s.setTipPresets)
+  const setTipAllowCustom = useDeviceStore((s) => s.setTipAllowCustom)
+  const setTipBeforeTax = useDeviceStore((s) => s.setTipBeforeTax)
+  const setTipSmartAmounts = useDeviceStore((s) => s.setTipSmartAmounts)
+  const setTipSmartThreshold = useDeviceStore((s) => s.setTipSmartThreshold)
+  const setTipSmartFixed = useDeviceStore((s) => s.setTipSmartFixed)
 
   return (
     <div className="max-w-xl space-y-8">
@@ -104,7 +116,7 @@ export default function DeviceTab() {
         </div>
       </section>
 
-      {/* Чаевые: шаг выбора перед оплатой + пресеты процентов */}
+      {/* Чаевые: мастер-тумблер + настройки как в Square (Tipping) */}
       <section>
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -113,25 +125,121 @@ export default function DeviceTab() {
           </div>
           <Toggle checked={collectTips} onChange={setCollectTips} />
         </div>
+
         {collectTips && (
-          <div className="mt-3">
-            <p className="text-sm text-gray-500 mb-2">{t(lang, 'tipPresetsHint')}</p>
-            <div className="flex gap-2">
-              {tipPresets.map((p, i) => (
-                <div key={i} className="relative">
-                  <input
-                    className="input !w-20 text-center tabular-nums pe-6"
-                    inputMode="numeric"
-                    value={p || ''}
-                    onChange={(e) => {
-                      const v = Math.min(99, Math.max(0, parseInt(e.target.value, 10) || 0))
-                      setTipPresets(tipPresets.map((x, j) => (j === i ? v : x)))
-                    }}
-                  />
-                  <span className="absolute end-2.5 top-1/2 -translate-y-1/2 text-sm text-gray-500">%</span>
-                </div>
-              ))}
+          <div className="mt-4 ps-4 border-s-2 border-gray-100 space-y-6">
+
+            {/* Авто-шаг перед оплатой; выкл — только кнопкой на экране продажи */}
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h4 className="font-semibold text-gray-900 mb-1">{t(lang, 'tipAskTitle')}</h4>
+                <p className="text-sm text-gray-500">{t(lang, 'tipAskHint')}</p>
+              </div>
+              <Toggle checked={tipAskBeforePayment} onChange={setTipAskBeforePayment} />
             </div>
+
+            {/* Пресеты процентов */}
+            <div>
+              <h4 className="font-semibold text-gray-900 mb-1">{t(lang, 'tipPresetsTitle')}</h4>
+              <p className="text-sm text-gray-500 mb-2">{t(lang, 'tipPresetsHint')}</p>
+              <div className="flex gap-2">
+                {tipPresets.map((p, i) => (
+                  <div key={i} className="relative">
+                    <input
+                      className="input !w-20 text-center tabular-nums pe-6"
+                      inputMode="numeric"
+                      value={p || ''}
+                      onChange={(e) => {
+                        const v = Math.min(99, Math.max(0, parseInt(e.target.value, 10) || 0))
+                        setTipPresets(tipPresets.map((x, j) => (j === i ? v : x)))
+                      }}
+                    />
+                    <span className="absolute end-2.5 top-1/2 -translate-y-1/2 text-sm text-gray-500">%</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* База процента: итог с НДС или без (Square: after/before taxes) */}
+            <div>
+              <h4 className="font-semibold text-gray-900 mb-1">{t(lang, 'tipBaseTitle')}</h4>
+              <p className="text-sm text-gray-500 mb-2">{t(lang, 'tipBaseHint')}</p>
+              <div className="flex gap-2 flex-wrap">
+                <button
+                  onClick={() => setTipBeforeTax(false)}
+                  className={`h-11 px-4 rounded-xl text-sm font-semibold transition-all active:scale-[0.96] ${
+                    !tipBeforeTax ? 'bg-gray-900 text-white' : 'bg-white border border-gray-200 text-gray-700 hover:border-gray-400'
+                  }`}
+                >
+                  {t(lang, 'tipBaseGross')}
+                </button>
+                <button
+                  onClick={() => setTipBeforeTax(true)}
+                  className={`h-11 px-4 rounded-xl text-sm font-semibold transition-all active:scale-[0.96] ${
+                    tipBeforeTax ? 'bg-gray-900 text-white' : 'bg-white border border-gray-200 text-gray-700 hover:border-gray-400'
+                  }`}
+                >
+                  {t(lang, 'tipBaseNet')}
+                </button>
+              </div>
+            </div>
+
+            {/* Своя сумма (Square: Allow Custom Amounts) */}
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h4 className="font-semibold text-gray-900 mb-1">{t(lang, 'tipCustomTitle')}</h4>
+                <p className="text-sm text-gray-500">{t(lang, 'tipCustomHint')}</p>
+              </div>
+              <Toggle checked={tipAllowCustom} onChange={setTipAllowCustom} />
+            </div>
+
+            {/* Умные суммы (Square: Smart Tip Amounts): мелкий чек → фиксированные ₪ */}
+            <div>
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h4 className="font-semibold text-gray-900 mb-1">{t(lang, 'tipSmartTitle')}</h4>
+                  <p className="text-sm text-gray-500">{t(lang, 'tipSmartHint')}</p>
+                </div>
+                <Toggle checked={tipSmartAmounts} onChange={setTipSmartAmounts} />
+              </div>
+              {tipSmartAmounts && (
+                <div className="mt-3 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-gray-500">{t(lang, 'tipSmartUpTo')}</span>
+                    <div className="relative">
+                      <input
+                        className="input !w-24 text-center tabular-nums pe-6"
+                        inputMode="numeric"
+                        value={tipSmartThreshold / 100 || ''}
+                        onChange={(e) => {
+                          const v = Math.max(0, parseInt(e.target.value, 10) || 0)
+                          setTipSmartThreshold(v * 100)
+                        }}
+                      />
+                      <span className="absolute end-2.5 top-1/2 -translate-y-1/2 text-sm text-gray-500">₪</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-gray-500">{t(lang, 'tipSmartFixedLabel')}</span>
+                    {tipSmartFixed.map((a, i) => (
+                      <div key={i} className="relative">
+                        <input
+                          className="input !w-20 text-center tabular-nums pe-6"
+                          inputMode="numeric"
+                          value={a / 100 || ''}
+                          onChange={(e) => {
+                            const v = Math.max(0, parseInt(e.target.value, 10) || 0)
+                            setTipSmartFixed(tipSmartFixed.map((x, j) => (j === i ? v * 100 : x)))
+                          }}
+                        />
+                        <span className="absolute end-2.5 top-1/2 -translate-y-1/2 text-sm text-gray-500">₪</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
           </div>
         )}
       </section>

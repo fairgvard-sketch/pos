@@ -4,11 +4,19 @@ import { t } from '../../lib/i18n'
 import { formatMoney, parseMoney } from '../../lib/money'
 import NumPad from '../../components/NumPad'
 
+/** Вариант чаевых: процент (percent задан) или фиксированная сумма (умный режим) */
+export interface TipOption {
+  percent?: number
+  amount: number
+}
+
 interface Props {
-  /** Итог заказа (с НДС) — база процентов */
+  /** Итог заказа (с НДС) — для шапки */
   total: number
-  /** Пресеты в процентах (Настройки → Касса) */
-  presets: number[]
+  /** Готовые варианты (проценты от базы или фиксированные суммы — считает вызывающий) */
+  options: TipOption[]
+  /** Кнопка «Своя сумма» (настройка кассы) */
+  allowCustom: boolean
   onCancel: () => void
   /** tip в агоротах; 0 = без чаевых */
   onDone: (tip: number) => void
@@ -20,13 +28,13 @@ interface Props {
  * 1 тап по пресету или «Без чаевых» — сразу дальше, к способу оплаты.
  * Планшет разворачивается к гостю — суммы крупные, выбор очевиден.
  */
-export default function TipSheet({ total, presets, onCancel, onDone, busy }: Props) {
+export default function TipSheet({ total, options, allowCustom, onCancel, onDone, busy }: Props) {
   const lang = useLangStore((s) => s.lang)
   const [custom, setCustom] = useState(false)
   const [customStr, setCustomStr] = useState('')
 
   const customTip = customStr ? parseMoney(customStr) : null
-  const percents = presets.filter((p) => p > 0)
+  const shown = options.filter((o) => o.amount > 0)
 
   return (
     <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
@@ -57,32 +65,38 @@ export default function TipSheet({ total, presets, onCancel, onDone, busy }: Pro
         <div className="p-6 flex flex-col gap-4">
           {!custom ? (
             <>
-              {/* Пресеты: 1 тап = выбрано, сразу к оплате */}
+              {/* Пресеты: 1 тап = выбрано, сразу к оплате. Процент крупно +
+                  сумма подписью; в умном режиме — сразу сумма крупно */}
               <div className="grid grid-cols-3 gap-2">
-                {percents.map((p) => {
-                  const amt = Math.round((total * p) / 100)
-                  return (
-                    <button
-                      key={p}
-                      onClick={() => onDone(amt)}
-                      disabled={busy}
-                      className="h-20 rounded-2xl border border-gray-200 hover:border-gray-900 flex flex-col
-                                 items-center justify-center gap-1 transition-all active:scale-[0.96]"
-                    >
-                      <span className="text-xl font-black text-gray-900">{p}%</span>
-                      <span className="text-sm text-gray-500 tabular-nums">{formatMoney(amt, lang)}</span>
-                    </button>
-                  )
-                })}
+                {shown.map((o, i) => (
+                  <button
+                    key={i}
+                    onClick={() => onDone(o.amount)}
+                    disabled={busy}
+                    className="h-20 rounded-2xl border border-gray-200 hover:border-gray-900 flex flex-col
+                               items-center justify-center gap-1 transition-all active:scale-[0.96]"
+                  >
+                    {o.percent !== undefined ? (
+                      <>
+                        <span className="text-xl font-black text-gray-900">{o.percent}%</span>
+                        <span className="text-sm text-gray-500 tabular-nums">{formatMoney(o.amount, lang)}</span>
+                      </>
+                    ) : (
+                      <span className="text-xl font-black text-gray-900 tabular-nums">{formatMoney(o.amount, lang)}</span>
+                    )}
+                  </button>
+                ))}
               </div>
 
-              <button
-                onClick={() => setCustom(true)}
-                disabled={busy}
-                className="btn-secondary w-full !py-3 !rounded-2xl"
-              >
-                {t(lang, 'tipCustom')}
-              </button>
+              {allowCustom && (
+                <button
+                  onClick={() => setCustom(true)}
+                  disabled={busy}
+                  className="btn-secondary w-full !py-3 !rounded-2xl"
+                >
+                  {t(lang, 'tipCustom')}
+                </button>
+              )}
 
               <button
                 onClick={() => onDone(0)}

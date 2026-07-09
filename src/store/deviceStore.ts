@@ -28,10 +28,22 @@ interface DeviceState {
   printKitchenTicket: boolean
   /** Порядок способов в окне оплаты: этот — первым и выбран по умолчанию */
   firstPayMethod: FirstPayMethod
-  /** Чаевые: показывать шаг выбора чаевых перед оплатой (Square: Collect Tips) */
+  /** Чаевые включены на этой кассе (Square: Collect Tips) */
   collectTips: boolean
-  /** Пресеты чаевых, % от итога заказа (с НДС); сами чаевые НДС не облагаются */
+  /** Автоматический шаг чаевых перед оплатой; выкл — только кнопкой на экране продажи */
+  tipAskBeforePayment: boolean
+  /** Пресеты чаевых, % от базы (см. tipBeforeTax); сами чаевые НДС не облагаются */
   tipPresets: number[]
+  /** Кнопка «Своя сумма» на экране чаевых (Square: Allow Custom Amounts) */
+  tipAllowCustom: boolean
+  /** Проценты от суммы БЕЗ НДС (Square: Calculate Tip Before Taxes); false — от итога с НДС */
+  tipBeforeTax: boolean
+  /** Умные суммы (Square: Smart Tip Amounts): для мелких заказов фиксированные ₪ вместо % */
+  tipSmartAmounts: boolean
+  /** Порог «мелкого» заказа, агороты (для умных сумм) */
+  tipSmartThreshold: number
+  /** Фиксированные суммы умного режима, агороты */
+  tipSmartFixed: number[]
   setAutoLockSec: (sec: number) => void
   setLockAfterSale: (v: boolean) => void
   setPaymentSound: (v: boolean) => void
@@ -41,7 +53,13 @@ interface DeviceState {
   setPrintKitchenTicket: (v: boolean) => void
   setFirstPayMethod: (m: FirstPayMethod) => void
   setCollectTips: (v: boolean) => void
+  setTipAskBeforePayment: (v: boolean) => void
   setTipPresets: (p: number[]) => void
+  setTipAllowCustom: (v: boolean) => void
+  setTipBeforeTax: (v: boolean) => void
+  setTipSmartAmounts: (v: boolean) => void
+  setTipSmartThreshold: (v: number) => void
+  setTipSmartFixed: (p: number[]) => void
 }
 
 export const useDeviceStore = create<DeviceState>()(
@@ -56,7 +74,13 @@ export const useDeviceStore = create<DeviceState>()(
       printKitchenTicket: false,
       firstPayMethod: 'cash',
       collectTips: false,
+      tipAskBeforePayment: true,
       tipPresets: [10, 12, 15],
+      tipAllowCustom: true,
+      tipBeforeTax: false,
+      tipSmartAmounts: false,
+      tipSmartThreshold: 5000,   // до 50 ₪
+      tipSmartFixed: [200, 300, 500],  // 2/3/5 ₪
       setAutoLockSec: (autoLockSec) => set({ autoLockSec }),
       setLockAfterSale: (lockAfterSale) => set({ lockAfterSale }),
       setPaymentSound: (paymentSound) => set({ paymentSound }),
@@ -66,7 +90,13 @@ export const useDeviceStore = create<DeviceState>()(
       setPrintKitchenTicket: (printKitchenTicket) => set({ printKitchenTicket }),
       setFirstPayMethod: (firstPayMethod) => set({ firstPayMethod }),
       setCollectTips: (collectTips) => set({ collectTips }),
+      setTipAskBeforePayment: (tipAskBeforePayment) => set({ tipAskBeforePayment }),
       setTipPresets: (tipPresets) => set({ tipPresets }),
+      setTipAllowCustom: (tipAllowCustom) => set({ tipAllowCustom }),
+      setTipBeforeTax: (tipBeforeTax) => set({ tipBeforeTax }),
+      setTipSmartAmounts: (tipSmartAmounts) => set({ tipSmartAmounts }),
+      setTipSmartThreshold: (tipSmartThreshold) => set({ tipSmartThreshold }),
+      setTipSmartFixed: (tipSmartFixed) => set({ tipSmartFixed }),
     }),
     { name: 'kassa-device-settings' }
   )
