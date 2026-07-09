@@ -29,7 +29,8 @@ const FIT = { card: 'object-contain', hero: 'object-contain', line: 'object-cove
 export default function ItemImage({ item, size }: { item: Pick<MenuItem, 'name' | 'image_url'>; size: keyof typeof SIZES }) {
   const cls = SIZES[size]
   if (item.image_url) {
-    return <img src={item.image_url} alt="" className={`${cls} ${FIT[size]}`} />
+    // lazy/async: не декодировать все фото каталога разом — щадим CPU T2
+    return <img src={item.image_url} alt="" loading="lazy" decoding="async" className={`${cls} ${FIT[size]}`} />
   }
   return (
     <div className={`${cls} ${tileTone(item.name)} flex items-center justify-center font-black select-none shrink-0`}>

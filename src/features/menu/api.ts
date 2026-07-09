@@ -1,4 +1,5 @@
 import { supabase } from '../../lib/supabase'
+import { compressImage } from '../../lib/imageCompress'
 import type { MenuCategory, MenuItem, ModifierGroup, Modifier, Station } from '../../types'
 
 /** org_id/location_id из JWT — обязательны при INSERT (RLS WITH CHECK) */
@@ -80,13 +81,19 @@ export interface ItemInput {
   modifier_group_ids: string[]
 }
 
-/** Загрузка фото товара в Storage → публичный URL */
+/** Загрузка фото товара в Storage → публичный URL. Сжимаем на клиенте
+ *  (тяжёлые фото с телефона тормозят слабый WebView T2). Имя файла
+ *  уникально → кэшируем на год (иммутабельно). */
 export async function uploadItemImage(file: File): Promise<string> {
   const { org_id } = await ctx()
-  const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg'
+  const compressed = await compressImage(file)
+  const ext = compressed.type === 'image/jpeg'
+    ? 'jpg'
+    : compressed.name.split('.').pop()?.toLowerCase() || 'jpg'
   const path = `${org_id}/${crypto.randomUUID()}.${ext}`
-  const { error } = await supabase.storage.from('menu-images').upload(path, file, {
-    cacheControl: '3600',
+  const { error } = await supabase.storage.from('menu-images').upload(path, compressed, {
+    cacheControl: '31536000',
+    contentType: compressed.type,
     upsert: false,
   })
   if (error) throw new Error(error.message)
