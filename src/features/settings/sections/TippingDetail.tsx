@@ -11,6 +11,7 @@ export default function TippingDetail() {
   const tipPresets = useDeviceStore((s) => s.tipPresets)
   const tipAllowCustom = useDeviceStore((s) => s.tipAllowCustom)
   const tipBeforeTax = useDeviceStore((s) => s.tipBeforeTax)
+  const tipRoundUp = useDeviceStore((s) => s.tipRoundUp)
   const tipSmartAmounts = useDeviceStore((s) => s.tipSmartAmounts)
   const tipSmartThreshold = useDeviceStore((s) => s.tipSmartThreshold)
   const tipSmartFixed = useDeviceStore((s) => s.tipSmartFixed)
@@ -19,6 +20,7 @@ export default function TippingDetail() {
   const setTipPresets = useDeviceStore((s) => s.setTipPresets)
   const setTipAllowCustom = useDeviceStore((s) => s.setTipAllowCustom)
   const setTipBeforeTax = useDeviceStore((s) => s.setTipBeforeTax)
+  const setTipRoundUp = useDeviceStore((s) => s.setTipRoundUp)
   const setTipSmartAmounts = useDeviceStore((s) => s.setTipSmartAmounts)
   const setTipSmartThreshold = useDeviceStore((s) => s.setTipSmartThreshold)
   const setTipSmartFixed = useDeviceStore((s) => s.setTipSmartFixed)
@@ -77,6 +79,12 @@ export default function TippingDetail() {
               hint={t(lang, 'tipCustomHint')}
               checked={tipAllowCustom}
               onChange={setTipAllowCustom}
+            />
+            <ToggleRow
+              label={t(lang, 'tipRoundUpTitle')}
+              hint={t(lang, 'tipRoundUpHint')}
+              checked={tipRoundUp}
+              onChange={setTipRoundUp}
             />
           </Group>
 

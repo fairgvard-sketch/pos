@@ -19,6 +19,8 @@ interface Props {
   options: TipOption[]
   /** Кнопка «Своя сумма» (настройка кассы) */
   allowCustom: boolean
+  /** Округлять чаевые до целого шекеля итога (Square: Round-up Tipping) */
+  roundUp: boolean
   onCancel: () => void
   /** tip в агоротах; 0 = без чаевых */
   onDone: (tip: number) => void
@@ -30,7 +32,7 @@ interface Props {
  * 1 тап по пресету или «Без чаевых» — сразу дальше, к способу оплаты.
  * Планшет разворачивается к гостю — суммы крупные, выбор очевиден.
  */
-export default function TipSheet({ total, percentBase, options, allowCustom, onCancel, onDone, busy }: Props) {
+export default function TipSheet({ total, percentBase, options, allowCustom, roundUp, onCancel, onDone, busy }: Props) {
   const lang = useLangStore((s) => s.lang)
   const [custom, setCustom] = useState(false)
   // Своя сумма: процент от базы или фикс. сумма в ₪
@@ -43,7 +45,7 @@ export default function TipSheet({ total, percentBase, options, allowCustom, onC
   const customTip =
     customType === 'percent'
       ? pctValid
-        ? roundTipToWholeTotal(total, Math.round((percentBase * customPct!) / 100))
+        ? roundTipToWholeTotal(total, Math.round((percentBase * customPct!) / 100), roundUp)
         : null
       : customStr
         ? parseMoney(customStr)

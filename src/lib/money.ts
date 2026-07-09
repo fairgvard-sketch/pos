@@ -43,7 +43,11 @@ export function percentOf(agorot: Agorot, pct: number): Agorot {
 /**
  * Подгонка чаевых: итог к оплате (total + tip) — целое число шекелей
  * (ближайший шекель). Чаевые не бывают отрицательными.
+ *
+ * enabled (Square: Allow Round-up Tipping) — настройка кассы. Выкл:
+ * возвращаем чаевые как есть (округляем до агорота), без подгонки итога.
  */
-export function roundTipToWholeTotal(total: Agorot, tip: Agorot): Agorot {
+export function roundTipToWholeTotal(total: Agorot, tip: Agorot, enabled = true): Agorot {
+  if (!enabled) return Math.max(Math.round(tip), 0)
   return Math.max(Math.round((total + tip) / 100) * 100 - total, 0)
 }

@@ -52,6 +52,8 @@ interface DeviceState {
   tipAllowCustom: boolean
   /** Проценты от суммы БЕЗ НДС (Square: Calculate Tip Before Taxes); false — от итога с НДС */
   tipBeforeTax: boolean
+  /** Округление чаевых до целого шекеля итога (Square: Allow Round-up Tipping) */
+  tipRoundUp: boolean
   /** Умные суммы (Square: Smart Tip Amounts): для мелких заказов фиксированные ₪ вместо % */
   tipSmartAmounts: boolean
   /** Порог «мелкого» заказа, агороты (для умных сумм) */
@@ -73,6 +75,7 @@ interface DeviceState {
   setTipPresets: (p: number[]) => void
   setTipAllowCustom: (v: boolean) => void
   setTipBeforeTax: (v: boolean) => void
+  setTipRoundUp: (v: boolean) => void
   setTipSmartAmounts: (v: boolean) => void
   setTipSmartThreshold: (v: number) => void
   setTipSmartFixed: (p: number[]) => void
@@ -98,6 +101,7 @@ export const useDeviceStore = create<DeviceState>()(
       tipPresets: [10, 12, 15],
       tipAllowCustom: true,
       tipBeforeTax: false,
+      tipRoundUp: true,
       tipSmartAmounts: false,
       tipSmartThreshold: 5000,   // до 50 ₪
       tipSmartFixed: [200, 300, 500],  // 2/3/5 ₪
@@ -116,6 +120,7 @@ export const useDeviceStore = create<DeviceState>()(
       setTipPresets: (tipPresets) => set({ tipPresets }),
       setTipAllowCustom: (tipAllowCustom) => set({ tipAllowCustom }),
       setTipBeforeTax: (tipBeforeTax) => set({ tipBeforeTax }),
+      setTipRoundUp: (tipRoundUp) => set({ tipRoundUp }),
       setTipSmartAmounts: (tipSmartAmounts) => set({ tipSmartAmounts }),
       setTipSmartThreshold: (tipSmartThreshold) => set({ tipSmartThreshold }),
       setTipSmartFixed: (tipSmartFixed) => set({ tipSmartFixed }),

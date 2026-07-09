@@ -104,6 +104,7 @@ export default function SellPage() {
   const tipPresets = useDeviceStore((s) => s.tipPresets)
   const tipAllowCustom = useDeviceStore((s) => s.tipAllowCustom)
   const tipBeforeTax = useDeviceStore((s) => s.tipBeforeTax)
+  const tipRoundUp = useDeviceStore((s) => s.tipRoundUp)
   const tipSmartAmounts = useDeviceStore((s) => s.tipSmartAmounts)
   const tipSmartThreshold = useDeviceStore((s) => s.tipSmartThreshold)
   const tipSmartFixed = useDeviceStore((s) => s.tipSmartFixed)
@@ -219,12 +220,12 @@ export default function SellPage() {
     if (tipSmartAmounts && total <= tipSmartThreshold) {
       return tipSmartFixed
         .filter((a) => a > 0)
-        .map((a) => ({ amount: roundTipToWholeTotal(total, a) }))
+        .map((a) => ({ amount: roundTipToWholeTotal(total, a, tipRoundUp) }))
     }
     const base = tipPercentBase(total)
     return tipPresets
       .filter((p) => p > 0)
-      .map((p) => ({ percent: p, amount: roundTipToWholeTotal(total, Math.round((base * p) / 100)) }))
+      .map((p) => ({ percent: p, amount: roundTipToWholeTotal(total, Math.round((base * p) / 100), tipRoundUp) }))
   }
 
   // Вход в оплату заказа. Чаевые с кнопки — сразу в оплату (не спрашиваем
@@ -905,6 +906,7 @@ export default function SellPage() {
           percentBase={tipPercentBase(tipping.total)}
           options={tipOptions(tipping.total)}
           allowCustom={tipAllowCustom}
+          roundUp={tipRoundUp}
           busy={pay.isPending}
           onCancel={() => cancelPayFlow(tipping)}
           onDone={(tip) => proceedPayment(tipping, tip)}
@@ -918,6 +920,7 @@ export default function SellPage() {
           percentBase={tipPercentBase(shownTotal)}
           options={tipOptions(shownTotal)}
           allowCustom={tipAllowCustom}
+          roundUp={tipRoundUp}
           busy={false}
           onCancel={() => setShowTipSheet(false)}
           onDone={(tip) => { setCartTip(tip); setShowTipSheet(false) }}
