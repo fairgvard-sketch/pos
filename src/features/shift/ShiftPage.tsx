@@ -105,7 +105,7 @@ export default function ShiftPage() {
       <div className="max-w-md mx-auto w-full">
         <h1 className="text-2xl font-black text-gray-900 mb-1">{t(lang, 'shift')}</h1>
         {shift && (
-          <p className="text-sm text-gray-400 mb-5">
+          <p className="text-sm text-gray-500 mb-5">
             {t(lang, 'openedAt')}: {new Date(shift.opened_at).toLocaleString(lang === 'he' ? 'he-IL' : 'ru-RU')}
           </p>
         )}
@@ -143,7 +143,7 @@ export default function ShiftPage() {
                 value={countedStr}
                 onChange={(e) => setCountedStr(e.target.value)}
               />
-              <p className="text-[11px] text-gray-400 mt-1.5">{t(lang, 'countCashHint')}</p>
+              <p className="text-[11px] text-gray-500 mt-1.5">{t(lang, 'countCashHint')}</p>
             </div>
             <input
               className="input"

@@ -224,7 +224,7 @@ export default function ReportsPage() {
               </div>
 
               {empty ? (
-                <p className="text-center text-gray-400 text-sm pt-16">{t(lang, 'noSalesPeriod')}</p>
+                <p className="text-center text-gray-500 text-sm pt-16">{t(lang, 'noSalesPeriod')}</p>
               ) : (
                 <>
                   {/* График: часы или дни. Ось времени всегда LTR */}

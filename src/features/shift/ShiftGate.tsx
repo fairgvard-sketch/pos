@@ -36,9 +36,8 @@ export default function ShiftGate() {
           onSubmit={(e) => { e.preventDefault(); open.mutate() }}
           className="w-full max-w-sm p-6 text-center"
         >
-          <div className="text-5xl mb-4">🔒</div>
           <h1 className="text-xl font-black text-gray-900">{t(lang, 'noShiftTitle')}</h1>
-          <p className="text-sm text-gray-400 mt-1 mb-6">{t(lang, 'noShiftHint')}</p>
+          <p className="text-sm text-gray-500 mt-1 mb-6">{t(lang, 'noShiftHint')}</p>
 
           <div className="text-start mb-5">
             <label className="text-xs font-medium text-gray-500 mb-1 block">{t(lang, 'openingFloat')}</label>
@@ -50,7 +49,7 @@ export default function ShiftGate() {
               value={floatStr}
               onChange={(e) => setFloatStr(e.target.value)}
             />
-            <p className="text-[11px] text-gray-400 mt-1.5">{t(lang, 'openingFloatHint')}</p>
+            <p className="text-[11px] text-gray-500 mt-1.5">{t(lang, 'openingFloatHint')}</p>
           </div>
 
           <button type="submit" disabled={open.isPending} className="btn-primary w-full !py-3.5 !rounded-2xl">

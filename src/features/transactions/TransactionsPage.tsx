@@ -101,7 +101,7 @@ export default function TransactionsPage() {
           ) : error ? (
             <p className="text-center text-red-500 text-sm pt-16 px-4">{(error as Error).message}</p>
           ) : byDay.length === 0 ? (
-            <p className="text-center text-gray-400 text-sm pt-16">{t(lang, 'noTransactions')}</p>
+            <p className="text-center text-gray-500 text-sm pt-16">{t(lang, 'noTransactions')}</p>
           ) : (
             byDay.map(([day, list]) => (
               <section key={day}>

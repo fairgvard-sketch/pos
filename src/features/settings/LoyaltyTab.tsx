@@ -194,7 +194,7 @@ export default function LoyaltyTab({ location }: { location: Location | undefine
               </div>
             </div>
           ))}
-          {guests.length === 0 && <p className="text-sm text-gray-400 text-center py-6">{t(lang, 'guestNotFound')}</p>}
+          {guests.length === 0 && <p className="text-sm text-gray-500 text-center py-6">{t(lang, 'guestNotFound')}</p>}
         </div>
       </section>
     </>

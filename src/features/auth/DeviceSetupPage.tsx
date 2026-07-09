@@ -87,7 +87,7 @@ export default function DeviceSetupPage() {
           <form onSubmit={handleAuth} className="card p-6 space-y-4">
             <div>
               <h2 className="text-lg font-bold text-gray-900">{t(lang, 'deviceSetup')}</h2>
-              <p className="text-sm text-gray-400 mt-1">{t(lang, 'deviceSetupHint')}</p>
+              <p className="text-sm text-gray-500 mt-1">{t(lang, 'deviceSetupHint')}</p>
             </div>
 
             <div className="space-y-3">
@@ -133,7 +133,7 @@ export default function DeviceSetupPage() {
           <form onSubmit={handleBootstrap} className="card p-6 space-y-4">
             <div>
               <h2 className="text-lg font-bold text-gray-900">{t(lang, 'orgSetup')}</h2>
-              <p className="text-sm text-gray-400 mt-1">{t(lang, 'orgSetupHint')}</p>
+              <p className="text-sm text-gray-500 mt-1">{t(lang, 'orgSetupHint')}</p>
             </div>
 
             <div className="space-y-3">

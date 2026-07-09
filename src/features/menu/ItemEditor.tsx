@@ -275,7 +275,7 @@ export default function ItemEditor({ item, defaultCategoryId, onSaved, onDeleted
                                  opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"
                       title={t(lang, 'delete')}
                     >
-                      🗑
+                      ✕
                     </button>
                   </div>
                 ) : (
@@ -435,9 +435,9 @@ export default function ItemEditor({ item, defaultCategoryId, onSaved, onDeleted
           {item ? (
             <button
               onClick={() => confirm(t(lang, 'confirmDelete')) && remove.mutate()}
-              className="text-sm text-red-400 hover:text-red-600 font-semibold"
+              className="text-sm text-red-500 hover:text-red-600 font-semibold"
             >
-              🗑 {t(lang, 'delete')}
+              {t(lang, 'delete')}
             </button>
           ) : <span />}
           <div className="flex gap-2">
