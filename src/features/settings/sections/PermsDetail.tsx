@@ -11,6 +11,7 @@ const PERM_ROWS: { key: PermKey; label: TranslationKey; hint: TranslationKey }[]
   { key: 'refund', label: 'permRefund', hint: 'permRefundHint' },
   { key: 'void_order', label: 'permVoid', hint: 'permVoidHint' },
   { key: 'close_shift', label: 'permCloseShift', hint: 'permCloseShiftHint' },
+  { key: 'cash_movement', label: 'permCashMovement', hint: 'permCashMovementHint' },
 ]
 
 /**

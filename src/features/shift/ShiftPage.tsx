@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { fetchCurrentShift, fetchShiftReport, closeShift, type CloseResult } from './api'
+import { fetchCurrentShift, fetchShiftReport, closeShift, addCashMovement, fetchShiftMovements, type CloseResult } from './api'
 import { fetchOnShiftStaff, clockOutStaff } from '../timesheet/api'
 import { fetchCurrentLocation } from '../auth/api'
 import { useCloseReminder } from './reminder'
@@ -11,7 +11,7 @@ import { canvasToRawbtUrl, canvasToEscposBase64, printCanvasSilently } from '../
 import { useAuthStore } from '../../store/authStore'
 import { useLangStore } from '../../store/langStore'
 import { useDeviceStore } from '../../store/deviceStore'
-import { t } from '../../lib/i18n'
+import { t, formatTime } from '../../lib/i18n'
 import { can } from '../../lib/perms'
 import { formatMoney, parseMoney } from '../../lib/money'
 import AppSidebar from '../../components/AppSidebar'
@@ -32,6 +32,8 @@ function toZReportData(res: CloseResult, openedAt: string | undefined, staffName
     vatTotal: res.vat_total ?? null,
     tipsTotal: res.tips_total,
     openingFloat: res.opening_float ?? null,
+    cashIn: res.cash_in ?? 0,
+    cashOut: res.cash_out ?? 0,
     expectedCash: res.expected_cash,
     countedCash: res.counted_cash,
     cashDiff: res.cash_diff,
@@ -60,6 +62,26 @@ export default function ShiftPage() {
   const remindClose = useCloseReminder(shift?.opened_at, location?.settings?.shift?.close_reminder)
   const cashWarnAt = location?.settings?.shift?.cash_warn_threshold ?? null
   const tooMuchCash = report != null && cashWarnAt != null && cashWarnAt > 0 && report.expected_cash > cashWarnAt
+
+  // ── Движение наличных (038): внесение/изъятие в течение смены ──
+  const canCashMove = can(staff?.role, 'cash_movement', location?.settings)
+  const [movementType, setMovementType] = useState<'in' | 'out' | null>(null)
+  const { data: movements = [] } = useQuery({
+    queryKey: ['cash_movements', shift?.id],
+    queryFn: () => fetchShiftMovements(shift!.id),
+    enabled: !!shift,
+  })
+  const addMovement = useMutation({
+    mutationFn: (v: { type: 'in' | 'out'; amount: number; reason: string }) =>
+      addCashMovement(shift!.id, staff!.id, v.type, v.amount, v.reason),
+    onSuccess: () => {
+      setMovementType(null)
+      toast.success(t(lang, 'cashMoveAdded'))
+      qc.invalidateQueries({ queryKey: ['shift_report', shift?.id] })
+      qc.invalidateQueries({ queryKey: ['cash_movements', shift?.id] })
+    },
+    onError: (e) => toast.error(e.message),
+  })
 
   const [closing, setClosing] = useState(false)
   const [countedStr, setCountedStr] = useState('')
@@ -153,6 +175,12 @@ export default function ShiftPage() {
               <Line label={t(lang, 'tipsTotal')} value={formatMoney(result.tips_total, lang)} />
             )}
             <div className="divider my-2" />
+            {(result.cash_in ?? 0) > 0 && (
+              <Line label={t(lang, 'cashInLabel')} value={`+${formatMoney(result.cash_in!, lang)}`} />
+            )}
+            {(result.cash_out ?? 0) > 0 && (
+              <Line label={t(lang, 'cashOutLabel')} value={`−${formatMoney(result.cash_out!, lang)}`} />
+            )}
             <Line label={t(lang, 'expectedCash')} value={formatMoney(result.expected_cash, lang)} />
             <Line label={t(lang, 'countedCash')} value={formatMoney(result.counted_cash, lang)} />
             <Line
@@ -213,7 +241,63 @@ export default function ShiftPage() {
             )}
             <div className="divider my-2" />
             <Line label={t(lang, 'openingFloat')} value={formatMoney(report.opening_float, lang)} />
+            {(report.cash_in ?? 0) > 0 && (
+              <Line label={t(lang, 'cashInLabel')} value={`+${formatMoney(report.cash_in!, lang)}`} />
+            )}
+            {(report.cash_out ?? 0) > 0 && (
+              <Line label={t(lang, 'cashOutLabel')} value={`−${formatMoney(report.cash_out!, lang)}`} />
+            )}
             <Line label={t(lang, 'expectedCash')} value={formatMoney(report.expected_cash, lang)} bold />
+          </div>
+        )}
+
+        {/* Внесение/изъятие наличных (038) */}
+        {shift && (
+          <div className="mb-5">
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => {
+                  if (!canCashMove) { toast.error(t(lang, 'permManagerToast')); return }
+                  setMovementType('in')
+                }}
+                className={`btn-secondary !rounded-2xl ${canCashMove ? '' : '!opacity-40'}`}
+              >
+                {t(lang, 'cashInBtn')}
+              </button>
+              <button
+                onClick={() => {
+                  if (!canCashMove) { toast.error(t(lang, 'permManagerToast')); return }
+                  setMovementType('out')
+                }}
+                className={`btn-secondary !rounded-2xl ${canCashMove ? '' : '!opacity-40'}`}
+              >
+                {t(lang, 'cashOutBtn')}
+              </button>
+            </div>
+
+            {movements.length > 0 && (
+              <div className="mt-3 space-y-1.5">
+                {movements.map((m) => (
+                  <div
+                    key={m.id}
+                    className="px-4 py-2.5 rounded-xl border border-gray-100 bg-white flex items-center justify-between gap-3"
+                  >
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-gray-900 truncate">
+                        {m.reason || t(lang, m.type === 'in' ? 'cashInLabel' : 'cashOutLabel')}
+                      </div>
+                      <div className="text-xs text-gray-500 tabular-nums">
+                        {formatTime(m.created_at, lang)}
+                        {m.staff?.name && ` · ${m.staff.name}`}
+                      </div>
+                    </div>
+                    <span className={`shrink-0 text-sm font-bold tabular-nums ${m.type === 'in' ? 'text-emerald-600' : 'text-gray-900'}`}>
+                      {m.type === 'in' ? '+' : '−'}{formatMoney(m.amount, lang)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -270,7 +354,80 @@ export default function ShiftPage() {
           onConfirm={(ids) => close.mutate(ids)}
         />
       )}
+
+      {movementType && (
+        <CashMovementDialog
+          lang={lang}
+          isRtl={isRtl}
+          type={movementType}
+          busy={addMovement.isPending}
+          onCancel={() => setMovementType(null)}
+          onConfirm={(amount, reason) => addMovement.mutate({ type: movementType, amount, reason })}
+        />
+      )}
     </Shell>
+  )
+}
+
+/** Модалка внесения/изъятия наличных: сумма + причина (своя, не window.confirm — APK) */
+function CashMovementDialog({
+  lang, isRtl, type, busy, onCancel, onConfirm,
+}: {
+  lang: 'ru' | 'he'
+  isRtl: boolean
+  type: 'in' | 'out'
+  busy: boolean
+  onCancel: () => void
+  onConfirm: (amount: number, reason: string) => void
+}) {
+  const [amountStr, setAmountStr] = useState('')
+  const [reason, setReason] = useState('')
+  const amount = parseMoney(amountStr)
+  const valid = amount !== null && amount > 0
+
+  return (
+    <div dir={isRtl ? 'rtl' : 'ltr'} className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+      <form
+        onSubmit={(e) => { e.preventDefault(); if (valid) onConfirm(amount!, reason.trim()) }}
+        className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 animate-[rise-in_0.2s_ease-out]"
+      >
+        <h2 className="text-lg font-black text-gray-900 mb-1">
+          {t(lang, type === 'in' ? 'cashInBtn' : 'cashOutBtn')}
+        </h2>
+        <p className="text-sm text-gray-500 mb-4">
+          {t(lang, type === 'in' ? 'cashInHint' : 'cashOutHint')}
+        </p>
+
+        <label className="text-xs font-medium text-gray-500 mb-1 block">{t(lang, 'cashMoveAmount')}</label>
+        <div className="relative mb-3">
+          <input
+            className="input tabular-nums text-lg pe-8"
+            inputMode="decimal"
+            autoFocus
+            placeholder="0"
+            value={amountStr}
+            onChange={(e) => setAmountStr(e.target.value)}
+          />
+          <span className="absolute end-3 top-1/2 -translate-y-1/2 text-gray-500">₪</span>
+        </div>
+
+        <input
+          className="input mb-5"
+          placeholder={t(lang, 'cashMoveReason')}
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+        />
+
+        <div className="flex gap-2">
+          <button type="submit" disabled={!valid || busy} className="btn-primary flex-1 !rounded-2xl">
+            {t(lang, type === 'in' ? 'cashInBtn' : 'cashOutBtn')}
+          </button>
+          <button type="button" onClick={onCancel} disabled={busy} className="btn-secondary">
+            {t(lang, 'cancel')}
+          </button>
+        </div>
+      </form>
+    </div>
   )
 }
 
@@ -440,6 +597,8 @@ function ZReportPrintBody({ z, location }: { z: ZReportData; location: Location 
       <ZDivider />
 
       {z.openingFloat != null && <ZRow label="עודף פתיחה" value={fmt(z.openingFloat)} />}
+      {z.cashIn > 0 && <ZRow label="הפקדות מזומן" value={`+${fmt(z.cashIn)}`} />}
+      {z.cashOut > 0 && <ZRow label="משיכות מזומן" value={`−${fmt(z.cashOut)}`} />}
       <ZRow label="מזומן צפוי" value={fmt(z.expectedCash)} />
       <ZRow label="מזומן שנספר" value={fmt(z.countedCash)} />
       <ZRow

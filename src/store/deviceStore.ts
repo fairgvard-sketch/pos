@@ -13,6 +13,8 @@ export type PrintMode = 'browser' | 'rawbt'
 export type FirstPayMethod = 'cash' | 'card'
 
 interface DeviceState {
+  /** Имя этой кассы (для отчётов/шапки настроек). Пусто = не задано */
+  deviceName: string
   /** Автоблокировка: секунд бездействия до экрана PIN. 0 = выключена */
   autoLockSec: number
   /** Требовать PIN после каждой продажи (анти-фрод для смен с несколькими сотрудниками) */
@@ -60,11 +62,13 @@ interface DeviceState {
   setTipSmartAmounts: (v: boolean) => void
   setTipSmartThreshold: (v: number) => void
   setTipSmartFixed: (p: number[]) => void
+  setDeviceName: (v: string) => void
 }
 
 export const useDeviceStore = create<DeviceState>()(
   persist(
     (set) => ({
+      deviceName: '',
       autoLockSec: 0,
       lockAfterSale: false,
       paymentSound: true,
@@ -97,6 +101,7 @@ export const useDeviceStore = create<DeviceState>()(
       setTipSmartAmounts: (tipSmartAmounts) => set({ tipSmartAmounts }),
       setTipSmartThreshold: (tipSmartThreshold) => set({ tipSmartThreshold }),
       setTipSmartFixed: (tipSmartFixed) => set({ tipSmartFixed }),
+      setDeviceName: (deviceName) => set({ deviceName }),
     }),
     { name: 'kassa-device-settings' }
   )

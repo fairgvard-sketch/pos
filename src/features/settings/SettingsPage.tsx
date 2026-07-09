@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { fetchCurrentLocation } from '../auth/api'
 import { useAuthStore } from '../../store/authStore'
 import { useLangStore } from '../../store/langStore'
+import { useDeviceStore } from '../../store/deviceStore'
 import { t, type TranslationKey } from '../../lib/i18n'
 import AppSidebar from '../../components/AppSidebar'
 import { CATEGORIES, SEARCH_INDEX, type CategoryId, type DetailId } from './registry'
@@ -20,6 +21,14 @@ import PermsDetail from './sections/PermsDetail'
 import SecuritySection from './sections/SecuritySection'
 import BusinessSection from './sections/BusinessSection'
 import ReceiptDetailsDetail from './sections/ReceiptDetailsDetail'
+import DeviceSection from './sections/DeviceSection'
+
+/** Стартовая категория — запоминаем на время сессии (возврат в настройки открывает то же место) */
+const CAT_KEY = 'kassa-settings-cat'
+function initialCat(): CategoryId {
+  const saved = sessionStorage.getItem(CAT_KEY)
+  return CATEGORIES.some((c) => c.id === saved) ? (saved as CategoryId) : 'payments'
+}
 
 const DETAIL_TITLES: Record<DetailId, TranslationKey> = {
   tipping: 'tipTitle',
@@ -38,8 +47,9 @@ export default function SettingsPage() {
   const lang = useLangStore((s) => s.lang)
   const isRtl = lang === 'he'
   const staff = useAuthStore((s) => s.staff)
+  const deviceName = useDeviceStore((s) => s.deviceName)
 
-  const [cat, setCat] = useState<CategoryId>('payments')
+  const [cat, setCat] = useState<CategoryId>(initialCat)
   const [detail, setDetail] = useState<DetailId | null>(null)
   const [query, setQuery] = useState('')
 
@@ -49,6 +59,7 @@ export default function SettingsPage() {
     setCat(nextCat)
     setDetail(nextDetail)
     setQuery('')
+    sessionStorage.setItem(CAT_KEY, nextCat)
   }
 
   // Поиск: фильтр реестра по переведённому названию и подсказке
@@ -89,9 +100,12 @@ export default function SettingsPage() {
             />
           </div>
 
-          {/* Карточка контекста: точка + кто за кассой */}
+          {/* Карточка контекста: точка · касса + кто за кассой */}
           <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3">
-            <div className="text-sm font-bold text-gray-900 truncate">{location?.name ?? '…'}</div>
+            <div className="text-sm font-bold text-gray-900 truncate">
+              {location?.name ?? '…'}
+              {deviceName && <span className="text-gray-400 font-semibold"> · {deviceName}</span>}
+            </div>
             {staff && (
               <div className="text-xs text-gray-500 mt-0.5 truncate">
                 {staff.name} · {t(lang, staff.role)}
@@ -142,16 +156,18 @@ export default function SettingsPage() {
                 )}
               </>
             ) : detail ? (
-              <>
+              // key на detail → перерисовка запускает rise-in при входе в drill-down
+              <div key={detail} className="animate-[rise-in_0.2s_ease-out]">
                 <DetailHeader title={t(lang, DETAIL_TITLES[detail])} onBack={() => setDetail(null)} />
                 {detail === 'tipping' && <TippingDetail />}
                 {detail === 'tables' && <TablesDetail />}
                 {detail === 'guests' && <GuestsDetail location={location} />}
                 {detail === 'perms' && <PermsDetail location={location} />}
                 {detail === 'receipt-details' && <ReceiptDetailsDetail location={location} />}
-              </>
+              </div>
             ) : (
-              <>
+              // key на cat → плавная смена при переключении категории
+              <div key={cat} className="animate-[rise-in_0.2s_ease-out]">
                 <h2 className="text-xl font-black text-gray-900 mb-6">
                   {t(lang, CATEGORIES.find((c) => c.id === cat)!.label)}
                 </h2>
@@ -163,7 +179,8 @@ export default function SettingsPage() {
                 {cat === 'staff' && <StaffSection openDetail={openDetail} />}
                 {cat === 'security' && <SecuritySection />}
                 {cat === 'business' && <BusinessSection location={location} openDetail={openDetail} />}
-              </>
+                {cat === 'device' && <DeviceSection location={location} />}
+              </div>
             )}
           </div>
         </section>

@@ -2,9 +2,14 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import legacy from '@vitejs/plugin-legacy'
 import { VitePWA } from 'vite-plugin-pwa'
+import { version } from './package.json'
 
 // https://vite.dev/config/
 export default defineConfig({
+  // Версия приложения доступна в коде как __APP_VERSION__ (см. src/types/global.d.ts)
+  define: {
+    __APP_VERSION__: JSON.stringify(version),
+  },
   plugins: [
     react(),
     // Целевое железо: Sunmi T2 mini, Android 7.1 → системный WebView ~Chrome 52-58.

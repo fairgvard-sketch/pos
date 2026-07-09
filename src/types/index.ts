@@ -22,6 +22,7 @@ export interface LocationSettings {
     refund?: PermLevel
     void_order?: PermLevel
     close_shift?: PermLevel
+    cash_movement?: PermLevel
   }
   receipt?: {
     print_modifiers?: boolean

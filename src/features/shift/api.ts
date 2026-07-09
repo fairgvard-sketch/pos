@@ -22,6 +22,19 @@ export interface ShiftReport {
   tips_total: number
   expected_cash: number
   orders_count: number
+  // Движения наличных (038); отсутствуют, пока миграция не применена
+  cash_in?: number
+  cash_out?: number
+}
+
+/** Внесение/изъятие наличных в течение смены (038) */
+export interface CashMovement {
+  id: string
+  type: 'in' | 'out'
+  amount: number
+  reason: string | null
+  created_at: string
+  staff: { name: string } | null
 }
 
 export interface CloseResult {
@@ -45,6 +58,9 @@ export interface CloseResult {
   opened_at?: string
   closed_at?: string
   opening_float?: number
+  // Движения наличных (038)
+  cash_in?: number
+  cash_out?: number
 }
 
 /** Открытая смена точки, либо null */
@@ -67,6 +83,35 @@ export async function fetchShiftReport(shiftId: string): Promise<ShiftReport> {
   const { data, error } = await supabase.rpc('shift_report', { p_shift_id: shiftId })
   if (error) throw new Error(error.message)
   return data as ShiftReport
+}
+
+/** Внести/изъять наличные (только в открытую смену; сервер валидирует) */
+export async function addCashMovement(
+  shiftId: string,
+  staffId: string,
+  type: 'in' | 'out',
+  amount: number,
+  reason: string
+): Promise<void> {
+  const { error } = await supabase.rpc('add_cash_movement', {
+    p_shift_id: shiftId,
+    p_staff_id: staffId,
+    p_type: type,
+    p_amount: amount,
+    p_reason: reason || null,
+  })
+  if (error) throw new Error(error.message)
+}
+
+/** Движения наличных смены, свежие сверху */
+export async function fetchShiftMovements(shiftId: string): Promise<CashMovement[]> {
+  const { data, error } = await supabase
+    .from('cash_movements')
+    .select('id, type, amount, reason, created_at, staff:staff(name)')
+    .eq('shift_id', shiftId)
+    .order('created_at', { ascending: false })
+  if (error) throw new Error(error.message)
+  return (data ?? []) as unknown as CashMovement[]
 }
 
 export async function closeShift(

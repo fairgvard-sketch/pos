@@ -15,6 +15,7 @@ export type CategoryId =
   | 'staff'
   | 'security'
   | 'business'
+  | 'device'
 
 export type DetailId = 'tipping' | 'tables' | 'guests' | 'perms' | 'receipt-details'
 
@@ -27,6 +28,7 @@ export const CATEGORIES: { id: CategoryId; label: TranslationKey }[] = [
   { id: 'staff', label: 'catStaff' },
   { id: 'security', label: 'catSecurity' },
   { id: 'business', label: 'catBusiness' },
+  { id: 'device', label: 'catDevice' },
 ]
 
 export interface SearchEntry {
@@ -61,4 +63,9 @@ export const SEARCH_INDEX: SearchEntry[] = [
   { cat: 'security', label: 'lockAfterSale', hint: 'lockAfterSaleHint' },
   { cat: 'business', label: 'vatRateTitle', hint: 'vatRateHint' },
   { cat: 'business', detail: 'receipt-details', label: 'receiptDetailsTitle', hint: 'receiptDetailsHint' },
+  { cat: 'device', label: 'deviceName', hint: 'deviceNameHint' },
+  { cat: 'device', label: 'printBridgeStatus' },
+  { cat: 'device', label: 'testPrint' },
+  { cat: 'device', label: 'appVersion' },
+  { cat: 'device', label: 'signOutDevice' },
 ]

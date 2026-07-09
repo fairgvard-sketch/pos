@@ -352,6 +352,9 @@ export interface ZReportData {
   vatTotal: number | null
   tipsTotal: number
   openingFloat: number | null
+  /** Внесения/изъятия наличных за смену (038) */
+  cashIn: number
+  cashOut: number
   expectedCash: number
   countedCash: number
   cashDiff: number
@@ -434,6 +437,8 @@ export function renderZReportCanvas(z: ZReportData, location: Location | undefin
 
   // ── Кассовая сверка ──
   if (z.openingFloat != null) metaRow('עודף פתיחה', fmt(z.openingFloat))
+  if (z.cashIn > 0) metaRow('הפקדות מזומן', `+${fmt(z.cashIn)}`)
+  if (z.cashOut > 0) metaRow('משיכות מזומן', `−${fmt(z.cashOut)}`)
   metaRow('מזומן צפוי', fmt(z.expectedCash))
   metaRow('מזומן שנספר', fmt(z.countedCash))
   metaRow(
@@ -448,6 +453,62 @@ export function renderZReportCanvas(z: ZReportData, location: Location | undefin
 
   y += 6
   center('— סוף דו"ח —', 22, false, 4)
+
+  const out = document.createElement('canvas')
+  out.width = W
+  out.height = Math.min(tall.height, y + 24)
+  const octx = out.getContext('2d')!
+  octx.fillStyle = '#fff'
+  octx.fillRect(0, 0, out.width, out.height)
+  octx.drawImage(tall, 0, 0)
+  return out
+}
+
+// ── Тестовая печать ───────────────────────────────────────
+
+/**
+ * Пробный оттиск (Настройки → Устройство → Тестовая печать):
+ * проверка, что тихая печать реально доходит до принтера.
+ * Двуязычно — иврит и русский, без фискальной нагрузки.
+ */
+export function renderTestPrintCanvas(businessName: string, deviceName: string): HTMLCanvasElement {
+  const tall = document.createElement('canvas')
+  tall.width = W
+  tall.height = 600
+  const ctx = tall.getContext('2d')!
+  ctx.fillStyle = '#fff'
+  ctx.fillRect(0, 0, W, tall.height)
+  ctx.fillStyle = '#000'
+
+  let y = 40
+  const center = (text: string, size: number, bold = false, gap = 10) => {
+    ctx.font = FONT(size, bold)
+    ctx.textAlign = 'center'
+    ctx.fillText(text, W / 2, y)
+    y += size + gap
+  }
+
+  if (businessName) center(businessName, 34, true, 14)
+  center('בדיקת הדפסה', 30, true, 6)
+  center('Тестовая печать', 26, false, 14)
+
+  ctx.save()
+  ctx.strokeStyle = '#000'
+  ctx.setLineDash([6, 6])
+  ctx.beginPath()
+  ctx.moveTo(MX, y)
+  ctx.lineTo(RIGHT, y)
+  ctx.stroke()
+  ctx.restore()
+  y += 24
+
+  if (deviceName) center(deviceName, 26, false, 10)
+  const now = new Date()
+  center(
+    `${now.toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' })} ${now.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}`,
+    24, false, 10
+  )
+  center('✓ OK', 30, true, 10)
 
   const out = document.createElement('canvas')
   out.width = W

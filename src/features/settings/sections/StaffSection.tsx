@@ -2,9 +2,11 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { fetchStaffList, createStaffMember, setStaffPin, updateStaffMember, isValidPin } from '../api'
+import { fetchCurrentLocation } from '../../auth/api'
 import { useAuthStore } from '../../../store/authStore'
 import { useLangStore } from '../../../store/langStore'
 import { t } from '../../../lib/i18n'
+import { permLevel, PERM_KEYS } from '../../../lib/perms'
 import { Group, NavRow } from '../ui'
 import type { DetailId } from '../registry'
 import type { Role, Staff } from '../../../types'
@@ -23,6 +25,10 @@ export default function StaffSection({ openDetail }: { openDetail: (id: DetailId
   const qc = useQueryClient()
 
   const { data: staff = [] } = useQuery({ queryKey: ['staff'], queryFn: fetchStaffList })
+  const { data: location } = useQuery({ queryKey: ['current_location'], queryFn: fetchCurrentLocation })
+
+  // Саммари прав для строки «Права доступа»: сколько действий ограничено менеджером
+  const restrictedPerms = PERM_KEYS.filter((k) => permLevel(location?.settings, k) === 'manager').length
 
   const iAmOwner = me?.role === 'owner'
   const assignableRoles: Role[] = iAmOwner ? ['barista', 'manager', 'owner'] : ['barista', 'manager']
@@ -71,7 +77,12 @@ export default function StaffSection({ openDetail }: { openDetail: (id: DetailId
   return (
     <div className="space-y-6">
       <Group>
-        <NavRow label={t(lang, 'permsTitle')} hint={t(lang, 'permsHint')} onClick={() => openDetail('perms')} />
+        <NavRow
+          label={t(lang, 'permsTitle')}
+          hint={t(lang, 'permsHint')}
+          value={restrictedPerms === 0 ? t(lang, 'permAll') : `${t(lang, 'permManager')}: ${restrictedPerms}`}
+          onClick={() => openDetail('perms')}
+        />
       </Group>
 
       <section>

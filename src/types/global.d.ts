@@ -12,3 +12,6 @@ interface KassaAndroidBridge {
 interface Window {
   KassaAndroid?: KassaAndroidBridge
 }
+
+/** Версия приложения — из package.json через define в vite.config.ts */
+declare const __APP_VERSION__: string
