@@ -2,11 +2,14 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { verifyStaffPin, fetchCurrentLocation } from './api'
+import { fetchCategories, fetchItems, fetchModifierGroups } from '../menu/api'
+import { fetchCurrentShift } from '../shift/api'
 import { landingRoute } from './landing'
 import { useAuthStore } from '../../store/authStore'
 import { useLangStore } from '../../store/langStore'
 import { t } from '../../lib/i18n'
 import LangToggle from '../../components/ui/LangToggle'
+import ArrowLogo from '../../components/ui/ArrowLogo'
 
 const PIN_LENGTH = 4
 
@@ -25,6 +28,17 @@ export default function PinLoginPage() {
   const [checking, setChecking] = useState(false)
   const [shake, setShake] = useState(false)
   const submitting = useRef(false)
+
+  // Греем кэш рабочего экрана, пока кассир вводит PIN: сессия устройства
+  // уже есть (RLS пропустит), и после 4-й цифры каталог рисуется мгновенно.
+  // prefetchQuery уважает staleTime и не дублирует уже идущие запросы.
+  useEffect(() => {
+    qc.prefetchQuery({ queryKey: ['current_location'], queryFn: fetchCurrentLocation })
+    qc.prefetchQuery({ queryKey: ['current_shift'], queryFn: fetchCurrentShift })
+    qc.prefetchQuery({ queryKey: ['menu_categories'], queryFn: fetchCategories })
+    qc.prefetchQuery({ queryKey: ['menu_items'], queryFn: fetchItems })
+    qc.prefetchQuery({ queryKey: ['modifier_groups'], queryFn: fetchModifierGroups })
+  }, [qc])
 
   const submit = useCallback(
     async (fullPin: string) => {
@@ -83,7 +97,10 @@ export default function PinLoginPage() {
         <LangToggle />
       </div>
 
-      <h1 className="text-2xl font-black text-gray-900 mb-2">{t(lang, 'appName')}</h1>
+      <div className="flex items-center gap-2.5 mb-2">
+        <ArrowLogo className="w-8 h-8 text-gray-900" />
+        <h1 className="text-2xl font-black text-gray-900 tracking-tight">{t(lang, 'arrowBrand')}</h1>
+      </div>
       <p className="text-sm text-gray-500 mb-8">
         {checking ? t(lang, 'checking') : t(lang, 'enterPin')}
       </p>

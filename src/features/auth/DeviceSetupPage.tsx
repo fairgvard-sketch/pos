@@ -6,27 +6,11 @@ import { t, translations } from '../../lib/i18n'
 import { useLangStore } from '../../store/langStore'
 import type { Lang } from '../../lib/i18n'
 import LangToggle from '../../components/ui/LangToggle'
+import ArrowLogo from '../../components/ui/ArrowLogo'
 
 type TKey = keyof typeof translations.ru
 
 type Step = 'auth' | 'biz' | 'owner'
-
-/** Логотип Arrow — стрелка в скруглённом квадрате (в духе значка Square). */
-function ArrowLogo({ className = '' }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 32 32" className={className} aria-hidden="true">
-      <rect x="1" y="1" width="30" height="30" rx="8" className="fill-current" />
-      <path
-        d="M11 16h10m0 0-4-4m4 4-4 4"
-        fill="none"
-        stroke="white"
-        strokeWidth="2.4"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
-}
 
 /** Правая брендовая панель: тёмная, список возможностей POS (без фото — CSP). */
 function BrandPanel({ lang }: { lang: Lang }) {
@@ -245,28 +229,43 @@ export default function DeviceSetupPage() {
                   </p>
                 </div>
 
-                <div className="space-y-3">
-                  <input
-                    required
-                    autoFocus
-                    className="input h-13 px-5 text-base rounded-2xl"
-                    placeholder={t(lang, 'orgNamePlaceholder')}
-                    value={orgName}
-                    onChange={(e) => setOrgName(e.target.value)}
-                  />
-                  <input
-                    required
-                    className="input h-13 px-5 text-base rounded-2xl"
-                    placeholder={t(lang, 'locationNamePlaceholder')}
-                    value={locationName}
-                    onChange={(e) => setLocationName(e.target.value)}
-                  />
-                  <input
-                    className="input h-13 px-5 text-base rounded-2xl"
-                    placeholder={t(lang, 'bizAddressPlaceholder')}
-                    value={address}
-                    onChange={(e) => setAddress(e.target.value)}
-                  />
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-xs font-semibold text-gray-500 mb-1.5 block">
+                      {t(lang, 'orgName')}
+                    </label>
+                    <input
+                      required
+                      autoFocus
+                      className="input h-13 px-5 text-base rounded-2xl"
+                      value={orgName}
+                      onChange={(e) => setOrgName(e.target.value)}
+                    />
+                    <p className="text-xs text-gray-500 mt-1.5">{t(lang, 'orgNameHint')}</p>
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-gray-500 mb-1.5 block">
+                      {t(lang, 'locationName')}
+                    </label>
+                    <input
+                      required
+                      className="input h-13 px-5 text-base rounded-2xl"
+                      value={locationName}
+                      onChange={(e) => setLocationName(e.target.value)}
+                    />
+                    <p className="text-xs text-gray-500 mt-1.5">{t(lang, 'locationNameHint')}</p>
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-gray-500 mb-1.5 block">
+                      {t(lang, 'bizAddress')}
+                    </label>
+                    <input
+                      className="input h-13 px-5 text-base rounded-2xl"
+                      value={address}
+                      onChange={(e) => setAddress(e.target.value)}
+                    />
+                    <p className="text-xs text-gray-500 mt-1.5">{t(lang, 'bizAddressHint')}</p>
+                  </div>
                 </div>
 
                 <div className="flex items-center gap-3">
