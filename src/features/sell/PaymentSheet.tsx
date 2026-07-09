@@ -8,7 +8,10 @@ import Icon from '../../components/Icon'
 import NumPad from '../../components/NumPad'
 
 interface Props {
+  /** К оплате, уже ВКЛЮЧАЯ чаевые */
   total: number
+  /** Чаевые внутри total — только для строки в шапке */
+  tip?: number
   startMode?: 'choose' | 'cash'
   onCancel: () => void
   onPay: (payments: PaymentInput[]) => void
@@ -32,7 +35,7 @@ function quickCashOptions(total: number): number[] {
   return [...opts].sort((a, b) => a - b).slice(0, 5)
 }
 
-export default function PaymentSheet({ total, startMode = 'choose', onCancel, onPay, onSplitItems, busy }: Props) {
+export default function PaymentSheet({ total, tip = 0, startMode = 'choose', onCancel, onPay, onSplitItems, busy }: Props) {
   const lang = useLangStore((s) => s.lang)
   // Первый способ настраивается на кассе (Настройки → Касса); «Наличные» с кнопки перебивают
   const firstPayMethod = useDeviceStore((s) => s.firstPayMethod)
@@ -85,9 +88,16 @@ export default function PaymentSheet({ total, startMode = 'choose', onCancel, on
         <div className="flex items-center justify-between gap-4 px-6 py-4 border-b border-gray-100">
           <h2 className="text-lg font-bold text-gray-900">{t(lang, 'payment')}</h2>
           <div className="flex items-center gap-4">
-            <div className="flex items-baseline gap-2">
-              <span className="text-sm text-gray-500">{t(lang, 'toPay')}</span>
-              <span className="text-2xl font-black text-gray-900 tabular-nums">{formatMoney(total, lang)}</span>
+            <div className="flex flex-col items-end">
+              <div className="flex items-baseline gap-2">
+                <span className="text-sm text-gray-500">{t(lang, 'toPay')}</span>
+                <span className="text-2xl font-black text-gray-900 tabular-nums">{formatMoney(total, lang)}</span>
+              </div>
+              {tip > 0 && (
+                <span className="text-xs text-gray-500 tabular-nums">
+                  {t(lang, 'tipIncluded')} {formatMoney(tip, lang)}
+                </span>
+              )}
             </div>
             <button
               onClick={onCancel}

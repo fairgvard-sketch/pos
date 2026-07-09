@@ -26,6 +26,8 @@ export default function DeviceTab() {
   const receiptPrompt = useDeviceStore((s) => s.receiptPrompt)
   const printKitchenTicket = useDeviceStore((s) => s.printKitchenTicket)
   const firstPayMethod = useDeviceStore((s) => s.firstPayMethod)
+  const collectTips = useDeviceStore((s) => s.collectTips)
+  const tipPresets = useDeviceStore((s) => s.tipPresets)
   const setAutoLockSec = useDeviceStore((s) => s.setAutoLockSec)
   const setLockAfterSale = useDeviceStore((s) => s.setLockAfterSale)
   const setPaymentSound = useDeviceStore((s) => s.setPaymentSound)
@@ -34,6 +36,8 @@ export default function DeviceTab() {
   const setReceiptPrompt = useDeviceStore((s) => s.setReceiptPrompt)
   const setPrintKitchenTicket = useDeviceStore((s) => s.setPrintKitchenTicket)
   const setFirstPayMethod = useDeviceStore((s) => s.setFirstPayMethod)
+  const setCollectTips = useDeviceStore((s) => s.setCollectTips)
+  const setTipPresets = useDeviceStore((s) => s.setTipPresets)
 
   return (
     <div className="max-w-xl space-y-8">
@@ -98,6 +102,38 @@ export default function DeviceTab() {
             </button>
           ))}
         </div>
+      </section>
+
+      {/* Чаевые: шаг выбора перед оплатой + пресеты процентов */}
+      <section>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h3 className="font-bold text-gray-900 mb-1">{t(lang, 'collectTipsTitle')}</h3>
+            <p className="text-sm text-gray-500">{t(lang, 'collectTipsHint')}</p>
+          </div>
+          <Toggle checked={collectTips} onChange={setCollectTips} />
+        </div>
+        {collectTips && (
+          <div className="mt-3">
+            <p className="text-sm text-gray-500 mb-2">{t(lang, 'tipPresetsHint')}</p>
+            <div className="flex gap-2">
+              {tipPresets.map((p, i) => (
+                <div key={i} className="relative">
+                  <input
+                    className="input !w-20 text-center tabular-nums pe-6"
+                    inputMode="numeric"
+                    value={p || ''}
+                    onChange={(e) => {
+                      const v = Math.min(99, Math.max(0, parseInt(e.target.value, 10) || 0))
+                      setTipPresets(tipPresets.map((x, j) => (j === i ? v : x)))
+                    }}
+                  />
+                  <span className="absolute end-2.5 top-1/2 -translate-y-1/2 text-sm text-gray-500">%</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </section>
 
       {/* Способ печати чека */}
@@ -168,20 +204,26 @@ function ToggleRow({
         <h3 className="font-bold text-gray-900 mb-1">{title}</h3>
         <p className="text-sm text-gray-500">{hint}</p>
       </div>
-      <button
-        role="switch"
-        aria-checked={checked}
-        onClick={() => onChange(!checked)}
-        className={`shrink-0 w-14 h-8 rounded-full transition-colors relative ${
-          checked ? 'bg-gray-900' : 'bg-gray-200'
-        }`}
-      >
-        <span
-          className={`absolute top-1 w-6 h-6 rounded-full bg-white shadow transition-all ${
-            checked ? 'start-7' : 'start-1'
-          }`}
-        />
-      </button>
+      <Toggle checked={checked} onChange={onChange} />
     </section>
+  )
+}
+
+function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <button
+      role="switch"
+      aria-checked={checked}
+      onClick={() => onChange(!checked)}
+      className={`shrink-0 w-14 h-8 rounded-full transition-colors relative ${
+        checked ? 'bg-gray-900' : 'bg-gray-200'
+      }`}
+    >
+      <span
+        className={`absolute top-1 w-6 h-6 rounded-full bg-white shadow transition-all ${
+          checked ? 'start-7' : 'start-1'
+        }`}
+      />
+    </button>
   )
 }

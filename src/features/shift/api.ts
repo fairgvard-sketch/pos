@@ -18,6 +18,8 @@ export interface ShiftReport {
   cash_sales: number
   card_sales: number
   total_sales: number
+  /** Чаевые за смену (входят в cash/card_sales — деньги, вне выручки) */
+  tips_total: number
   expected_cash: number
   orders_count: number
 }
@@ -26,6 +28,7 @@ export interface CloseResult {
   cash_sales: number
   card_sales: number
   total_sales: number
+  tips_total: number
   expected_cash: number
   counted_cash: number
   cash_diff: number

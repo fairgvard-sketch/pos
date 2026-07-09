@@ -63,6 +63,9 @@ export default function ShiftPage() {
             <Line label={t(lang, 'cashSales')} value={formatMoney(result.cash_sales, lang)} />
             <Line label={t(lang, 'cardSales')} value={formatMoney(result.card_sales, lang)} />
             <Line label={t(lang, 'totalSales')} value={formatMoney(result.total_sales, lang)} bold />
+            {result.tips_total > 0 && (
+              <Line label={t(lang, 'tipsTotal')} value={formatMoney(result.tips_total, lang)} />
+            )}
             <div className="divider my-2" />
             <Line label={t(lang, 'expectedCash')} value={formatMoney(result.expected_cash, lang)} />
             <Line label={t(lang, 'countedCash')} value={formatMoney(result.counted_cash, lang)} />
@@ -99,6 +102,9 @@ export default function ShiftPage() {
             <Line label={t(lang, 'cashSales')} value={formatMoney(report.cash_sales, lang)} />
             <Line label={t(lang, 'cardSales')} value={formatMoney(report.card_sales, lang)} />
             <Line label={t(lang, 'totalSales')} value={formatMoney(report.total_sales, lang)} bold />
+            {report.tips_total > 0 && (
+              <Line label={t(lang, 'tipsTotal')} value={formatMoney(report.tips_total, lang)} />
+            )}
             <div className="divider my-2" />
             <Line label={t(lang, 'openingFloat')} value={formatMoney(report.opening_float, lang)} />
             <Line label={t(lang, 'expectedCash')} value={formatMoney(report.expected_cash, lang)} bold />

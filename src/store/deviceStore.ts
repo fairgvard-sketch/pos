@@ -28,6 +28,10 @@ interface DeviceState {
   printKitchenTicket: boolean
   /** Порядок способов в окне оплаты: этот — первым и выбран по умолчанию */
   firstPayMethod: FirstPayMethod
+  /** Чаевые: показывать шаг выбора чаевых перед оплатой (Square: Collect Tips) */
+  collectTips: boolean
+  /** Пресеты чаевых, % от итога заказа (с НДС); сами чаевые НДС не облагаются */
+  tipPresets: number[]
   setAutoLockSec: (sec: number) => void
   setLockAfterSale: (v: boolean) => void
   setPaymentSound: (v: boolean) => void
@@ -36,6 +40,8 @@ interface DeviceState {
   setReceiptPrompt: (v: boolean) => void
   setPrintKitchenTicket: (v: boolean) => void
   setFirstPayMethod: (m: FirstPayMethod) => void
+  setCollectTips: (v: boolean) => void
+  setTipPresets: (p: number[]) => void
 }
 
 export const useDeviceStore = create<DeviceState>()(
@@ -49,6 +55,8 @@ export const useDeviceStore = create<DeviceState>()(
       receiptPrompt: false,
       printKitchenTicket: false,
       firstPayMethod: 'cash',
+      collectTips: false,
+      tipPresets: [10, 12, 15],
       setAutoLockSec: (autoLockSec) => set({ autoLockSec }),
       setLockAfterSale: (lockAfterSale) => set({ lockAfterSale }),
       setPaymentSound: (paymentSound) => set({ paymentSound }),
@@ -57,6 +65,8 @@ export const useDeviceStore = create<DeviceState>()(
       setReceiptPrompt: (receiptPrompt) => set({ receiptPrompt }),
       setPrintKitchenTicket: (printKitchenTicket) => set({ printKitchenTicket }),
       setFirstPayMethod: (firstPayMethod) => set({ firstPayMethod }),
+      setCollectTips: (collectTips) => set({ collectTips }),
+      setTipPresets: (tipPresets) => set({ tipPresets }),
     }),
     { name: 'kassa-device-settings' }
   )

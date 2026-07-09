@@ -34,6 +34,8 @@ export interface Receipt {
   vat_rate: number
   vat_amount: number
   total: number
+  /** Чаевые — сверх total, вне базы НДС */
+  tip_amount: number
   paid_at: string | null
   created_at: string
   staff_name: string | null
@@ -114,6 +116,7 @@ interface OrderRow {
   vat_rate: number
   vat_amount: number
   total: number
+  tip_amount: number
   paid_at: string | null
   created_at: string
   staff: { name: string } | null
@@ -136,7 +139,7 @@ export async function fetchReceipt(orderId: string): Promise<Receipt> {
     .select(`
       id, daily_number, receipt_number, doc_type, allocation_number,
       order_type, customer_name, table_label, status,
-      subtotal, discount_type, discount_value, discount_amount, loyalty_discount, vat_rate, vat_amount, total,
+      subtotal, discount_type, discount_value, discount_amount, loyalty_discount, vat_rate, vat_amount, total, tip_amount,
       paid_at, created_at,
       staff:staff!orders_staff_id_fkey(name),
       order_items(name, variant_name, qty, unit_price, line_total, voided_at, order_item_modifiers(name, price_delta)),
@@ -164,6 +167,7 @@ export async function fetchReceipt(orderId: string): Promise<Receipt> {
     vat_rate: o.vat_rate,
     vat_amount: o.vat_amount,
     total: o.total,
+    tip_amount: o.tip_amount ?? 0,
     paid_at: o.paid_at,
     created_at: o.created_at,
     staff_name: o.staff?.name ?? null,

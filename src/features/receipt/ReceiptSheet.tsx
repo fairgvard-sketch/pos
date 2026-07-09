@@ -171,9 +171,17 @@ function ReceiptBody({ receipt: r, location }: { receipt: Receipt; location: Loc
         </div>
       )}
 
-      {/* Итого к оплате — крупно */}
+      {/* Чаевые — сверх итога, вне базы НДС */}
+      {r.tip_amount > 0 && (
+        <div className="flex justify-between text-sm mt-1">
+          <span>טיפ</span>
+          <span className="tabular-nums">{fmt(r.tip_amount)}</span>
+        </div>
+      )}
+
+      {/* Итого к оплате — крупно (с чаевыми) */}
       <div className="text-center font-bold text-lg my-3">
-        לתשלום: {fmt(r.total)}
+        לתשלום: {fmt(r.total + r.tip_amount)}
       </div>
 
       {/* Разбивка НДС: net + сумма НДС */}

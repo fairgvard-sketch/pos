@@ -19,6 +19,7 @@ import { formatMoney, formatMoneyList } from '../../lib/money'
 import type { MenuItem, ModifierGroup } from '../../types'
 import ItemPicker from './ItemPicker'
 import PaymentSheet from './PaymentSheet'
+import TipSheet from './TipSheet'
 import DiscountSheet from './DiscountSheet'
 import PriceSheet from './PriceSheet'
 import TableSheet from './TableSheet'
@@ -64,6 +65,17 @@ function toTicketLine(l: CartLine): KitchenTicketLine {
   }
 }
 
+/** Заказ в потоке оплаты: после place, до pay (см. комментарий у payingOrder) */
+interface PayingOrder {
+  orderId: string
+  dailyNumber: number
+  total: number
+  intent: 'cash' | 'card' | 'choose'
+  fromCart?: boolean
+  /** Выбранные чаевые (агороты) — сверх total, вне базы НДС */
+  tip?: number
+}
+
 /** Подписи тикета на языке интерфейса кассы */
 function ticketLabels(lang: 'ru' | 'he') {
   return {
@@ -86,6 +98,8 @@ export default function SellPage() {
   const receiptPromptOn = useDeviceStore((s) => s.receiptPrompt)
   const kitchenTicketOn = useDeviceStore((s) => s.printKitchenTicket)
   const firstPayMethod = useDeviceStore((s) => s.firstPayMethod)
+  const collectTips = useDeviceStore((s) => s.collectTips)
+  const tipPresets = useDeviceStore((s) => s.tipPresets)
   const qc = useQueryClient()
   const navigate = useNavigate()
 
@@ -120,9 +134,9 @@ export default function SellPage() {
   // fromCart: свежий заказ из корзины (place_order) — при отмене оплаты его
   // нужно аннулировать и сменить clientUuid, иначе повторный place_order
   // по тому же UUID молча вернёт этот заказ со старой суммой
-  const [payingOrder, setPayingOrder] = useState<
-    { orderId: string; dailyNumber: number; total: number; intent: 'cash' | 'card' | 'choose'; fromCart?: boolean } | null
-  >(null)
+  const [payingOrder, setPayingOrder] = useState<PayingOrder | null>(null)
+  // Шаг чаевых (настройка «Собирать чаевые»): показывается ПЕРЕД окном оплаты
+  const [tipping, setTipping] = useState<PayingOrder | null>(null)
   // Раздельная оплата по позициям: выбор позиций + остаток после оплаты части
   const [showSplit, setShowSplit] = useState(false)
   const [splitRemainder, setSplitRemainder] = useState<{ orderId: string; total: number } | null>(null)
@@ -167,6 +181,37 @@ export default function SellPage() {
     lockStaff()
     navigate('/pin', { replace: true })
     return true
+  }
+
+  // Вход в оплату заказа. При включённых чаевых сначала шаг TipSheet,
+  // дальше proceedPayment; иначе — сразу к оплате (как раньше)
+  function startPayment(o: PayingOrder) {
+    setPayingOrder(null)
+    if (collectTips && o.total > 0) setTipping(o)
+    else proceedPayment(o, 0)
+  }
+
+  // Чаевые выбраны (или шаг пропущен): карта-intent платит сразу
+  // одним тапом, остальное — окно оплаты с итогом total + tip
+  function proceedPayment(o: PayingOrder, tip: number) {
+    setTipping(null)
+    if (o.intent === 'card') {
+      pay.mutate({ orderId: o.orderId, dailyNumber: o.dailyNumber, payments: [{ method: 'card', amount: o.total + tip }], tip })
+    } else {
+      setPayingOrder({ ...o, tip })
+    }
+  }
+
+  // Отмена на шаге чаевых или в окне оплаты: свежий заказ из корзины
+  // аннулировать (аудит цел, void не delete) и сменить UUID — корзина
+  // осталась, следующий «Оформить» создаст новый заказ
+  function cancelPayFlow(o: PayingOrder) {
+    setTipping(null)
+    setPayingOrder(null)
+    if (o.fromCart) {
+      setClientUuid(crypto.randomUUID())
+      voidTableOrder(o.orderId).catch(() => {})
+    }
   }
 
   function finishPaid(num: number, orderId: string) {
@@ -227,7 +272,7 @@ export default function SellPage() {
     const num = placedNumber ?? 0
     setPlacedNumber(null)
     if (splitRemainder) {
-      setPayingOrder({ orderId: splitRemainder.orderId, dailyNumber: num, total: splitRemainder.total, intent: 'choose' })
+      startPayment({ orderId: splitRemainder.orderId, dailyNumber: num, total: splitRemainder.total, intent: 'choose' })
       setSplitRemainder(null)
       return
     }
@@ -242,7 +287,8 @@ export default function SellPage() {
       setShowSplit(false)
       // Сначала платим за выделенную часть; остаток — следом
       setSplitRemainder({ orderId: payingOrder!.orderId, total: res.remaining_total })
-      setPayingOrder({ orderId: res.new_order_id, dailyNumber: res.daily_number, total: res.new_total, intent: 'choose' })
+      // Каждая часть — отдельный чек: чаевые спрашиваются заново на часть
+      startPayment({ orderId: res.new_order_id, dailyNumber: res.daily_number, total: res.new_total, intent: 'choose' })
       qc.invalidateQueries({ queryKey: ['order_lines'] })
       qc.invalidateQueries({ queryKey: ['queue'] })
     },
@@ -257,23 +303,18 @@ export default function SellPage() {
     mutationFn: (intent: 'cash' | 'card' | 'choose') =>
       placeOrder(clientUuid, staff!.id, cart.orderType, cart.customerName, cart.lines, cart.discount, cart.tableLabel, cart.guest?.id ?? null, cart.redeem).then((r) => ({ ...r, intent })),
     onSuccess: (res) => {
-      if (res.intent === 'card') {
-        payWithClose({ orderId: res.order_id, dailyNumber: res.daily_number, payments: [{ method: 'card', amount: res.total }] })
-      } else {
-        setPayingOrder({ orderId: res.order_id, dailyNumber: res.daily_number, total: res.total, intent: res.intent, fromCart: true })
-      }
+      startPayment({ orderId: res.order_id, dailyNumber: res.daily_number, total: res.total, intent: res.intent, fromCart: true })
     },
     onError: (e) => toast.error(e.message),
   })
 
   // Шаг 2: принять оплату → показать номер, очистить корзину
   const pay = useMutation({
-    mutationFn: (v: { orderId: string; dailyNumber: number; payments: PaymentInput[] }) =>
-      payOrder(v.orderId, v.payments),
+    mutationFn: (v: { orderId: string; dailyNumber: number; payments: PaymentInput[]; tip?: number }) =>
+      payOrder(v.orderId, v.payments, v.tip ?? 0),
     onSuccess: (_r, v) => finishPaid(v.dailyNumber, v.orderId),
     onError: (e) => toast.error(e.message),
   })
-  const payWithClose = (v: { orderId: string; dailyNumber: number; payments: PaymentInput[] }) => pay.mutate(v)
 
   const tableCtx = cart.tableCtx
 
@@ -356,7 +397,7 @@ export default function SellPage() {
       return tableCtx!.existingTotal
     },
     onSuccess: (billTotal) => {
-      setPayingOrder({ orderId: tableCtx!.orderId, dailyNumber: 0, total: billTotal, intent: 'choose' })
+      startPayment({ orderId: tableCtx!.orderId, dailyNumber: 0, total: billTotal, intent: 'choose' })
     },
     onError: (e) => toast.error(e.message),
   })
@@ -780,23 +821,26 @@ export default function SellPage() {
         </div>
       </aside>
 
+      {/* Шаг чаевых (настройка «Собирать чаевые») — перед окном оплаты */}
+      {tipping && (
+        <TipSheet
+          total={tipping.total}
+          presets={tipPresets}
+          busy={pay.isPending}
+          onCancel={() => cancelPayFlow(tipping)}
+          onDone={(tip) => proceedPayment(tipping, tip)}
+        />
+      )}
+
       {/* Оплата созданного заказа (наличные с расчётом сдачи или выбор способа) */}
       {payingOrder && !showSplit && (
         <PaymentSheet
-          total={payingOrder.total}
+          total={payingOrder.total + (payingOrder.tip ?? 0)}
+          tip={payingOrder.tip ?? 0}
           startMode={payingOrder.intent === 'cash' ? 'cash' : 'choose'}
           busy={pay.isPending}
-          onCancel={() => {
-            const o = payingOrder
-            setPayingOrder(null)
-            // Свежий заказ из корзины брошен: аннулировать (аудит цел, void не delete)
-            // и сменить UUID — корзина осталась, следующий «Оформить» создаст новый заказ
-            if (o.fromCart) {
-              setClientUuid(crypto.randomUUID())
-              voidTableOrder(o.orderId).catch(() => {})
-            }
-          }}
-          onPay={(payments) => pay.mutate({ orderId: payingOrder.orderId, dailyNumber: payingOrder.dailyNumber, payments })}
+          onCancel={() => cancelPayFlow(payingOrder)}
+          onPay={(payments) => pay.mutate({ orderId: payingOrder.orderId, dailyNumber: payingOrder.dailyNumber, payments, tip: payingOrder.tip ?? 0 })}
           // split_order пересчитывает итоги без loyalty_discount — при выбранной награде сплит недоступен
           onSplitItems={cart.redeem ? undefined : () => setShowSplit(true)}
         />

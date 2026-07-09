@@ -92,10 +92,13 @@ export async function splitOrder(
 }
 
 /** Принять оплату по заказу, перевести в paid и присвоить фискальный номер документа */
-export async function payOrder(orderId: string, payments: PaymentInput[]): Promise<void> {
+export async function payOrder(orderId: string, payments: PaymentInput[], tip: number = 0): Promise<void> {
+  // p_tip только при чаевых: до применения миграции 033 в БД живёт
+  // двухаргументная pay_order — обычная оплата не должна ломаться
   const { error } = await supabase.rpc('pay_order', {
     p_order_id: orderId,
     p_payments: payments,
+    ...(tip > 0 ? { p_tip: tip } : {}),
   })
   if (error) throw new Error(error.message)
   // Сквозной номер документа (Израиль): присваивается после оплаты, идемпотентно.

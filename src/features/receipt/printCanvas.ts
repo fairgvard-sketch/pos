@@ -163,11 +163,16 @@ export function renderReceiptCanvas(r: Receipt, location: Location | undefined):
     metaRow('הטבת מועדון', `−${fmt(r.loyalty_discount)}`)
   }
 
-  // Итого крупно
-  y += 10
-  center(`לתשלום: ${fmt(r.total)}`, 36, true, 16)
+  // Чаевые — сверх итога, в базу מע"מ не входят
+  if (r.tip_amount > 0) {
+    metaRow('טיפ', fmt(r.tip_amount))
+  }
 
-  // НДС
+  // Итого крупно (с чаевыми — то, что фактически заплатил гость)
+  y += 10
+  center(`לתשלום: ${fmt(r.total + r.tip_amount)}`, 36, true, 16)
+
+  // НДС — база только товары (r.total), без чаевых
   metaRow('סה"כ חייב במע"מ', fmt(r.total - r.vat_amount))
   metaRow(`מע"מ ${Number(r.vat_rate).toFixed(1)}%`, fmt(r.vat_amount))
 
