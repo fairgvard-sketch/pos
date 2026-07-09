@@ -98,7 +98,7 @@ export default function SellPage() {
   const autoPrintOn = useDeviceStore((s) => s.autoPrintReceipt)
   const receiptPromptOn = useDeviceStore((s) => s.receiptPrompt)
   const kitchenTicketOn = useDeviceStore((s) => s.printKitchenTicket)
-  const firstPayMethod = useDeviceStore((s) => s.firstPayMethod)
+  const payMethodOrder = useDeviceStore((s) => s.payMethodOrder)
   const collectTips = useDeviceStore((s) => s.collectTips)
   const tipAskBeforePayment = useDeviceStore((s) => s.tipAskBeforePayment)
   const tipPresets = useDeviceStore((s) => s.tipPresets)
@@ -880,8 +880,8 @@ export default function SellPage() {
                     {cart.lines.length > 0 && <span className="tabular-nums">{formatMoney(total + cartTip, lang)}</span>}
                   </button>
                   <div className="grid grid-cols-2 gap-2 mt-2">
-                    {/* Порядок кнопок = настройке «первый способ оплаты» этой кассы */}
-                    {(firstPayMethod === 'cash' ? (['cash', 'card'] as const) : (['card', 'cash'] as const)).map((m) => (
+                    {/* Порядок кнопок = порядок способов оплаты этой кассы */}
+                    {payMethodOrder.map((m) => (
                       <button
                         key={m}
                         onClick={() => place.mutate(m)}

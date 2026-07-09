@@ -9,8 +9,10 @@ import { persist } from 'zustand/middleware'
 /** Способ печати чека: браузерный диалог / RawBT (встроенный принтер Sunmi) */
 export type PrintMode = 'browser' | 'rawbt'
 
-/** Какой способ оплаты идёт первым в окне оплаты (и выбран по умолчанию) */
-export type FirstPayMethod = 'cash' | 'card'
+/** Способ оплаты (Square: payment types). Пока наличные/карта */
+export type PayMethod = 'cash' | 'card'
+/** @deprecated синоним PayMethod — оставлен, чтобы не ломать импорты */
+export type FirstPayMethod = PayMethod
 
 /**
  * Быстрые суммы при оплате наличными (Square: Quick amounts):
@@ -36,8 +38,11 @@ interface DeviceState {
   receiptPrompt: boolean
   /** Печать тикета на кухню/бар при оплате и дозаказе стола */
   printKitchenTicket: boolean
-  /** Порядок способов в окне оплаты: этот — первым и выбран по умолчанию */
-  firstPayMethod: FirstPayMethod
+  /**
+   * Порядок способов оплаты в окне оплаты (Square: Payment types drag-list).
+   * Первый — по умолчанию выбран. Все включённые способы перечислены.
+   */
+  payMethodOrder: PayMethod[]
   /** Режим быстрых сумм наличных (Square: Quick amounts) */
   quickAmountsMode: QuickAmountsMode
   /** Ручные быстрые суммы, агороты (для quickAmountsMode='manual', до 3) */
@@ -67,7 +72,7 @@ interface DeviceState {
   setAutoPrintReceipt: (v: boolean) => void
   setReceiptPrompt: (v: boolean) => void
   setPrintKitchenTicket: (v: boolean) => void
-  setFirstPayMethod: (m: FirstPayMethod) => void
+  setPayMethodOrder: (o: PayMethod[]) => void
   setQuickAmountsMode: (m: QuickAmountsMode) => void
   setQuickAmountsManual: (a: number[]) => void
   setCollectTips: (v: boolean) => void
@@ -93,7 +98,7 @@ export const useDeviceStore = create<DeviceState>()(
       autoPrintReceipt: false,
       receiptPrompt: false,
       printKitchenTicket: false,
-      firstPayMethod: 'cash',
+      payMethodOrder: ['cash', 'card'],
       quickAmountsMode: 'smart',
       quickAmountsManual: [2000, 5000, 10000],  // 20/50/100 ₪
       collectTips: false,
@@ -112,7 +117,7 @@ export const useDeviceStore = create<DeviceState>()(
       setAutoPrintReceipt: (autoPrintReceipt) => set({ autoPrintReceipt }),
       setReceiptPrompt: (receiptPrompt) => set({ receiptPrompt }),
       setPrintKitchenTicket: (printKitchenTicket) => set({ printKitchenTicket }),
-      setFirstPayMethod: (firstPayMethod) => set({ firstPayMethod }),
+      setPayMethodOrder: (payMethodOrder) => set({ payMethodOrder }),
       setQuickAmountsMode: (quickAmountsMode) => set({ quickAmountsMode }),
       setQuickAmountsManual: (quickAmountsManual) => set({ quickAmountsManual }),
       setCollectTips: (collectTips) => set({ collectTips }),

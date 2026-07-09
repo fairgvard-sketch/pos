@@ -357,8 +357,6 @@ export const translations = {
     detachGuest: 'Отвязать гостя',
     loyaltyLabel: 'Лояльность',
     deviceTabHint: 'Настройки этого устройства — на других кассах свои.',
-    firstPayTitle: 'Первый способ оплаты',
-    firstPayHint: 'Показывается первым в окне оплаты и выбран по умолчанию.',
     autoLock: 'Автоблокировка',
     autoLockHint: 'Без касаний экрана указанное время — касса запросит PIN.',
     autoLockOff: 'Выкл',
@@ -397,6 +395,13 @@ export const translations = {
     groupReceiptContent: 'Содержимое чека',
     groupPlanned: 'Запланировано',
     featureSoon: 'Скоро будет доступно',
+    reorder: 'Перетащить',
+
+    // Способы оплаты (Square: Payment types)
+    payMethodsTitle: 'Способы оплаты',
+    payMethodsHint: 'Порядок способов в окне оплаты. Первый — выбран по умолчанию.',
+    payMethodsPageHint: 'Перетащите способы в нужном порядке — так они идут в окне оплаты. Верхний выбран по умолчанию.',
+    payDefault: 'По умолчанию',
 
     // Быстрые суммы (Square: Quick amounts)
     quickAmountsTitle: 'Быстрые суммы',
@@ -983,8 +988,6 @@ export const translations = {
     detachGuest: 'ניתוק לקוח',
     loyaltyLabel: 'מועדון',
     deviceTabHint: 'הגדרות המכשיר הזה — לכל קופה הגדרות משלה.',
-    firstPayTitle: 'אמצעי תשלום ראשון',
-    firstPayHint: 'מוצג ראשון בחלון התשלום ונבחר כברירת מחדל.',
     autoLock: 'נעילה אוטומטית',
     autoLockHint: 'ללא מגע במסך למשך הזמן שנבחר — הקופה תבקש PIN.',
     autoLockOff: 'כבוי',
@@ -1023,6 +1026,13 @@ export const translations = {
     groupReceiptContent: 'תוכן הקבלה',
     groupPlanned: 'מתוכנן',
     featureSoon: 'יהיה זמין בקרוב',
+    reorder: 'גרירה',
+
+    // אמצעי תשלום (Square: Payment types)
+    payMethodsTitle: 'אמצעי תשלום',
+    payMethodsHint: 'סדר האמצעים בחלון התשלום. הראשון נבחר כברירת מחדל.',
+    payMethodsPageHint: 'גררו את האמצעים לסדר הרצוי — כך הם מופיעים בחלון התשלום. העליון נבחר כברירת מחדל.',
+    payDefault: 'ברירת מחדל',
 
     // סכומים מהירים (Square: Quick amounts)
     quickAmountsTitle: 'סכומים מהירים',

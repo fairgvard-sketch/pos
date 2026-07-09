@@ -17,7 +17,7 @@ export type CategoryId =
   | 'business'
   | 'device'
 
-export type DetailId = 'tipping' | 'tables' | 'guests' | 'perms' | 'receipt-details' | 'quick-amounts'
+export type DetailId = 'tipping' | 'tables' | 'guests' | 'perms' | 'receipt-details' | 'quick-amounts' | 'pay-methods'
 
 export const CATEGORIES: { id: CategoryId; label: TranslationKey }[] = [
   { id: 'payments', label: 'catPayments' },
@@ -39,7 +39,7 @@ export interface SearchEntry {
 }
 
 export const SEARCH_INDEX: SearchEntry[] = [
-  { cat: 'payments', label: 'firstPayTitle', hint: 'firstPayHint' },
+  { cat: 'payments', detail: 'pay-methods', label: 'payMethodsTitle', hint: 'payMethodsHint' },
   { cat: 'payments', detail: 'quick-amounts', label: 'quickAmountsTitle', hint: 'quickAmountsHint' },
   { cat: 'payments', label: 'paymentSoundTitle', hint: 'paymentSoundHint' },
   { cat: 'payments', label: 'serviceChargeTitle', hint: 'serviceChargeHint' },

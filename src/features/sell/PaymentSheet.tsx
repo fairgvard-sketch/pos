@@ -45,8 +45,10 @@ function quickCashOptions(total: number, mode: 'smart' | 'manual' | 'off', manua
 
 export default function PaymentSheet({ total, tip = 0, startMode = 'choose', onCancel, onPay, onSplitItems, busy }: Props) {
   const lang = useLangStore((s) => s.lang)
-  // Первый способ настраивается на кассе (Настройки → Оплата); «Наличные» с кнопки перебивают
-  const firstPayMethod = useDeviceStore((s) => s.firstPayMethod)
+  // Порядок способов настраивается на кассе (Настройки → Оплата → Способы оплаты);
+  // первый — выбран по умолчанию. «Наличные» с кнопки перебивают
+  const payMethodOrder = useDeviceStore((s) => s.payMethodOrder)
+  const firstPayMethod = payMethodOrder[0] ?? 'cash'
   const quickAmountsMode = useDeviceStore((s) => s.quickAmountsMode)
   const quickAmountsManual = useDeviceStore((s) => s.quickAmountsManual)
   const [method, setMethod] = useState<Method>(startMode === 'cash' ? 'cash' : firstPayMethod)
@@ -88,8 +90,10 @@ export default function PaymentSheet({ total, tip = 0, startMode = 'choose', onC
 
   const card = { id: 'card', icon: 'card', label: t(lang, 'payCard') } as const
   const cash = { id: 'cash', icon: 'cash', label: t(lang, 'payCash') } as const
+  const byId = { cash, card } as const
   const methods: { id: Method; icon: 'card' | 'cash'; label: string }[] = [
-    ...(firstPayMethod === 'cash' ? [cash, card] : [card, cash]),
+    // Порядок из настроек кассы (payMethodOrder); дубли/пропуски отсекаем
+    ...payMethodOrder.filter((m, i) => payMethodOrder.indexOf(m) === i).map((m) => byId[m]),
     { id: 'mixed', icon: 'card', label: t(lang, 'payMixed') },
   ]
 
