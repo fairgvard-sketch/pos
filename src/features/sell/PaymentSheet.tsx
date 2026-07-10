@@ -22,7 +22,7 @@ interface Props {
   busy: boolean
 }
 
-type Method = 'card' | 'cash' | 'mixed'
+type Method = 'card' | 'cash'
 
 /**
  * Быстрые купюры для расчёта сдачи (Square: Quick amounts), по режиму кассы:
@@ -45,6 +45,11 @@ function quickCashOptions(total: number, mode: 'smart' | 'manual' | 'off', manua
   return [...opts].sort((a, b) => a - b).slice(0, 5)
 }
 
+/**
+ * Оплата без отдельного режима «наличные + карта» (Square-подход):
+ * ввёл МЕНЬШЕ остатка → часть фиксируется чипом, касса переключается на
+ * другой способ добрать остаток. onPay уходит один раз со всеми частями.
+ */
 export default function PaymentSheet({ total, tip = 0, startMode = 'choose', onCancel, onPay, onSplitItems, onSplitEqually, busy }: Props) {
   const lang = useLangStore((s) => s.lang)
   // Порядок способов настраивается на кассе (Настройки → Оплата → Способы оплаты);
@@ -55,49 +60,62 @@ export default function PaymentSheet({ total, tip = 0, startMode = 'choose', onC
   const quickAmountsManual = useDeviceStore((s) => s.quickAmountsManual)
   const [method, setMethod] = useState<Method>(startMode === 'cash' ? 'cash' : firstPayMethod)
   const [tenderedStr, setTenderedStr] = useState('')
-  // Смешанная оплата: сумма наличными; карта добирает остаток
-  const [mixedCashStr, setMixedCashStr] = useState('')
+  const [cardStr, setCardStr] = useState('')
+
+  // Зафиксированные части смешанной оплаты (ещё НЕ отправлены на сервер —
+  // onPay уходит один раз, целиком, при доборе остатка)
+  const [parts, setParts] = useState<PaymentInput[]>([])
+  const paidSoFar = parts.reduce((s, p) => s + p.amount, 0)
+  const remaining = total - paidSoFar
 
   const quick = useMemo(
-    () => quickCashOptions(total, quickAmountsMode, quickAmountsManual),
-    [total, quickAmountsMode, quickAmountsManual]
+    () => quickCashOptions(remaining, quickAmountsMode, quickAmountsManual),
+    [remaining, quickAmountsMode, quickAmountsManual]
   )
   const tendered = tenderedStr ? parseMoney(tenderedStr) : null
-  const change = tendered !== null && tendered >= total ? tendered - total : null
+  const change = tendered !== null && tendered >= remaining ? tendered - remaining : null
+  // Карта: пустой ввод = весь остаток; больше остатка картой не бывает
+  const cardEntered = cardStr ? parseMoney(cardStr) : null
+  const cardAmount = cardEntered === null ? remaining : Math.min(cardEntered, remaining)
+  const cardPartial = cardEntered !== null && cardEntered > 0 && cardEntered < remaining
 
-  const mixedCash = mixedCashStr ? parseMoney(mixedCashStr) : null
-  const mixedCard = mixedCash !== null && mixedCash >= 0 && mixedCash <= total ? total - mixedCash : null
-  const mixedValid = mixedCash !== null && mixedCash > 0 && mixedCash < total
-
-  function payCard() {
-    onPay([{ method: 'card', amount: total }])
+  /** Наличные: полная оплата остатка (со сдачей) или частичная → добор картой */
+  function confirmCash(tenderedAmount: number) {
+    if (tenderedAmount >= remaining) {
+      onPay([
+        ...parts,
+        { method: 'cash', amount: remaining, tendered: tenderedAmount, change_due: tenderedAmount - remaining },
+      ])
+    } else if (tenderedAmount > 0) {
+      setParts([...parts, { method: 'cash', amount: tenderedAmount, tendered: tenderedAmount, change_due: 0 }])
+      setTenderedStr('')
+      setMethod('card')
+    }
   }
 
-  function payCash(tenderedAmount: number) {
-    onPay([{
-      method: 'cash',
-      amount: total,
-      tendered: tenderedAmount,
-      change_due: tenderedAmount - total,
-    }])
+  /** Карта: полный остаток или частично → добор наличными */
+  function confirmCard() {
+    if (cardAmount <= 0) return
+    if (cardAmount >= remaining) {
+      onPay([...parts, { method: 'card', amount: remaining }])
+    } else {
+      setParts([...parts, { method: 'card', amount: cardAmount }])
+      setCardStr('')
+      setMethod('cash')
+    }
   }
 
-  function payMixed() {
-    if (!mixedValid || mixedCard === null) return
-    onPay([
-      { method: 'cash', amount: mixedCash!, tendered: mixedCash!, change_due: 0 },
-      { method: 'card', amount: mixedCard },
-    ])
+  /** Убрать зафиксированную часть (передумали до подтверждения) */
+  function removePart(idx: number) {
+    setParts(parts.filter((_, i) => i !== idx))
   }
 
   const card = { id: 'card', icon: 'card', label: t(lang, 'payCard') } as const
   const cash = { id: 'cash', icon: 'cash', label: t(lang, 'payCash') } as const
   const byId = { cash, card } as const
-  const methods: { id: Method; icon: 'card' | 'cash'; label: string }[] = [
+  const methods: { id: Method; icon: 'card' | 'cash'; label: string }[] =
     // Порядок из настроек кассы (payMethodOrder); дубли/пропуски отсекаем
-    ...payMethodOrder.filter((m, i) => payMethodOrder.indexOf(m) === i).map((m) => byId[m]),
-    { id: 'mixed', icon: 'card', label: t(lang, 'payMixed') },
-  ]
+    payMethodOrder.filter((m, i) => payMethodOrder.indexOf(m) === i).map((m) => byId[m])
 
   return (
     <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
@@ -109,14 +127,22 @@ export default function PaymentSheet({ total, tip = 0, startMode = 'choose', onC
           <div className="flex items-center gap-4">
             <div className="flex flex-col items-end">
               <div className="flex items-baseline gap-2">
-                <span className="text-sm text-gray-500">{t(lang, 'toPay')}</span>
-                <span className="text-2xl font-black text-gray-900 tabular-nums">{formatMoney(total, lang)}</span>
+                <span className="text-sm text-gray-500">
+                  {parts.length > 0 ? t(lang, 'remainingLabel') : t(lang, 'toPay')}
+                </span>
+                <span className="text-2xl font-black text-gray-900 tabular-nums">
+                  {formatMoney(remaining, lang)}
+                </span>
               </div>
-              {tip > 0 && (
+              {parts.length > 0 ? (
+                <span className="text-xs text-gray-500 tabular-nums">
+                  {t(lang, 'toPay')} {formatMoney(total, lang)}
+                </span>
+              ) : tip > 0 ? (
                 <span className="text-xs text-gray-500 tabular-nums">
                   {t(lang, 'tipIncluded')} {formatMoney(tip, lang)}
                 </span>
-              )}
+              ) : null}
             </div>
             <button
               onClick={onCancel}
@@ -163,7 +189,7 @@ export default function PaymentSheet({ total, tip = 0, startMode = 'choose', onC
             {onSplitEqually && (
               <button
                 onClick={onSplitEqually}
-                disabled={busy}
+                disabled={busy || parts.length > 0}
                 className="flex-1 sm:flex-none h-14 px-4 rounded-2xl flex items-center gap-3 font-semibold text-sm
                            bg-white text-gray-900 border border-gray-200 hover:border-gray-400
                            transition-all active:scale-[0.97]"
@@ -176,7 +202,7 @@ export default function PaymentSheet({ total, tip = 0, startMode = 'choose', onC
             {onSplitItems && (
               <button
                 onClick={onSplitItems}
-                disabled={busy}
+                disabled={busy || parts.length > 0}
                 className="flex-1 sm:flex-none h-14 px-4 rounded-2xl flex items-center gap-3 font-semibold text-sm
                            bg-white text-gray-900 border border-gray-200 hover:border-gray-400
                            transition-all active:scale-[0.97]"
@@ -191,23 +217,75 @@ export default function PaymentSheet({ total, tip = 0, startMode = 'choose', onC
           <div className="p-6 min-h-[520px] flex flex-col">
             <div className="w-full max-w-[360px] mx-auto flex-1 flex flex-col">
 
+              {/* Зафиксированные части смешанной оплаты — чипы с ✕ */}
+              {parts.length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-4">
+                  {parts.map((p, i) => (
+                    <span
+                      key={i}
+                      className="inline-flex items-center gap-2 ps-3 pe-1 py-1 rounded-full bg-gray-100
+                                 text-sm font-semibold text-gray-900 tabular-nums"
+                    >
+                      <Icon name={p.method === 'cash' ? 'cash' : 'card'} size={14} />
+                      {formatMoney(p.amount, lang)}
+                      <button
+                        onClick={() => removePart(i)}
+                        disabled={busy}
+                        aria-label={t(lang, 'cancel')}
+                        className="w-7 h-7 rounded-full flex items-center justify-center text-gray-400
+                                   hover:bg-gray-200 hover:text-gray-900 transition-all"
+                      >
+                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                          <path d="M3 3L9 9M9 3L3 9" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                        </svg>
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+
               {method === 'card' && (
-                <>
-                  <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center">
-                    <div className="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center text-gray-900">
-                      <Icon name="card" size={36} />
-                    </div>
-                    <div className="text-4xl font-black text-gray-900 tabular-nums">{formatMoney(total, lang)}</div>
-                    <p className="text-sm text-gray-500">{t(lang, 'cardHint')}</p>
+                <div className="flex-1 flex flex-col gap-4">
+                  {/* Сумма картой: пусто = весь остаток; меньше — добор наличными */}
+                  <div className="flex items-baseline justify-between px-1">
+                    <span className="text-sm text-gray-500 flex items-center gap-1.5">
+                      <Icon name="card" size={14} /> {t(lang, 'payCard')}
+                    </span>
+                    <span className={`text-3xl font-black tabular-nums ${cardStr ? 'text-gray-900' : 'text-gray-400'}`}>
+                      {formatMoney(cardAmount, lang)}
+                    </span>
                   </div>
+
+                  <NumPad value={cardStr} onChange={setCardStr} />
+
+                  {/* Подсказка/остаток — строка всегда на месте, чтобы вёрстка не прыгала */}
+                  <div className="flex items-baseline justify-between px-1 min-h-[32px]">
+                    {cardPartial ? (
+                      <>
+                        <span className="text-sm text-gray-500 flex items-center gap-1.5">
+                          <Icon name="cash" size={14} /> {t(lang, 'restByCash')}
+                        </span>
+                        <span className="text-2xl font-black text-gray-900 tabular-nums">
+                          {formatMoney(remaining - cardAmount, lang)}
+                        </span>
+                      </>
+                    ) : (
+                      <span className="text-sm text-gray-400">{t(lang, 'cardHint')}</span>
+                    )}
+                  </div>
+
                   <button
-                    onClick={payCard}
-                    disabled={busy}
-                    className="btn-primary w-full !py-4 !text-base !rounded-2xl"
+                    onClick={confirmCard}
+                    disabled={busy || cardAmount <= 0}
+                    className="btn-primary w-full !py-4 !text-base !rounded-2xl mt-auto"
                   >
-                    {busy ? '…' : `${t(lang, 'confirmPayment')} · ${formatMoney(total, lang)}`}
+                    {busy
+                      ? '…'
+                      : cardPartial
+                        ? `${t(lang, 'acceptPart')} ${formatMoney(cardAmount, lang)} · ${t(lang, 'restByCash')}`
+                        : `${t(lang, 'confirmPayment')} · ${formatMoney(remaining, lang)}`}
                   </button>
-                </>
+                </div>
               )}
 
               {method === 'cash' && (
@@ -217,12 +295,12 @@ export default function PaymentSheet({ total, tip = 0, startMode = 'choose', onC
                     {quick.map((amt) => (
                       <button
                         key={amt}
-                        onClick={() => payCash(amt)}
+                        onClick={() => confirmCash(amt)}
                         disabled={busy}
                         className="h-11 rounded-xl border border-gray-200 hover:border-gray-900 font-bold text-sm
                                    text-gray-900 tabular-nums transition-all active:scale-[0.96]"
                       >
-                        {amt === total ? t(lang, 'exactAmount') : formatMoney(amt, lang)}
+                        {amt === remaining ? t(lang, 'exactAmount') : formatMoney(amt, lang)}
                       </button>
                     ))}
                   </div>
@@ -237,55 +315,35 @@ export default function PaymentSheet({ total, tip = 0, startMode = 'choose', onC
 
                   <NumPad value={tenderedStr} onChange={setTenderedStr} />
 
-                  {/* Сдача — строка всегда на месте, чтобы вёрстка не прыгала */}
+                  {/* Сдача / добор картой — строка всегда на месте, чтобы вёрстка не прыгала */}
                   <div className="flex items-baseline justify-between px-1">
-                    <span className="text-sm text-gray-500">{t(lang, 'change')}</span>
-                    <span className={`text-2xl font-black tabular-nums ${change !== null ? 'text-emerald-600' : 'text-gray-300'}`}>
-                      {change !== null ? formatMoney(change, lang) : '—'}
-                    </span>
+                    {tendered !== null && tendered > 0 && tendered < remaining ? (
+                      <>
+                        <span className="text-sm text-gray-500 flex items-center gap-1.5">
+                          <Icon name="card" size={14} /> {t(lang, 'restByCard')}
+                        </span>
+                        <span className="text-2xl font-black text-gray-900 tabular-nums">
+                          {formatMoney(remaining - tendered, lang)}
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="text-sm text-gray-500">{t(lang, 'change')}</span>
+                        <span className={`text-2xl font-black tabular-nums ${change !== null ? 'text-emerald-600' : 'text-gray-300'}`}>
+                          {change !== null ? formatMoney(change, lang) : '—'}
+                        </span>
+                      </>
+                    )}
                   </div>
 
                   <button
-                    onClick={() => tendered !== null && tendered >= total && payCash(tendered)}
-                    disabled={busy || tendered === null || tendered < total}
+                    onClick={() => tendered !== null && confirmCash(tendered)}
+                    disabled={busy || tendered === null || tendered <= 0}
                     className="btn-primary w-full !py-4 !text-base !rounded-2xl mt-auto"
                   >
-                    {t(lang, 'confirmPayment')}
-                  </button>
-                </div>
-              )}
-
-              {method === 'mixed' && (
-                <div className="flex-1 flex flex-col gap-4">
-                  <p className="text-sm text-gray-500">{t(lang, 'mixedHint')}</p>
-
-                  <div className="flex items-baseline justify-between px-1">
-                    <span className="text-sm text-gray-500 flex items-center gap-1.5">
-                      <Icon name="cash" size={14} /> {t(lang, 'payCash')}
-                    </span>
-                    <span className={`text-3xl font-black tabular-nums ${mixedCash !== null ? 'text-gray-900' : 'text-gray-300'}`}>
-                      {mixedCash !== null ? formatMoney(mixedCash, lang) : formatMoney(0, lang)}
-                    </span>
-                  </div>
-
-                  <NumPad value={mixedCashStr} onChange={setMixedCashStr} />
-
-                  {/* Карта добирает остаток автоматически */}
-                  <div className="flex items-baseline justify-between px-1">
-                    <span className="text-sm text-gray-500 flex items-center gap-1.5">
-                      <Icon name="card" size={14} /> {t(lang, 'payCard')}
-                    </span>
-                    <span className="text-2xl font-black text-gray-900 tabular-nums">
-                      {mixedCard !== null ? formatMoney(mixedCard, lang) : '—'}
-                    </span>
-                  </div>
-
-                  <button
-                    onClick={payMixed}
-                    disabled={busy || !mixedValid}
-                    className="btn-primary w-full !py-4 !text-base !rounded-2xl mt-auto"
-                  >
-                    {t(lang, 'confirmPayment')}
+                    {tendered !== null && tendered > 0 && tendered < remaining
+                      ? `${t(lang, 'acceptPart')} ${formatMoney(tendered, lang)} · ${t(lang, 'restByCard')}`
+                      : t(lang, 'confirmPayment')}
                   </button>
                 </div>
               )}
