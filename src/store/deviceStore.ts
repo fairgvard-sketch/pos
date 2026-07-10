@@ -22,6 +22,9 @@ export type FirstPayMethod = PayMethod
  */
 export type QuickAmountsMode = 'smart' | 'manual' | 'off'
 
+/** Порядок кнопок ряда действий на экране продажи (перестановка long-press'ом) */
+export const DEFAULT_ACTION_ORDER = ['customItem', 'discount', 'loyalty', 'refund', 'tip']
+
 interface DeviceState {
   /** Имя этой кассы (для отчётов/шапки настроек). Пусто = не задано */
   deviceName: string
@@ -43,6 +46,8 @@ interface DeviceState {
    * Первый — по умолчанию выбран. Все включённые способы перечислены.
    */
   payMethodOrder: PayMethod[]
+  /** Порядок кнопок ряда действий на экране продажи (long-press drag, как iOS) */
+  actionOrder: string[]
   /** Режим быстрых сумм наличных (Square: Quick amounts) */
   quickAmountsMode: QuickAmountsMode
   /** Ручные быстрые суммы, агороты (для quickAmountsMode='manual', до 3) */
@@ -73,6 +78,7 @@ interface DeviceState {
   setReceiptPrompt: (v: boolean) => void
   setPrintKitchenTicket: (v: boolean) => void
   setPayMethodOrder: (o: PayMethod[]) => void
+  setActionOrder: (o: string[]) => void
   setQuickAmountsMode: (m: QuickAmountsMode) => void
   setQuickAmountsManual: (a: number[]) => void
   setCollectTips: (v: boolean) => void
@@ -99,6 +105,7 @@ export const useDeviceStore = create<DeviceState>()(
       receiptPrompt: false,
       printKitchenTicket: false,
       payMethodOrder: ['cash', 'card'],
+      actionOrder: DEFAULT_ACTION_ORDER,
       quickAmountsMode: 'smart',
       quickAmountsManual: [2000, 5000, 10000],  // 20/50/100 ₪
       collectTips: false,
@@ -118,6 +125,7 @@ export const useDeviceStore = create<DeviceState>()(
       setReceiptPrompt: (receiptPrompt) => set({ receiptPrompt }),
       setPrintKitchenTicket: (printKitchenTicket) => set({ printKitchenTicket }),
       setPayMethodOrder: (payMethodOrder) => set({ payMethodOrder }),
+      setActionOrder: (actionOrder) => set({ actionOrder }),
       setQuickAmountsMode: (quickAmountsMode) => set({ quickAmountsMode }),
       setQuickAmountsManual: (quickAmountsManual) => set({ quickAmountsManual }),
       setCollectTips: (collectTips) => set({ collectTips }),

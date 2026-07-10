@@ -10,7 +10,7 @@ import { appendToOrder, voidTableOrder, fetchOrderLines, voidOrderItem, setOrder
 import { useCartStore, cartSubtotal, cartTotal, discountAmount, loyaltyAmount, lineUnitPrice, type CartLine, type CartMod, type CartDiscount, type OrderType } from '../../store/cartStore'
 import { useAuthStore } from '../../store/authStore'
 import { useLangStore } from '../../store/langStore'
-import { useDeviceStore } from '../../store/deviceStore'
+import { useDeviceStore, DEFAULT_ACTION_ORDER } from '../../store/deviceStore'
 import { playPaymentChime } from '../../lib/sound'
 import { autoPrintReceipt, autoPrintLocalReceipt, printKitchenTicket } from '../receipt/printService'
 import { buildLocalReceipt } from '../receipt/localReceipt'
@@ -114,6 +114,8 @@ export default function SellPage() {
   const receiptPromptOn = useDeviceStore((s) => s.receiptPrompt)
   const kitchenTicketOn = useDeviceStore((s) => s.printKitchenTicket)
   const payMethodOrder = useDeviceStore((s) => s.payMethodOrder)
+  const actionOrder = useDeviceStore((s) => s.actionOrder)
+  const setActionOrder = useDeviceStore((s) => s.setActionOrder)
   const collectTips = useDeviceStore((s) => s.collectTips)
   const tipAskBeforePayment = useDeviceStore((s) => s.tipAskBeforePayment)
   const tipPresets = useDeviceStore((s) => s.tipPresets)
@@ -162,6 +164,79 @@ export default function SellPage() {
   const [editingPrice, setEditingPrice] = useState<CartLine | null>(null)
   // Строка, у которой правим количество (QtySheet)
   const [editingQty, setEditingQty] = useState<CartLine | null>(null)
+
+  // ── Перестановка кнопок ряда действий long-press'ом (как на iPhone) ──
+  // Долгое нажатие «поднимает» кнопку, движение по горизонтали меняет её
+  // место в ряду; порядок хранится per-device (deviceStore.actionOrder).
+  const [dragAction, setDragAction] = useState<string | null>(null)
+  const actionsRowRef = useRef<HTMLDivElement>(null)
+  const dragTimer = useRef<number | null>(null)
+  const dragStartPt = useRef<{ x: number; y: number } | null>(null)
+  const suppressActionClick = useRef(false)
+  // Пока тянем — глушим нативный скролл (touch-action менять мид-жестом нельзя)
+  const preventTouchScroll = useRef((e: TouchEvent) => e.preventDefault())
+
+  // Сохранённый порядок + новые кнопки, которых в нём ещё нет (апгрейд версии)
+  const fullActionOrder = useMemo(
+    () => [
+      ...actionOrder.filter((id) => DEFAULT_ACTION_ORDER.includes(id)),
+      ...DEFAULT_ACTION_ORDER.filter((id) => !actionOrder.includes(id)),
+    ],
+    [actionOrder]
+  )
+
+  function actionDragDown(id: string, e: React.PointerEvent) {
+    if (e.pointerType === 'mouse' && e.button !== 0) return
+    suppressActionClick.current = false
+    dragStartPt.current = { x: e.clientX, y: e.clientY }
+    const el = e.currentTarget as HTMLElement
+    const pointerId = e.pointerId
+    dragTimer.current = window.setTimeout(() => {
+      dragTimer.current = null
+      setDragAction(id)
+      suppressActionClick.current = true // после drag тап не должен «нажать» кнопку
+      try { el.setPointerCapture(pointerId) } catch { /* старый WebView */ }
+      document.addEventListener('touchmove', preventTouchScroll.current, { passive: false })
+      navigator.vibrate?.(15)
+    }, 450)
+  }
+
+  function actionDragMove(id: string, e: React.PointerEvent) {
+    // Таймер ещё тикает: заметное движение = обычный тап/скролл ряда, отменяем long-press
+    if (dragTimer.current !== null && dragStartPt.current) {
+      if (Math.abs(e.clientX - dragStartPt.current.x) > 10 || Math.abs(e.clientY - dragStartPt.current.y) > 10) {
+        window.clearTimeout(dragTimer.current)
+        dragTimer.current = null
+      }
+      return
+    }
+    if (dragAction !== id || !actionsRowRef.current) return
+    // Курсор над соседней кнопкой → dragged занимает её слот
+    for (const child of Array.from(actionsRowRef.current.children) as HTMLElement[]) {
+      const cid = child.dataset.actionId
+      if (!cid || cid === id) continue
+      const r = child.getBoundingClientRect()
+      if (e.clientX > r.left && e.clientX < r.right) {
+        const without = fullActionOrder.filter((x) => x !== id)
+        const wasBefore = fullActionOrder.indexOf(id) < fullActionOrder.indexOf(cid)
+        without.splice(without.indexOf(cid) + (wasBefore ? 1 : 0), 0, id)
+        setActionOrder(without)
+        break
+      }
+    }
+  }
+
+  function actionDragEnd() {
+    if (dragTimer.current !== null) {
+      window.clearTimeout(dragTimer.current)
+      dragTimer.current = null
+    }
+    if (dragAction !== null) {
+      setDragAction(null)
+      document.removeEventListener('touchmove', preventTouchScroll.current)
+    }
+    dragStartPt.current = null
+  }
   // Номер к показу: серверный #42 или локальный K-3 (офлайн-продажа)
   const [placedNumber, setPlacedNumber] = useState<number | string | null>(null)
   const [paidOrderId, setPaidOrderId] = useState<string | null>(null)  // последний оплаченный — для чека
@@ -917,35 +992,93 @@ export default function SellPage() {
           )}
         </div>
 
-        {/* Ряд действий */}
-        <div className="shrink-0 border-t border-gray-100 px-5 pt-3 pb-5 short:pb-3 flex gap-2 overflow-x-auto">
-          <ActionButton icon="customItem" label={t(lang, 'customItem')} onClick={() => setShowCustom(true)} />
-          <ActionButton
-            icon="discount"
-            label={t(lang, 'discount')}
-            active={tableCtx ? !!tableDiscount : !!cart.discount}
-            dimmed={!canDiscount}
-            onClick={() => requirePerm(canDiscount, () => setShowDiscount(true))}
-          />
-          {loyaltyOn && (
-            <ActionButton
-              icon="customers"
-              // Выбранный гость виден прямо на кнопке: имя/телефон вместо «Лояльность»
-              label={cart.guest ? cart.guest.name || formatPhone(cart.guest.phone) : t(lang, 'loyaltyLabel')}
-              active={!!cart.guest}
-              // Лояльность требует сети: балансы гостя валидирует сервер
-              onClick={() => (online ? setShowGuest(true) : toast.error(t(lang, 'offlineBlockedHint')))}
-            />
-          )}
-          <ActionButton icon="refund" label={t(lang, 'refund')} onClick={() => navigate('/transactions')} />
-          {collectTips && (
-            <ActionButton
-              icon="cash"
-              label={t(lang, 'tipTitle')}
-              active={cartTip > 0}
-              onClick={() => { if (shownTotal > 0) setShowTipSheet(true) }}
-            />
-          )}
+        {/* Ряд действий. Long-press на кнопке → режим перестановки (как iOS):
+            кнопка поднимается, тянешь по горизонтали — меняются местами. */}
+        <div
+          ref={actionsRowRef}
+          className="shrink-0 border-t border-gray-100 px-5 pt-3 pb-5 short:pb-3 flex gap-2 overflow-x-auto select-none"
+        >
+          {fullActionOrder.map((id) => {
+            const def = {
+              customItem: {
+                icon: 'customItem' as const,
+                label: t(lang, 'customItem'),
+                visible: true,
+                active: false,
+                dimmed: false,
+                onClick: () => setShowCustom(true),
+              },
+              discount: {
+                icon: 'discount' as const,
+                label: t(lang, 'discount'),
+                visible: true,
+                active: tableCtx ? !!tableDiscount : !!cart.discount,
+                dimmed: !canDiscount,
+                onClick: () => requirePerm(canDiscount, () => setShowDiscount(true)),
+              },
+              loyalty: {
+                icon: 'customers' as const,
+                // Выбранный гость виден прямо на кнопке: имя/телефон вместо «Лояльность»
+                label: cart.guest ? cart.guest.name || formatPhone(cart.guest.phone) : t(lang, 'loyaltyLabel'),
+                visible: loyaltyOn,
+                active: !!cart.guest,
+                dimmed: false,
+                // Лояльность требует сети: балансы гостя валидирует сервер
+                onClick: () => (online ? setShowGuest(true) : toast.error(t(lang, 'offlineBlockedHint'))),
+              },
+              refund: {
+                icon: 'refund' as const,
+                label: t(lang, 'refund'),
+                visible: true,
+                active: false,
+                dimmed: false,
+                onClick: () => navigate('/transactions'),
+              },
+              tip: {
+                icon: 'cash' as const,
+                label: t(lang, 'tipTitle'),
+                visible: collectTips,
+                active: cartTip > 0,
+                dimmed: false,
+                onClick: () => { if (shownTotal > 0) setShowTipSheet(true) },
+              },
+            }[id]
+            if (!def || !def.visible) return null
+            return (
+              <div
+                key={id}
+                data-action-id={id}
+                onPointerDown={(e) => actionDragDown(id, e)}
+                onPointerMove={(e) => actionDragMove(id, e)}
+                onPointerUp={actionDragEnd}
+                onPointerCancel={actionDragEnd}
+                onContextMenu={(e) => dragAction && e.preventDefault()}
+                onClickCapture={(e) => {
+                  // Гасим клик, который браузер шлёт после long-press/перетаскивания
+                  if (suppressActionClick.current) {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    suppressActionClick.current = false
+                  }
+                }}
+                className={`shrink-0 transition-transform ${
+                  dragAction === id
+                    ? 'scale-110 opacity-90 drop-shadow-lg z-10'
+                    : dragAction
+                      ? 'animate-[btn-wiggle_0.3s_ease-in-out_infinite]'
+                      : ''
+                }`}
+              >
+                <ActionButton
+                  icon={def.icon}
+                  label={def.label}
+                  active={def.active}
+                  dimmed={def.dimmed}
+                  onClick={def.onClick}
+                />
+              </div>
+            )
+          })}
         </div>
       </main>
 
@@ -1752,13 +1885,13 @@ function ActionButton({
   return (
     <button
       onClick={onClick}
-      className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-semibold
+      className={`flex items-center gap-2 px-4 h-11 rounded-xl border text-sm font-semibold
                  transition-all whitespace-nowrap active:scale-[0.97] ${
                    active
-                     ? 'border-gray-900 bg-gray-900 text-white'
+                     ? 'border-gray-900 bg-gray-900 text-white shadow-sm'
                      : dimmed
-                       ? 'border-gray-200 text-gray-400'
-                       : 'border-gray-200 text-gray-900 hover:border-gray-400'
+                       ? 'border-gray-200 bg-white text-gray-400'
+                       : 'border-gray-300 bg-white text-gray-900 shadow-sm hover:border-gray-400'
                  }`}
     >
       <Icon name={icon} size={18} />
