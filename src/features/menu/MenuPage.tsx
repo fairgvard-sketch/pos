@@ -19,6 +19,7 @@ import ItemImage from '../../components/ItemImage'
 import ItemEditor from './ItemEditor'
 import ModifierGroupsTab from './ModifierGroupsTab'
 import StationsTab from './StationsTab'
+import OfflineBanner from '../../components/OfflineBanner'
 
 type Tab = 'items' | 'modifiers' | 'stations'
 
@@ -185,6 +186,7 @@ export default function MenuPage() {
       <div className="w-64 shrink-0 bg-white rounded-3xl flex flex-col overflow-hidden">
         <div className="p-4 pb-0 shrink-0">
           <h1 className="text-2xl font-black text-gray-900 mb-3">{t(lang, 'menu')}</h1>
+          <OfflineBanner />
           {/* Секции вертикально: полные названия, иконки, счётчики — ничего не обрезается */}
           <nav className="space-y-1">
             {TABS.map((tb) => {

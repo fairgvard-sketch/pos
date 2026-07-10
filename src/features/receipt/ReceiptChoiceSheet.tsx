@@ -5,7 +5,7 @@ import { t, formatDate, type Lang } from '../../lib/i18n'
 import { formatMoney } from '../../lib/money'
 import type { Location } from '../../types'
 import { fetchReceipt, type Receipt } from './api'
-import { autoPrintReceipt } from './printService'
+import { autoPrintReceipt, autoPrintLocalReceipt } from './printService'
 import ReceiptSheet from './ReceiptSheet'
 import Icon from '../../components/Icon'
 import NumPad from '../../components/NumPad'
@@ -13,6 +13,8 @@ import NumPad from '../../components/NumPad'
 interface Props {
   orderId: string
   location?: Location
+  /** Офлайн: временный чек уже собран на кассе — не ходим за ним в сеть */
+  receipt?: Receipt
   /** Выбор сделан (или чек закрыт) — продолжить поток продажи */
   onDone: () => void
 }
@@ -51,7 +53,7 @@ function buildReceiptText(r: Receipt, location: Location | undefined, lang: Lang
  * После оплаты: «Как выдать чек?» — печать / на телефон (WhatsApp) / без чека.
  * Включается настройкой кассы receiptPrompt (заменяет автопечать).
  */
-export default function ReceiptChoiceSheet({ orderId, location, onDone }: Props) {
+export default function ReceiptChoiceSheet({ orderId, location, receipt: localReceipt, onDone }: Props) {
   const lang = useLangStore((s) => s.lang)
   const printMode = useDeviceStore((s) => s.printMode)
   // 'receipt' — тихая печать не удалась, показываем чек с браузерной печатью
@@ -61,7 +63,9 @@ export default function ReceiptChoiceSheet({ orderId, location, onDone }: Props)
 
   async function choosePaper() {
     setBusy(true)
-    const ok = await autoPrintReceipt(orderId, location, printMode === 'rawbt')
+    const ok = localReceipt
+      ? autoPrintLocalReceipt(localReceipt, location, printMode === 'rawbt')
+      : await autoPrintReceipt(orderId, location, printMode === 'rawbt')
     setBusy(false)
     if (ok) onDone()
     else setStep('receipt') // тихого пути нет — чек с кнопкой печати
@@ -72,7 +76,7 @@ export default function ReceiptChoiceSheet({ orderId, location, onDone }: Props)
     if (phone.length < 11) return
     setBusy(true)
     try {
-      const receipt = await fetchReceipt(orderId)
+      const receipt = localReceipt ?? (await fetchReceipt(orderId))
       const text = buildReceiptText(receipt, location, lang)
       window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, '_blank')
       onDone()
@@ -82,7 +86,7 @@ export default function ReceiptChoiceSheet({ orderId, location, onDone }: Props)
   }
 
   if (step === 'receipt') {
-    return <ReceiptSheet orderId={orderId} onClose={onDone} />
+    return <ReceiptSheet orderId={orderId} receipt={localReceipt} onClose={onDone} />
   }
 
   return (

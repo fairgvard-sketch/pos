@@ -1,8 +1,12 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { QueryClient } from '@tanstack/react-query'
+import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client'
+import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister'
 import { Toaster } from 'react-hot-toast'
 import { supabase } from './lib/supabase'
+import { initNet } from './lib/offline/net'
+import { initDrain } from './lib/offline/drain'
 import DeviceSetupPage from './features/auth/DeviceSetupPage'
 import PinLoginPage from './features/auth/PinLoginPage'
 import ProtectedRoute from './features/auth/ProtectedRoute'
@@ -42,10 +46,27 @@ const queryClient = new QueryClient({
 // Каталог и точка меняются редко — 5 минут без фоновых рефетчей при каждом
 // переходе зал↔продажа↔очередь (меньше сети и батареи терминала). Правки
 // меню/настроек инвалидируют эти ключи явно, так что свежесть не страдает.
-const STATIC_5MIN = { staleTime: 5 * 60_000 }
-for (const key of ['menu_categories', 'menu_items', 'modifier_groups', 'current_location']) {
+// gcTime 7 дней: эти ключи переживают перезагрузку через localStorage-кэш
+// (см. PERSIST_KEYS) — холодный старт офлайн получает каталог/смену/столы.
+const STATIC_5MIN = { staleTime: 5 * 60_000, gcTime: 7 * 24 * 3600_000 }
+for (const key of ['menu_categories', 'menu_items', 'modifier_groups', 'current_location', 'current_shift', 'tables']) {
   queryClient.setQueryDefaults([key], STATIC_5MIN)
 }
+
+// ── Офлайн (фаза 7): read-кэш + очередь мутаций ─────────────
+// Данные для работы без сети: каталог, точка (НДС/реквизиты чека),
+// последняя смена, столы. Остальные ключи (заказы, отчёты) не персистятся —
+// они либо realtime, либо не нужны офлайн.
+const PERSIST_KEYS = new Set(['menu_categories', 'menu_items', 'modifier_groups', 'current_location', 'current_shift', 'tables'])
+const persister = createSyncStoragePersister({
+  storage: window.localStorage,
+  key: 'kassa-query-cache',
+  // Реже пишем в localStorage — main thread терминала (Android 7.1) не блокируем
+  throttleTime: 2000,
+})
+
+initNet()          // детекция сети (события браузера + проба Supabase)
+initDrain(queryClient)  // движок replay офлайн-очереди
 
 /** "/" → куда нужно: нет сессии устройства → /setup, есть → /pin */
 function RootRedirect() {
@@ -69,7 +90,17 @@ function RootRedirect() {
 
 export default function App() {
   return (
-    <QueryClientProvider client={queryClient}>
+    <PersistQueryClientProvider
+      client={queryClient}
+      persistOptions={{
+        persister,
+        maxAge: 7 * 24 * 3600_000,
+        buster: __APP_VERSION__, // новая версия приложения сбрасывает кэш
+        dehydrateOptions: {
+          shouldDehydrateQuery: (q) => PERSIST_KEYS.has(String(q.queryKey[0])) && q.state.status === 'success',
+        },
+      }}
+    >
       <BrowserRouter>
         <AutoLock />
         {/* fallback null: чанк приходит из SW-кэша за миллисекунды, спиннер только мигал бы */}
@@ -179,6 +210,6 @@ export default function App() {
           error: { iconTheme: { primary: '#ef4444', secondary: '#f9fafb' } },
         }}
       />
-    </QueryClientProvider>
+    </PersistQueryClientProvider>
   )
 }

@@ -6,6 +6,9 @@ import { fetchStations } from '../menu/api'
 import { useLangStore } from '../../store/langStore'
 import { t } from '../../lib/i18n'
 import { playNewOrderChime } from '../../lib/sound'
+import { useOutboxStore } from '../../lib/offline/outboxStore'
+import { useNetStore } from '../../lib/offline/net'
+import { enqueueItemReady, enqueueOrderReady } from '../../lib/offline/enqueue'
 import AppSidebar from '../../components/AppSidebar'
 
 const STATION_KEY = 'kassa-queue-station'
@@ -61,13 +64,53 @@ const THEMES = {
   },
 } as const
 
+/** Карточка очереди: серверная или локальное эхо офлайн-заказа */
+type MergedQueueOrder = QueueOrder & { localNumber?: string; isLocal?: boolean }
+
 export default function QueuePage() {
   const lang = useLangStore((s) => s.lang)
   const isRtl = lang === 'he'
   const qc = useQueryClient()
 
-  const { data: orders = [] } = useQuery({ queryKey: ['queue'], queryFn: fetchQueue })
+  const { data: serverOrders = [] } = useQuery({ queryKey: ['queue'], queryFn: fetchQueue })
   const { data: stations = [] } = useQuery({ queryKey: ['stations'], queryFn: fetchStations })
+
+  // ── Офлайн (фаза 7): эхо неотправленных заказов в очереди ──
+  const localOrders = useOutboxStore((s) => s.localOrders)
+  const patchLocalOrder = useOutboxStore((s) => s.patchLocalOrder)
+  const online = useNetStore((s) => s.online)
+
+  const orders = useMemo<MergedQueueOrder[]>(() => {
+    const echo: MergedQueueOrder[] = Object.values(localOrders)
+      .filter((lo) => lo.status !== 'synced' && !lo.localFulfilled && lo.lines.length > 0)
+      // counter-эхо появляется после оплаты (есть чек); столы — сразу
+      .filter((lo) => lo.kind === 'table' || lo.receipt !== null)
+      // после синка place сервер уже отдаёт заказ — эхо не дублируем
+      .filter((lo) => !(lo.serverOrderId && serverOrders.some((o) => o.id === lo.serverOrderId)))
+      .map((lo) => ({
+        id: lo.key,
+        daily_number: lo.serverDailyNumber ?? 0,
+        localNumber: lo.provisionalNumber ?? undefined,
+        order_type: lo.orderType,
+        customer_name: lo.customerName || null,
+        table_label: lo.tableLabel,
+        status: 'paid',
+        paid_at: lo.createdAt,
+        created_at: lo.createdAt,
+        isLocal: true,
+        order_items: lo.lines.map((l) => ({
+          id: l.key,
+          name: l.name,
+          variant_name: l.variantName,
+          qty: l.qty,
+          notes: l.notes || null,
+          station_id: null,
+          prep_status: (lo.readyLineKeys ?? []).includes(l.key) ? ('ready' as const) : ('pending' as const),
+          order_item_modifiers: l.mods.map((m) => ({ name: m.name })),
+        })),
+      }))
+    return [...serverOrders, ...echo].sort((a, b) => a.created_at.localeCompare(b.created_at))
+  }, [serverOrders, localOrders])
 
   // Выбранная станция запоминается на устройстве
   const [station, setStation] = useState<string>(() => localStorage.getItem(STATION_KEY) ?? 'all')
@@ -91,6 +134,45 @@ export default function QueuePage() {
     onSettled: () => qc.invalidateQueries({ queryKey: ['queue'] }),
     onError: (e) => toast.error((e as Error).message),
   })
+
+  // Готовность позиции: эхо — локальная отметка; серверный заказ офлайн —
+  // операция в очередь + оптимистичный кэш (mark_*_ready идемпотентны)
+  function handleItemReady(order: MergedQueueOrder, itemId: string, ready: boolean) {
+    if (order.isLocal) {
+      const lo = localOrders[order.id]
+      if (!lo) return
+      const keys = new Set(lo.readyLineKeys ?? [])
+      if (ready) keys.add(itemId)
+      else keys.delete(itemId)
+      patchLocalOrder(order.id, { readyLineKeys: [...keys] })
+      return
+    }
+    if (!online) {
+      enqueueItemReady(itemId, ready)
+      qc.setQueryData<QueueOrder[]>(['queue'], (old) =>
+        old?.map((o) =>
+          o.id === order.id
+            ? { ...o, order_items: o.order_items.map((i) => (i.id === itemId ? { ...i, prep_status: ready ? 'ready' : 'pending' } : i)) }
+            : o
+        )
+      )
+      return
+    }
+    readyItem.mutate({ id: itemId, ready })
+  }
+
+  function handleAllReady(order: MergedQueueOrder) {
+    if (order.isLocal) {
+      patchLocalOrder(order.id, { localFulfilled: true })
+      return
+    }
+    if (!online) {
+      enqueueOrderReady(order.id)
+      qc.setQueryData<QueueOrder[]>(['queue'], (old) => old?.filter((o) => o.id !== order.id))
+      return
+    }
+    readyOrder.mutate(order.id)
+  }
 
   // Фильтр по станции: показываем заказы, где есть хоть одна позиция станции
   const visibleOrders = useMemo(() => {
@@ -161,8 +243,8 @@ export default function QueuePage() {
                   order={order}
                   lang={lang}
                   theme={c}
-                  onItemReady={(id, ready) => readyItem.mutate({ id, ready })}
-                  onAllReady={() => readyOrder.mutate(order.id)}
+                  onItemReady={(id, ready) => handleItemReady(order, id, ready)}
+                  onAllReady={() => handleAllReady(order)}
                 />
               ))}
             </div>
@@ -178,7 +260,7 @@ type ThemeStyles = typeof THEMES[Theme]
 function OrderCard({
   order, lang, theme, onItemReady, onAllReady,
 }: {
-  order: QueueOrder
+  order: MergedQueueOrder
   lang: 'ru' | 'he'
   theme: ThemeStyles
   onItemReady: (id: string, ready: boolean) => void
@@ -192,7 +274,10 @@ function OrderCard({
       {/* Заголовок карточки */}
       <div className={`flex items-center justify-between px-4 py-3 border-b ${theme.cardBorder}`}>
         <div className="flex items-baseline gap-2">
-          <span className={`text-2xl font-black tabular-nums ${theme.number}`}>#{order.daily_number}</span>
+          {/* Эхо офлайн-заказа показывает локальный номер K-n */}
+          <span className={`text-2xl font-black tabular-nums ${theme.number}`}>
+            {order.localNumber ?? `#${order.daily_number}`}
+          </span>
           {order.table_label ? (
             <span className={`text-xs font-bold uppercase tracking-wide ${theme.number}`}>
               {t(lang, 'tableLabel')} {order.table_label}

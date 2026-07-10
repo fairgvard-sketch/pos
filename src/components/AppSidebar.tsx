@@ -6,10 +6,13 @@ import { useLangStore } from '../store/langStore'
 import { useCartStore } from '../store/cartStore'
 import { fetchCurrentLocation } from '../features/auth/api'
 import { voidTableOrder } from '../features/tables/api'
+import { useOutboxStore } from '../lib/offline/outboxStore'
+import { enqueueTableVoid } from '../lib/offline/enqueue'
 import { t } from '../lib/i18n'
 import Icon from './Icon'
 import type { IconName } from './Icon'
 import LangToggle from './ui/LangToggle'
+import OfflineBadge from './OfflineBadge'
 
 export type SidebarPage = 'sell' | 'hall' | 'queue' | 'transactions' | 'shift' | 'timesheet' | 'menu' | 'analytics' | 'settings'
 
@@ -28,12 +31,25 @@ export default function AppSidebar({ active }: { active: SidebarPage }) {
 
   // Уход в зал. Если открытый счёт стола так и остался пустым (зашли и вышли,
   // ничего не заказав) — отменяем пустышку, чтобы стол не числился занятым.
+  // Офлайн-стол (эхо): open ещё не ушёл → снимаем операции; ушёл → void в очередь.
   function goHall() {
     const emptyOrder = !!tableCtx && tableCtx.existingTotal === 0 && lines.length === 0
     if (emptyOrder) {
-      voidTableOrder(tableCtx!.orderId)
-        .catch(() => {})
-        .finally(() => qc.invalidateQueries({ queryKey: ['open_table_orders'] }))
+      const key = tableCtx!.orderId
+      const st = useOutboxStore.getState()
+      const echo = st.localOrders[key]
+      if (echo && echo.serverOrderId === null) {
+        const openPending = st.ops.some((o) => o.orderKey === key && o.kind === 'table.open' && o.status === 'pending')
+        if (openPending) st.dropUnsent(key)
+        else {
+          enqueueTableVoid({ orderKey: key, orderId: null })
+          st.removeLocalOrder(key)
+        }
+      } else {
+        voidTableOrder(key)
+          .catch(() => {})
+          .finally(() => qc.invalidateQueries({ queryKey: ['open_table_orders'] }))
+      }
     }
     clearCart()
     navigate('/hall')
@@ -86,6 +102,7 @@ export default function AppSidebar({ active }: { active: SidebarPage }) {
       </nav>
 
       <div className="mt-auto space-y-4">
+        <OfflineBadge />
         <div className="px-2">
           <LangToggle />
         </div>

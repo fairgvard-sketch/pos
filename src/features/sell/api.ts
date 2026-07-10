@@ -12,6 +12,8 @@ export interface PlaceOrderResult {
 /**
  * Оформление заказа. clientUuid генерирует касса ЗАРАНЕЕ (идемпотентность):
  * повторная отправка после сбоя сети не создаст дубликат.
+ * placedAt — честное время операции для offline-replay (042): продажа была
+ * в 10:00, доехала в 14:00 → created_at и daily_number считаются от 10:00.
  */
 export async function placeOrder(
   clientUuid: string,
@@ -22,7 +24,8 @@ export async function placeOrder(
   discount: CartDiscount | null = null,
   tableLabel: string = '',
   guestId: string | null = null,
-  redeem: CartRedeem | null = null
+  redeem: CartRedeem | null = null,
+  placedAt: string | null = null
 ): Promise<PlaceOrderResult> {
   const { data, error } = await supabase.rpc('place_order', {
     p_client_uuid: clientUuid,
@@ -30,6 +33,7 @@ export async function placeOrder(
     p_order_type: orderType,
     p_customer_name: customerName,
     p_table_label: tableLabel || null,
+    ...(placedAt ? { p_placed_at: placedAt } : {}),
     p_items: lines.map((l) => ({
       menu_item_id: l.itemId,
       variant_id: l.variantId,
@@ -91,16 +95,37 @@ export async function splitOrder(
   return data as SplitResult
 }
 
-/** Принять оплату по заказу, перевести в paid и присвоить фискальный номер документа */
-export async function payOrder(orderId: string, payments: PaymentInput[], tip: number = 0): Promise<void> {
+export interface PayOrderResult {
+  order_id: string
+  paid: number
+  tip: number
+  receipt_number: number
+}
+
+/**
+ * Принять оплату по заказу, перевести в paid и присвоить фискальный номер.
+ * paymentUuid — ключ идемпотентности (042): и ретрай React Query, и
+ * offline-replay с тем же UUID вернут ТОТ ЖЕ результат (включая
+ * receipt_number) без повторного списания. paidAt — честное время оплаты.
+ */
+export async function payOrder(
+  orderId: string,
+  payments: PaymentInput[],
+  tip: number = 0,
+  paymentUuid: string | null = null,
+  paidAt: string | null = null
+): Promise<PayOrderResult> {
   // Один round-trip: фискальный номер присваивает сам pay_order (041) —
   // отдельный вызов assign_receipt_number больше не нужен.
-  // p_tip только при чаевых: до применения миграции 033 в БД живёт
-  // двухаргументная pay_order — обычная оплата не должна ломаться
-  const { error } = await supabase.rpc('pay_order', {
+  // Опциональные параметры шлём только заданными: до применения 042 в БД
+  // живёт трёхаргументная pay_order — обычная оплата не должна ломаться
+  const { data, error } = await supabase.rpc('pay_order', {
     p_order_id: orderId,
     p_payments: payments,
     ...(tip > 0 ? { p_tip: tip } : {}),
+    ...(paymentUuid ? { p_payment_uuid: paymentUuid } : {}),
+    ...(paidAt ? { p_paid_at: paidAt } : {}),
   })
   if (error) throw new Error(error.message)
+  return data as PayOrderResult
 }

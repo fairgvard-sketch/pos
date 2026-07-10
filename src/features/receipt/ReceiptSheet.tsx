@@ -9,7 +9,10 @@ import { t } from '../../lib/i18n'
 import type { Location } from '../../types'
 
 interface Props {
-  orderId: string
+  /** id серверного заказа — чек тянется fetchReceipt */
+  orderId?: string
+  /** Готовый чек (офлайн: временный документ, собранный на кассе) — без запроса */
+  receipt?: Receipt
   onClose: () => void
 }
 
@@ -18,10 +21,15 @@ interface Props {
  * Сам чек — ВСЕГДА на иврите и RTL (фискальный документ Израиля),
  * независимо от языка интерфейса. Кнопки модалки — на языке UI.
  */
-export default function ReceiptSheet({ orderId, onClose }: Props) {
+export default function ReceiptSheet({ orderId, receipt: localReceipt, onClose }: Props) {
   const lang = useLangStore((s) => s.lang)
   const printMode = useDeviceStore((s) => s.printMode)
-  const { data: receipt, isLoading } = useQuery({ queryKey: ['receipt', orderId], queryFn: () => fetchReceipt(orderId) })
+  const { data: fetched, isLoading } = useQuery({
+    queryKey: ['receipt', orderId],
+    queryFn: () => fetchReceipt(orderId!),
+    enabled: !localReceipt && !!orderId,
+  })
+  const receipt = localReceipt ?? fetched
   const { data: location } = useQuery({ queryKey: ['current_location'], queryFn: fetchCurrentLocation })
 
   /**
@@ -114,18 +122,18 @@ function ReceiptBody({ receipt: r, location }: { receipt: Receipt; location: Loc
         {location?.receipt_tax_id && <div className="text-xs">ע.מ/ח.פ: {location.receipt_tax_id}</div>}
       </div>
 
-      {/* Тип документа + сквозной номер */}
+      {/* Тип документа + сквозной номер (у временного номера ещё нет) */}
       <div className="text-center font-bold text-sm">
         {docTypeLabel(r.doc_type)} {r.receipt_number ?? '—'}
       </div>
-      {/* Оригинал; перепечатка — *העתק* (TODO: флаг копии) */}
-      <div className="text-center text-xs mb-1">*מקור*</div>
+      {/* Оригинал; офлайн — временный документ (номер присвоится при синке) */}
+      <div className="text-center text-xs mb-1">{r.provisional ? '*מסמך זמני*' : '*מקור*'}</div>
 
       <Divider />
 
       {/* Мета: метка справа, значение слева (RTL) */}
       <MetaRow label="תאריך:" value={`${timeStr} ${dateStr}`} />
-      <MetaRow label="הזמנה:" value={`#${r.daily_number}`} />
+      <MetaRow label="הזמנה:" value={r.provisional && r.provisional_number ? r.provisional_number : `#${r.daily_number}`} />
       {r.table_label && <MetaRow label="שולחן:" value={r.table_label} />}
       {r.customer_name && <MetaRow label="לקוח/ה:" value={r.customer_name} />}
       {r.staff_name && <MetaRow label="מוכר/ת:" value={r.staff_name} />}

@@ -5,6 +5,7 @@ import { fetchTimesheetReport, punchByPin, type TimeEntryRow, type TimesheetRepo
 import { useAuthStore } from '../../store/authStore'
 import { useLangStore } from '../../store/langStore'
 import { t, type Lang } from '../../lib/i18n'
+import { useNetStore } from '../../lib/offline/net'
 import AppSidebar from '../../components/AppSidebar'
 import EntryEditSheet from './EntryEditSheet'
 
@@ -107,6 +108,12 @@ export default function TimesheetPage() {
   const submit = useCallback(
     async (fullPin: string) => {
       if (submitting.current) return
+      // Отметка времени требует сети: PIN сверяет сервер (bcrypt в БД)
+      if (!useNetStore.getState().online) {
+        toast.error(t(lang, 'offlineBlockedHint'))
+        setPin('')
+        return
+      }
       submitting.current = true
       setChecking(true)
       try {

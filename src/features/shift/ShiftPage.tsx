@@ -14,6 +14,8 @@ import { useLangStore } from '../../store/langStore'
 import { useDeviceStore } from '../../store/deviceStore'
 import { t, formatTime } from '../../lib/i18n'
 import { can } from '../../lib/perms'
+import { useOutboxStore, pendingOpsCount } from '../../lib/offline/outboxStore'
+import { useNetStore } from '../../lib/offline/net'
 import { formatMoney, parseMoney } from '../../lib/money'
 import AppSidebar from '../../components/AppSidebar'
 import BackButton from '../../components/BackButton'
@@ -62,6 +64,10 @@ export default function ShiftPage() {
 
   // Настройки точки: право закрытия, напоминание, порог наличных
   const canCloseShift = can(staff?.role, 'close_shift', location?.settings)
+  // Офлайн (фаза 7): закрытие смены заблокировано, пока очередь не пуста
+  const outboxOps = useOutboxStore((s) => s.ops)
+  const pendingOps = pendingOpsCount({ ops: outboxOps })
+  const online = useNetStore((s) => s.online)
   const remindClose = useCloseReminder(shift?.opened_at, location?.settings?.shift?.close_reminder)
   const cashWarnAt = location?.settings?.shift?.cash_warn_threshold ?? null
   const tooMuchCash = report != null && cashWarnAt != null && cashWarnAt > 0 && report.expected_cash > cashWarnAt
@@ -261,18 +267,21 @@ export default function ShiftPage() {
               <button
                 onClick={() => {
                   if (!canCashMove) { toast.error(t(lang, 'permManagerToast')); return }
+                  // add_cash_movement не идемпотентен — без сети недоступен
+                  if (!online) { toast.error(t(lang, 'offlineBlockedHint')); return }
                   setMovementType('in')
                 }}
-                className={`btn-secondary !rounded-2xl ${canCashMove ? '' : '!opacity-40'}`}
+                className={`btn-secondary !rounded-2xl ${canCashMove && online ? '' : '!opacity-40'}`}
               >
                 {t(lang, 'cashInBtn')}
               </button>
               <button
                 onClick={() => {
                   if (!canCashMove) { toast.error(t(lang, 'permManagerToast')); return }
+                  if (!online) { toast.error(t(lang, 'offlineBlockedHint')); return }
                   setMovementType('out')
                 }}
-                className={`btn-secondary !rounded-2xl ${canCashMove ? '' : '!opacity-40'}`}
+                className={`btn-secondary !rounded-2xl ${canCashMove && online ? '' : '!opacity-40'}`}
               >
                 {t(lang, 'cashOutBtn')}
               </button>
@@ -308,9 +317,13 @@ export default function ShiftPage() {
           <button
             onClick={() => {
               if (!canCloseShift) { toast.error(t(lang, 'permManagerToast')); return }
+              // Офлайн-очередь не пуста: replay-платежи должны упасть в ЭТУ
+              // смену (иначе — 'no open shift' и ручной разбор). Сначала синк.
+              if (pendingOps > 0) { toast.error(`${t(lang, 'offlineCloseShiftBlocked')} (${pendingOps})`); return }
+              if (!online) { toast.error(t(lang, 'offlineBlockedHint')); return }
               setClosing(true)
             }}
-            className={`btn-danger w-full !rounded-2xl ${canCloseShift ? '' : '!opacity-40'}`}
+            className={`btn-danger w-full !rounded-2xl ${canCloseShift && online && pendingOps === 0 ? '' : '!opacity-40'}`}
           >
             {t(lang, 'closeShift')}
           </button>

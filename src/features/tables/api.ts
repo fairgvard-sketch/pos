@@ -78,21 +78,41 @@ export interface TableOrderResult {
   existing: boolean
 }
 
-/** Открыть (или получить существующий) счёт стола */
-export async function openTableOrder(tableId: string, staffId: string): Promise<TableOrderResult> {
+/**
+ * Открыть (или получить существующий) счёт стола.
+ * clientUuid/openedAt — для offline-replay (042): заказ с этим client_uuid
+ * уже существует → вернётся он же, повтор не создаст второй счёт.
+ */
+export async function openTableOrder(
+  tableId: string,
+  staffId: string,
+  clientUuid: string | null = null,
+  openedAt: string | null = null
+): Promise<TableOrderResult> {
   const { data, error } = await supabase.rpc('open_or_get_table_order', {
     p_table_id: tableId,
     p_staff_id: staffId,
+    ...(clientUuid ? { p_client_uuid: clientUuid } : {}),
+    ...(openedAt ? { p_opened_at: openedAt } : {}),
   })
   if (error) throw new Error(error.message)
   return data as TableOrderResult
 }
 
-/** Дозаказ: добавить позиции в открытый счёт, пересчитать итоги */
-export async function appendToOrder(orderId: string, staffId: string, lines: CartLine[]): Promise<{ total: number }> {
+/**
+ * Дозаказ: добавить позиции в открытый счёт, пересчитать итоги.
+ * opUuid — ключ идемпотентности (042): replay не дублирует строки.
+ */
+export async function appendToOrder(
+  orderId: string,
+  staffId: string,
+  lines: CartLine[],
+  opUuid: string | null = null
+): Promise<{ total: number }> {
   const { data, error } = await supabase.rpc('append_to_order', {
     p_order_id: orderId,
     p_staff_id: staffId,
+    ...(opUuid ? { p_op_uuid: opUuid } : {}),
     p_items: lines.map((l) => ({
       menu_item_id: l.itemId,
       variant_id: l.variantId,

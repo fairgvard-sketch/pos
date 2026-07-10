@@ -1,4 +1,4 @@
-import { fetchReceipt, fetchRefundReceipt } from './api'
+import { fetchReceipt, fetchRefundReceipt, type Receipt } from './api'
 import { renderReceiptCanvas, renderRefundReceiptCanvas, renderKitchenTicketCanvas, type KitchenTicketData } from './printCanvas'
 import { printCanvasSilently } from '../../lib/escpos'
 import type { Location } from '../../types'
@@ -25,6 +25,22 @@ export async function autoPrintReceipt(
       }, 3000)
     }
     return ok
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Автопечать ВРЕМЕННОГО чека офлайн-продажи (фаза 7): чек уже собран
+ * на кассе (buildLocalReceipt), сети нет — печатаем без fetchReceipt.
+ */
+export function autoPrintLocalReceipt(
+  receipt: Receipt,
+  location: Location | undefined,
+  allowRawbt: boolean,
+): boolean {
+  try {
+    return printCanvasSilently(renderReceiptCanvas(receipt, location), allowRawbt)
   } catch {
     return false
   }

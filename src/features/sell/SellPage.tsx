@@ -12,7 +12,13 @@ import { useAuthStore } from '../../store/authStore'
 import { useLangStore } from '../../store/langStore'
 import { useDeviceStore } from '../../store/deviceStore'
 import { playPaymentChime } from '../../lib/sound'
-import { autoPrintReceipt, printKitchenTicket } from '../receipt/printService'
+import { autoPrintReceipt, autoPrintLocalReceipt, printKitchenTicket } from '../receipt/printService'
+import { buildLocalReceipt } from '../receipt/localReceipt'
+import type { Receipt } from '../receipt/api'
+import { OfflineError, withOfflineFallback, useNetStore } from '../../lib/offline/net'
+import { enqueueOfflineSale, enqueueOfflinePayment, enqueueTableAppend, enqueueTablePayment, enqueueTableVoid } from '../../lib/offline/enqueue'
+import { useOutboxStore } from '../../lib/offline/outboxStore'
+import { billLineToReceiptLine } from '../receipt/localReceipt'
 import type { KitchenTicketLine } from '../receipt/printCanvas'
 import { t } from '../../lib/i18n'
 import { can } from '../../lib/perms'
@@ -76,6 +82,12 @@ interface PayingOrder {
   fromCart?: boolean
   /** Выбранные чаевые (агороты) — сверх total, вне базы НДС */
   tip?: number
+  /**
+   * Офлайн (фаза 7): заказ НЕ создан на сервере — orderId = clientUuid
+   * корзины, итог посчитан на кассе (зеркало 034). Подтверждение оплаты
+   * ставит place+pay в офлайн-очередь одной группой.
+   */
+  offline?: boolean
 }
 
 /** Подписи тикета на языке интерфейса кассы */
@@ -111,6 +123,7 @@ export default function SellPage() {
   const tipSmartFixed = useDeviceStore((s) => s.tipSmartFixed)
   const qc = useQueryClient()
   const navigate = useNavigate()
+  const online = useNetStore((s) => s.online)
 
   const { data: shift, isLoading: shiftLoading } = useQuery({ queryKey: ['current_shift'], queryFn: fetchCurrentShift })
   const { data: location } = useQuery({ queryKey: ['current_location'], queryFn: fetchCurrentLocation })
@@ -145,11 +158,14 @@ export default function SellPage() {
   const [showTableSheet, setShowTableSheet] = useState(false)
   // Строка, у которой правим цену вручную (edit-режим PriceSheet)
   const [editingPrice, setEditingPrice] = useState<CartLine | null>(null)
-  const [placedNumber, setPlacedNumber] = useState<number | null>(null)
+  // Номер к показу: серверный #42 или локальный K-3 (офлайн-продажа)
+  const [placedNumber, setPlacedNumber] = useState<number | string | null>(null)
   const [paidOrderId, setPaidOrderId] = useState<string | null>(null)  // последний оплаченный — для чека
+  // Офлайн: временный чек последней продажи (кнопка «Чек» без сети)
+  const [paidLocalReceipt, setPaidLocalReceipt] = useState<Receipt | null>(null)
   const [showReceipt, setShowReceipt] = useState(false)
   // Окно «Как выдать чек?» (настройка receiptPrompt); after — отложенное продолжение потока
-  const [receiptChoice, setReceiptChoice] = useState<{ orderId: string; after: () => void } | null>(null)
+  const [receiptChoice, setReceiptChoice] = useState<{ orderId: string; receipt?: Receipt; after: () => void } | null>(null)
   const [clientUuid, setClientUuid] = useState(() => crypto.randomUUID())
   // Заказ, ожидающий оплаты (после place, до pay).
   // intent: 'card' — оплатить сразу картой; 'cash'/'choose' — открыть диалог
@@ -251,7 +267,7 @@ export default function SellPage() {
   function proceedPayment(o: PayingOrder, tip: number) {
     setTipping(null)
     if (o.intent === 'card') {
-      pay.mutate({ orderId: o.orderId, dailyNumber: o.dailyNumber, payments: [{ method: 'card', amount: o.total + tip }], tip })
+      pay.mutate({ orderId: o.orderId, dailyNumber: o.dailyNumber, payments: [{ method: 'card', amount: o.total + tip }], tip, offline: o.offline })
     } else {
       setPayingOrder({ ...o, tip })
     }
@@ -259,17 +275,19 @@ export default function SellPage() {
 
   // Отмена на шаге чаевых или в окне оплаты: свежий заказ из корзины
   // аннулировать (аудит цел, void не delete) и сменить UUID — корзина
-  // осталась, следующий «Оформить» создаст новый заказ
+  // осталась, следующий «Оформить» создаст новый заказ.
+  // Офлайн-заказ ещё нигде не существует (enqueue происходит только при
+  // подтверждении оплаты) — аннулировать нечего.
   function cancelPayFlow(o: PayingOrder) {
     setTipping(null)
     setPayingOrder(null)
     if (o.fromCart) {
       setClientUuid(crypto.randomUUID())
-      voidTableOrder(o.orderId).catch(() => {})
+      if (!o.offline) voidTableOrder(o.orderId).catch(() => {})
     }
   }
 
-  function finishPaid(num: number, orderId: string) {
+  function finishPaid(num: number | string, orderId: string, localReceipt?: Receipt) {
     const wasTable = !!cart.tableCtx
     // Автопечать — ДО очистки корзины (тикету нужны заметки позиций).
     // Тикет печатается один раз на заказ: при сплите остаток его не дублирует
@@ -287,13 +305,18 @@ export default function SellPage() {
         printMode === 'rawbt'
       )
     }
-    // «Как выдать чек?» заменяет автопечать: печать — только по выбору кассира
-    if (!receiptPromptOn && autoPrintOn) void autoPrintReceipt(orderId, location, printMode === 'rawbt')
+    // «Как выдать чек?» заменяет автопечать: печать — только по выбору кассира.
+    // Офлайн: временный чек уже собран на кассе — печатаем без fetchReceipt.
+    if (!receiptPromptOn && autoPrintOn) {
+      if (localReceipt) autoPrintLocalReceipt(localReceipt, location, printMode === 'rawbt')
+      else void autoPrintReceipt(orderId, location, printMode === 'rawbt')
+    }
     setPayingOrder(null)
     setShowEqualSplit(false)
     cart.clear()
     setClientUuid(crypto.randomUUID())
     setPaidOrderId(orderId)  // для кнопки «Чек»
+    setPaidLocalReceipt(localReceipt ?? null)
     if (paymentSound) playPaymentChime()
     qc.invalidateQueries({ queryKey: ['orders'] })
     qc.invalidateQueries({ queryKey: ['current_shift'] })
@@ -318,14 +341,14 @@ export default function SellPage() {
       // Авто-скрытие убрано: закрывается по «Готово» или показу чека
     }
     // Сначала выбор чека (навигация/номер заказа ждут его), потом обычный поток
-    if (receiptPromptOn) setReceiptChoice({ orderId, after: continueFlow })
+    if (receiptPromptOn) setReceiptChoice({ orderId, receipt: localReceipt, after: continueFlow })
     else continueFlow()
   }
 
   // «Готово» в модалке номера: если остался неоплаченный остаток сплита —
   // сразу открываем его оплату
   function dismissPlaced() {
-    const num = placedNumber ?? 0
+    const num = typeof placedNumber === 'number' ? placedNumber : 0
     setPlacedNumber(null)
     if (splitRemainder) {
       startPayment({ orderId: splitRemainder.orderId, dailyNumber: num, total: splitRemainder.total, intent: 'choose' })
@@ -355,33 +378,210 @@ export default function SellPage() {
   //   card   → сразу оплатить картой
   //   cash   → открыть диалог с расчётом сдачи
   //   choose → открыть диалог выбора способа
+  // Сеть упала/зависла (>4с) → продажа продолжается ОФЛАЙН: заказ не
+  // создаётся, итог считает касса (зеркало 034), place+pay встанут в
+  // очередь при подтверждении оплаты. Лояльность офлайн недоступна
+  // (баланс гостя валидирует сервер) — с гостем требуем сеть.
   const place = useMutation({
-    mutationFn: (intent: 'cash' | 'card' | 'choose') =>
-      placeOrder(clientUuid, staff!.id, cart.orderType, cart.customerName, cart.lines, cart.discount, cart.tableLabel, cart.guest?.id ?? null, cart.redeem).then((r) => ({ ...r, intent })),
-    onSuccess: (res) => {
-      startPayment({ orderId: res.order_id, dailyNumber: res.daily_number, total: res.total, intent: res.intent, fromCart: true })
+    mutationFn: async (intent: 'cash' | 'card' | 'choose') => {
+      const c = useCartStore.getState()
+      try {
+        const r = await withOfflineFallback(() =>
+          placeOrder(clientUuid, staff!.id, c.orderType, c.customerName, c.lines, c.discount, c.tableLabel, c.guest?.id ?? null, c.redeem)
+        )
+        return { ...r, intent, offline: false }
+      } catch (e) {
+        if (e instanceof OfflineError && !c.guest) {
+          return {
+            order_id: clientUuid,
+            daily_number: 0,
+            total: cartTotal(c.lines, c.discount, null),
+            duplicate: false,
+            intent,
+            offline: true,
+          }
+        }
+        throw e
+      }
     },
-    onError: (e) => toast.error(e.message),
+    onSuccess: (res) => {
+      startPayment({ orderId: res.order_id, dailyNumber: res.daily_number, total: res.total, intent: res.intent, fromCart: true, offline: res.offline })
+    },
+    onError: (e) => toast.error(e instanceof OfflineError ? t(lang, 'offlineBlockedHint') : e.message),
   })
 
-  // Шаг 2: принять оплату → показать номер, очистить корзину
+  // Шаг 2: принять оплату → показать номер, очистить корзину.
+  // Три пути:
+  //   онлайн        → pay_order (с payment_uuid: ретрай не спишет дважды)
+  //   офлайн-заказ  → place+pay в очередь одной группой, временный чек K-n
+  //   таймаут pay   → заказ уже создан: в очередь только pay (с тем же
+  //                   payment_uuid — если вызов долетел, replay вернёт его результат)
   const pay = useMutation({
-    mutationFn: (v: { orderId: string; dailyNumber: number; payments: PaymentInput[]; tip?: number }) =>
-      payOrder(v.orderId, v.payments, v.tip ?? 0),
-    onSuccess: (_r, v) => finishPaid(v.dailyNumber, v.orderId),
+    mutationFn: async (v: { orderId: string; dailyNumber: number; payments: PaymentInput[]; tip?: number; offline?: boolean }) => {
+      const c = useCartStore.getState()
+      const tip = v.tip ?? 0
+      const paidAt = new Date().toISOString()
+
+      // Оплата счёта СТОЛА офлайн: pay в очередь за append'ами того же счёта.
+      // Чек собирается из серверного кэша строк + эха + не должен ждать сеть.
+      const enqueueTablePay = (paymentUuid?: string) => {
+        const key = v.orderId
+        const st = useOutboxStore.getState()
+        const echo = st.localOrders[key]
+        const isLocal = !!echo && echo.serverOrderId === null
+        const knownTotal = v.payments.reduce((s, p) => s + p.amount, 0) - tip
+        const dailyNumber = echo?.serverDailyNumber ?? (v.dailyNumber || null)
+        // Локальный номер K-n нужен, только если серверного ещё нет
+        const prov = dailyNumber ? null : (echo?.provisionalNumber ?? st.nextProvisionalNumber())
+        const cachedLines = (qc.getQueryData(['order_lines', key]) as BillLine[] | undefined) ?? []
+        const receipt = buildLocalReceipt({
+          lines: echo?.lines ?? [],
+          extraLines: cachedLines.map(billLineToReceiptLine),
+          orderType: 'here',
+          customerName: c.customerName,
+          tableLabel: c.tableCtx?.tableLabel ?? null,
+          discount: null,
+          redeem: null,
+          payments: v.payments,
+          tip,
+          staffName: staff!.name,
+          location,
+          provisionalNumber: prov,
+          dailyNumber,
+          knownTotal,
+          paidAt,
+        })
+        enqueueTablePayment({
+          orderKey: key,
+          orderId: isLocal ? null : key,
+          tableId: c.tableCtx?.tableId ?? null,
+          tableLabel: c.tableCtx?.tableLabel ?? null,
+          payments: v.payments,
+          tip,
+          total: knownTotal,
+          receipt,
+          provisionalNumber: prov,
+          dailyNumber,
+          paymentUuid,
+        })
+        return { offlineNumber: (prov ?? dailyNumber) as number | string | null, orderId: key, receipt }
+      }
+
+      if (v.offline && c.tableCtx) {
+        return enqueueTablePay()
+      }
+
+      if (v.offline) {
+        const { provisionalNumber } = enqueueOfflineSale({
+          clientUuid: v.orderId,
+          staffId: staff!.id,
+          orderType: c.orderType,
+          customerName: c.customerName,
+          tableLabel: c.tableLabel,
+          lines: c.lines,
+          discount: c.discount,
+          payments: v.payments,
+          tip,
+          total: cartTotal(c.lines, c.discount, null),
+          buildReceipt: (prov) =>
+            buildLocalReceipt({
+              lines: c.lines,
+              orderType: c.orderType,
+              customerName: c.customerName,
+              tableLabel: c.tableLabel || null,
+              discount: c.discount,
+              redeem: null,
+              payments: v.payments,
+              tip,
+              staffName: staff!.name,
+              location,
+              provisionalNumber: prov,
+              paidAt,
+            }),
+        })
+        const echo = useOutboxStore.getState().localOrders[v.orderId]
+        return { offlineNumber: provisionalNumber as number | string, orderId: v.orderId, receipt: echo?.receipt ?? undefined }
+      }
+
+      const paymentUuid = crypto.randomUUID()
+      try {
+        await withOfflineFallback(() => payOrder(v.orderId, v.payments, tip, paymentUuid, null))
+        return null
+      } catch (e) {
+        if (e instanceof OfflineError) {
+          // Стол: таймаут оплаты серверного счёта → в очередь с тем же uuid
+          if (c.tableCtx) return enqueueTablePay(paymentUuid)
+          // Итог заказа известен серверу (place прошёл): сумма платежей − tip
+          const knownTotal = v.payments.reduce((s, p) => s + p.amount, 0) - tip
+          const receipt = buildLocalReceipt({
+            lines: c.lines,
+            orderType: c.orderType,
+            customerName: c.customerName,
+            tableLabel: c.tableLabel || null,
+            discount: c.discount,
+            redeem: c.redeem,
+            payments: v.payments,
+            tip,
+            staffName: staff!.name,
+            location,
+            provisionalNumber: null,
+            dailyNumber: v.dailyNumber || null,
+            knownTotal,
+            paidAt,
+          })
+          enqueueOfflinePayment({
+            orderId: v.orderId,
+            dailyNumber: v.dailyNumber || null,
+            orderType: c.orderType,
+            customerName: c.customerName,
+            tableLabel: c.tableLabel || null,
+            lines: c.lines,
+            payments: v.payments,
+            tip,
+            total: receipt.total,
+            receipt,
+            paymentUuid,
+          })
+          return { offlineNumber: (v.dailyNumber || null) as number | string | null, orderId: v.orderId, receipt }
+        }
+        throw e
+      }
+    },
+    onSuccess: (res, v) => {
+      if (res) finishPaid(res.offlineNumber ?? v.dailyNumber, res.orderId, res.receipt)
+      else finishPaid(v.dailyNumber, v.orderId)
+    },
     onError: (e) => toast.error(e.message),
   })
 
   const tableCtx = cart.tableCtx
 
+  // Офлайн (фаза 7): эхо счёта стола. Ключ = tableCtx.orderId — локальный
+  // uuid (стол открыт офлайн) либо серверный order_id (офлайн-дозаказ к
+  // серверному счёту). isLocalTable = счёт существует только на кассе.
+  const tableEcho = useOutboxStore((s) => (tableCtx ? s.localOrders[tableCtx.orderId] : undefined))
+  const isLocalTable = !!tableEcho && tableEcho.serverOrderId === null
+
   // Уже заказанные позиции открытого счёта стола (read-only, до дозаказа).
   // cart.lines в режиме стола = только НОВЫЕ позиции, поэтому существующие
   // тянем отдельно, чтобы бариста/кассир видел, что уже на столе.
-  const { data: existingLines = [] } = useQuery({
+  const { data: fetchedLines = [] } = useQuery({
     queryKey: ['order_lines', tableCtx?.orderId],
     queryFn: () => fetchOrderLines(tableCtx!.orderId),
-    enabled: !!tableCtx,
+    enabled: !!tableCtx && !isLocalTable,
   })
+  // Строки счёта: серверные + офлайн-дозаказы из эха
+  const existingLines = useMemo<BillLine[]>(() => {
+    const echoLines: BillLine[] = (tableEcho?.lines ?? []).map((l) => ({
+      id: l.key,
+      name: l.name,
+      variant_name: l.variantName,
+      qty: l.qty,
+      line_total: lineUnitPrice(l) * l.qty,
+      modifiers: l.mods.map((m) => m.name),
+    }))
+    return [...fetchedLines, ...echoLines]
+  }, [fetchedLines, tableEcho])
   const existingSubtotal = existingLines.reduce((s, l) => s + l.line_total, 0)
 
   // Скидка на счёт стола живёт на ЗАКАЗЕ (не в корзине): ставится RPC
@@ -415,9 +615,43 @@ export default function SellPage() {
     onError: (e) => toast.error(e.message),
   })
 
-  // Режим столов: сохранить дозаказ в открытый счёт (остаётся open) → назад в зал
+  // Режим столов: сохранить дозаказ в открытый счёт (остаётся open) → назад в зал.
+  // Локальный стол → всегда в очередь (FIFO за open); серверный + обрыв сети →
+  // в очередь с тем же op_uuid (если вызов долетел, replay не задвоит строки).
   const saveBill = useMutation({
-    mutationFn: () => appendToOrder(tableCtx!.orderId, staff!.id, cart.lines),
+    mutationFn: async () => {
+      const c = useCartStore.getState()
+      const key = tableCtx!.orderId
+      if (isLocalTable) {
+        enqueueTableAppend({
+          orderKey: key,
+          orderId: null,
+          staffId: staff!.id,
+          lines: c.lines,
+          totalAfter: (tableEcho?.total ?? 0) + cartSubtotal(c.lines),
+        })
+        return
+      }
+      const opUuid = crypto.randomUUID()
+      try {
+        await withOfflineFallback(() => appendToOrder(key, staff!.id, c.lines, opUuid))
+      } catch (e) {
+        if (e instanceof OfflineError) {
+          enqueueTableAppend({
+            orderKey: key,
+            orderId: key,
+            staffId: staff!.id,
+            lines: c.lines,
+            totalAfter: tableCtx!.existingTotal + cartSubtotal(c.lines),
+            opUuid,
+            tableId: tableCtx!.tableId,
+            tableLabel: tableCtx!.tableLabel,
+          })
+          return
+        }
+        throw e
+      }
+    },
     onSuccess: () => {
       toast.success(t(lang, 'billSaved'))
       // Тикет на кухню для дозаказа: только новые позиции, без номера
@@ -443,24 +677,83 @@ export default function SellPage() {
     onError: (e) => toast.error(e.message),
   })
 
-  // Режим столов: добавить новые позиции (если есть) и открыть оплату всего счёта
+  // Режим столов: добавить новые позиции (если есть) и открыть оплату всего счёта.
+  // offline-флаг уводит последующий pay в офлайн-очередь (за append'ом, FIFO).
   const billToPay = useMutation({
-    mutationFn: async () => {
-      if (cart.lines.length > 0) {
-        const r = await appendToOrder(tableCtx!.orderId, staff!.id, cart.lines)
-        return r.total
+    mutationFn: async (): Promise<{ total: number; offline: boolean }> => {
+      const c = useCartStore.getState()
+      const key = tableCtx!.orderId
+      if (isLocalTable) {
+        let totalAfter = tableEcho?.total ?? tableCtx!.existingTotal
+        if (c.lines.length > 0) {
+          totalAfter += cartSubtotal(c.lines)
+          enqueueTableAppend({ orderKey: key, orderId: null, staffId: staff!.id, lines: c.lines, totalAfter })
+        }
+        return { total: totalAfter, offline: true }
       }
-      return tableCtx!.existingTotal
+      const opUuid = crypto.randomUUID()
+      try {
+        if (c.lines.length > 0) {
+          const r = await withOfflineFallback(() => appendToOrder(key, staff!.id, c.lines, opUuid))
+          return { total: r.total, offline: false }
+        }
+        return { total: tableCtx!.existingTotal, offline: false }
+      } catch (e) {
+        if (e instanceof OfflineError) {
+          const totalAfter = tableCtx!.existingTotal + cartSubtotal(c.lines)
+          enqueueTableAppend({
+            orderKey: key,
+            orderId: key,
+            staffId: staff!.id,
+            lines: c.lines,
+            totalAfter,
+            opUuid,
+            tableId: tableCtx!.tableId,
+            tableLabel: tableCtx!.tableLabel,
+          })
+          return { total: totalAfter, offline: true }
+        }
+        throw e
+      }
     },
-    onSuccess: (billTotal) => {
-      startPayment({ orderId: tableCtx!.orderId, dailyNumber: 0, total: billTotal, intent: 'choose' })
+    onSuccess: ({ total: billTotal, offline }) => {
+      startPayment({
+        orderId: tableCtx!.orderId,
+        dailyNumber: tableEcho?.serverDailyNumber ?? 0,
+        total: billTotal,
+        intent: 'choose',
+        offline,
+      })
     },
     onError: (e) => toast.error(e.message),
   })
 
-  // Режим столов: отменить пустой/ошибочный счёт
+  // Режим столов: отменить пустой/ошибочный счёт.
+  // Локальный стол: open ещё не ушёл → просто снять операции; ушёл → void в очередь.
   const voidBill = useMutation({
-    mutationFn: () => voidTableOrder(tableCtx!.orderId),
+    mutationFn: async () => {
+      const key = tableCtx!.orderId
+      const st = useOutboxStore.getState()
+      if (isLocalTable) {
+        const openPending = st.ops.some((o) => o.orderKey === key && o.kind === 'table.open' && o.status === 'pending')
+        if (openPending) {
+          st.dropUnsent(key) // на сервер ничего не ушло — отменять нечего
+        } else {
+          enqueueTableVoid({ orderKey: key, orderId: null })
+          st.removeLocalOrder(key) // стол освобождается сразу
+        }
+        return
+      }
+      try {
+        await withOfflineFallback(() => voidTableOrder(key))
+      } catch (e) {
+        if (e instanceof OfflineError) {
+          enqueueTableVoid({ orderKey: key, orderId: key })
+          return
+        }
+        throw e
+      }
+    },
     onSuccess: () => {
       cart.clear()
       qc.invalidateQueries({ queryKey: ['open_table_orders'] })
@@ -689,7 +982,8 @@ export default function SellPage() {
               </div>
               {loyaltyOn && (
                 <button
-                  onClick={() => setShowGuest(true)}
+                  // Лояльность требует сети: балансы гостя валидирует сервер
+                  onClick={() => (online ? setShowGuest(true) : toast.error(t(lang, 'offlineBlockedHint')))}
                   className="input !py-2 mt-2.5 w-full text-start flex items-center gap-2"
                 >
                   <Icon name="customers" size={16} />
@@ -726,6 +1020,13 @@ export default function SellPage() {
                   isRtl={isRtl}
                   busy={voidItem.isPending}
                   onVoid={() => requirePerm(canVoidOrder, () => {
+                    // Офлайн-строки (эхо) и работа без сети: снятие позиции
+                    // требует сервера — упрощение v1, см. план фазы 7
+                    const isEchoLine = (tableEcho?.lines ?? []).some((el) => el.key === l.id)
+                    if (isEchoLine || !online) {
+                      toast.error(t(lang, 'offlineBlockedHint'))
+                      return
+                    }
                     if (confirm(t(lang, 'confirmVoidItem'))) voidItem.mutate(l.id)
                   })}
                 />
@@ -939,9 +1240,10 @@ export default function SellPage() {
           startMode={payingOrder.intent === 'cash' ? 'cash' : 'choose'}
           busy={pay.isPending}
           onCancel={() => cancelPayFlow(payingOrder)}
-          onPay={(payments) => pay.mutate({ orderId: payingOrder.orderId, dailyNumber: payingOrder.dailyNumber, payments, tip: payingOrder.tip ?? 0 })}
-          // split_order пересчитывает итоги без loyalty_discount — при выбранной награде сплит недоступен
-          onSplitItems={cart.redeem ? undefined : () => setShowSplit(true)}
+          onPay={(payments) => pay.mutate({ orderId: payingOrder.orderId, dailyNumber: payingOrder.dailyNumber, payments, tip: payingOrder.tip ?? 0, offline: payingOrder.offline })}
+          // split_order пересчитывает итоги без loyalty_discount — при выбранной
+          // награде сплит недоступен; офлайн — тоже (split_order не идемпотентен)
+          onSplitItems={cart.redeem || payingOrder.offline || !online ? undefined : () => setShowSplit(true)}
           onSplitEqually={() => setShowEqualSplit(true)}
         />
       )}
@@ -963,7 +1265,7 @@ export default function SellPage() {
           busy={pay.isPending}
           onBack={() => setShowEqualSplit(false)}
           onCancel={() => { setShowEqualSplit(false); cancelPayFlow(payingOrder) }}
-          onPay={(payments) => pay.mutate({ orderId: payingOrder.orderId, dailyNumber: payingOrder.dailyNumber, payments, tip: payingOrder.tip ?? 0 })}
+          onPay={(payments) => pay.mutate({ orderId: payingOrder.orderId, dailyNumber: payingOrder.dailyNumber, payments, tip: payingOrder.tip ?? 0, offline: payingOrder.offline })}
         />
       )}
 
@@ -992,6 +1294,11 @@ export default function SellPage() {
           current={tableCtx ? tableDiscount : cart.discount}
           onApply={(d) => {
             if (tableCtx) {
+              // Скидка стола живёт на заказе (RPC) — без сети недоступна (v1)
+              if (isLocalTable || !online) {
+                toast.error(t(lang, 'offlineBlockedHint'))
+                return
+              }
               orderDiscount.mutate(d)  // диалог закроется по успеху RPC
             } else {
               cart.setDiscount(d)
@@ -1069,7 +1376,10 @@ export default function SellPage() {
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center">
           <div className="card px-12 py-10 text-center animate-[pop-in_0.35s_cubic-bezier(0.34,1.56,0.64,1)]">
             <div className="text-sm text-gray-500 mb-2">{t(lang, 'orderPlaced')}</div>
-            <div className="text-7xl font-black text-gray-900 tabular-nums mb-8">#{placedNumber}</div>
+            {/* Офлайн-заказ показывает локальный номер K-n (уже с префиксом) */}
+            <div className="text-7xl font-black text-gray-900 tabular-nums mb-8">
+              {typeof placedNumber === 'string' ? placedNumber : `#${placedNumber}`}
+            </div>
             <div className="grid grid-cols-2 gap-2">
               <button
                 onClick={() => setShowReceipt(true)}
@@ -1087,13 +1397,14 @@ export default function SellPage() {
       )}
 
       {showReceipt && paidOrderId && (
-        <ReceiptSheet orderId={paidOrderId} onClose={() => setShowReceipt(false)} />
+        <ReceiptSheet orderId={paidOrderId} receipt={paidLocalReceipt ?? undefined} onClose={() => setShowReceipt(false)} />
       )}
 
       {/* «Как выдать чек?» — после оплаты, до номера заказа/возврата в зал */}
       {receiptChoice && (
         <ReceiptChoiceSheet
           orderId={receiptChoice.orderId}
+          receipt={receiptChoice.receipt}
           location={location}
           onDone={() => {
             const after = receiptChoice.after

@@ -41,6 +41,13 @@ export interface Receipt {
   staff_name: string | null
   lines: ReceiptLine[]
   payments: ReceiptPayment[]
+  /**
+   * Офлайн (фаза 7): чек построен на кассе без сервера — временный
+   * документ. Печатается с пометкой «מסמך זמני» и локальным номером
+   * заказа (K-n); фискальный receipt_number присвоится при синхронизации.
+   */
+  provisional?: boolean
+  provisional_number?: string | null
 }
 
 export interface RefundReceipt {

@@ -10,6 +10,9 @@ import { useAuthStore } from '../../store/authStore'
 import { useLangStore } from '../../store/langStore'
 import { t, formatElapsed } from '../../lib/i18n'
 import { supabase } from '../../lib/supabase'
+import { OfflineError, withOfflineFallback } from '../../lib/offline/net'
+import { useOutboxStore } from '../../lib/offline/outboxStore'
+import { enqueueTableOpen } from '../../lib/offline/enqueue'
 import type { Table, TableStatus } from '../../types'
 import AppSidebar from '../../components/AppSidebar'
 import Icon from '../../components/Icon'
@@ -54,11 +57,28 @@ export default function HallPage() {
     return () => { supabase.removeChannel(ch) }
   }, [qc])
 
+  // Офлайн (фаза 7): столы, открытые без сети, живут в локальном эхе
+  const localOrders = useOutboxStore((s) => s.localOrders)
+
   const occupancyByTable = useMemo(() => {
     const map = new Map<string, (typeof open)[number]>()
     for (const o of open) map.set(o.table_id, o)
+    // Эхо офлайн-столов: стол занят, пока счёт не оплачен/не отменён
+    for (const lo of Object.values(localOrders)) {
+      if (lo.kind !== 'table' || lo.status === 'synced' || !lo.tableId || lo.receipt) continue
+      if (lo.serverOrderId !== null || map.has(lo.tableId)) continue
+      map.set(lo.tableId, {
+        table_id: lo.tableId,
+        order_id: lo.key,
+        total: lo.total,
+        daily_number: 0,
+        opened_at: lo.createdAt,
+        staff_name: null,
+        item_count: lo.lines.reduce((s, l) => s + l.qty, 0),
+      })
+    }
     return map
-  }, [open])
+  }, [open, localOrders])
 
   // Раскладка на холсте: у неразмещённых столов (pos_x=null) — дефолтная
   // сетка, чтобы их можно было увидеть и растащить. Размещённые — как есть.
@@ -164,9 +184,15 @@ export default function HallPage() {
     const occ = occupancyByTable.get(tb.id)
     holdTimer.current = setTimeout(() => {
       holdFired.current = true
-      // Занятый стол → меню действий; свободный/резерв/недоступный → статус
-      if (occ) setActionTable({ table: tb, occ })
-      else setStatusTable(tb)
+      // Занятый стол → меню действий; свободный/резерв/недоступный → статус.
+      // Локальное эхо (стол открыт офлайн): перенос/слияние требуют сервера
+      if (occ) {
+        if (useOutboxStore.getState().localOrders[occ.order_id]) {
+          toast.error(t(lang, 'offlineBlockedHint'))
+          return
+        }
+        setActionTable({ table: tb, occ })
+      } else setStatusTable(tb)
     }, 500)
   }
   function cancelHold() {
@@ -176,12 +202,41 @@ export default function HallPage() {
   async function openTable(tableId: string, tableLabel: string) {
     if (holdFired.current) return // это был долгий тап — click игнорируем
     if (!staff) return
+
+    // Стол уже открыт офлайн (локальное эхо) → входим в него, без сети
+    const echo = Object.values(useOutboxStore.getState().localOrders).find(
+      (lo) => lo.kind === 'table' && lo.tableId === tableId && lo.status !== 'synced' && !lo.receipt && lo.serverOrderId === null
+    )
+    if (echo) {
+      cart.clear()
+      cart.setTableCtx({ tableId, orderId: echo.key, tableLabel, existingTotal: echo.total })
+      navigate('/sell')
+      return
+    }
+
     try {
-      const res = await openTableOrder(tableId, staff.id)
+      const res = await withOfflineFallback(() => openTableOrder(tableId, staff.id))
       cart.clear()
       cart.setTableCtx({ tableId, orderId: res.order_id, tableLabel, existingTotal: res.total })
       navigate('/sell')
     } catch (e) {
+      if (e instanceof OfflineError) {
+        // Серверный счёт этого стола известен из кэша зала → входим офлайн
+        const occ = occupancyByTable.get(tableId)
+        if (occ) {
+          cart.clear()
+          cart.setTableCtx({ tableId, orderId: occ.order_id, tableLabel, existingTotal: occ.total })
+          navigate('/sell')
+          return
+        }
+        // Свободный стол → открываем офлайн: эхо + операция в очередь
+        const key = crypto.randomUUID()
+        enqueueTableOpen({ key, tableId, tableLabel, staffId: staff.id })
+        cart.clear()
+        cart.setTableCtx({ tableId, orderId: key, tableLabel, existingTotal: 0 })
+        navigate('/sell')
+        return
+      }
       toast.error((e as Error).message)
     }
   }

@@ -7,6 +7,7 @@ import { useAuthStore } from '../../store/authStore'
 import { useLangStore } from '../../store/langStore'
 import { t } from '../../lib/i18n'
 import { parseMoney } from '../../lib/money'
+import { useNetStore } from '../../lib/offline/net'
 import AppSidebar from '../../components/AppSidebar'
 
 /** Экран «смена не открыта»: ввод размена → открытие */
@@ -15,6 +16,7 @@ export default function ShiftGate() {
   const isRtl = lang === 'he'
   const staff = useAuthStore((s) => s.staff)
   const qc = useQueryClient()
+  const online = useNetStore((s) => s.online)
   const [floatStr, setFloatStr] = useState('')
 
   // Префилл размена из настроек точки (Смена → стартовая сумма по умолчанию)
@@ -64,7 +66,12 @@ export default function ShiftGate() {
             <p className="text-[11px] text-gray-500 mt-1.5">{t(lang, 'openingFloatHint')}</p>
           </div>
 
-          <button type="submit" disabled={open.isPending} className="btn-primary w-full !py-3.5 !rounded-2xl">
+          {/* Открытие смены — только онлайн: open_shift не идемпотентен,
+              а без смены сервер всё равно не примет replay-продажи */}
+          {!online && (
+            <p className="text-xs text-amber-600 font-semibold mb-2">{t(lang, 'offlineBlockedHint')}</p>
+          )}
+          <button type="submit" disabled={open.isPending || !online} className="btn-primary w-full !py-3.5 !rounded-2xl">
             {t(lang, 'openShift')}
           </button>
         </form>

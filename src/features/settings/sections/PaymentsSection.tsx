@@ -1,8 +1,11 @@
+import { useState } from 'react'
 import toast from 'react-hot-toast'
 import { useLangStore } from '../../../store/langStore'
 import { useDeviceStore, type QuickAmountsMode } from '../../../store/deviceStore'
 import { playPaymentChime } from '../../../lib/sound'
 import { t } from '../../../lib/i18n'
+import { useOutboxStore, pendingOpsCount, hasFailedOps } from '../../../lib/offline/outboxStore'
+import OfflineOpsSheet from '../../offline/OfflineOpsSheet'
 import { Group, NavRow, SoonRow, ToggleRow } from '../ui'
 import type { DetailId } from '../registry'
 
@@ -23,6 +26,17 @@ export default function PaymentsSection({ openDetail }: { openDetail: (id: Detai
 
   const soon = () => toast(t(lang, 'featureSoon'))
   const methodsLabel = payMethodOrder.map((m) => t(lang, m === 'cash' ? 'payCash' : 'payCard')).join(' · ')
+
+  // Офлайн-очередь (фаза 7) — живой статус вместо заглушки «Скоро»
+  const ops = useOutboxStore((s) => s.ops)
+  const [showOps, setShowOps] = useState(false)
+  const pending = pendingOpsCount({ ops })
+  const failed = hasFailedOps({ ops })
+  const offlineValue = failed
+    ? t(lang, 'offlineAttention')
+    : pending > 0
+      ? `${t(lang, 'offlineSyncing')} · ${pending}`
+      : t(lang, 'settingOn')
 
   return (
     <div className="space-y-6">
@@ -63,12 +77,23 @@ export default function PaymentsSection({ openDetail }: { openDetail: (id: Detai
         />
       </Group>
 
+      {/* Офлайн-очередь (фаза 7): работает, тап открывает журнал операций */}
+      <Group>
+        <NavRow
+          label={t(lang, 'offlinePayTitle')}
+          hint={t(lang, 'offlinePayHint')}
+          value={offlineValue}
+          onClick={() => setShowOps(true)}
+        />
+      </Group>
+
       {/* Запланировано (Square-паритет): пока заглушки со статусом «Скоро» */}
       <Group title={t(lang, 'groupPlanned')}>
         <SoonRow label={t(lang, 'serviceChargeTitle')} hint={t(lang, 'serviceChargeHint')} onTap={soon} />
-        <SoonRow label={t(lang, 'offlinePayTitle')} hint={t(lang, 'offlinePayHint')} onTap={soon} />
         <SoonRow label={t(lang, 'customerMgmtTitle')} hint={t(lang, 'customerMgmtHint')} onTap={soon} />
       </Group>
+
+      {showOps && <OfflineOpsSheet onClose={() => setShowOps(false)} />}
     </div>
   )
 }

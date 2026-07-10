@@ -94,9 +94,9 @@ export function renderReceiptCanvas(
   if (location?.receipt_tax_id) center(`ע.מ/ח.פ: ${location.receipt_tax_id}`, 24)
   y += 6
 
-  // ── Тип документа + номер ──
+  // ── Тип документа + номер (у временного офлайн-чека номера ещё нет) ──
   center(`${docTypeLabel(r.doc_type)} ${r.receipt_number ?? '—'}`, 28, true, 6)
-  center(opts.copy ? '*העתק*' : '*מקור*', 22, false, 4)
+  center(r.provisional ? '*מסמך זמני*' : opts.copy ? '*העתק*' : '*מקור*', 22, false, 4)
   divider()
 
   // ── Мета ──
@@ -104,7 +104,7 @@ export function renderReceiptCanvas(
   const dateStr = dt.toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' })
   const timeStr = dt.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })
   metaRow('תאריך:', `${timeStr} ${dateStr}`)
-  metaRow('הזמנה:', `#${r.daily_number}`)
+  metaRow('הזמנה:', r.provisional && r.provisional_number ? r.provisional_number : `#${r.daily_number}`)
   if (r.table_label) metaRow('שולחן:', r.table_label)
   if (r.customer_name) metaRow('לקוח/ה:', r.customer_name)
   if (r.staff_name) metaRow('מוכר/ת:', r.staff_name)
@@ -531,8 +531,8 @@ export interface KitchenTicketLine {
 }
 
 export interface KitchenTicketData {
-  /** Номер заказа (#42); null для дозаказа стола */
-  dailyNumber: number | null
+  /** Номер заказа (#42); строка K-n у офлайн-заказа; null для дозаказа стола */
+  dailyNumber: number | string | null
   orderType: 'here' | 'takeaway'
   customerName: string
   tableLabel: string
@@ -561,7 +561,8 @@ export function renderKitchenTicketCanvas(d: KitchenTicketData): HTMLCanvasEleme
   ctx.textAlign = 'center'
   if (d.dailyNumber !== null) {
     ctx.font = FONT(72, true)
-    ctx.fillText(`#${d.dailyNumber}`, W / 2, y + 28)
+    // Офлайн-заказ приходит с локальным номером K-n (уже с префиксом)
+    ctx.fillText(typeof d.dailyNumber === 'string' ? d.dailyNumber : `#${d.dailyNumber}`, W / 2, y + 28)
     y += 100
   } else {
     ctx.font = FONT(48, true)

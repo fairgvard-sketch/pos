@@ -1,12 +1,16 @@
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import toast from 'react-hot-toast'
 import { fetchTransactions, fetchRefunds, refundedTotal, type Transaction } from './api'
-import { fetchReceipt } from '../receipt/api'
+import { fetchReceipt, type Receipt } from '../receipt/api'
 import { fetchCurrentLocation } from '../auth/api'
 import { autoPrintRefundReceipt } from '../receipt/printService'
 import ReceiptSheet from '../receipt/ReceiptSheet'
 import RefundReceiptSheet from '../receipt/RefundReceiptSheet'
 import RefundSheet from './RefundSheet'
+import OfflineOpsSheet from '../offline/OfflineOpsSheet'
+import { useOutboxStore, pendingOpsCount, hasFailedOps } from '../../lib/offline/outboxStore'
+import { useNetStore } from '../../lib/offline/net'
 import { useDeviceStore } from '../../store/deviceStore'
 import AppSidebar from '../../components/AppSidebar'
 import Icon from '../../components/Icon'
@@ -31,6 +35,23 @@ export default function TransactionsPage() {
   const [showReceipt, setShowReceipt] = useState(false)
   const [refunding, setRefunding] = useState(false)
   const [refundReceiptId, setRefundReceiptId] = useState<string | null>(null)
+
+  // ── Офлайн (фаза 7): эхо неотправленных продаж + журнал очереди ──
+  const localOrders = useOutboxStore((s) => s.localOrders)
+  const ops = useOutboxStore((s) => s.ops)
+  const online = useNetStore((s) => s.online)
+  const [showOps, setShowOps] = useState(false)
+  // Просмотр временного чека офлайн-продажи (ReceiptSheet без сети)
+  const [localReceiptView, setLocalReceiptView] = useState<Receipt | null>(null)
+  const offlineEcho = useMemo(
+    () =>
+      Object.values(localOrders)
+        .filter((lo) => lo.receipt !== null && lo.status !== 'synced')
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    [localOrders]
+  )
+  const pendingCount = pendingOpsCount({ ops })
+  const anyFailed = hasFailedOps({ ops })
 
   const autoPrintOn = useDeviceStore((s) => s.autoPrintReceipt)
   const printMode = useDeviceStore((s) => s.printMode)
@@ -97,6 +118,43 @@ export default function TransactionsPage() {
           />
         </div>
         <div className="flex-1 overflow-y-auto px-2 pb-4">
+          {/* Офлайн-продажи, ещё не доехавшие до сервера */}
+          {(offlineEcho.length > 0 || pendingCount > 0 || anyFailed) && (
+            <section>
+              <button
+                onClick={() => setShowOps(true)}
+                className="w-full px-3 pt-4 pb-1.5 flex items-baseline justify-between text-xs font-bold uppercase tracking-wide"
+              >
+                <span className={anyFailed ? 'text-red-500' : 'text-amber-600'}>
+                  {t(lang, anyFailed ? 'offlineAttention' : 'offlinePendingLabel')}
+                </span>
+                {pendingCount > 0 && <span className="text-gray-400 tabular-nums">{pendingCount}</span>}
+              </button>
+              {offlineEcho.map((lo) => (
+                <button
+                  key={lo.key}
+                  onClick={() => setLocalReceiptView(lo.receipt)}
+                  className="w-full flex items-center gap-3 px-3 py-3 rounded-2xl text-start hover:bg-gray-50 transition-colors"
+                >
+                  <Icon name={lo.receipt!.payments.some((p) => p.method === 'card') ? 'card' : 'cash'} size={20} />
+                  <div className="flex-1 min-w-0">
+                    <div className={`font-bold tabular-nums ${lo.status === 'failed' ? 'text-red-500' : 'text-gray-900'}`}>
+                      {formatMoney(lo.total, lang)}
+                    </div>
+                    <div className="text-xs text-gray-500 truncate">
+                      {lo.provisionalNumber ?? (lo.serverDailyNumber ? `#${lo.serverDailyNumber}` : '')}
+                      {' · '}
+                      {t(lang, lo.status === 'failed' ? 'offlineFailedLabel' : 'offlineSale')}
+                      {lo.customerName && ` · ${lo.customerName}`}
+                    </div>
+                  </div>
+                  <span className="text-xs text-gray-400 tabular-nums shrink-0">
+                    {new Date(lo.createdAt).toLocaleTimeString(lang === 'he' ? 'he-IL' : 'ru-RU', { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                </button>
+              ))}
+            </section>
+          )}
           {isLoading ? (
             <p className="text-center text-gray-400 pt-16">…</p>
           ) : error ? (
@@ -167,9 +225,11 @@ export default function TransactionsPage() {
 
             <div className="grid grid-cols-2 gap-2 mb-8">
               <button
-                onClick={() => setRefunding(true)}
+                // Возврат — только онлайн: issue_refund идемпотентен, но
+                // фискальный номер зикуя и сверка остатка требуют сервера
+                onClick={() => (online ? setRefunding(true) : toast.error(t(lang, 'offlineBlockedHint')))}
                 disabled={remaining <= 0 || !canRefund}
-                className="btn-secondary !py-3.5 !rounded-2xl disabled:opacity-40"
+                className={`btn-secondary !py-3.5 !rounded-2xl disabled:opacity-40 ${!online ? 'opacity-40' : ''}`}
               >
                 {t(lang, 'issueRefund')}
               </button>
@@ -293,6 +353,11 @@ export default function TransactionsPage() {
       {refundReceiptId && (
         <RefundReceiptSheet refundId={refundReceiptId} onClose={() => setRefundReceiptId(null)} />
       )}
+      {/* Временный чек офлайн-продажи */}
+      {localReceiptView && (
+        <ReceiptSheet receipt={localReceiptView} onClose={() => setLocalReceiptView(null)} />
+      )}
+      {showOps && <OfflineOpsSheet onClose={() => setShowOps(false)} />}
     </div>
   )
 }

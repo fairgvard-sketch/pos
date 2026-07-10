@@ -21,6 +21,7 @@ import GuestsDetail from './sections/GuestsDetail'
 import StaffSection from './sections/StaffSection'
 import PermsDetail from './sections/PermsDetail'
 import SecuritySection from './sections/SecuritySection'
+import OfflineBanner from '../../components/OfflineBanner'
 import BusinessSection from './sections/BusinessSection'
 import ReceiptDetailsDetail from './sections/ReceiptDetailsDetail'
 import DeviceSection from './sections/DeviceSection'
@@ -87,6 +88,7 @@ export default function SettingsPage() {
         {/* Левая колонка: поиск + категории */}
         <nav className="w-72 shrink-0 border-e border-gray-100 p-4 flex flex-col gap-4 overflow-y-auto">
           <h1 className="text-2xl font-black text-gray-900 px-2 pt-2">{t(lang, 'settingsTitle')}</h1>
+          <OfflineBanner />
 
           <div className="relative">
             <svg
