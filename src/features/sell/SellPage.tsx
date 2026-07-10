@@ -976,22 +976,14 @@ export default function SellPage() {
                   </button>
                 ))}
               </div>
-              <div className={showTable ? 'grid grid-cols-2 gap-2' : ''}>
-                <input
-                  className="input !py-2"
-                  placeholder={t(lang, 'customerNameOpt')}
-                  value={cart.customerName}
-                  onChange={(e) => cart.setCustomerName(e.target.value)}
-                />
-                {showTable && (
-                  <button
-                    onClick={() => setShowTableSheet(true)}
-                    className={`input !py-2 text-start ${cart.tableLabel ? 'text-gray-900 font-semibold' : 'text-gray-400'}`}
-                  >
-                    {cart.tableLabel ? `${t(lang, 'tableLabel')} ${cart.tableLabel}` : t(lang, 'tablePlaceholder')}
-                  </button>
-                )}
-              </div>
+              {showTable && (
+                <button
+                  onClick={() => setShowTableSheet(true)}
+                  className={`input !py-2 w-full text-start ${cart.tableLabel ? 'text-gray-900 font-semibold' : 'text-gray-400'}`}
+                >
+                  {cart.tableLabel ? `${t(lang, 'tableLabel')} ${cart.tableLabel}` : t(lang, 'tablePlaceholder')}
+                </button>
+              )}
             </>
           )}
         </div>
