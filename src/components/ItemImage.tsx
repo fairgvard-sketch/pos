@@ -17,7 +17,8 @@ function tileTone(name: string): string {
 }
 
 const SIZES = {
-  card: 'w-full aspect-square rounded-xl text-3xl',
+  // Иконка чуть меньше плитки: занимает ~64% ширины, по центру
+  card: 'w-[64%] mx-auto aspect-square rounded-xl text-3xl',
   line: 'w-10 h-10 rounded-lg text-base',
   mini: 'w-8 h-8 rounded-lg text-sm',
   hero: 'w-full aspect-square rounded-2xl text-5xl',

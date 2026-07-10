@@ -11,7 +11,6 @@ import { enqueueTableVoid } from '../lib/offline/enqueue'
 import { t } from '../lib/i18n'
 import Icon from './Icon'
 import type { IconName } from './Icon'
-import LangToggle from './ui/LangToggle'
 import OfflineBadge from './OfflineBadge'
 
 export type SidebarPage = 'sell' | 'hall' | 'queue' | 'transactions' | 'shift' | 'timesheet' | 'menu' | 'analytics' | 'settings'
@@ -65,10 +64,7 @@ export default function AppSidebar({ active }: { active: SidebarPage }) {
 
   return (
     <aside className="w-52 shrink-0 bg-white rounded-3xl flex flex-col p-4">
-      <div className="px-2 pt-1 pb-5 text-center">
-        <div className="font-medium text-gray-900 tracking-[0.25em] text-lg leading-none uppercase">VANDAL</div>
-        <div className="text-[10px] font-semibold text-gray-400 tracking-[0.35em] uppercase mt-1">Coffee</div>
-      </div>
+      <div className="pt-1 pb-5" />
 
       <nav className="space-y-1">
         {/* Режим столов: вход через зал, «Продажа» появляется только с выбранным столом */}
@@ -103,9 +99,6 @@ export default function AppSidebar({ active }: { active: SidebarPage }) {
 
       <div className="mt-auto space-y-4">
         <OfflineBadge />
-        <div className="px-2">
-          <LangToggle />
-        </div>
         <Clock lang={lang} />
         <div className="flex items-center gap-2.5 px-2">
           <div className="w-9 h-9 rounded-full bg-gray-900 text-white flex items-center justify-center text-sm font-bold shrink-0">
@@ -126,7 +119,7 @@ function SideLink({ label, iconName, active, onClick }: { label: string; iconNam
     <button
       onClick={onClick}
       className={`w-full flex items-center gap-3 px-3 h-11 rounded-xl text-sm font-semibold transition-all ${
-        active ? 'bg-gray-100 text-gray-900' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+        active ? 'bg-gray-200 text-gray-900' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
       }`}
     >
       <Icon name={iconName} isActive={active} size={20} />

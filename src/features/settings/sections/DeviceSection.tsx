@@ -10,6 +10,7 @@ import { renderTestPrintCanvas } from '../../receipt/printCanvas'
 import { canvasToRawbtUrl, canvasToEscposBase64 } from '../../../lib/escpos'
 import { t } from '../../../lib/i18n'
 import { Group, InputRow, NavRow } from '../ui'
+import LangToggle from '../../../components/ui/LangToggle'
 import type { Location } from '../../../types'
 
 /**
@@ -90,6 +91,9 @@ export default function DeviceSection({ location }: { location: Location | undef
         </InputRow>
         <InputRow label={t(lang, 'deviceAccount')}>
           <span className="text-sm text-gray-500 truncate max-w-[220px]">{email ?? '…'}</span>
+        </InputRow>
+        <InputRow label={t(lang, 'interfaceLanguage')} device>
+          <LangToggle />
         </InputRow>
         <div>
           <NavRow

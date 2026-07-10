@@ -844,26 +844,32 @@ export default function SellPage() {
       {/* ── Каталог ─────────────────────────────────── */}
       <main className="flex-1 min-w-0 bg-white rounded-3xl flex flex-col overflow-hidden">
         <div className="p-5 pb-0 shrink-0">
-          <input
-            className="w-full rounded-2xl border border-gray-100 bg-gray-50 px-5 py-3 text-sm
-                       placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900/10
-                       focus:bg-white transition-all"
-            placeholder={t(lang, 'searchPlaceholder')}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-
-          <div className="flex gap-2 overflow-x-auto py-4 short:py-2">
-            {hasFavorites && (
-              <Chip active={!search && currentCat === 'fav'} onClick={() => { setSearch(''); setActiveCat('fav') }}>
-                ★ {t(lang, 'favorites')}
-              </Chip>
-            )}
-            {categories.filter((c) => c.is_active).map((c) => (
-              <Chip key={c.id} active={!search && currentCat === c.id} onClick={() => { setSearch(''); setActiveCat(c.id) }}>
-                {c.name}
-              </Chip>
-            ))}
+          {/* Поиск + категории в одну строку: поиск ФИЗИЧЕСКИ слева в обоих направлениях.
+              В LTR обычный порядок кладёт input влево; в RTL зеркалит вправо —
+              поэтому для RTL разворачиваем строку обратно (input снова у левого края). */}
+          <div className="flex items-center gap-3 py-4 short:py-2 rtl:flex-row-reverse">
+            <input
+              className="w-44 shrink-0 rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm
+                         placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900/10
+                         focus:bg-white transition-all"
+              placeholder={t(lang, 'searchPlaceholder')}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+            {/* flex-1 + чипы прижаты к ПРАВОМУ физическому краю (напротив поиска).
+                justify-end = вправо в LTR; в RTL «end» уходит влево, поэтому rtl:justify-start */}
+            <div className="flex-1 flex gap-2 overflow-x-auto min-w-0 justify-end rtl:justify-start">
+              {hasFavorites && (
+                <Chip active={!search && currentCat === 'fav'} onClick={() => { setSearch(''); setActiveCat('fav') }}>
+                  ★ {t(lang, 'favorites')}
+                </Chip>
+              )}
+              {categories.filter((c) => c.is_active).map((c) => (
+                <Chip key={c.id} active={!search && currentCat === c.id} onClick={() => { setSearch(''); setActiveCat(c.id) }}>
+                  {c.name}
+                </Chip>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -876,8 +882,8 @@ export default function SellPage() {
                 <button
                   key={item.id}
                   onClick={() => handleItemTap(item)}
-                  className="relative rounded-2xl border border-gray-200 p-3 text-start bg-white
-                             hover:border-gray-300 hover:shadow-[0_4px_16px_rgba(0,0,0,0.06)]
+                  className="relative rounded-2xl border border-gray-300 p-3 text-start bg-white
+                             hover:border-gray-400 hover:shadow-[0_4px_16px_rgba(0,0,0,0.06)]
                              transition-all duration-150 active:scale-[0.97]"
                 >
                   {item.is_favorite && (
@@ -949,7 +955,7 @@ export default function SellPage() {
           {tableCtx ? (
             /* Режим столов: работаем со счётом конкретного стола */
             <div className="flex items-baseline justify-between mb-3">
-              <h2 className="text-lg font-black text-gray-900">
+              <h2 className="text-lg font-bold text-gray-900">
                 {t(lang, 'tableLabel')} {tableCtx.tableLabel}
                 <span className="text-gray-400 font-semibold"> · {t(lang, 'openBill')}</span>
               </h2>
@@ -961,7 +967,7 @@ export default function SellPage() {
             </div>
           ) : (
             <>
-              <h2 className="text-lg font-black text-gray-900 mb-3">{t(lang, 'newOrderTitle')}</h2>
+              <h2 className="text-lg font-bold text-gray-900 mb-3">{t(lang, 'newOrderTitle')}</h2>
               <OrderTypeSwitch
                 value={cart.orderType}
                 onChange={cart.setOrderType}
@@ -1514,18 +1520,31 @@ function CartLineRow({
       >
         <div className="flex items-start gap-2.5">
           {item && <ItemImage item={item} size="line" />}
-          <button
-            className="text-start flex-1 min-w-0"
+          {/* div с role=button (не <button>), чтобы вложенный кликабельный
+              «× N» не был interactive-in-interactive */}
+          <div
+            role="button"
+            tabIndex={0}
+            className="text-start flex-1 min-w-0 cursor-pointer"
             // Игнорируем клик, если строка раскрыта свайпом (сначала закрываем)
             onClick={() => (revealed ? setDx(0) : onOpen())}
           >
             <span className="font-semibold text-gray-900 text-sm block leading-tight">
               {l.name}
-              {l.variantName && <span className="text-gray-500 font-medium"> · {l.variantName}</span>}
+              {/* Кол-во сразу после названия, мелким серым (как в референсе).
+                  Тап по нему открывает панель −/+; stopPropagation → не onOpen. */}
+              <span
+                onClick={(e) => { e.stopPropagation(); onQty() }}
+                className="text-gray-400 font-medium tabular-nums ms-1.5"
+              >
+                × {l.qty}
+              </span>
             </span>
-            {(l.mods.length > 0 || l.notes || l.priceOverride !== null) && (
-              <span className="block text-xs text-gray-500 mt-0.5 leading-snug">
+            {/* Вариант (размер), модификаторы, заметка, правка цены — строкой под названием */}
+            {(l.variantName || l.mods.length > 0 || l.notes || l.priceOverride !== null) && (
+              <span className="block text-sm text-gray-500 mt-0.5 leading-snug">
                 {[
+                  l.variantName,
                   ...l.mods.map((m) => m.name),
                   l.notes,
                   l.priceOverride !== null ? t(lang, 'priceOverridden') : '',
@@ -1534,29 +1553,15 @@ function CartLineRow({
                   .join(' · ')}
               </span>
             )}
-          </button>
-          <div className="flex flex-col items-end gap-1.5 shrink-0">
-            <div className="flex items-center gap-1.5">
-              <button
-                onClick={onEditPrice}
-                className={`font-bold text-sm tabular-nums ${
-                  l.priceOverride !== null ? 'text-gray-900 underline decoration-dotted underline-offset-2' : 'text-gray-900'
-                }`}
-              >
-                {formatMoney(lineUnitPrice(l) * l.qty, lang)}
-              </button>
-              <button onClick={onRemove} className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-red-500">✕</button>
-            </div>
-            {/* Кол-во — компактный чип; тап открывает панель с −/+ и клавиатурой.
-                Быстрый +1 — повторный тап по плитке товара (addLine схлопывает). */}
-            <button
-              onClick={onQty}
-              className="h-8 min-w-[2.5rem] px-2.5 rounded-lg bg-gray-50 border border-gray-200 text-sm font-bold
-                         text-gray-600 tabular-nums hover:border-gray-400 active:scale-[0.94] transition-all"
-            >
-              ×{l.qty}
-            </button>
           </div>
+          <button
+            onClick={onEditPrice}
+            className={`font-bold text-sm tabular-nums shrink-0 ${
+              l.priceOverride !== null ? 'text-gray-900 underline decoration-dotted underline-offset-2' : 'text-gray-900'
+            }`}
+          >
+            {formatMoney(lineUnitPrice(l) * l.qty, lang)}
+          </button>
         </div>
       </div>
     </div>
@@ -1652,9 +1657,9 @@ function ExistingBillRow({
 }
 
 /**
- * Сегментированный переключатель типа заказа: здесь / с собой / доставка.
- * Всегда выбран ровно один. Переключение тапом ИЛИ свайпом влево/вправо
- * по всей полосе (сосед по направлению свайпа). RTL — направление зеркалится.
+ * Переключатель типа заказа: одна полоса во всю ширину, показывает ТОЛЬКО
+ * текущий вариант. Свайп влево/вправо листает (RTL-зеркально), тап — следующий
+ * по кругу. Точки-индикаторы показывают, сколько вариантов и какой активен.
  */
 const ORDER_TYPES: OrderType[] = ['here', 'takeaway', 'delivery']
 
@@ -1670,12 +1675,15 @@ function OrderTypeSwitch({
   isRtl: boolean
 }) {
   const start = useRef<{ x: number; y: number } | null>(null)
+  // Направление последнего перехода — для стороны, откуда выезжает подпись
+  const [dir, setDir] = useState<1 | -1>(1)
   const idx = ORDER_TYPES.indexOf(value)
 
-  // Сдвиг на шаг в порядке ORDER_TYPES (без «заворота» по краям)
-  function step(dir: 1 | -1) {
-    const next = Math.min(ORDER_TYPES.length - 1, Math.max(0, idx + dir))
-    if (next !== idx) onChange(ORDER_TYPES[next])
+  // Листаем по кругу; d=1 — следующий, d=-1 — предыдущий
+  function go(d: 1 | -1) {
+    setDir(d)
+    const next = (idx + d + ORDER_TYPES.length) % ORDER_TYPES.length
+    onChange(ORDER_TYPES[next])
   }
 
   function onPointerDown(e: React.PointerEvent) {
@@ -1689,30 +1697,40 @@ function OrderTypeSwitch({
     start.current = null
     // Горизонтальный свайп с явным преобладанием: >40px, не вертикаль
     if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) {
-      step(dx > 0 ? 1 : -1) // вправо → следующий, влево → предыдущий
+      go(dx > 0 ? 1 : -1) // вправо → следующий, влево → предыдущий
     }
   }
 
   return (
-    <div
-      onPointerDown={onPointerDown}
-      onPointerUp={onPointerUp}
-      onPointerCancel={() => (start.current = null)}
-      className="grid grid-cols-3 gap-1 bg-gray-50 border border-gray-100 rounded-xl p-0.5 mb-2.5 touch-pan-y select-none"
-    >
-      {ORDER_TYPES.map((tp) => (
-        <button
-          key={tp}
-          onClick={() => onChange(tp)}
-          className={`py-2 rounded-lg text-sm font-semibold transition-all ${
-            value === tp
-              ? 'bg-white text-gray-900 shadow-[0_1px_2px_rgba(0,0,0,0.08)]'
-              : 'text-gray-400 hover:text-gray-600'
-          }`}
+    <div className="mb-2.5">
+      <button
+        onPointerDown={onPointerDown}
+        onPointerUp={onPointerUp}
+        onPointerCancel={() => (start.current = null)}
+        onClick={() => go(1)} // тап = следующий по кругу
+        className="relative w-full h-11 rounded-xl bg-gray-100 border border-gray-300
+                   overflow-hidden touch-pan-y select-none active:scale-[0.99] transition-transform"
+      >
+        {/* key на span → перезапуск анимации выезда при каждой смене */}
+        <span
+          key={value}
+          className="absolute inset-0 flex items-center justify-center text-sm font-semibold text-gray-900"
+          style={{ animation: `${dir === 1 ? 'ot-in-right' : 'ot-in-left'} 0.18s ease-out` }}
         >
-          {t(lang, tp)}
-        </button>
-      ))}
+          {t(lang, value)}
+        </span>
+      </button>
+      {/* Точки — сколько вариантов и текущий */}
+      <div className="flex justify-center gap-1.5 mt-1.5">
+        {ORDER_TYPES.map((tp, i) => (
+          <span
+            key={tp}
+            className={`h-1.5 rounded-full transition-all ${
+              i === idx ? 'w-4 bg-gray-800' : 'w-1.5 bg-gray-300'
+            }`}
+          />
+        ))}
+      </div>
     </div>
   )
 }

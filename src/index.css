@@ -128,6 +128,16 @@
 }
 .cart-bump { animation: cart-bump 0.28s ease-out; }
 
+/* ── Order-type switch (выезд подписи при листании) ───────── */
+@keyframes ot-in-right {
+  from { opacity: 0; transform: translateX(40%); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes ot-in-left {
+  from { opacity: 0; transform: translateX(-40%); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
 /* ── Shake (неверный PIN) ────────────────────────────────── */
 @keyframes shake {
   0%, 100% { transform: translateX(0); }
