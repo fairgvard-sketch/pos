@@ -129,11 +129,11 @@ export default function PinLoginPage() {
             {d}
           </button>
         ))}
-        <div />
+        {/* 0 — широкая клавиша на 2 колонки; ⌫ рядом (RTL зеркалит порядок сам) */}
         <button
           onClick={() => press('0')}
           disabled={checking}
-          className="card-hover h-16 text-xl font-bold text-gray-900 active:scale-[0.95]"
+          className="card-hover col-span-2 h-16 text-xl font-bold text-gray-900 active:scale-[0.95]"
         >
           0
         </button>
