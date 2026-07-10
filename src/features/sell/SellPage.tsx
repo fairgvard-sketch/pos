@@ -29,6 +29,7 @@ import PaymentSheet from './PaymentSheet'
 import TipSheet, { type TipOption } from './TipSheet'
 import DiscountSheet from './DiscountSheet'
 import PriceSheet from './PriceSheet'
+import QtySheet from './QtySheet'
 import TableSheet from './TableSheet'
 import ShiftGate from '../shift/ShiftGate'
 import ReceiptSheet from '../receipt/ReceiptSheet'
@@ -158,6 +159,8 @@ export default function SellPage() {
   const [showTableSheet, setShowTableSheet] = useState(false)
   // Строка, у которой правим цену вручную (edit-режим PriceSheet)
   const [editingPrice, setEditingPrice] = useState<CartLine | null>(null)
+  // Строка, у которой правим количество (QtySheet)
+  const [editingQty, setEditingQty] = useState<CartLine | null>(null)
   // Номер к показу: серверный #42 или локальный K-3 (офлайн-продажа)
   const [placedNumber, setPlacedNumber] = useState<number | string | null>(null)
   const [paidOrderId, setPaidOrderId] = useState<string | null>(null)  // последний оплаченный — для чека
@@ -917,7 +920,16 @@ export default function SellPage() {
             dimmed={!canDiscount}
             onClick={() => requirePerm(canDiscount, () => setShowDiscount(true))}
           />
-          <ActionButton icon="note" label={t(lang, 'note')} onClick={() => toast(`${t(lang, 'note')} — ${t(lang, 'comingSoon')}`)} />
+          {loyaltyOn && (
+            <ActionButton
+              icon="customers"
+              // Выбранный гость виден прямо на кнопке: имя/телефон вместо «Лояльность»
+              label={cart.guest ? cart.guest.name || formatPhone(cart.guest.phone) : t(lang, 'loyaltyLabel')}
+              active={!!cart.guest}
+              // Лояльность требует сети: балансы гостя валидирует сервер
+              onClick={() => (online ? setShowGuest(true) : toast.error(t(lang, 'offlineBlockedHint')))}
+            />
+          )}
           <ActionButton icon="refund" label={t(lang, 'refund')} onClick={() => navigate('/transactions')} />
           {collectTips && (
             <ActionButton
@@ -980,29 +992,6 @@ export default function SellPage() {
                   </button>
                 )}
               </div>
-              {loyaltyOn && (
-                <button
-                  // Лояльность требует сети: балансы гостя валидирует сервер
-                  onClick={() => (online ? setShowGuest(true) : toast.error(t(lang, 'offlineBlockedHint')))}
-                  className="input !py-2 mt-2.5 w-full text-start flex items-center gap-2"
-                >
-                  <Icon name="customers" size={16} />
-                  {cart.guest ? (
-                    <>
-                      <span className="font-semibold text-gray-900 truncate">
-                        {cart.guest.name || formatPhone(cart.guest.phone)}
-                      </span>
-                      <span className="ms-auto text-sm font-bold text-gray-500 tabular-nums shrink-0">
-                        {loyaltyMode === 'stamps'
-                          ? `${cart.guest.stamps}/${location?.loyalty_stamps_goal ?? 10}`
-                          : formatMoney(cart.guest.points, lang)}
-                      </span>
-                    </>
-                  ) : (
-                    <span className="text-gray-400">{t(lang, 'guestAdd')}</span>
-                  )}
-                </button>
-              )}
             </>
           )}
         </div>
@@ -1051,8 +1040,7 @@ export default function SellPage() {
                 onOpen={() => (item ? setPicker({ item, line: l }) : requirePerm(canPriceEdit, () => setEditingPrice(l)))}
                 onEditPrice={() => requirePerm(canPriceEdit, () => setEditingPrice(l))}
                 onRemove={() => cart.removeLine(l.key)}
-                onDec={() => cart.updateQty(l.key, l.qty - 1)}
-                onInc={() => cart.updateQty(l.key, l.qty + 1)}
+                onQty={() => setEditingQty(l)}
               />
             )
           })}
@@ -1372,6 +1360,18 @@ export default function SellPage() {
         />
       )}
 
+      {editingQty && (
+        <QtySheet
+          name={editingQty.name}
+          qty={editingQty.qty}
+          onSubmit={(qty) => {
+            cart.updateQty(editingQty.key, qty) // qty ≤ 0 удаляет строку
+            setEditingQty(null)
+          }}
+          onCancel={() => setEditingQty(null)}
+        />
+      )}
+
       {placedNumber !== null && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center">
           <div className="card px-12 py-10 text-center animate-[pop-in_0.35s_cubic-bezier(0.34,1.56,0.64,1)]">
@@ -1431,8 +1431,7 @@ function CartLineRow({
   onOpen,
   onEditPrice,
   onRemove,
-  onDec,
-  onInc,
+  onQty,
 }: {
   line: CartLine
   item: MenuItem | undefined
@@ -1441,8 +1440,7 @@ function CartLineRow({
   onOpen: () => void
   onEditPrice: () => void
   onRemove: () => void
-  onDec: () => void
-  onInc: () => void
+  onQty: () => void
 }) {
   // dx < 0 — строка уехала «в сторону удаления» (нормализовано под RTL)
   const [dx, setDx] = useState(0)
@@ -1565,11 +1563,15 @@ function CartLineRow({
               </button>
               <button onClick={onRemove} className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-red-500">✕</button>
             </div>
-            <div className="flex items-center gap-1">
-              <Stepper onClick={onDec}>−</Stepper>
-              <span className="w-6 text-center font-bold text-sm tabular-nums">{l.qty}</span>
-              <Stepper onClick={onInc}>+</Stepper>
-            </div>
+            {/* Кол-во — компактный чип; тап открывает панель с −/+ и клавиатурой.
+                Быстрый +1 — повторный тап по плитке товара (addLine схлопывает). */}
+            <button
+              onClick={onQty}
+              className="h-8 min-w-[2.5rem] px-2.5 rounded-lg bg-gray-50 border border-gray-200 text-sm font-bold
+                         text-gray-600 tabular-nums hover:border-gray-400 active:scale-[0.94] transition-all"
+            >
+              ×{l.qty}
+            </button>
           </div>
         </div>
       </div>
@@ -1672,7 +1674,7 @@ function ActionButton({
   active = false,
   dimmed = false,
 }: {
-  icon: 'customItem' | 'discount' | 'note' | 'refund' | 'cash'
+  icon: 'customItem' | 'discount' | 'customers' | 'refund' | 'cash'
   label: string
   onClick: () => void
   active?: boolean
@@ -1710,16 +1712,4 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
   )
 }
 
-function Stepper({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button
-      onClick={onClick}
-      className="w-11 h-11 rounded-xl bg-gray-50 border border-gray-200 text-base font-bold text-gray-600
-                 flex items-center justify-center leading-none
-                 hover:border-gray-400 active:scale-[0.9] transition-all"
-    >
-      {children}
-    </button>
-  )
-}
 

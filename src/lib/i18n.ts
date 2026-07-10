@@ -680,6 +680,7 @@ export const translations = {
     paymentMethods: 'Способы оплаты',
     noSalesPeriod: 'Нет продаж за выбранный период',
     qtyShort: 'шт.',
+    qtyTitle: 'Количество',
 
     // Офлайн-режим (фаза 7)
     offlineBadge: 'Нет сети',
@@ -1388,6 +1389,7 @@ export const translations = {
     paymentMethods: 'אמצעי תשלום',
     noSalesPeriod: 'אין מכירות בתקופה שנבחרה',
     qtyShort: 'יח׳',
+    qtyTitle: 'כמות',
 
     // Офлайн-режим (фаза 7)
     offlineBadge: 'אין רשת',
