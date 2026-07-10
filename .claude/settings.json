@@ -44,7 +44,10 @@
       "PowerShell($c = Get-NetTCPConnection -LocalPort 5173 -State Listen -ErrorAction SilentlyContinue; if \\($c\\) { Write-Host \"порт 5173 слушает, PID $\\($c.OwningProcess\\)\" } else { Write-Host \"порт 5173 СВОБОДЕН — сервер не работает\" }; Write-Host \"--- jobs ---\"; Get-Job | Format-Table Id, State, HasMoreData -AutoSize)",
       "PowerShell(Start-Process cmd -ArgumentList '/c','npm run dev > \"%TEMP%\\\\vite-dev.log\" 2>&1' -WorkingDirectory \"c:\\\\Users\\\\Hub\\\\Desktop\\\\in work projects\\\\kassa\" -WindowStyle Hidden; Start-Sleep -Seconds 9; Get-Content \"$env:TEMP\\\\vite-dev.log\" -Tail 25)",
       "PowerShell(Start-Sleep -Seconds 2; try { $r = Invoke-WebRequest \"http://localhost:5173/\" -UseBasicParsing -TimeoutSec 5; Write-Host \"HTTP $\\($r.StatusCode\\) — работает\" } catch { Write-Host \"не отвечает: $\\($_.Exception.Message\\)\" }; $c = Get-NetTCPConnection -LocalPort 5173 -State Listen -ErrorAction SilentlyContinue; if \\($c\\) { Write-Host \"PID $\\($c.OwningProcess\\) слушает 5173\" })",
-      "PowerShell($f = Get-Content \"C:\\\\Users\\\\Hub\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-Hub-Desktop-in-work-projects-kassa\\\\66886456-182d-4620-a57f-17f2aecf848a\\\\scratchpad\\\\fix_034_functions.sql\"; $f | Select-String -Pattern \"CREATE OR REPLACE FUNCTION|^REVOKE\" | ForEach-Object { Write-Host $_.Line.Substring\\(0, [Math]::Min\\(80, $_.Line.Length\\)\\) })"
+      "PowerShell($f = Get-Content \"C:\\\\Users\\\\Hub\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-Hub-Desktop-in-work-projects-kassa\\\\66886456-182d-4620-a57f-17f2aecf848a\\\\scratchpad\\\\fix_034_functions.sql\"; $f | Select-String -Pattern \"CREATE OR REPLACE FUNCTION|^REVOKE\" | ForEach-Object { Write-Host $_.Line.Substring\\(0, [Math]::Min\\(80, $_.Line.Length\\)\\) })",
+      "PowerShell(npx tsc --noEmit 2>$null)",
+      "PowerShell(if \\($?\\) { \"OK\" })",
+      "PowerShell(git add src/App.tsx .claude/settings.json)"
     ]
   }
 }

@@ -5,7 +5,7 @@ import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client
 import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister'
 import { Toaster } from 'react-hot-toast'
 import { supabase } from './lib/supabase'
-import { initNet } from './lib/offline/net'
+import { initNet, OfflineError } from './lib/offline/net'
 import { initDrain } from './lib/offline/drain'
 import DeviceSetupPage from './features/auth/DeviceSetupPage'
 import PinLoginPage from './features/auth/PinLoginPage'
@@ -34,10 +34,14 @@ const queryClient = new QueryClient({
       refetchOnReconnect: true,
     },
     mutations: {
-      // При коротком обрыве сети мутация ставится на паузу (networkMode 'online' по
-      // умолчанию) и автоматически выполнится, когда сеть вернётся — вместо мгновенной
-      // ошибки. Уровень A офлайна; полная офлайн-очередь — фаза 7.
-      retry: 2,
+      // 'always': офлайн обрабатывают сами mutationFn (withOfflineFallback →
+      // очередь фазы 7). Дефолтный 'online' ставил mutate() на ПАУЗУ при
+      // onlineManager.offline — офлайн-ветка не выполнялась, isPending висел
+      // вечно и кнопки продажи/столов замирали серыми.
+      networkMode: 'always',
+      // OfflineError не ретраим: это осознанный «мы офлайн» из withOfflineFallback,
+      // повтор бессмысленен и лишь задерживает тост offlineBlockedHint
+      retry: (failureCount, error) => !(error instanceof OfflineError) && failureCount < 2,
       retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000),
     },
   },
