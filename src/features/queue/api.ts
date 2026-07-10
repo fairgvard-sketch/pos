@@ -18,7 +18,7 @@ export interface QueueItem {
 export interface QueueOrder {
   id: string
   daily_number: number
-  order_type: 'here' | 'takeaway'
+  order_type: 'here' | 'takeaway' | 'delivery'
   customer_name: string | null
   table_label: string | null
   status: string

@@ -533,12 +533,12 @@ export interface KitchenTicketLine {
 export interface KitchenTicketData {
   /** Номер заказа (#42); строка K-n у офлайн-заказа; null для дозаказа стола */
   dailyNumber: number | string | null
-  orderType: 'here' | 'takeaway'
+  orderType: 'here' | 'takeaway' | 'delivery'
   customerName: string
   tableLabel: string
   lines: KitchenTicketLine[]
   /** Локализованные подписи (тикет — на языке интерфейса кассы) */
-  labels: { takeaway: string; here: string; table: string; addon: string }
+  labels: { takeaway: string; here: string; delivery: string; table: string; addon: string }
 }
 
 /**
@@ -574,7 +574,7 @@ export function renderKitchenTicketCanvas(d: KitchenTicketData): HTMLCanvasEleme
   ctx.font = FONT(28, true)
   const meta: string[] = []
   if (d.tableLabel) meta.push(`${d.labels.table} ${d.tableLabel}`)
-  else meta.push(d.orderType === 'takeaway' ? d.labels.takeaway : d.labels.here)
+  else meta.push(d.labels[d.orderType])
   if (d.customerName) meta.push(d.customerName)
   meta.push(new Date().toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' }))
   ctx.fillText(meta.join(' · '), W / 2, y)

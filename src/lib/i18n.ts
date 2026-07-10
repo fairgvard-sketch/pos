@@ -129,6 +129,7 @@ export const translations = {
     // Экран продажи
     here: 'Здесь',
     takeaway: 'С собой',
+    delivery: 'Доставка',
     tableLabel: 'Стол',
     tablePlaceholder: 'Номер стола',
     tableSheetTitle: 'Номер стола',
@@ -838,6 +839,7 @@ export const translations = {
     // Экран продажи
     here: 'כאן',
     takeaway: 'לקחת',
+    delivery: 'משלוח',
     tableLabel: 'שולחן',
     tablePlaceholder: 'מספר שולחן',
     tableSheetTitle: 'מספר שולחן',
@@ -1425,6 +1427,11 @@ export type TranslationKey = keyof typeof translations.ru
 
 export function t(lang: Lang, key: TranslationKey): string {
   return translations[lang][key] ?? translations.ru[key] ?? key
+}
+
+/** Локализованный ярлык типа заказа (here/takeaway/delivery). */
+export function orderTypeLabel(lang: Lang, type: 'here' | 'takeaway' | 'delivery'): string {
+  return t(lang, type)
 }
 
 export function formatDate(date: string | Date, lang: Lang): string {

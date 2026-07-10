@@ -16,7 +16,7 @@ import AppSidebar from '../../components/AppSidebar'
 import Icon from '../../components/Icon'
 import { useAuthStore } from '../../store/authStore'
 import { useLangStore } from '../../store/langStore'
-import { t } from '../../lib/i18n'
+import { t, orderTypeLabel } from '../../lib/i18n'
 import { can } from '../../lib/perms'
 import { formatMoney } from '../../lib/money'
 
@@ -304,7 +304,7 @@ export default function TransactionsPage() {
                 <div className="bg-gray-100 rounded-lg px-3 py-2 text-sm font-bold text-gray-700">
                   {receipt.table_label
                     ? `${t(lang, 'tableLabel')} ${receipt.table_label}`
-                    : t(lang, receipt.order_type === 'takeaway' ? 'takeaway' : 'here')}
+                    : orderTypeLabel(lang, receipt.order_type)}
                   {receipt.customer_name && ` · ${receipt.customer_name}`}
                 </div>
                 {receipt.lines.map((l, i) => (

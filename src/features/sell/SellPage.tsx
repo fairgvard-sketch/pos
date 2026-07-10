@@ -7,7 +7,7 @@ import { placeOrder, payOrder, splitOrder, type PaymentInput } from './api'
 import { fetchCurrentShift } from '../shift/api'
 import { fetchCurrentLocation } from '../auth/api'
 import { appendToOrder, voidTableOrder, fetchOrderLines, voidOrderItem, setOrderDiscount, type BillLine } from '../tables/api'
-import { useCartStore, cartSubtotal, cartTotal, discountAmount, loyaltyAmount, lineUnitPrice, type CartLine, type CartMod, type CartDiscount } from '../../store/cartStore'
+import { useCartStore, cartSubtotal, cartTotal, discountAmount, loyaltyAmount, lineUnitPrice, type CartLine, type CartMod, type CartDiscount, type OrderType } from '../../store/cartStore'
 import { useAuthStore } from '../../store/authStore'
 import { useLangStore } from '../../store/langStore'
 import { useDeviceStore } from '../../store/deviceStore'
@@ -96,6 +96,7 @@ function ticketLabels(lang: 'ru' | 'he') {
   return {
     takeaway: t(lang, 'takeaway'),
     here: t(lang, 'here'),
+    delivery: t(lang, 'delivery'),
     table: t(lang, 'tableLabel'),
     addon: t(lang, 'kitchenAddon'),
   }
@@ -961,21 +962,12 @@ export default function SellPage() {
           ) : (
             <>
               <h2 className="text-lg font-black text-gray-900 mb-3">{t(lang, 'newOrderTitle')}</h2>
-              <div className="grid grid-cols-2 gap-1 bg-gray-50 border border-gray-100 rounded-xl p-0.5 mb-2.5">
-                {(['here', 'takeaway'] as const).map((tp) => (
-                  <button
-                    key={tp}
-                    onClick={() => cart.setOrderType(tp)}
-                    className={`py-2 rounded-lg text-sm font-semibold transition-all ${
-                      cart.orderType === tp
-                        ? 'bg-white text-gray-900 shadow-[0_1px_2px_rgba(0,0,0,0.08)]'
-                        : 'text-gray-400 hover:text-gray-600'
-                    }`}
-                  >
-                    {t(lang, tp)}
-                  </button>
-                ))}
-              </div>
+              <OrderTypeSwitch
+                value={cart.orderType}
+                onChange={cart.setOrderType}
+                lang={lang}
+                isRtl={isRtl}
+              />
               {showTable && (
                 <button
                   onClick={() => setShowTableSheet(true)}
@@ -1655,6 +1647,72 @@ function ExistingBillRow({
         </div>
         <span className="font-bold text-gray-600 tabular-nums shrink-0">{formatMoney(l.line_total, lang)}</span>
       </div>
+    </div>
+  )
+}
+
+/**
+ * Сегментированный переключатель типа заказа: здесь / с собой / доставка.
+ * Всегда выбран ровно один. Переключение тапом ИЛИ свайпом влево/вправо
+ * по всей полосе (сосед по направлению свайпа). RTL — направление зеркалится.
+ */
+const ORDER_TYPES: OrderType[] = ['here', 'takeaway', 'delivery']
+
+function OrderTypeSwitch({
+  value,
+  onChange,
+  lang,
+  isRtl,
+}: {
+  value: OrderType
+  onChange: (t: OrderType) => void
+  lang: 'ru' | 'he'
+  isRtl: boolean
+}) {
+  const start = useRef<{ x: number; y: number } | null>(null)
+  const idx = ORDER_TYPES.indexOf(value)
+
+  // Сдвиг на шаг в порядке ORDER_TYPES (без «заворота» по краям)
+  function step(dir: 1 | -1) {
+    const next = Math.min(ORDER_TYPES.length - 1, Math.max(0, idx + dir))
+    if (next !== idx) onChange(ORDER_TYPES[next])
+  }
+
+  function onPointerDown(e: React.PointerEvent) {
+    if (e.pointerType === 'mouse' && e.button !== 0) return
+    start.current = { x: e.clientX, y: e.clientY }
+  }
+  function onPointerUp(e: React.PointerEvent) {
+    if (!start.current) return
+    const dx = (e.clientX - start.current.x) * (isRtl ? -1 : 1)
+    const dy = e.clientY - start.current.y
+    start.current = null
+    // Горизонтальный свайп с явным преобладанием: >40px, не вертикаль
+    if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) {
+      step(dx > 0 ? 1 : -1) // вправо → следующий, влево → предыдущий
+    }
+  }
+
+  return (
+    <div
+      onPointerDown={onPointerDown}
+      onPointerUp={onPointerUp}
+      onPointerCancel={() => (start.current = null)}
+      className="grid grid-cols-3 gap-1 bg-gray-50 border border-gray-100 rounded-xl p-0.5 mb-2.5 touch-pan-y select-none"
+    >
+      {ORDER_TYPES.map((tp) => (
+        <button
+          key={tp}
+          onClick={() => onChange(tp)}
+          className={`py-2 rounded-lg text-sm font-semibold transition-all ${
+            value === tp
+              ? 'bg-white text-gray-900 shadow-[0_1px_2px_rgba(0,0,0,0.08)]'
+              : 'text-gray-400 hover:text-gray-600'
+          }`}
+        >
+          {t(lang, tp)}
+        </button>
+      ))}
     </div>
   )
 }

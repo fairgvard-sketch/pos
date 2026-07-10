@@ -4,7 +4,7 @@ import toast from 'react-hot-toast'
 import { fetchQueue, subscribeQueue, markItemReady, markOrderReady, type QueueOrder, type QueueItem } from './api'
 import { fetchStations } from '../menu/api'
 import { useLangStore } from '../../store/langStore'
-import { t } from '../../lib/i18n'
+import { t, orderTypeLabel } from '../../lib/i18n'
 import { playNewOrderChime } from '../../lib/sound'
 import { useOutboxStore } from '../../lib/offline/outboxStore'
 import { useNetStore } from '../../lib/offline/net'
@@ -284,7 +284,7 @@ function OrderCard({
             </span>
           ) : (
             <span className={`text-xs font-semibold uppercase tracking-wide ${theme.itemDetailIdle}`}>
-              {order.order_type === 'takeaway' ? t(lang, 'takeaway') : t(lang, 'here')}
+              {orderTypeLabel(lang, order.order_type)}
             </span>
           )}
         </div>

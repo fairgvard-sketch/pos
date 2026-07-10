@@ -22,7 +22,7 @@ export interface Receipt {
   receipt_number: number | null
   doc_type: 'receipt' | 'tax_invoice' | 'invoice_receipt'
   allocation_number: string | null
-  order_type: 'here' | 'takeaway'
+  order_type: 'here' | 'takeaway' | 'delivery'
   customer_name: string | null
   table_label: string | null
   status: string
@@ -111,7 +111,7 @@ interface OrderRow {
   receipt_number: number | null
   doc_type: 'receipt' | 'tax_invoice' | 'invoice_receipt'
   allocation_number: string | null
-  order_type: 'here' | 'takeaway'
+  order_type: 'here' | 'takeaway' | 'delivery'
   customer_name: string | null
   table_label: string | null
   status: string

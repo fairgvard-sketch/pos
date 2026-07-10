@@ -26,7 +26,7 @@ export interface CartLine {
   priceOverride: number | null
 }
 
-export type OrderType = 'here' | 'takeaway'
+export type OrderType = 'here' | 'takeaway' | 'delivery'
 
 /** Скидка на весь заказ. value: для percent — целые %, для fixed — агороты. */
 export interface CartDiscount {
