@@ -4,6 +4,7 @@ import toast from 'react-hot-toast'
 import QRCode from 'qrcode'
 import { updateServiceMode } from '../../auth/api'
 import { fetchTables } from '../../tables/api'
+import { uploadItemImage } from '../../menu/api'
 import { useLangStore } from '../../../store/langStore'
 import { useDeviceStore } from '../../../store/deviceStore'
 import { t, type TranslationKey } from '../../../lib/i18n'
@@ -213,6 +214,24 @@ function OnlineOrdersBlock({ location }: { location: Location | undefined }) {
           </div>
         </div>
         <div className="px-4 py-3 border-t border-gray-100">
+          <div className="text-sm font-semibold text-gray-900">{t(lang, 'onlineDesignTitle')}</div>
+          <p className="text-xs text-gray-500 mt-0.5">{t(lang, 'onlineDesignHint')}</p>
+          <div className="space-y-3 mt-3">
+            <ImageField
+              label={t(lang, 'onlineImgHeader')}
+              hint={t(lang, 'onlineImgHeaderHint')}
+              url={settings.online_orders?.header_url ?? null}
+              onChange={(v) => update({ online_orders: { header_url: v } })}
+            />
+            <ImageField
+              label={t(lang, 'onlineImgBg')}
+              hint={t(lang, 'onlineImgBgHint')}
+              url={settings.online_orders?.background_url ?? null}
+              onChange={(v) => update({ online_orders: { background_url: v } })}
+            />
+          </div>
+        </div>
+        <div className="px-4 py-3 border-t border-gray-100">
           <div className="text-sm font-semibold text-gray-900">{t(lang, 'onlineSocialTitle')}</div>
           <p className="text-xs text-gray-500 mt-0.5">{t(lang, 'onlineSocialHint')}</p>
           <div className="space-y-3 mt-3">
@@ -238,6 +257,64 @@ function OnlineOrdersBlock({ location }: { location: Location | undefined }) {
         </div>
       </Group>
     </section>
+  )
+}
+
+/**
+ * Фото оформления гостевой страницы: превью + загрузка в Storage
+ * (тот же бакет и компрессия, что у фото товаров) + удаление.
+ * Удаление не трогает файл в Storage — только ссылку в настройках.
+ */
+function ImageField({ label, hint, url, onChange }: {
+  label: string
+  hint: string
+  url: string | null
+  onChange: (url: string | null) => void
+}) {
+  const lang = useLangStore((s) => s.lang)
+  const fileRef = useRef<HTMLInputElement>(null)
+  const upload = useMutation({
+    mutationFn: (file: File) => uploadItemImage(file),
+    onSuccess: (publicUrl) => onChange(publicUrl),
+    onError: (e) => toast.error((e as Error).message),
+  })
+  return (
+    <div className="flex items-center gap-3">
+      {url ? (
+        <img src={url} alt="" className="w-24 h-14 rounded-xl object-cover border border-gray-100 shrink-0" />
+      ) : (
+        <div className="w-24 h-14 rounded-xl bg-gray-100 shrink-0" />
+      )}
+      <div className="flex-1 min-w-0">
+        <div className="text-xs font-bold text-gray-500 uppercase tracking-wide">{label}</div>
+        <p className="text-xs text-gray-500 mt-0.5">{hint}</p>
+      </div>
+      <div className="flex gap-2 shrink-0">
+        <button
+          className="btn-secondary h-11 px-4"
+          disabled={upload.isPending}
+          onClick={() => fileRef.current?.click()}
+        >
+          {upload.isPending ? t(lang, 'loading') : t(lang, 'uploadPhoto')}
+        </button>
+        {url && (
+          <button className="btn-ghost h-11 px-3" onClick={() => onChange(null)}>
+            {t(lang, 'removeLogo')}
+          </button>
+        )}
+      </div>
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0]
+          if (f) upload.mutate(f)
+          e.target.value = ''
+        }}
+      />
+    </div>
   )
 }
 

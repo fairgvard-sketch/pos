@@ -57,6 +57,10 @@ export interface PublicMenu {
     is_open: boolean
     /** false = владелец выключил приём онлайн-заказов (051) */
     accepting?: boolean
+    /** Баннер-шапка главного экрана; логотип и название — поверх */
+    header_url?: string | null
+    /** Фон главного экрана; шапка накладывается поверх */
+    background_url?: string | null
     /** Соцссылки подвала — настраиваются в кассе, пусто = не показывать */
     links?: {
       instagram?: string | null

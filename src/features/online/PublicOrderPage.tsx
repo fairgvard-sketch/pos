@@ -7,6 +7,7 @@ import {
   fetchPublicMenu, fetchPublicStatus, submitPublicOrder, PublicApiError,
   type PublicItem, type PublicMenu, type PublicStatus,
 } from './publicApi'
+import BrandSplash from '../../components/ui/BrandSplash'
 
 /**
  * Публичная страница «закажи и забери» (050): меню → корзина → заявка →
@@ -105,22 +106,33 @@ export default function PublicOrderPage() {
     )
   }
 
+  // Сплэш Angle держится, пока грузится меню (done=false), и растворяется,
+  // когда данные пришли. Первым ребёнком фрагмента во всех трёх ветках —
+  // React сохраняет его состояние и анимация не перезапускается.
   if (isLoading) {
     return (
-      <Shell isRtl={isRtl} lang={lang} setLang={setLang}>
-        <div className="py-24 text-center text-gray-500">{t(lang, 'loading')}</div>
-      </Shell>
+      <>
+        <BrandSplash done={false} />
+        <Shell isRtl={isRtl} lang={lang} setLang={setLang}>
+          <div className="py-24 text-center text-gray-500">{t(lang, 'loading')}</div>
+        </Shell>
+      </>
     )
   }
   if (isError || !menu) {
     return (
-      <Shell isRtl={isRtl} lang={lang} setLang={setLang}>
-        <div className="py-24 text-center text-gray-500">{t(lang, 'pubMenuError')}</div>
-      </Shell>
+      <>
+        <BrandSplash />
+        <Shell isRtl={isRtl} lang={lang} setLang={setLang}>
+          <div className="py-24 text-center text-gray-500">{t(lang, 'pubMenuError')}</div>
+        </Shell>
+      </>
     )
   }
 
   return (
+    <>
+    <BrandSplash />
     <Shell
       isRtl={isRtl}
       lang={lang}
@@ -128,6 +140,8 @@ export default function PublicOrderPage() {
       title={menu.location.business_name || menu.location.name}
       logo={menu.location.logo_url}
       hero={view === 'menu' && !activeCat}
+      headerImg={menu.location.header_url}
+      bgImg={menu.location.background_url}
     >
       {menu.location.accepting === false ? (
         <div className="mx-4 mt-4 rounded-2xl bg-amber-50 text-amber-800 text-sm font-semibold px-4 py-3">
@@ -259,6 +273,7 @@ export default function PublicOrderPage() {
         />
       )}
     </Shell>
+    </>
   )
 }
 
@@ -267,14 +282,19 @@ export default function PublicOrderPage() {
  * hero — главный экран плиток: крупный логотип и название по центру;
  * компактная sticky-шапка (h-14) — категории/корзина/статус, к ней
  * привязаны чипы навигации (sticky top-14).
+ * Оформление (Настройки → Онлайн-заказы): headerImg — баннер вместо
+ * белой hero-шапки; bgImg — фон главного экрана (fixed-подложка),
+ * шапка и плитки накладываются поверх, текст шапки — белый.
  */
-function Shell({ isRtl, lang, setLang, title, logo, hero, children }: {
+function Shell({ isRtl, lang, setLang, title, logo, hero, headerImg, bgImg, children }: {
   isRtl: boolean
   lang: Lang
   setLang: (l: Lang) => void
   title?: string
   logo?: string | null
   hero?: boolean
+  headerImg?: string | null
+  bgImg?: string | null
   children: React.ReactNode
 }) {
   const langBtn = (
@@ -285,17 +305,44 @@ function Shell({ isRtl, lang, setLang, title, logo, hero, children }: {
       {lang === 'he' ? 'RU' : 'עב'}
     </button>
   )
+  const hasBg = !!(hero && bgImg)
   return (
     <div dir={isRtl ? 'rtl' : 'ltr'} className="min-h-screen bg-[#eceef1]">
-      <div className="max-w-lg mx-auto min-h-screen bg-white flex flex-col">
+      {hasBg && (
+        // Фон не скроллится вместе с контентом; колонка та же max-w-lg
+        <div className="fixed inset-0 pointer-events-none" aria-hidden>
+          <div className="max-w-lg mx-auto h-full relative overflow-hidden">
+            <img src={bgImg!} alt="" className="absolute inset-0 w-full h-full object-cover" />
+            <span className="absolute inset-0 bg-black/30" />
+          </div>
+        </div>
+      )}
+      <div className={`relative max-w-lg mx-auto min-h-screen flex flex-col ${hasBg ? '' : 'bg-white'}`}>
         {hero ? (
+          headerImg ? (
+            // Баннер-шапка: фото, поверх — логотип и название (белым на скриме)
+            <header className="relative h-44 shrink-0">
+              <img src={headerImg} alt="" className="absolute inset-0 w-full h-full object-cover" />
+              <span className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/15 to-black/25" />
+              <div className="absolute top-4 end-4">{langBtn}</div>
+              <div className="absolute bottom-4 inset-x-4 flex items-center gap-3">
+                {logo && <img src={logo} alt="" className="w-12 h-12 rounded-full object-cover border-2 border-white/80 shrink-0" />}
+                <h1 className="text-2xl font-black text-white leading-tight truncate [text-shadow:0_1px_8px_rgba(0,0,0,0.45)]">
+                  {title ?? ''}
+                </h1>
+              </div>
+            </header>
+          ) : (
           <header className="relative px-8 pt-8 pb-2 text-center">
             <div className="absolute top-4 end-4">{langBtn}</div>
             {logo && <img src={logo} alt="" className="w-20 h-20 rounded-full object-cover mx-auto" />}
-            <h1 className={`text-2xl font-black text-gray-900 leading-tight ${logo ? 'mt-3' : 'mt-8'}`}>
+            <h1 className={`text-2xl font-black leading-tight ${logo ? 'mt-3' : 'mt-8'} ${
+              hasBg ? 'text-white [text-shadow:0_1px_8px_rgba(0,0,0,0.45)]' : 'text-gray-900'
+            }`}>
               {title ?? ''}
             </h1>
           </header>
+          )
         ) : (
           <header className="sticky top-0 z-10 bg-white border-b border-gray-100 px-4 h-14 flex items-center justify-end relative">
             {/* Логотип у начала строки; название — по центру, поверх флекса */}

@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, Navigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { fetchCategories, fetchItems, fetchModifierGroups, toggleItemAvailability } from '../menu/api'
+import { fetchCategories, fetchItems, fetchModifierGroups, toggleItemAvailability, reorderItems } from '../menu/api'
+// Редактор товара нужен только менеджеру в режиме правки — не грузим в горячий путь
+const ItemEditor = lazy(() => import('../menu/ItemEditor'))
 import { placeOrder, payOrder, splitOrder, type PaymentInput } from './api'
 import { fetchCurrentShift } from '../shift/api'
 import { fetchCurrentLocation } from '../auth/api'
@@ -200,6 +202,96 @@ export default function SellPage() {
     }
   }
 
+  // ── Правка витрины (менеджер): тап по плитке — редактор товара,
+  //    long-press — перестановка (та же механика, что у ряда действий,
+  //    но по 2D-сетке). Полная админка (модификаторы, станции) — Настройки→Бизнес.
+  const isManager = staff?.role === 'owner' || staff?.role === 'manager'
+  const [editMode, setEditMode] = useState(false)
+  const [editorItem, setEditorItem] = useState<MenuItem | 'new' | null>(null)
+  const [dragTile, setDragTile] = useState<string | null>(null)
+  // Локальный порядок текущей выборки на время перетаскивания (id плиток)
+  const [tileOrder, setTileOrder] = useState<string[] | null>(null)
+  const gridRef = useRef<HTMLDivElement>(null)
+  const tileDragTimer = useRef<number | null>(null)
+  const tileDragStartPt = useRef<{ x: number; y: number } | null>(null)
+  const suppressTileClick = useRef(false)
+
+  const reorderMut = useMutation({
+    mutationFn: reorderItems,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['menu_items'] }),
+    onError: (e) => toast.error(e.message),
+  })
+
+  function tileDragDown(item: MenuItem, e: React.PointerEvent) {
+    if (search.trim()) return // в результатах поиска порядок не правим
+    if (e.pointerType === 'mouse' && e.button !== 0) return
+    suppressTileClick.current = false
+    tileDragStartPt.current = { x: e.clientX, y: e.clientY }
+    const el = e.currentTarget as HTMLElement
+    const pointerId = e.pointerId
+    tileDragTimer.current = window.setTimeout(() => {
+      tileDragTimer.current = null
+      setDragTile(item.id)
+      suppressTileClick.current = true
+      try { el.setPointerCapture(pointerId) } catch { /* старый WebView */ }
+      document.addEventListener('touchmove', preventTouchScroll.current, { passive: false })
+      navigator.vibrate?.(15)
+    }, 450)
+  }
+
+  function tileDragMove(item: MenuItem, e: React.PointerEvent) {
+    if (tileDragTimer.current !== null && tileDragStartPt.current) {
+      if (Math.abs(e.clientX - tileDragStartPt.current.x) > 10 || Math.abs(e.clientY - tileDragStartPt.current.y) > 10) {
+        window.clearTimeout(tileDragTimer.current)
+        tileDragTimer.current = null
+      }
+      return
+    }
+    if (dragTile !== item.id || !gridRef.current) return
+    // Курсор над соседней плиткой → dragged занимает её слот
+    for (const child of Array.from(gridRef.current.children) as HTMLElement[]) {
+      const cid = child.dataset.tileId
+      if (!cid || cid === item.id) continue
+      const r = child.getBoundingClientRect()
+      if (e.clientX > r.left && e.clientX < r.right && e.clientY > r.top && e.clientY < r.bottom) {
+        const base = tileOrder ?? visibleItems.map((i) => i.id)
+        const without = base.filter((x) => x !== item.id)
+        const wasBefore = base.indexOf(item.id) < base.indexOf(cid)
+        without.splice(without.indexOf(cid) + (wasBefore ? 1 : 0), 0, item.id)
+        setTileOrder(without)
+        break
+      }
+    }
+  }
+
+  /** Уход указателя с плитки: отменяет только ОЖИДАНИЕ long-press.
+   *  Активный drag не трогаем — с pointer capture leave прилетает при
+   *  каждом выходе за границы плитки, а тянуть нужно по всей сетке. */
+  function tileDragLeave() {
+    if (tileDragTimer.current !== null) {
+      window.clearTimeout(tileDragTimer.current)
+      tileDragTimer.current = null
+    }
+  }
+
+  function tileDragEnd() {
+    if (tileDragTimer.current !== null) {
+      window.clearTimeout(tileDragTimer.current)
+      tileDragTimer.current = null
+    }
+    if (dragTile !== null) {
+      setDragTile(null)
+      document.removeEventListener('touchmove', preventTouchScroll.current)
+      // Персист: локальный порядок выборки вписываем в глобальный порядок каталога
+      if (tileOrder) {
+        const visSet = new Set(tileOrder)
+        const queue = [...tileOrder]
+        reorderMut.mutate(items.map((i) => (visSet.has(i.id) ? queue.shift()! : i.id)))
+      }
+    }
+    tileDragStartPt.current = null
+  }
+
   // ── Перестановка кнопок ряда действий long-press'ом (как на iPhone) ──
   // Долгое нажатие «поднимает» кнопку, движение по горизонтали меняет её
   // место в ряду; порядок хранится per-device (deviceStore.actionOrder).
@@ -306,15 +398,26 @@ export default function SellPage() {
   const currentCat = activeCat ?? firstCat ?? 'all'
 
   const visibleItems = useMemo(() => {
-    let list = items.filter((i) => i.is_available)
+    // В режиме правки показываем и снятые с продажи (приглушёнными)
+    let list = editMode ? items : items.filter((i) => i.is_available)
     if (search.trim()) {
       const q = search.trim().toLowerCase()
       return list.filter((i) => i.name.toLowerCase().includes(q))
     }
     if (currentCat === 'fav') list = list.filter((i) => i.is_favorite)
     else if (currentCat !== 'all') list = list.filter((i) => i.category_id === currentCat)
+    if (tileOrder) {
+      // Перетаскивание: локальный порядок поверх серверного (до инвалидации)
+      const pos = new Map(tileOrder.map((id, i) => [id, i]))
+      list = list.slice().sort((a, b) => (pos.get(a.id) ?? Infinity) - (pos.get(b.id) ?? Infinity))
+    }
     return list
-  }, [items, currentCat, search])
+  }, [items, currentCat, search, editMode, tileOrder])
+
+  // Смена контекста (категория/поиск/выход из правки) сбрасывает локальный порядок
+  useEffect(() => {
+    setTileOrder(null)
+  }, [editMode, currentCat, search])
 
   function itemGroups(item: MenuItem): ModifierGroup[] {
     const links = (item.menu_item_modifier_groups ?? []).slice().sort((a, b) => a.sort_order - b.sort_order)
@@ -1009,32 +1112,74 @@ export default function SellPage() {
               )}
               </div>
             </div>
+            {/* Правка витрины: тумблер-карандаш (только менеджер) */}
+            {isManager && (
+              <button
+                onClick={() => setEditMode((v) => !v)}
+                aria-label={t(lang, 'menuEditMode')}
+                title={t(lang, 'menuEditMode')}
+                className={`shrink-0 w-11 h-11 rounded-2xl border flex items-center justify-center transition-all active:scale-[0.94] ${
+                  editMode
+                    ? 'bg-gray-900 border-gray-900 text-white'
+                    : 'border-gray-100 bg-gray-50 text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path
+                    d="M4 20l1-4L16.5 4.5a2.1 2.1 0 0 1 3 3L8 19l-4 1z"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </button>
+            )}
           </div>
+          {editMode && (
+            <p className="text-xs text-gray-500 pb-2 -mt-2">{t(lang, 'menuEditHint')}</p>
+          )}
         </div>
 
         <div className="flex-1 overflow-y-auto px-5 pb-5">
-          {visibleItems.length === 0 ? (
+          {visibleItems.length === 0 && !editMode ? (
             <p className="text-gray-300 text-sm text-center pt-20">{t(lang, 'nothingFound')}</p>
           ) : (
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-3">
+            <div ref={gridRef} className="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-3">
               {visibleItems.map((item) => (
                 <button
                   key={item.id}
+                  data-tile-id={item.id}
                   onClick={() => {
+                    if (editMode) {
+                      // Клик после drag-перестановки — не открывать редактор
+                      if (suppressTileClick.current) { suppressTileClick.current = false; return }
+                      setEditorItem(item)
+                      return
+                    }
                     // Клик после long-press (стоп-лист) — не добавлять в корзину
                     if (tileFired.current) { tileFired.current = false; return }
                     handleItemTap(item)
                   }}
-                  onPointerDown={(e) => tilePressStart(item, e)}
-                  onPointerUp={tilePressCancel}
-                  onPointerLeave={tilePressCancel}
-                  onPointerMove={tilePressMove}
+                  onPointerDown={(e) => (editMode ? tileDragDown(item, e) : tilePressStart(item, e))}
+                  onPointerUp={() => (editMode ? tileDragEnd() : tilePressCancel())}
+                  onPointerLeave={() => (editMode ? tileDragLeave() : tilePressCancel())}
+                  onPointerCancel={() => (editMode ? tileDragEnd() : tilePressCancel())}
+                  onPointerMove={(e) => (editMode ? tileDragMove(item, e) : tilePressMove(e))}
                   onContextMenu={(e) => e.preventDefault()}
-                  className="relative rounded-2xl border border-gray-300 p-3 text-start bg-white
-                             hover:border-gray-400 hover:shadow-[0_4px_16px_rgba(0,0,0,0.06)]
-                             transition-all duration-150 active:scale-[0.97]"
+                  className={`relative rounded-2xl border p-3 text-start bg-white transition-all duration-150 ${
+                    dragTile === item.id
+                      ? 'border-gray-900 shadow-[0_12px_32px_rgba(0,0,0,0.18)] scale-105 z-10'
+                      : 'border-gray-300 hover:border-gray-400 hover:shadow-[0_4px_16px_rgba(0,0,0,0.06)] active:scale-[0.97]'
+                  } ${editMode && !item.is_available ? 'opacity-40' : ''}`}
                 >
-                  {item.is_favorite && (
+                  {editMode ? (
+                    <span className="absolute top-2 end-2 w-6 h-6 rounded-full bg-gray-900 text-white flex items-center justify-center shadow-sm">
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <path d="M4 20l1-4L16.5 4.5a2.1 2.1 0 0 1 3 3L8 19l-4 1z" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </span>
+                  ) : item.is_favorite && (
                     <span className="absolute top-2.5 end-2.5 text-amber-400 text-sm drop-shadow-sm">★</span>
                   )}
                   <ItemImage item={item} size="card" />
@@ -1061,6 +1206,18 @@ export default function SellPage() {
                   })()}
                 </button>
               ))}
+              {/* Режим правки: плитка «+ Товар» в конце сетки */}
+              {editMode && !search.trim() && (
+                <button
+                  onClick={() => setEditorItem('new')}
+                  className="rounded-2xl border-2 border-dashed border-gray-200 min-h-[140px] p-3
+                             flex flex-col items-center justify-center text-gray-400
+                             hover:text-gray-600 hover:border-gray-300 transition-all active:scale-[0.97]"
+                >
+                  <span className="text-3xl leading-none font-light">+</span>
+                  <span className="mt-1.5 text-sm font-semibold">{t(lang, 'newItem')}</span>
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -1568,6 +1725,22 @@ export default function SellPage() {
           }}
           onCancel={() => setEditingQty(null)}
         />
+      )}
+
+      {/* Редактор товара из режима правки витрины (переиспользуем админку меню) */}
+      {editorItem !== null && (
+        <div className="fixed inset-0 z-50 bg-[#eceef1] p-3 flex">
+          <Suspense fallback={null}>
+            <ItemEditor
+              key={editorItem === 'new' ? 'new' : editorItem.id}
+              item={editorItem === 'new' ? null : editorItem}
+              defaultCategoryId={currentCat !== 'all' && currentCat !== 'fav' ? currentCat : (firstCat ?? '')}
+              onSaved={() => setEditorItem(null)}
+              onDeleted={() => setEditorItem(null)}
+              onBack={() => setEditorItem(null)}
+            />
+          </Suspense>
+        </div>
       )}
 
       {/* Подтверждение стоп-листа: long-press по товару */}

@@ -250,6 +250,18 @@ export default function ShiftPage() {
           </div>
         )}
 
+        {/* Табель — вход отсюда (из сайдбара пункт убран: приход/уход — часть смены) */}
+        <button
+          onClick={() => navigate('/timesheet')}
+          className="w-full mb-5 min-h-[52px] px-4 rounded-2xl border border-gray-100 bg-white
+                     flex items-center gap-3 text-start hover:bg-gray-50 transition-colors"
+        >
+          <span className="flex-1 text-sm font-semibold text-gray-900">{t(lang, 'timesheet')}</span>
+          <svg className="w-4 h-4 text-gray-400 shrink-0 rtl:-scale-x-100" viewBox="0 0 16 16" fill="none" aria-hidden>
+            <path d="M6 3l5 5-5 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+
         {/* X-отчёт (живой) */}
         {report && (
           <div className="card p-5 space-y-1 mb-5">

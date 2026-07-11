@@ -6,7 +6,7 @@ import { t, translations } from '../../lib/i18n'
 import { useLangStore } from '../../store/langStore'
 import type { Lang } from '../../lib/i18n'
 import LangToggle from '../../components/ui/LangToggle'
-import ArrowLogo from '../../components/ui/ArrowLogo'
+import BrandWordmark from '../../components/ui/BrandWordmark'
 
 type TKey = keyof typeof translations.ru
 
@@ -26,10 +26,7 @@ function BrandPanel({ lang }: { lang: Lang }) {
   ]
   return (
     <div className="hidden lg:flex flex-col justify-between bg-gray-900 text-white rounded-3xl p-10 xl:p-12 h-full">
-      <div className="flex items-center gap-3">
-        <ArrowLogo className="w-8 h-8" invert />
-        <span className="text-lg font-bold tracking-tight">{t(lang, 'arrowBrand')}</span>
-      </div>
+      <BrandWordmark invert className="text-xl" />
 
       <div>
         <h2 className="text-3xl xl:text-4xl font-black leading-tight mb-8">
@@ -143,12 +140,7 @@ export default function DeviceSetupPage() {
         <div className="flex flex-col">
           {/* Шапка: логотип + язык */}
           <div className="flex items-center justify-between mb-10 lg:mb-16">
-            <div className="flex items-center gap-2.5">
-              <ArrowLogo className="w-8 h-8 text-gray-900" />
-              <span className="text-lg font-bold tracking-tight text-gray-900">
-                {t(lang, 'arrowBrand')}
-              </span>
-            </div>
+            <BrandWordmark className="text-xl" />
             <LangToggle />
           </div>
 

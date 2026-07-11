@@ -119,20 +119,16 @@ export default function AppSidebar({ active }: { active: SidebarPage }) {
         />
         <SideLink active={active === 'transactions'} label={t(lang, 'transactions')} iconName="card" onClick={() => navigate('/transactions')} />
         <SideLink active={active === 'shift'} label={t(lang, 'shift')} iconName="shift" onClick={() => navigate('/shift')} />
-        <SideLink active={active === 'timesheet'} label={t(lang, 'timesheet')} iconName="customers" onClick={() => navigate('/timesheet')} />
-        {isManager && (
-          <SideLink active={active === 'menu'} label={t(lang, 'menu')} iconName="menu" onClick={() => navigate('/menu')} />
-        )}
+        {/* Менеджерский блок отделён. Редкие экраны из сайдбара убраны:
+            Табель — со страницы Смены, Меню — правка витрины на экране продажи
+            (полная админка в Настройках → Бизнес), Дашборд — тоже там. */}
+        {isManager && <div className="my-3 border-t border-gray-100" />}
         {isManager && (
           <SideLink active={active === 'analytics'} label={t(lang, 'reports')} iconName="analytics" onClick={() => navigate('/reports')} />
         )}
         {isManager && (
-          <SideLink label={t(lang, 'dashboard')} iconName="analytics" onClick={() => navigate('/dashboard')} />
-        )}
-        {isManager && (
           <SideLink active={active === 'settings'} label={t(lang, 'settings')} iconName="settings" onClick={() => navigate('/settings')} />
         )}
-        <SideLink label={t(lang, 'lock')} iconName="customers" onClick={() => { lock(); navigate('/pin', { replace: true }) }} />
       </nav>
 
       <div className="mt-auto space-y-4">
@@ -142,10 +138,23 @@ export default function AppSidebar({ active }: { active: SidebarPage }) {
           <div className="w-9 h-9 rounded-full bg-gray-900 text-white flex items-center justify-center text-sm font-bold shrink-0">
             {staff.name.slice(0, 1).toUpperCase()}
           </div>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <div className="text-sm font-bold text-gray-900 truncate">{staff.name}</div>
             <div className="text-[11px] text-gray-400">{t(lang, staff.role)}</div>
           </div>
+          {/* Блокировка — действие, не страница: живёт у профиля, не в навигации */}
+          <button
+            onClick={() => { lock(); navigate('/pin', { replace: true }) }}
+            aria-label={t(lang, 'lock')}
+            title={t(lang, 'lock')}
+            className="shrink-0 w-11 h-11 -me-2 flex items-center justify-center rounded-xl text-gray-400
+                       hover:text-gray-900 hover:bg-gray-50 transition-colors active:scale-[0.94]"
+          >
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <rect x="5" y="10.5" width="14" height="9.5" rx="2.5" stroke="currentColor" strokeWidth="1.8" />
+              <path d="M8 10.5V8a4 4 0 0 1 8 0v2.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+            </svg>
+          </button>
         </div>
       </div>
     </aside>

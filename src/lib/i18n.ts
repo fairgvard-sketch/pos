@@ -3,7 +3,7 @@ export type Lang = 'ru' | 'he'
 export const translations = {
   ru: {
     // Общее
-    appName: 'Kassa',
+    appName: 'Angle',
     loading: 'Загрузка...',
     save: 'Сохранить',
     cancel: 'Отмена',
@@ -34,8 +34,8 @@ export const translations = {
     createOrg: 'Начать работу',
     creating: 'Создаём...',
 
-    // Мастер входа/регистрации (бренд Arrow POS)
-    arrowBrand: 'Arrow POS',
+    // Мастер входа/регистрации (бренд Angle)
+    arrowBrand: 'Angle',
     setupSignInTitle: 'Вход в систему',
     setupSignUpTitle: 'Создайте аккаунт',
     setupSignInSub: 'Войдите в аккаунт вашего заведения. Это делается один раз на каждой кассе.',
@@ -43,7 +43,7 @@ export const translations = {
     setupContinue: 'Продолжить',
     setupCreateAccount: 'Создать аккаунт',
     setupNewHere: 'Впервые здесь?',
-    setupAlready: 'Уже есть аккаунт Arrow?',
+    setupAlready: 'Уже есть аккаунт Angle?',
     // Шаг «Бизнес» онбординга
     bizStepTitle: 'Расскажите о вашем заведении',
     bizStepHint: 'Всё это потом можно изменить в настройках.',
@@ -157,6 +157,10 @@ export const translations = {
     requiredLabel: 'обязательно',
     allItems: 'Все товары',
     addItem: '+ Товар',
+    menuEditMode: 'Правка меню',
+    menuEditHint: 'Тап по товару — правка, long-press — перестановка',
+    menuAdminHint: 'Категории, товары, модификаторы, станции',
+    dashboardHint: 'Выручка и показатели — можно открывать с телефона',
     selectOrCreateItem: 'Выберите товар слева или создайте новый',
     imageLabel: 'Фото',
     uploadImage: 'Загрузить фото',
@@ -841,6 +845,13 @@ export const translations = {
     previewHide: 'Скрыть превью',
     onlineSocialTitle: 'Соцсети и отзыв Google',
     onlineSocialHint: 'Кнопки внизу страницы заказа. Пустое поле — кнопки нет.',
+    onlineDesignTitle: 'Оформление страницы',
+    onlineDesignHint: 'Фотографии главного экрана страницы заказа.',
+    onlineImgHeader: 'Шапка',
+    onlineImgHeaderHint: 'Баннер сверху; логотип и название — поверх него',
+    onlineImgBg: 'Фон',
+    onlineImgBgHint: 'Фон всего экрана; шапка накладывается поверх',
+    uploadPhoto: 'Загрузить',
     googleReviewLabel: 'Ссылка на отзыв в Google',
     onlineStats7d: 'За 7 дней',
     onlineStatReqs: 'заявок',
@@ -853,7 +864,7 @@ export const translations = {
     removeLogo: 'Убрать',
     logoHint: 'Квадратная картинка. Видна в настройках и на странице онлайн-заказа.',
     bizNameLabel: 'Название заведения',
-    bizNameHint: 'Печатается в шапке чека и показывается гостям онлайн',
+    bizNameHint: 'Показывается в кассе и гостям на странице заказа. Название в чеке — в «Реквизитах для чека».',
     locNameLabel: 'Название точки',
     locNameHint: 'Для вас: различать филиалы и кассы',
     devicePasswordTitle: 'Пароль аккаунта',
@@ -868,7 +879,7 @@ export const translations = {
   },
   he: {
     // Общее
-    appName: 'Kassa',
+    appName: 'Angle',
     loading: 'טוען...',
     save: 'שמור',
     cancel: 'ביטול',
@@ -899,8 +910,8 @@ export const translations = {
     createOrg: 'להתחיל לעבוד',
     creating: 'יוצרים...',
 
-    // אשף התחברות/הרשמה (מותג Arrow POS)
-    arrowBrand: 'Arrow POS',
+    // אשף התחברות/הרשמה (מותג Angle)
+    arrowBrand: 'Angle',
     setupSignInTitle: 'כניסה למערכת',
     setupSignUpTitle: 'יצירת חשבון',
     setupSignInSub: 'התחברו לחשבון העסק שלכם. פעולה חד-פעמית לכל קופה.',
@@ -908,7 +919,7 @@ export const translations = {
     setupContinue: 'המשך',
     setupCreateAccount: 'יצירת חשבון',
     setupNewHere: 'פעם ראשונה כאן?',
-    setupAlready: 'כבר יש חשבון Arrow?',
+    setupAlready: 'כבר יש חשבון Angle?',
     // שלב «עסק» באשף
     bizStepTitle: 'ספרו לנו על העסק שלכם',
     bizStepHint: 'את כל זה אפשר לשנות מאוחר יותר בהגדרות.',
@@ -1022,6 +1033,10 @@ export const translations = {
     requiredLabel: 'חובה',
     allItems: 'כל הפריטים',
     addItem: '+ פריט',
+    menuEditMode: 'עריכת תפריט',
+    menuEditHint: 'הקשה על פריט — עריכה, לחיצה ארוכה — שינוי סדר',
+    menuAdminHint: 'קטגוריות, פריטים, תוספות ותחנות',
+    dashboardHint: 'הכנסות ומדדים — נוח לפתוח גם מהטלפון',
     selectOrCreateItem: 'בחרו פריט משמאל או צרו חדש',
     imageLabel: 'תמונה',
     uploadImage: 'העלאת תמונה',
@@ -1706,6 +1721,13 @@ export const translations = {
     previewHide: 'להסתיר תצוגה מקדימה',
     onlineSocialTitle: 'רשתות חברתיות וביקורת בגוגל',
     onlineSocialHint: 'כפתורים בתחתית דף ההזמנה. שדה ריק — אין כפתור.',
+    onlineDesignTitle: 'עיצוב הדף',
+    onlineDesignHint: 'תמונות של המסך הראשי בדף ההזמנה.',
+    onlineImgHeader: 'כותרת עליונה',
+    onlineImgHeaderHint: 'באנר למעלה; הלוגו והשם מוצגים מעליו',
+    onlineImgBg: 'רקע',
+    onlineImgBgHint: 'רקע לכל המסך; הכותרת מוצגת מעליו',
+    uploadPhoto: 'להעלות',
     googleReviewLabel: 'קישור לביקורת בגוגל',
     onlineStats7d: 'ב־7 ימים',
     onlineStatReqs: 'הזמנות',
@@ -1718,7 +1740,7 @@ export const translations = {
     removeLogo: 'להסיר',
     logoHint: 'תמונה מרובעת. מוצגת בהגדרות ובדף ההזמנה אונליין.',
     bizNameLabel: 'שם העסק',
-    bizNameHint: 'מודפס בראש הקבלה ומוצג לאורחים אונליין',
+    bizNameHint: 'מוצג בקופה ולאורחים בדף ההזמנה. השם בקבלה — ב"פרטי העסק לקבלה".',
     locNameLabel: 'שם הנקודה',
     locNameHint: 'בשבילכם: להבחין בין סניפים וקופות',
     devicePasswordTitle: 'סיסמת חשבון',

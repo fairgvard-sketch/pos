@@ -14,6 +14,7 @@ import SellPage from './features/sell/SellPage'
 import QueuePage from './features/queue/QueuePage'
 import HallPage from './features/tables/HallPage'
 import AutoLock from './components/AutoLock'
+import BrandSplash from './components/ui/BrandSplash'
 
 // Горячий путь кассира (PIN → продажа/зал/очередь) — статика, в стартовом чанке.
 // Менеджерские экраны — lazy: не тормозят парсинг на слабом CPU терминала,
@@ -97,6 +98,8 @@ function RootRedirect() {
 }
 
 export default function App() {
+  // Гостевая страница заказа — без сплэша кассы: гостю нужен сразу контент
+  const showSplash = !window.location.pathname.startsWith('/order/')
   return (
     <PersistQueryClientProvider
       client={queryClient}
@@ -225,6 +228,8 @@ export default function App() {
         </Routes>
         </Suspense>
       </BrowserRouter>
+
+      {showSplash && <BrandSplash />}
 
       <Toaster
         position="top-right"

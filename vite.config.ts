@@ -24,8 +24,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'icons.svg'],
       manifest: {
-        name: 'Kassa — POS',
-        short_name: 'Kassa',
+        name: 'Angle — POS',
+        short_name: 'Angle',
         description: 'POS для кофеен и пекарен',
         lang: 'ru',
         // Тач-касса, альбомная ориентация. standalone (не fullscreen!):

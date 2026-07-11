@@ -1,0 +1,109 @@
+/* Сплэш Angle. Целевой движок — Chrome 52 (T2, Android 7.1): без flex gap,
+   inset и clip-path — только transform / opacity / overflow. */
+
+.brand-splash {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 9999;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.4s ease;
+}
+
+.brand-splash--leave {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Пока буквы спрятаны, группа сдвинута вправо — знак стоит по центру экрана;
+   вместе с выездом букв группа уезжает в финальное центрированное положение */
+.brand-splash__group {
+  display: flex;
+  align-items: flex-end;
+  animation: bs-group 0.5s cubic-bezier(0.22, 0.61, 0.21, 1) 1.5s both;
+}
+
+/* Знак влетает как бумажный самолётик снизу-слева (__fly: подлёт + приземление),
+   затем закладывает мёртвую петлю: __loop вращается на -360° вокруг точки в 85px
+   НАД знаком — знак идёт по идеальной окружности, нос сам по касательной.
+   Одна анимация вращения без стыков = полная плавность. */
+.brand-splash__fly {
+  display: block;
+  animation:
+    bs-fly 0.5s cubic-bezier(0.3, 0.7, 0.4, 1) both,
+    bs-land 0.45s cubic-bezier(0.33, 1, 0.68, 1) 1.5s both;
+  will-change: transform;
+}
+
+.brand-splash__loop {
+  display: block;
+  transform-origin: 50% -37px; /* центр петли: 85px выше центра знака (96/2 + 37) */
+  animation: bs-loop 1s cubic-bezier(0.45, 0.1, 0.55, 0.9) 0.5s both;
+  will-change: transform;
+}
+
+.brand-splash__mark {
+  display: block;
+  height: 96px;
+  width: auto;
+  margin-bottom: -13px; /* хвост знака опускается ниже базовой линии букв */
+}
+
+.brand-splash__clip {
+  display: block;
+  overflow: hidden;
+  margin-left: 5px;
+}
+
+.brand-splash__text {
+  display: block;
+  font-family: 'Archivo Black', 'Inter', sans-serif;
+  font-size: 64px;
+  line-height: 1;
+  letter-spacing: 0.04em;
+  color: #111827;
+  animation: bs-text 0.55s cubic-bezier(0.22, 0.61, 0.21, 1) 1.5s both;
+  will-change: transform;
+}
+
+/* Подлёт снизу-слева, выравнивание к нижней точке петли */
+@keyframes bs-fly {
+  0% {
+    opacity: 0;
+    transform: translate(-320px, 200px) rotate(-18deg);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(0, 0) rotate(0deg);
+  }
+}
+
+/* Мёртвая петля: один непрерывный оборот против часовой,
+   разгон в начале и торможение на выходе — через timing-function */
+@keyframes bs-loop {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(-360deg); }
+}
+
+/* Приземление: короткий прострел вперёд и возврат */
+@keyframes bs-land {
+  0% { transform: translate(0, 0); }
+  45% { transform: translate(14px, -8px); }
+  100% { transform: translate(0, 0); }
+}
+
+@keyframes bs-group {
+  from { transform: translateX(118px); }
+  to { transform: translateX(0); }
+}
+
+@keyframes bs-text {
+  from { transform: translateX(-104%); }
+  to { transform: translateX(0); }
+}

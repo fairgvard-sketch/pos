@@ -16,6 +16,11 @@ export type PermLevel = 'all' | 'manager'
  * Все ключи опциональны: отсутствие = дефолт (см. src/lib/perms.ts).
  */
 export interface LocationSettings {
+  /**
+   * Отображаемое имя заведения (052): карточка в настройках и заголовок
+   * гостевой страницы. НЕ влияет на шапку чека — там receipt_business_name.
+   */
+  display_name?: string | null
   perms?: {
     discount?: PermLevel
     price_edit?: PermLevel
@@ -43,6 +48,11 @@ export interface LocationSettings {
     instagram?: string | null
     facebook?: string | null
     google_review?: string | null
+    // Оформление главного экрана гостевой страницы (фото в Storage)
+    /** Баннер-шапка сверху; логотип и название накладываются поверх */
+    header_url?: string | null
+    /** Фон главного экрана; шапка и плитки — поверх */
+    background_url?: string | null
   }
 }
 

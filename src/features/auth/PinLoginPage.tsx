@@ -9,7 +9,7 @@ import { useAuthStore } from '../../store/authStore'
 import { useLangStore } from '../../store/langStore'
 import { t } from '../../lib/i18n'
 import LangToggle from '../../components/ui/LangToggle'
-import ArrowLogo from '../../components/ui/ArrowLogo'
+import BrandWordmark from '../../components/ui/BrandWordmark'
 
 const PIN_LENGTH = 4
 
@@ -97,10 +97,9 @@ export default function PinLoginPage() {
         <LangToggle />
       </div>
 
-      <div className="flex items-center gap-2.5 mb-2">
-        <ArrowLogo className="w-8 h-8 text-gray-900" />
-        <h1 className="text-2xl font-black text-gray-900 tracking-tight">{t(lang, 'arrowBrand')}</h1>
-      </div>
+      <h1 className="mb-2">
+        <BrandWordmark className="text-2xl" />
+      </h1>
       <p className="text-sm text-gray-500 mb-8">
         {checking ? t(lang, 'checking') : t(lang, 'enterPin')}
       </p>

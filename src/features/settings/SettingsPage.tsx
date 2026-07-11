@@ -117,12 +117,12 @@ export default function SettingsPage() {
               <img src={location.logo_url} alt="" className="w-10 h-10 rounded-full object-cover shrink-0" />
             ) : (
               <span className="w-10 h-10 rounded-full bg-gray-900 text-white font-bold flex items-center justify-center shrink-0">
-                {(location?.receipt_business_name || location?.name || '?').slice(0, 1).toUpperCase()}
+                {(location?.settings?.display_name || location?.receipt_business_name || location?.name || '?').slice(0, 1).toUpperCase()}
               </span>
             )}
             <span className="min-w-0">
               <span className="block text-sm font-bold text-gray-900 truncate">
-                {location?.receipt_business_name || location?.name || '…'}
+                {location?.settings?.display_name || location?.receipt_business_name || location?.name || '…'}
                 {deviceName && <span className="text-gray-400 font-semibold"> · {deviceName}</span>}
               </span>
               {staff && (
@@ -194,7 +194,7 @@ export default function SettingsPage() {
                 <h2 className="text-xl font-black text-gray-900 mb-6">
                   {t(lang, CATEGORIES.find((c) => c.id === cat)!.label)}
                 </h2>
-                {cat === 'payments' && <PaymentsSection openDetail={openDetail} />}
+                {cat === 'payments' && <PaymentsSection location={location} openDetail={openDetail} />}
                 {cat === 'receipts' && <ReceiptsSection location={location} />}
                 {cat === 'service' && <ServiceSection location={location} openDetail={openDetail} />}
                 {cat === 'shift' && <ShiftSection location={location} />}

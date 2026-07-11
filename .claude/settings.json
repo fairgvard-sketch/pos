@@ -47,7 +47,22 @@
       "PowerShell($f = Get-Content \"C:\\\\Users\\\\Hub\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-Hub-Desktop-in-work-projects-kassa\\\\66886456-182d-4620-a57f-17f2aecf848a\\\\scratchpad\\\\fix_034_functions.sql\"; $f | Select-String -Pattern \"CREATE OR REPLACE FUNCTION|^REVOKE\" | ForEach-Object { Write-Host $_.Line.Substring\\(0, [Math]::Min\\(80, $_.Line.Length\\)\\) })",
       "PowerShell(npx tsc --noEmit 2>$null)",
       "PowerShell(if \\($?\\) { \"OK\" })",
-      "PowerShell(git add src/App.tsx .claude/settings.json)"
+      "PowerShell(git add src/App.tsx .claude/settings.json)",
+      "PowerShell(npm install)",
+      "PowerShell(npm i @fontsource/archivo-black)",
+      "Skill(run)",
+      "Skill(run:*)",
+      "PowerShell(Test-Path \"C:\\\\Program Files\\\\Google\\\\Chrome\\\\Application\\\\chrome.exe\"; Test-Path \"$env:LOCALAPPDATA\\\\Google\\\\Chrome\\\\Application\\\\chrome.exe\")",
+      "PowerShell(npm run dev)",
+      "PowerShell(Set-Location \"C:\\\\Users\\\\Hub\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-Hub-Desktop-in-work-projects-kassa\\\\10de8642-1e6b-4cfa-a676-8200dd909c9d\\\\scratchpad\"; node shot-logo.mjs \"$PWD\\\\logo-test.html\" logo-v1.png)",
+      "PowerShell(Set-Location \"C:\\\\Users\\\\Hub\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-Hub-Desktop-in-work-projects-kassa\\\\10de8642-1e6b-4cfa-a676-8200dd909c9d\\\\scratchpad\"; node shot-logo.mjs \"$PWD\\\\logo-test.html\" logo-v2.png)",
+      "PowerShell(Start-Process \"http://localhost:5173/\")",
+      "PowerShell(node \"C:\\\\Users\\\\Hub\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-Hub-Desktop-in-work-projects-kassa\\\\10de8642-1e6b-4cfa-a676-8200dd909c9d\\\\scratchpad\\\\trim-logo.cjs\" \"c:\\\\Users\\\\Hub\\\\Desktop\\\\in work projects\\\\kassa\" \"c:\\\\Users\\\\Hub\\\\Desktop\\\\in work projects\\\\kassa\\\\src\\\\assets\\\\logo\\\\anglelogo.png\" \"c:\\\\Users\\\\Hub\\\\Desktop\\\\in work projects\\\\kassa\\\\src\\\\assets\\\\logo\\\\logo.png\")",
+      "PowerShell(Remove-Item \"c:\\\\Users\\\\Hub\\\\Desktop\\\\in work projects\\\\kassa\\\\src\\\\assets\\\\logo\\\\logo.webp\" -Confirm:$false)",
+      "Bash(npx supabase *)",
+      "Bash(supabase functions *)",
+      "PowerShell([Environment]::GetEnvironmentVariable\\('SUPABASE_ACCESS_TOKEN','User'\\) -ne $null; [Environment]::GetEnvironmentVariable\\('SUPABASE_ACCESS_TOKEN','Machine'\\) -ne $null; cmdkey /list | Select-String -Pattern 'supabase' -SimpleMatch)",
+      "PowerShell(npx tsc --noEmit)"
     ]
   }
 }

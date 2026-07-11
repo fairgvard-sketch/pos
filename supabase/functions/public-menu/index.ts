@@ -42,7 +42,7 @@ Deno.serve(async (req) => {
 
   const [locRes, shiftRes, catRes] = await Promise.all([
     // Наружу — только флаг онлайн-заказов, НЕ весь settings (там права ролей)
-    supabase.from('locations').select('id, name, currency, receipt_business_name, logo_url, online_settings:settings->online_orders').eq('id', loc).maybeSingle(),
+    supabase.from('locations').select('id, name, currency, receipt_business_name, logo_url, display_name:settings->>display_name, online_settings:settings->online_orders').eq('id', loc).maybeSingle(),
     supabase.from('shifts').select('id').eq('location_id', loc).eq('status', 'open').limit(1),
     supabase
       .from('menu_categories')
@@ -106,7 +106,14 @@ Deno.serve(async (req) => {
     .filter((c) => c.items.length > 0)
 
   const onlineSettings = (locRes.data as {
-    online_settings?: { enabled?: boolean; instagram?: string | null; facebook?: string | null; google_review?: string | null }
+    online_settings?: {
+      enabled?: boolean
+      instagram?: string | null
+      facebook?: string | null
+      google_review?: string | null
+      header_url?: string | null
+      background_url?: string | null
+    }
   }).online_settings
 
   return json(
@@ -114,13 +121,19 @@ Deno.serve(async (req) => {
       location: {
         id: locRes.data.id,
         name: locRes.data.name,
-        // Название ЗАВЕДЕНИЯ (шапка чека) — для витрины; имя точки — запасное
-        business_name: locRes.data.receipt_business_name || locRes.data.name,
+        // Отображаемое имя (профиль 052) → название из чека → имя точки
+        business_name:
+          (locRes.data as { display_name?: string | null }).display_name ||
+          locRes.data.receipt_business_name ||
+          locRes.data.name,
         logo_url: locRes.data.logo_url ?? null,
         currency: locRes.data.currency,
         is_open: (shiftRes.data ?? []).length > 0,
         // Тумблер 051: false = владелец выключил приём онлайн-заказов
         accepting: onlineSettings?.enabled !== false,
+        // Оформление главного экрана: баннер-шапка и фон (Настройки → Онлайн-заказы)
+        header_url: onlineSettings?.header_url || null,
+        background_url: onlineSettings?.background_url || null,
         // Соцссылки подвала гостевой страницы (Настройки → Обслуживание → Онлайн-заказы)
         links: {
           instagram: onlineSettings?.instagram || null,

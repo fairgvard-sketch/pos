@@ -20,7 +20,12 @@ export default function ProfileDetail({ location }: { location: Location | undef
   const qc = useQueryClient()
   const fileRef = useRef<HTMLInputElement>(null)
 
-  const [bizName, setBizName] = useState(location?.receipt_business_name ?? '')
+  // Отображаемое имя (карточка настроек + гостевая страница). Живёт в
+  // settings.display_name и НЕ трогает receipt_business_name (шапку чека) —
+  // старое значение из чека подставляется как стартовое.
+  const [bizName, setBizName] = useState(
+    location?.settings?.display_name ?? location?.receipt_business_name ?? ''
+  )
   // Аккаунт входа (email Supabase Auth) и смена его пароля — единственное место
   const [email, setEmail] = useState<string | null>(null)
   useEffect(() => {
@@ -46,7 +51,7 @@ export default function ProfileDetail({ location }: { location: Location | undef
     mutationFn: () =>
       updateLocationProfile({
         name: locName.trim() || undefined,
-        receipt_business_name: bizName.trim() || null,
+        settings: { ...location?.settings, display_name: bizName.trim() || null },
       }),
     onSuccess: () => {
       invalidate()
