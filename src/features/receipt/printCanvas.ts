@@ -630,3 +630,32 @@ export function renderKitchenTicketCanvas(d: KitchenTicketData): HTMLCanvasEleme
   octx.drawImage(tall, 0, 0)
   return out
 }
+
+/**
+ * QR-флаер онлайн-заказов (Настройки → Обслуживание): визитка на термоленте —
+ * название, QR со ссылкой на страницу заказа, подпись. Клеится на стойку.
+ * qr — уже отрисованный QR-canvas (библиотека qrcode), мы только компонуем.
+ */
+export function renderQrFlyerCanvas(businessName: string, qr: HTMLCanvasElement, caption: string): HTMLCanvasElement {
+  const qrSize = 400
+  const canvas = document.createElement('canvas')
+  canvas.width = W
+  canvas.height = 620
+  const ctx = canvas.getContext('2d')!
+  ctx.fillStyle = '#fff'
+  ctx.fillRect(0, 0, W, canvas.height)
+  ctx.fillStyle = '#000'
+
+  let y = 56
+  ctx.font = FONT(40, true)
+  ctx.textAlign = 'center'
+  ctx.fillText(businessName, W / 2, y)
+  y += 28
+
+  ctx.drawImage(qr, (W - qrSize) / 2, y, qrSize, qrSize)
+  y += qrSize + 52
+
+  ctx.font = FONT(30)
+  ctx.fillText(caption, W / 2, y)
+  return canvas
+}

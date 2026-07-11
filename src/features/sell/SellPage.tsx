@@ -967,8 +967,12 @@ export default function SellPage() {
               onChange={(e) => setSearch(e.target.value)}
             />
             {/* flex-1 + чипы прижаты к ПРАВОМУ физическому краю (напротив поиска).
-                justify-end = вправо в LTR; в RTL «end» уходит влево, поэтому rtl:justify-start */}
-            <div className="flex-1 flex gap-2 overflow-x-auto min-w-0 justify-end rtl:justify-start">
+                НЕ justify-end: при переполнении контейнера с justify-end хвост
+                уезжает за НАЧАЛО, куда скролл не достаёт (категории пропадали).
+                Вместо этого auto-margin у внутренней обёртки: мало чипов —
+                прижаты к краю, много — обычный горизонтальный скролл. */}
+            <div className="flex-1 flex overflow-x-auto min-w-0">
+              <div className="flex gap-2 ms-auto rtl:ms-0 rtl:me-auto">
               {hasFavorites && (
                 <Chip active={!search && currentCat === 'fav'} onClick={() => { setSearch(''); setActiveCat('fav') }}>
                   ★ {t(lang, 'favorites')}
@@ -985,6 +989,7 @@ export default function SellPage() {
                   {t(lang, 'stopListTitle')} · {stoppedItems.length}
                 </Chip>
               )}
+              </div>
             </div>
           </div>
         </div>

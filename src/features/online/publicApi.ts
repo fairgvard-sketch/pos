@@ -45,7 +45,14 @@ export interface PublicItem {
 }
 
 export interface PublicMenu {
-  location: { id: string; name: string; currency: string; is_open: boolean }
+  location: {
+    id: string
+    name: string
+    currency: string
+    is_open: boolean
+    /** false = владелец выключил приём онлайн-заказов (051) */
+    accepting?: boolean
+  }
   categories: { id: string; name: string; items: PublicItem[] }[]
 }
 

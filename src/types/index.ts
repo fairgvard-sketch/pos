@@ -36,6 +36,10 @@ export interface LocationSettings {
     /** Порог предупреждения «много наличных в кассе», агороты */
     cash_warn_threshold?: number | null
   }
+  /** Онлайн-заказы с сайта (051). Отсутствие ключа = включено. */
+  online_orders?: {
+    enabled?: boolean
+  }
 }
 
 export interface Location {

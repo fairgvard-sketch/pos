@@ -30,7 +30,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 // Ошибки, которые БД кидает осознанно — отдаём гостю как код, не 500
 const KNOWN_ERRORS = [
-  'closed', 'rate_limited', 'busy', 'invalid_location', 'invalid_name',
+  'disabled', 'closed', 'rate_limited', 'busy', 'invalid_location', 'invalid_name',
   'invalid_phone', 'invalid_pickup', 'invalid_items', 'item_unavailable',
   'invalid_client_uuid', 'not_found',
 ]

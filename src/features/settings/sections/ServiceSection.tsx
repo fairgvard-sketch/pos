@@ -1,10 +1,16 @@
+import { useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
+import QRCode from 'qrcode'
 import { updateServiceMode } from '../../auth/api'
 import { fetchTables } from '../../tables/api'
 import { useLangStore } from '../../../store/langStore'
+import { useDeviceStore } from '../../../store/deviceStore'
 import { t, type TranslationKey } from '../../../lib/i18n'
-import { Group, NavRow } from '../ui'
+import { printCanvasSilently } from '../../../lib/escpos'
+import { renderQrFlyerCanvas } from '../../receipt/printCanvas'
+import { useLocationSettings } from '../useLocationSettings'
+import { Group, NavRow, ToggleRow } from '../ui'
 import type { DetailId } from '../registry'
 import type { Location, ServiceMode } from '../../../types'
 
@@ -93,6 +99,108 @@ export default function ServiceSection({
           />
         </Group>
       )}
+
+      <OnlineOrdersBlock location={location} />
     </div>
+  )
+}
+
+/** Подпись на QR-флаере — для гостей, поэтому всегда иврит */
+const QR_FLYER_CAPTION = 'להזמנה אונליין — סרקו את הקוד'
+
+/**
+ * Онлайн-заказы (050/051): тумблер приёма, ссылка для гостей, QR.
+ * Ссылка работает сразу — публичная страница /order/:locId мультитенантна;
+ * тумблер enforced на сервере (submit_online_order → 'disabled').
+ */
+function OnlineOrdersBlock({ location }: { location: Location | undefined }) {
+  const lang = useLangStore((s) => s.lang)
+  const printMode = useDeviceStore((s) => s.printMode)
+  const { settings, update } = useLocationSettings(location)
+  const enabled = settings.online_orders?.enabled !== false
+  const url = location ? `${window.location.origin}/order/${location.id}` : ''
+
+  // QR-превью на экране
+  const qrRef = useRef<HTMLCanvasElement>(null)
+  useEffect(() => {
+    if (qrRef.current && url) {
+      QRCode.toCanvas(qrRef.current, url, { width: 176, margin: 1 }).catch(() => {})
+    }
+  }, [url])
+
+  async function copyLink() {
+    try {
+      // Chrome 52 (T2) не знает clipboard API — fallback через execCommand
+      if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(url)
+      else {
+        const ta = document.createElement('textarea')
+        ta.value = url
+        document.body.appendChild(ta)
+        ta.select()
+        document.execCommand('copy')
+        ta.remove()
+      }
+      toast.success(t(lang, 'copiedToast'))
+    } catch {
+      toast.error(t(lang, 'qrPrintFail'))
+    }
+  }
+
+  async function printQr() {
+    if (!location) return
+    const qr = document.createElement('canvas')
+    await QRCode.toCanvas(qr, url, { width: 400, margin: 2 })
+    const flyer = renderQrFlyerCanvas(location.receipt_business_name || location.name, qr, QR_FLYER_CAPTION)
+    const ok = printCanvasSilently(flyer, printMode === 'rawbt')
+    if (ok) {
+      toast.success(t(lang, 'qrPrintSent'))
+      return
+    }
+    // Нет тихой печати (браузер на ноуте) — обычная печать страницы с QR
+    const win = window.open('', '_blank', 'width=420,height=640')
+    if (!win) return
+    win.document.write(`<img src="${flyer.toDataURL('image/png')}" style="width:100%" onload="window.print()">`)
+    win.document.close()
+  }
+
+  return (
+    <section>
+      <h3 className="text-xs font-bold uppercase tracking-wide text-gray-500 mb-2 px-1">
+        {t(lang, 'onlineOrders')}
+      </h3>
+      <Group>
+        <ToggleRow
+          label={t(lang, 'onlineSettingsToggle')}
+          hint={t(lang, 'onlineSettingsToggleHint')}
+          checked={enabled}
+          onChange={(v) => update({ online_orders: { enabled: v } })}
+        />
+        <div className="px-4 py-3 border-t border-gray-100">
+          <div className="text-sm font-semibold text-gray-900">{t(lang, 'onlineLinkTitle')}</div>
+          <p className="text-xs text-gray-500 mt-0.5">{t(lang, 'onlineLinkHint')}</p>
+          <div className="flex items-center gap-2 mt-3">
+            <input
+              readOnly
+              value={url}
+              dir="ltr"
+              onFocus={(e) => e.target.select()}
+              className="input flex-1 min-w-0 text-xs text-gray-600"
+            />
+            <button className="btn-secondary h-11 px-4 shrink-0" onClick={copyLink}>
+              {t(lang, 'copyAction')}
+            </button>
+          </div>
+          <div className="flex items-center gap-4 mt-4">
+            <canvas ref={qrRef} className="rounded-lg border border-gray-100 shrink-0" />
+            <div className="min-w-0">
+              <p className="text-xs text-gray-500">{t(lang, 'qrHint')}</p>
+              <button className="btn-secondary h-11 px-4 mt-3" onClick={printQr}>
+                {t(lang, 'printQrAction')}
+              </button>
+            </div>
+          </div>
+        </div>
+      </Group>
+    </section>
   )
 }

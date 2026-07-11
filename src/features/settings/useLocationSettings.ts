@@ -37,6 +37,7 @@ export function useLocationSettings(location: Location | undefined) {
       perms: patch.perms ? { ...settings.perms, ...patch.perms } : settings.perms,
       receipt: patch.receipt ? { ...settings.receipt, ...patch.receipt } : settings.receipt,
       shift: patch.shift ? { ...settings.shift, ...patch.shift } : settings.shift,
+      online_orders: patch.online_orders ? { ...settings.online_orders, ...patch.online_orders } : settings.online_orders,
     })
   }
 

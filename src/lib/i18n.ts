@@ -821,6 +821,19 @@ export const translations = {
     pubErrUnavailable: 'Позиция закончилась',
     pubErrPhone: 'Проверьте номер телефона',
     pubErrGeneric: 'Не удалось отправить заказ. Попробуйте ещё раз.',
+    pubPaused: 'Онлайн-заказы временно недоступны',
+
+    // Настройки → Обслуживание → Онлайн-заказы (051)
+    onlineSettingsToggle: 'Приём заказов с сайта',
+    onlineSettingsToggleHint: 'Выключите — страница заказа перестанет принимать новые заявки, меню останется видно',
+    onlineLinkTitle: 'Ссылка для гостей',
+    onlineLinkHint: 'Кнопка на сайте, шапка Instagram или QR-код на стойке — гость сканирует и заказывает',
+    copyAction: 'Скопировать',
+    copiedToast: 'Скопировано',
+    printQrAction: 'Печать QR',
+    qrPrintSent: 'QR отправлен на печать',
+    qrPrintFail: 'Не получилось — проверьте способ печати',
+    qrHint: 'Распечатайте QR на термоленте и приклейте на стойку или витрину',
   },
   he: {
     // Общее
@@ -1642,6 +1655,19 @@ export const translations = {
     pubErrUnavailable: 'הפריט אזל',
     pubErrPhone: 'בדקו את מספר הטלפון',
     pubErrGeneric: 'שליחת ההזמנה נכשלה. נסו שוב.',
+    pubPaused: 'הזמנות אונליין אינן זמינות כרגע',
+
+    // Настройки → Обслуживание → Онлайн-заказы (051)
+    onlineSettingsToggle: 'קבלת הזמנות מהאתר',
+    onlineSettingsToggleHint: 'כיבוי — דף ההזמנה יפסיק לקבל הזמנות חדשות, התפריט יישאר גלוי',
+    onlineLinkTitle: 'קישור לאורחים',
+    onlineLinkHint: 'כפתור באתר, ביו באינסטגרם או קוד QR בדלפק — האורח סורק ומזמין',
+    copyAction: 'להעתיק',
+    copiedToast: 'הועתק',
+    printQrAction: 'הדפסת QR',
+    qrPrintSent: 'ה-QR נשלח להדפסה',
+    qrPrintFail: 'לא הצליח — בדקו את שיטת ההדפסה',
+    qrHint: 'הדפיסו את הקוד על סרט תרמי והדביקו בדלפק או בחלון הראווה',
   },
 } as const
 

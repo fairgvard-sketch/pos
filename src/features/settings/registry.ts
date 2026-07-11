@@ -56,6 +56,8 @@ export const SEARCH_INDEX: SearchEntry[] = [
   { cat: 'receipts', label: 'receiptCopiesTitle', hint: 'receiptCopiesHint' },
   { cat: 'service', label: 'serviceModeTitle', hint: 'serviceModeHint' },
   { cat: 'service', detail: 'tables', label: 'tablesManage' },
+  { cat: 'service', label: 'onlineOrders', hint: 'onlineSettingsToggleHint' },
+  { cat: 'service', label: 'onlineLinkTitle', hint: 'onlineLinkHint' },
   { cat: 'shift', label: 'defaultFloatTitle', hint: 'defaultFloatHint' },
   { cat: 'shift', label: 'closeReminderTitle', hint: 'closeReminderHint' },
   { cat: 'shift', label: 'cashWarnTitle', hint: 'cashWarnHint' },

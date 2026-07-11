@@ -41,7 +41,8 @@ Deno.serve(async (req) => {
   )
 
   const [locRes, shiftRes, catRes] = await Promise.all([
-    supabase.from('locations').select('id, name, currency').eq('id', loc).maybeSingle(),
+    // Наружу — только флаг онлайн-заказов, НЕ весь settings (там права ролей)
+    supabase.from('locations').select('id, name, currency, online_settings:settings->online_orders').eq('id', loc).maybeSingle(),
     supabase.from('shifts').select('id').eq('location_id', loc).eq('status', 'open').limit(1),
     supabase
       .from('menu_categories')
@@ -110,6 +111,8 @@ Deno.serve(async (req) => {
         name: locRes.data.name,
         currency: locRes.data.currency,
         is_open: (shiftRes.data ?? []).length > 0,
+        // Тумблер 051: false = владелец выключил приём онлайн-заказов
+        accepting: (locRes.data as { online_settings?: { enabled?: boolean } }).online_settings?.enabled !== false,
       },
       categories,
     },

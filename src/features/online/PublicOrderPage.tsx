@@ -115,7 +115,11 @@ export default function PublicOrderPage() {
 
   return (
     <Shell isRtl={isRtl} lang={lang} setLang={setLang} title={menu.location.name}>
-      {!menu.location.is_open && (
+      {menu.location.accepting === false ? (
+        <div className="mx-4 mt-4 rounded-2xl bg-amber-50 text-amber-800 text-sm font-semibold px-4 py-3">
+          {t(lang, 'pubPaused')}
+        </div>
+      ) : !menu.location.is_open && (
         <div className="mx-4 mt-4 rounded-2xl bg-amber-50 text-amber-800 text-sm font-semibold px-4 py-3">
           {t(lang, 'pubClosed')}
         </div>
@@ -163,7 +167,7 @@ export default function PublicOrderPage() {
         <CheckoutScreen
           lang={lang}
           locId={locId}
-          isOpen={menu.location.is_open}
+          isOpen={menu.location.is_open && menu.location.accepting !== false}
           cart={cart}
           total={cartTotal}
           onQty={updateQty}
@@ -656,6 +660,7 @@ function Stepper({ onClick, children }: { onClick: () => void; children: React.R
 /** Код ошибки публичного API → текст гостю */
 function publicErrorText(lang: Lang, code: string, detail?: string): string {
   switch (code) {
+    case 'disabled': return t(lang, 'pubPaused')
     case 'closed': return t(lang, 'pubErrClosed')
     case 'rate_limited': return t(lang, 'pubErrRate')
     case 'busy': return t(lang, 'pubErrBusy')
