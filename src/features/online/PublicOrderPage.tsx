@@ -44,7 +44,11 @@ function readActive(locId: string): string | null {
 export default function PublicOrderPage() {
   const { locId = '' } = useParams()
   const [lang, setLang] = useState<Lang>(() => (localStorage.getItem(LANG_KEY) as Lang) ?? 'he')
-  useEffect(() => { localStorage.setItem(LANG_KEY, lang) }, [lang])
+  useEffect(() => {
+    localStorage.setItem(LANG_KEY, lang)
+    // <html lang> решает RTL в проде: start/end скомпилированы через :lang(he)
+    document.documentElement.lang = lang
+  }, [lang])
   const isRtl = lang === 'he'
 
   // Незавершённая заявка переживает перезагрузку страницы
