@@ -192,6 +192,12 @@ he/ru, Edge Functions `public-menu`/`public-order` под service_role, анти
 сайдбаре. Приём заявок только при открытой смене; незабранные заказы
 аннулирует закрытие смены (035). Деплой и детали — `docs/online-orders.md`
 (порядок: миграция → edge functions → фронтенд!).
+Self-service (051): Настройки → Обслуживание → «Онлайн-заказы» — тумблер
+приёма (enforced в `submit_online_order`, код 'disabled'; `public-menu`
+отдаёт `accepting`), ссылка для гостей + печать QR-флаера на термоленте.
+Сайт Bulochka (bulweb2, Firebase) заказывает через тот же API: чекаут в
+`menu.html`, матчинг корзины по ивритским названиям, WhatsApp — fallback;
+каталог кассы наполнен из Firestore скриптом `scripts/import-site-menu.mjs`.
 
 **Офлайн-слой (фаза 7, миграция 042 + `src/lib/offline/`):**
 - Работают без сети: counter-продажа (place+pay в очередь, временный чек
