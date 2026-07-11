@@ -526,6 +526,15 @@ export const translations = {
     testPrint: 'Тестовая печать',
     testPrintSent: 'Отправлено на принтер',
     testPrintNoSilent: 'В браузерном режиме тихая печать недоступна. Печать доступна в APK или через RawBT.',
+    // Дашборд владельца (049)
+    dashboard: 'Дашборд',
+    dbVsYesterday: 'Вчера за день',
+    dbShiftOpenSince: 'Смена открыта с',
+    dbShiftClosed: 'Смена закрыта',
+    dbByHour: 'По часам',
+    dbByDay: 'По дням',
+    dbNoSales: 'Продаж пока нет',
+    dbTapBar: 'Тапните столбик — увидите сумму',
     // Способы оплаты: кошельки (046)
     payCibus: 'Cibus',
     payTenbis: '10bis',
@@ -1273,6 +1282,15 @@ export const translations = {
     testPrint: 'הדפסת בדיקה',
     testPrintSent: 'נשלח למדפסת',
     testPrintNoSilent: 'במצב דפדפן אין הדפסה שקטה. ההדפסה זמינה ב-APK או דרך RawBT.',
+    // דשבורד לבעלים (049)
+    dashboard: 'סקירה',
+    dbVsYesterday: 'אתמול (יום מלא)',
+    dbShiftOpenSince: 'משמרת פתוחה מאז',
+    dbShiftClosed: 'המשמרת סגורה',
+    dbByHour: 'לפי שעות',
+    dbByDay: 'לפי ימים',
+    dbNoSales: 'אין עדיין מכירות',
+    dbTapBar: 'הקישו על עמודה לצפייה בסכום',
     // אמצעי תשלום: ארנקים (046)
     payCibus: 'סיבוס',
     payTenbis: 'תן ביס',

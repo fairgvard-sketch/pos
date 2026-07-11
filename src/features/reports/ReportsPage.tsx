@@ -6,6 +6,7 @@ import Icon from '../../components/Icon'
 import { useAuthStore } from '../../store/authStore'
 import { useLangStore } from '../../store/langStore'
 import { t, type TranslationKey } from '../../lib/i18n'
+import { payMethodIcon, payMethodLabel } from '../../lib/payMethods'
 import { formatMoney } from '../../lib/money'
 
 type Preset = 'today' | 'yesterday' | '7d' | '30d' | 'year' | 'custom'
@@ -282,8 +283,8 @@ export default function ReportsPage() {
                         {report.by_method.map((m) => (
                           <div key={m.method} className="flex items-center justify-between">
                             <span className="flex items-center gap-2 text-gray-600">
-                              <Icon name={m.method === 'cash' ? 'cash' : 'card'} size={16} />
-                              {t(lang, m.method === 'cash' ? 'payCash' : 'payCard')}
+                              <Icon name={payMethodIcon(m.method)} size={16} />
+                              {payMethodLabel(lang, m.method)}
                               <span className="text-gray-400 text-xs">×{m.count}</span>
                             </span>
                             <span className="tabular-nums font-semibold text-gray-900">{formatMoney(m.amount, lang)}</span>

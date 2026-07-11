@@ -1,4 +1,5 @@
 import { supabase } from '../../lib/supabase'
+import { currentStaffToken } from '../../store/authStore'
 
 export interface SalesSummary {
   gross_sales: number
@@ -11,7 +12,8 @@ export interface SalesSummary {
 }
 
 export interface MethodRow {
-  method: 'cash' | 'card'
+  /** cash | card | cibus | tenbis | bit (046) */
+  method: string
   amount: number
   count: number
 }
@@ -64,6 +66,8 @@ export async function fetchSalesReport(from: Date, to: Date): Promise<SalesRepor
     p_from: from.toISOString(),
     p_to: to.toISOString(),
     p_tz: tz,
+    // Отчёты — manager-данные: сервер проверяет staff-сессию (049)
+    p_staff_session: currentStaffToken(),
   })
   if (error) throw new Error(error.message)
   return data as SalesReport

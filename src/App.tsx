@@ -24,6 +24,7 @@ const TimesheetPage = lazy(() => import('./features/timesheet/TimesheetPage'))
 const TransactionsPage = lazy(() => import('./features/transactions/TransactionsPage'))
 const SettingsPage = lazy(() => import('./features/settings/SettingsPage'))
 const ReportsPage = lazy(() => import('./features/reports/ReportsPage'))
+const DashboardPage = lazy(() => import('./features/dashboard/DashboardPage'))
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -191,6 +192,16 @@ export default function App() {
             element={
               <ProtectedRoute allowedRoles={['owner', 'manager']}>
                 <SettingsPage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Дашборд владельца: mobile-first, выручка с телефона (049) */}
+          <Route
+            path="/dashboard"
+            element={
+              <ProtectedRoute allowedRoles={['owner', 'manager']}>
+                <DashboardPage />
               </ProtectedRoute>
             }
           />

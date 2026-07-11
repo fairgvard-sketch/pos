@@ -12,14 +12,15 @@ export type PayMethodId = 'cash' | 'card' | 'cibus' | 'tenbis' | 'bit'
 
 export const WALLET_METHODS: PayMethodId[] = ['cibus', 'tenbis', 'bit']
 
-/** Название способа на языке интерфейса */
-export function payMethodLabel(lang: Lang, m: PayMethodId): string {
+/** Название способа на языке интерфейса (незнакомый метод — как есть) */
+export function payMethodLabel(lang: Lang, m: PayMethodId | string): string {
   switch (m) {
     case 'cash': return t(lang, 'payCash')
     case 'card': return t(lang, 'payCard')
     case 'cibus': return t(lang, 'payCibus')
     case 'tenbis': return t(lang, 'payTenbis')
     case 'bit': return t(lang, 'payBit')
+    default: return String(m)
   }
 }
 
@@ -36,6 +37,6 @@ export function receiptMethodLabel(m: PayMethodId | string): string {
 }
 
 /** Иконка способа (кошельки рисуются карточной иконкой) */
-export function payMethodIcon(m: PayMethodId): 'cash' | 'card' {
+export function payMethodIcon(m: PayMethodId | string): 'cash' | 'card' {
   return m === 'cash' ? 'cash' : 'card'
 }

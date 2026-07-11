@@ -92,6 +92,9 @@ export default function AppSidebar({ active }: { active: SidebarPage }) {
           <SideLink active={active === 'analytics'} label={t(lang, 'reports')} iconName="analytics" onClick={() => navigate('/reports')} />
         )}
         {isManager && (
+          <SideLink label={t(lang, 'dashboard')} iconName="analytics" onClick={() => navigate('/dashboard')} />
+        )}
+        {isManager && (
           <SideLink active={active === 'settings'} label={t(lang, 'settings')} iconName="settings" onClick={() => navigate('/settings')} />
         )}
         <SideLink label={t(lang, 'lock')} iconName="customers" onClick={() => { lock(); navigate('/pin', { replace: true }) }} />
