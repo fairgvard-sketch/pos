@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { t, type Lang } from '../../lib/i18n'
@@ -127,10 +127,12 @@ export default function PublicOrderPage() {
 
       {view === 'menu' && (
         <>
+          <CategoryNav categories={menu.categories} />
           <div className="px-4 pb-32">
             {menu.categories.map((cat) => (
-              <section key={cat.id} className="mt-6">
-                <h2 className="text-sm font-bold text-gray-500 uppercase tracking-wide mb-2">{cat.name}</h2>
+              // scroll-mt: заголовок не прячется под липкие шапку и навигацию
+              <section key={cat.id} id={`cat-${cat.id}`} className="mt-7 scroll-mt-[118px]">
+                <h2 className="text-lg font-bold text-gray-900 mb-3">{cat.name}</h2>
                 <div className="space-y-2">
                   {cat.items.map((item) => (
                     <ItemRow key={item.id} item={item} lang={lang} onTap={() => {
@@ -156,7 +158,7 @@ export default function PublicOrderPage() {
                 onClick={() => setView('checkout')}
                 className="w-full h-14 rounded-2xl bg-gray-900 text-white font-bold text-base active:scale-[0.98] transition-all"
               >
-                {t(lang, 'pubCart')} · {cartCount} · {formatMoney(cartTotal, lang)}
+                {t(lang, 'pubCart')} · {cartCount} · <span dir="ltr">{formatMoney(cartTotal, lang)}</span>
               </button>
             </div>
           )}
@@ -197,6 +199,62 @@ export default function PublicOrderPage() {
   )
 }
 
+/**
+ * Липкая полоса категорий: тап скроллит к секции, при прокрутке активная
+ * категория подсвечивается сама (IntersectionObserver) и чип подъезжает
+ * в видимую зону. Классический паттерн мобильного меню доставки.
+ */
+function CategoryNav({ categories }: { categories: { id: string; name: string }[] }) {
+  const [active, setActive] = useState<string | null>(null)
+  const tappedAt = useRef(0)
+
+  useEffect(() => {
+    const obs = new IntersectionObserver(
+      (entries) => {
+        // Сразу после тапа не даём обсерверу перебивать выбор пользователя
+        if (Date.now() - tappedAt.current < 600) return
+        const visible = entries
+          .filter((e) => e.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)
+        if (visible[0]) setActive(visible[0].target.id.replace('cat-', ''))
+      },
+      // Верхняя полоса вьюпорта под шапкой — «текущая» секция
+      { rootMargin: '-118px 0px -65% 0px' }
+    )
+    for (const c of categories) {
+      const el = document.getElementById(`cat-${c.id}`)
+      if (el) obs.observe(el)
+    }
+    return () => obs.disconnect()
+  }, [categories])
+
+  useEffect(() => {
+    if (!active) return
+    document.getElementById(`chip-${active}`)?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' })
+  }, [active])
+
+  return (
+    <nav className="sticky top-14 z-10 bg-white/95 backdrop-blur border-b border-gray-100 px-4 py-2 flex gap-2 overflow-x-auto">
+      {categories.map((c) => (
+        <button
+          key={c.id}
+          id={`chip-${c.id}`}
+          onClick={() => {
+            tappedAt.current = Date.now()
+            setActive(c.id)
+            document.getElementById(`cat-${c.id}`)?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+          }}
+          className={`h-10 px-4 rounded-full text-sm font-semibold whitespace-nowrap transition-all active:scale-[0.96] shrink-0 ${
+            active === c.id ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600'
+          }`}
+        >
+          {c.name}
+        </button>
+      ))}
+    </nav>
+  )
+}
+
 /** Каркас страницы: шапка с названием кофейни и переключателем языка */
 function Shell({ isRtl, lang, setLang, title, children }: {
   isRtl: boolean
@@ -223,18 +281,39 @@ function Shell({ isRtl, lang, setLang, title, children }: {
   )
 }
 
+/**
+ * Карточка товара — классический вид меню доставки: фото, название,
+ * цена, кнопка «+». Без фото — плейсхолдер с первой буквой названия,
+ * чтобы список не «прыгал» по выравниванию.
+ */
 function ItemRow({ item, lang, onTap }: { item: PublicItem; lang: Lang; onTap: () => void }) {
   const prices = item.variants.length > 0 ? item.variants.map((v) => v.price) : [item.price]
   const minPrice = Math.min(...prices)
+  const hasRange = new Set(prices).size > 1
   return (
     <button
       onClick={onTap}
-      className="w-full min-h-[56px] px-4 py-3 rounded-2xl bg-gray-50 hover:bg-gray-100 active:scale-[0.99] transition-all flex items-center gap-3 text-start"
+      className="w-full rounded-2xl bg-gray-50 hover:bg-gray-100 active:scale-[0.99] transition-all flex items-center gap-3 p-3 text-start"
     >
-      <span className="flex-1 min-w-0 font-semibold text-gray-900">{item.name}</span>
-      <span className="shrink-0 tabular-nums text-gray-900 font-semibold">
-        {item.variants.length > 0 && <span className="text-gray-500 font-normal">{t(lang, 'pubFrom')} </span>}
-        {formatMoney(minPrice, lang)}
+      {item.image_url ? (
+        <img src={item.image_url} alt="" loading="lazy" className="w-16 h-16 rounded-xl object-cover shrink-0 bg-white" />
+      ) : (
+        <span className="w-16 h-16 rounded-xl bg-white text-gray-300 text-2xl font-bold shrink-0 flex items-center justify-center">
+          {item.name.slice(0, 1)}
+        </span>
+      )}
+      <span className="flex-1 min-w-0">
+        <span className="block font-semibold text-gray-900 leading-snug">{item.name}</span>
+        <span className="block text-sm text-gray-500 mt-1 tabular-nums">
+          {hasRange && <span>{t(lang, 'pubFrom')} </span>}
+          {/* dir=ltr: цена не пляшет в bidi-контексте ивритских названий */}
+          <span dir="ltr">{formatMoney(minPrice, lang)}</span>
+        </span>
+      </span>
+      <span className="w-9 h-9 rounded-full bg-gray-900 text-white shrink-0 flex items-center justify-center" aria-hidden>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+          <path d="M12 5v14M5 12h14" />
+        </svg>
       </span>
     </button>
   )
@@ -302,9 +381,12 @@ function ItemConfigSheet({ item, lang, isRtl, onClose, onAdd }: {
   return (
     <div dir={isRtl ? 'rtl' : 'ltr'} className="fixed inset-0 z-20 flex items-end justify-center bg-black/40" onClick={onClose}>
       <div
-        className="w-full max-w-lg bg-white rounded-t-3xl max-h-[85vh] flex flex-col"
+        className="w-full max-w-lg bg-white rounded-t-3xl max-h-[85vh] flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
+        {item.image_url && (
+          <img src={item.image_url} alt="" className="w-full h-44 object-cover shrink-0" />
+        )}
         <div className="px-6 pt-5 pb-3 flex items-center justify-between shrink-0">
           <h3 className="text-lg font-bold text-gray-900">{item.name}</h3>
           <button onClick={onClose} className="w-9 h-9 rounded-xl bg-gray-100 text-gray-500 font-bold active:scale-[0.94] transition-all">✕</button>
@@ -315,7 +397,7 @@ function ItemConfigSheet({ item, lang, isRtl, onClose, onAdd }: {
             <div className="flex gap-2 flex-wrap">
               {item.variants.map((v) => (
                 <Chip key={v.id} active={variantId === v.id} onClick={() => setVariantId(v.id)}>
-                  {v.name} · {formatMoney(v.price, lang)}
+                  {v.name} · <span dir="ltr">{formatMoney(v.price, lang)}</span>
                 </Chip>
               ))}
             </div>
@@ -331,7 +413,7 @@ function ItemConfigSheet({ item, lang, isRtl, onClose, onAdd }: {
                 {g.modifiers.map((m) => (
                   <Chip key={m.id} active={selected.has(m.id)} onClick={() => toggleMod(g.id, m.id)}>
                     {m.name}
-                    {m.price_delta !== 0 && ` +${formatMoney(m.price_delta, lang)}`}
+                    {m.price_delta !== 0 && <span dir="ltr"> +{formatMoney(m.price_delta, lang)}</span>}
                   </Chip>
                 ))}
               </div>
@@ -461,7 +543,7 @@ function CheckoutScreen({ lang, locId, isOpen, cart, total, onQty, onBack, onSub
               <Stepper onClick={() => onQty(l.key, l.qty + 1)}>+</Stepper>
             </div>
             <span className="w-20 text-end tabular-nums font-semibold text-sm text-gray-900 shrink-0">
-              {formatMoney(l.unitPrice * l.qty, lang)}
+              <span dir="ltr">{formatMoney(l.unitPrice * l.qty, lang)}</span>
             </span>
           </div>
         ))}
@@ -469,7 +551,7 @@ function CheckoutScreen({ lang, locId, isOpen, cart, total, onQty, onBack, onSub
 
       <div className="flex items-center justify-between mt-4 px-1">
         <span className="font-bold text-gray-900">{t(lang, 'pubTotal')}</span>
-        <span className="font-black text-xl tabular-nums text-gray-900">{formatMoney(total, lang)}</span>
+        <span className="font-black text-xl tabular-nums text-gray-900" dir="ltr">{formatMoney(total, lang)}</span>
       </div>
       <p className="text-xs text-gray-500 mt-1 px-1">{t(lang, 'pubPayAtPickup')}</p>
 
@@ -608,7 +690,7 @@ function StatusScreen({ lang, clientUuid, onNewOrder }: {
       <p className="text-sm text-gray-500 mt-2">
         {isDone ? t(lang, 'pubDoneHint') : t(lang, 'pubShowNumber')}
       </p>
-      <p className="text-lg font-bold tabular-nums text-gray-900 mt-3">{formatMoney(status.total, lang)}</p>
+      <p className="text-lg font-bold tabular-nums text-gray-900 mt-3" dir="ltr">{formatMoney(status.total, lang)}</p>
       {isDone && <NewOrderBtn lang={lang} onClick={onNewOrder} />}
     </CenterCard>
   )
