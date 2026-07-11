@@ -3,15 +3,15 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { useLangStore } from '../../../store/langStore'
 import { t } from '../../../lib/i18n'
-import { updateLocationProfile, updateDevicePassword } from '../../auth/api'
+import { updateLocationProfile } from '../../auth/api'
 import { uploadItemImage } from '../../menu/api'
 import { Group, Field } from '../ui'
 import type { Location } from '../../../types'
 
 /**
- * Профиль заведения (052): логотип (аватар), название заведения и точки,
- * пароль аккаунта устройства. Открывается тапом по карточке точки.
- * Логотип виден в карточке настроек и на публичной странице заказа.
+ * Профиль заведения (052): логотип (аватар), название заведения и точки.
+ * Открывается тапом по карточке точки. Логотип виден в карточке настроек
+ * и на публичной странице заказа. Пароль устройства — в «Устройстве».
  */
 export default function ProfileDetail({ location }: { location: Location | undefined }) {
   const lang = useLangStore((s) => s.lang)
@@ -20,8 +20,6 @@ export default function ProfileDetail({ location }: { location: Location | undef
 
   const [bizName, setBizName] = useState(location?.receipt_business_name ?? '')
   const [locName, setLocName] = useState(location?.name ?? '')
-  const [pass1, setPass1] = useState('')
-  const [pass2, setPass2] = useState('')
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['current_location'] })
 
@@ -55,22 +53,6 @@ export default function ProfileDetail({ location }: { location: Location | undef
     onSuccess: invalidate,
     onError: (e) => toast.error((e as Error).message),
   })
-
-  const savePassword = useMutation({
-    mutationFn: () => updateDevicePassword(pass1),
-    onSuccess: () => {
-      setPass1('')
-      setPass2('')
-      toast.success(t(lang, 'passwordSaved'))
-    },
-    onError: (e) => toast.error((e as Error).message),
-  })
-
-  function submitPassword() {
-    if (pass1.length < 6) return toast.error(t(lang, 'passwordShort'))
-    if (pass1 !== pass2) return toast.error(t(lang, 'passwordMismatch'))
-    savePassword.mutate()
-  }
 
   const letter = (bizName || location?.name || '?').slice(0, 1).toUpperCase()
 
@@ -124,37 +106,6 @@ export default function ProfileDetail({ location }: { location: Location | undef
         </div>
       </Group>
 
-      {/* Пароль аккаунта устройства */}
-      <section>
-        <h3 className="text-xs font-bold uppercase tracking-wide text-gray-500 mb-2 px-1">
-          {t(lang, 'devicePasswordTitle')}
-        </h3>
-        <Group>
-          <div className="px-4 py-3 space-y-3">
-            <p className="text-xs text-gray-500">{t(lang, 'devicePasswordHint')}</p>
-            <input
-              className="input w-full"
-              type="password"
-              autoComplete="new-password"
-              placeholder={t(lang, 'newPassword')}
-              value={pass1}
-              onChange={(e) => setPass1(e.target.value)}
-            />
-            <input
-              className="input w-full"
-              type="password"
-              autoComplete="new-password"
-              placeholder={t(lang, 'repeatPassword')}
-              value={pass2}
-              onChange={(e) => setPass2(e.target.value)}
-            />
-            <button className="btn-secondary h-11 px-6" disabled={savePassword.isPending || !pass1} onClick={submitPassword}>
-              {t(lang, 'changePassword')}
-            </button>
-            <p className="text-xs text-gray-500">{t(lang, 'pinsElsewhereHint')}</p>
-          </div>
-        </Group>
-      </section>
     </div>
   )
 }
