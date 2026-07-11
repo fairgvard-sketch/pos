@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { t, type Lang } from '../../lib/i18n'
@@ -53,6 +53,9 @@ export default function PublicOrderPage() {
   const [cart, setCart] = useState<CartLine[]>([])
   const [view, setView] = useState<'menu' | 'checkout'>('menu')
   const [configItem, setConfigItem] = useState<PublicItem | null>(null)
+  // null = экран плиток категорий; id = экран позиций категории
+  const [activeCat, setActiveCat] = useState<string | null>(null)
+  useEffect(() => { window.scrollTo(0, 0) }, [activeCat, view])
 
   const { data: menu, isLoading, isError } = useQuery({
     queryKey: ['public_menu', locId],
@@ -125,50 +128,78 @@ export default function PublicOrderPage() {
         </div>
       )}
 
+      {view === 'menu' && !activeCat && (
+        // Главный экран: только плитки категорий (drill-down как в сайтах-меню)
+        <div className="px-4 mt-4 pb-32 grid grid-cols-2 gap-3">
+          {menu.categories.map((cat) => {
+            const cover = cat.items.find((i) => i.image_url)?.image_url
+            return (
+              <button
+                key={cat.id}
+                onClick={() => setActiveCat(cat.id)}
+                className="relative h-28 rounded-2xl overflow-hidden bg-gray-200 active:scale-[0.98] transition-all text-start"
+              >
+                {cover && <img src={cover} alt="" loading="lazy" className="absolute inset-0 w-full h-full object-cover" />}
+                <span className="absolute inset-0 bg-gradient-to-t from-black/60 to-black/10" />
+                <span className="absolute bottom-2.5 inset-x-3 text-white font-bold leading-tight">{cat.name}</span>
+              </button>
+            )
+          })}
+        </div>
+      )}
+
+      {view === 'menu' && activeCat && (() => {
+        const cat = menu.categories.find((c) => c.id === activeCat)
+        if (!cat) return null
+        return (
+          <>
+            {/* Чипы: возврат к плиткам + быстрый переход между категориями */}
+            <nav className="sticky top-14 z-10 bg-white/95 backdrop-blur border-b border-gray-100 px-4 py-2 flex gap-2 overflow-x-auto">
+              <button
+                onClick={() => setActiveCat(null)}
+                aria-label={t(lang, 'back')}
+                className="h-10 w-10 rounded-full bg-gray-100 text-gray-600 shrink-0 flex items-center justify-center active:scale-[0.96] transition-all"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="rtl:-scale-x-100">
+                  <path d="M19 12H5M12 19l-7-7 7-7" />
+                </svg>
+              </button>
+              {menu.categories.map((c) => (
+                <button
+                  key={c.id}
+                  onClick={() => setActiveCat(c.id)}
+                  className={`h-10 px-4 rounded-full text-sm font-semibold whitespace-nowrap transition-all active:scale-[0.96] shrink-0 ${
+                    c.id === activeCat ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600'
+                  }`}
+                >
+                  {c.name}
+                </button>
+              ))}
+            </nav>
+            <div className="px-4 pb-32">
+              <h2 className="text-lg font-bold text-gray-900 mt-5 mb-3">{cat.name}</h2>
+              <div className="space-y-2">
+                {cat.items.map((item) => (
+                  <ItemRow key={item.id} item={item} lang={lang} onTap={() => {
+                    // Простой товар — сразу в корзину; сложный — конфигуратор
+                    if (item.variants.length === 0 && item.modifier_groups.length === 0) {
+                      addLine({
+                        itemId: item.id, name: item.name, variantId: null, variantName: null,
+                        modIds: [], modNames: [], unitPrice: item.price,
+                      })
+                    } else {
+                      setConfigItem(item)
+                    }
+                  }} />
+                ))}
+              </div>
+            </div>
+          </>
+        )
+      })()}
+
       {view === 'menu' && (
         <>
-          <CategoryNav categories={menu.categories} />
-          {/* Плитки категорий с фото — «обложка» меню (референс: сайты-меню) */}
-          <div className="px-4 mt-4 grid grid-cols-2 gap-2">
-            {menu.categories.map((cat) => {
-              const cover = cat.items.find((i) => i.image_url)?.image_url
-              return (
-                <button
-                  key={cat.id}
-                  onClick={() => document.getElementById(`cat-${cat.id}`)?.scrollIntoView({ block: 'start', behavior: 'smooth' })}
-                  className="relative h-20 rounded-2xl overflow-hidden bg-gray-100 active:scale-[0.98] transition-all text-start"
-                >
-                  {cover && <img src={cover} alt="" loading="lazy" className="absolute inset-0 w-full h-full object-cover" />}
-                  <span className="absolute inset-0 bg-gradient-to-t from-black/60 to-black/10" />
-                  <span className="absolute bottom-2 inset-x-3 text-white font-bold text-sm leading-tight">{cat.name}</span>
-                </button>
-              )
-            })}
-          </div>
-          <div className="px-4 pb-32">
-            {menu.categories.map((cat) => (
-              // scroll-mt: заголовок не прячется под липкие шапку и навигацию
-              <section key={cat.id} id={`cat-${cat.id}`} className="mt-7 scroll-mt-[118px]">
-                <h2 className="text-lg font-bold text-gray-900 mb-3">{cat.name}</h2>
-                <div className="space-y-2">
-                  {cat.items.map((item) => (
-                    <ItemRow key={item.id} item={item} lang={lang} onTap={() => {
-                      // Простой товар — сразу в корзину; сложный — конфигуратор
-                      if (item.variants.length === 0 && item.modifier_groups.length === 0) {
-                        addLine({
-                          itemId: item.id, name: item.name, variantId: null, variantName: null,
-                          modIds: [], modNames: [], unitPrice: item.price,
-                        })
-                      } else {
-                        setConfigItem(item)
-                      }
-                    }} />
-                  ))}
-                </div>
-              </section>
-            ))}
-          </div>
-
           {cartCount > 0 && (
             <div className="fixed bottom-0 inset-x-0 p-4 bg-gradient-to-t from-white via-white to-transparent">
               <button
@@ -213,62 +244,6 @@ export default function PublicOrderPage() {
         />
       )}
     </Shell>
-  )
-}
-
-/**
- * Липкая полоса категорий: тап скроллит к секции, при прокрутке активная
- * категория подсвечивается сама (IntersectionObserver) и чип подъезжает
- * в видимую зону. Классический паттерн мобильного меню доставки.
- */
-function CategoryNav({ categories }: { categories: { id: string; name: string }[] }) {
-  const [active, setActive] = useState<string | null>(null)
-  const tappedAt = useRef(0)
-
-  useEffect(() => {
-    const obs = new IntersectionObserver(
-      (entries) => {
-        // Сразу после тапа не даём обсерверу перебивать выбор пользователя
-        if (Date.now() - tappedAt.current < 600) return
-        const visible = entries
-          .filter((e) => e.isIntersecting)
-          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)
-        if (visible[0]) setActive(visible[0].target.id.replace('cat-', ''))
-      },
-      // Верхняя полоса вьюпорта под шапкой — «текущая» секция
-      { rootMargin: '-118px 0px -65% 0px' }
-    )
-    for (const c of categories) {
-      const el = document.getElementById(`cat-${c.id}`)
-      if (el) obs.observe(el)
-    }
-    return () => obs.disconnect()
-  }, [categories])
-
-  useEffect(() => {
-    if (!active) return
-    document.getElementById(`chip-${active}`)?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' })
-  }, [active])
-
-  return (
-    <nav className="sticky top-14 z-10 bg-white/95 backdrop-blur border-b border-gray-100 px-4 py-2 flex gap-2 overflow-x-auto">
-      {categories.map((c) => (
-        <button
-          key={c.id}
-          id={`chip-${c.id}`}
-          onClick={() => {
-            tappedAt.current = Date.now()
-            setActive(c.id)
-            document.getElementById(`cat-${c.id}`)?.scrollIntoView({ block: 'start', behavior: 'smooth' })
-          }}
-          className={`h-10 px-4 rounded-full text-sm font-semibold whitespace-nowrap transition-all active:scale-[0.96] shrink-0 ${
-            active === c.id ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600'
-          }`}
-        >
-          {c.name}
-        </button>
-      ))}
-    </nav>
   )
 }
 
