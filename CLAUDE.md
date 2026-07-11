@@ -194,7 +194,9 @@ he/ru, Edge Functions `public-menu`/`public-order` под service_role, анти
 (порядок: миграция → edge functions → фронтенд!).
 Self-service (051): Настройки → Обслуживание → «Онлайн-заказы» — тумблер
 приёма (enforced в `submit_online_order`, код 'disabled'; `public-menu`
-отдаёт `accepting`), ссылка для гостей + печать QR-флаера на термоленте.
+отдаёт `accepting`), ссылка для гостей + печать QR-флаера на термоленте,
+соцссылки Instagram/Facebook/отзыв Google (`settings.online_orders` →
+`location.links` в `public-menu`) — подвал гостевой страницы.
 Сайт Bulochka (bulweb2, Firebase) заказывает через тот же API: чекаут в
 `menu.html`, матчинг корзины по ивритским названиям, WhatsApp — fallback;
 каталог кассы наполнен из Firestore скриптом `scripts/import-site-menu.mjs`.

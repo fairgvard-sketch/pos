@@ -105,6 +105,10 @@ Deno.serve(async (req) => {
     }))
     .filter((c) => c.items.length > 0)
 
+  const onlineSettings = (locRes.data as {
+    online_settings?: { enabled?: boolean; instagram?: string | null; facebook?: string | null; google_review?: string | null }
+  }).online_settings
+
   return json(
     {
       location: {
@@ -116,7 +120,13 @@ Deno.serve(async (req) => {
         currency: locRes.data.currency,
         is_open: (shiftRes.data ?? []).length > 0,
         // Тумблер 051: false = владелец выключил приём онлайн-заказов
-        accepting: (locRes.data as { online_settings?: { enabled?: boolean } }).online_settings?.enabled !== false,
+        accepting: onlineSettings?.enabled !== false,
+        // Соцссылки подвала гостевой страницы (Настройки → Обслуживание → Онлайн-заказы)
+        links: {
+          instagram: onlineSettings?.instagram || null,
+          facebook: onlineSettings?.facebook || null,
+          google_review: onlineSettings?.google_review || null,
+        },
       },
       categories,
     },

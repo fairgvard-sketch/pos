@@ -822,6 +822,7 @@ export const translations = {
     pubErrPhone: 'Проверьте номер телефона',
     pubErrGeneric: 'Не удалось отправить заказ. Попробуйте ещё раз.',
     pubPaused: 'Онлайн-заказы временно недоступны',
+    pubReviewGoogle: 'Оставить отзыв в Google',
 
     // Настройки → Обслуживание → Онлайн-заказы (051)
     onlineSettingsToggle: 'Приём заказов с сайта',
@@ -836,6 +837,9 @@ export const translations = {
     qrHint: 'Распечатайте QR на термоленте и приклейте на стойку или витрину',
     previewShow: 'Показать превью страницы',
     previewHide: 'Скрыть превью',
+    onlineSocialTitle: 'Соцсети и отзыв Google',
+    onlineSocialHint: 'Кнопки внизу страницы заказа. Пустое поле — кнопки нет.',
+    googleReviewLabel: 'Ссылка на отзыв в Google',
     onlineStats7d: 'За 7 дней',
     onlineStatReqs: 'заявок',
     onlineStatAcc: 'принято',
@@ -1681,6 +1685,7 @@ export const translations = {
     pubErrPhone: 'בדקו את מספר הטלפון',
     pubErrGeneric: 'שליחת ההזמנה נכשלה. נסו שוב.',
     pubPaused: 'הזמנות אונליין אינן זמינות כרגע',
+    pubReviewGoogle: 'השאירו ביקורת בגוגל',
 
     // Настройки → Обслуживание → Онлайн-заказы (051)
     onlineSettingsToggle: 'קבלת הזמנות מהאתר',
@@ -1695,6 +1700,9 @@ export const translations = {
     qrHint: 'הדפיסו את הקוד על סרט תרמי והדביקו בדלפק או בחלון הראווה',
     previewShow: 'להציג תצוגה מקדימה',
     previewHide: 'להסתיר תצוגה מקדימה',
+    onlineSocialTitle: 'רשתות חברתיות וביקורת בגוגל',
+    onlineSocialHint: 'כפתורים בתחתית דף ההזמנה. שדה ריק — אין כפתור.',
+    googleReviewLabel: 'קישור לביקורת בגוגל',
     onlineStats7d: 'ב־7 ימים',
     onlineStatReqs: 'הזמנות',
     onlineStatAcc: 'אושרו',

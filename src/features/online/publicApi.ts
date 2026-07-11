@@ -57,6 +57,12 @@ export interface PublicMenu {
     is_open: boolean
     /** false = владелец выключил приём онлайн-заказов (051) */
     accepting?: boolean
+    /** Соцссылки подвала — настраиваются в кассе, пусто = не показывать */
+    links?: {
+      instagram?: string | null
+      facebook?: string | null
+      google_review?: string | null
+    }
   }
   categories: { id: string; name: string; items: PublicItem[] }[]
 }

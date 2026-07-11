@@ -39,6 +39,10 @@ export interface LocationSettings {
   /** Онлайн-заказы с сайта (051). Отсутствие ключа = включено. */
   online_orders?: {
     enabled?: boolean
+    // Ссылки в подвале гостевой страницы (пусто/null = не показывать)
+    instagram?: string | null
+    facebook?: string | null
+    google_review?: string | null
   }
 }
 

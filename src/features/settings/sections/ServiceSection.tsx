@@ -212,7 +212,66 @@ function OnlineOrdersBlock({ location }: { location: Location | undefined }) {
             )}
           </div>
         </div>
+        <div className="px-4 py-3 border-t border-gray-100">
+          <div className="text-sm font-semibold text-gray-900">{t(lang, 'onlineSocialTitle')}</div>
+          <p className="text-xs text-gray-500 mt-0.5">{t(lang, 'onlineSocialHint')}</p>
+          <div className="space-y-3 mt-3">
+            <LinkField
+              label="Instagram"
+              placeholder="https://instagram.com/..."
+              value={settings.online_orders?.instagram ?? ''}
+              onSave={(v) => update({ online_orders: { instagram: v || null } })}
+            />
+            <LinkField
+              label="Facebook"
+              placeholder="https://facebook.com/..."
+              value={settings.online_orders?.facebook ?? ''}
+              onSave={(v) => update({ online_orders: { facebook: v || null } })}
+            />
+            <LinkField
+              label={t(lang, 'googleReviewLabel')}
+              placeholder="https://g.page/r/..."
+              value={settings.online_orders?.google_review ?? ''}
+              onSave={(v) => update({ online_orders: { google_review: v || null } })}
+            />
+          </div>
+        </div>
       </Group>
     </section>
+  )
+}
+
+/** URL-поле с сохранением на blur; голый домен дополняется https:// */
+function LinkField({ label, placeholder, value, onSave }: {
+  label: string
+  placeholder: string
+  value: string
+  onSave: (v: string) => void
+}) {
+  const [val, setVal] = useState(value)
+  // Сброс при смене пропа — во время рендера (без setState-в-эффекте)
+  const [prevValue, setPrevValue] = useState(value)
+  if (prevValue !== value) {
+    setPrevValue(value)
+    setVal(value)
+  }
+  return (
+    <label className="block">
+      <span className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">{label}</span>
+      <input
+        className="input text-sm"
+        dir="ltr"
+        inputMode="url"
+        value={val}
+        placeholder={placeholder}
+        onChange={(e) => setVal(e.target.value)}
+        onBlur={() => {
+          const raw = val.trim()
+          const v = raw && !/^https?:\/\//i.test(raw) ? `https://${raw}` : raw
+          if (v !== val) setVal(v)
+          if (v !== value) onSave(v)
+        }}
+      />
+    </label>
   )
 }

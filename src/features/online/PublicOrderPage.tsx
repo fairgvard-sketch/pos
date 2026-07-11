@@ -5,7 +5,7 @@ import { t, type Lang } from '../../lib/i18n'
 import { formatMoney } from '../../lib/money'
 import {
   fetchPublicMenu, fetchPublicStatus, submitPublicOrder, PublicApiError,
-  type PublicItem, type PublicStatus,
+  type PublicItem, type PublicMenu, type PublicStatus,
 } from './publicApi'
 
 /**
@@ -117,7 +117,14 @@ export default function PublicOrderPage() {
   }
 
   return (
-    <Shell isRtl={isRtl} lang={lang} setLang={setLang} title={menu.location.business_name || menu.location.name} logo={menu.location.logo_url}>
+    <Shell
+      isRtl={isRtl}
+      lang={lang}
+      setLang={setLang}
+      title={menu.location.business_name || menu.location.name}
+      logo={menu.location.logo_url}
+      hero={view === 'menu' && !activeCat}
+    >
       {menu.location.accepting === false ? (
         <div className="mx-4 mt-4 rounded-2xl bg-amber-50 text-amber-800 text-sm font-semibold px-4 py-3">
           {t(lang, 'pubPaused')}
@@ -129,23 +136,27 @@ export default function PublicOrderPage() {
       )}
 
       {view === 'menu' && !activeCat && (
-        // Главный экран: только плитки категорий (drill-down как в сайтах-меню)
-        <div className="px-4 mt-4 pb-32 grid grid-cols-2 gap-3">
-          {menu.categories.map((cat) => {
-            const cover = cat.items.find((i) => i.image_url)?.image_url
-            return (
-              <button
-                key={cat.id}
-                onClick={() => setActiveCat(cat.id)}
-                className="relative h-28 rounded-2xl overflow-hidden bg-gray-200 active:scale-[0.98] transition-all text-start"
-              >
-                {cover && <img src={cover} alt="" loading="lazy" className="absolute inset-0 w-full h-full object-cover" />}
-                <span className="absolute inset-0 bg-gradient-to-t from-black/60 to-black/10" />
-                <span className="absolute bottom-2.5 inset-x-3 text-white font-bold leading-tight">{cat.name}</span>
-              </button>
-            )
-          })}
-        </div>
+        // Главный экран: плитки категорий растягиваются на всю высоту
+        // (auto-rows-fr + flex-1 — пустого «хвоста» не остаётся), внизу подвал
+        <>
+          <div className="px-4 mt-4 flex-1 grid grid-cols-2 auto-rows-fr gap-3">
+            {menu.categories.map((cat) => {
+              const cover = cat.items.find((i) => i.image_url)?.image_url
+              return (
+                <button
+                  key={cat.id}
+                  onClick={() => setActiveCat(cat.id)}
+                  className="relative min-h-28 rounded-2xl overflow-hidden bg-gray-200 active:scale-[0.98] transition-all text-start"
+                >
+                  {cover && <img src={cover} alt="" loading="lazy" className="absolute inset-0 w-full h-full object-cover" />}
+                  <span className="absolute inset-0 bg-gradient-to-t from-black/60 to-black/10" />
+                  <span className="absolute bottom-3 inset-x-3 text-white text-lg font-bold leading-tight">{cat.name}</span>
+                </button>
+              )
+            })}
+          </div>
+          <SocialFooter links={menu.location.links} lang={lang} padForCart={cartCount > 0} />
+        </>
       )}
 
       {view === 'menu' && activeCat && (() => {
@@ -247,34 +258,107 @@ export default function PublicOrderPage() {
   )
 }
 
-/** Каркас страницы: шапка с названием кофейни и переключателем языка */
-function Shell({ isRtl, lang, setLang, title, logo, children }: {
+/**
+ * Каркас страницы. Два режима шапки:
+ * hero — главный экран плиток: крупный логотип и название по центру;
+ * компактная sticky-шапка (h-14) — категории/корзина/статус, к ней
+ * привязаны чипы навигации (sticky top-14).
+ */
+function Shell({ isRtl, lang, setLang, title, logo, hero, children }: {
   isRtl: boolean
   lang: Lang
   setLang: (l: Lang) => void
   title?: string
   logo?: string | null
+  hero?: boolean
   children: React.ReactNode
 }) {
+  const langBtn = (
+    <button
+      onClick={() => setLang(lang === 'he' ? 'ru' : 'he')}
+      className="h-9 px-3 rounded-xl bg-gray-100 text-sm font-semibold text-gray-700 active:scale-[0.96] transition-all"
+    >
+      {lang === 'he' ? 'RU' : 'עב'}
+    </button>
+  )
   return (
     <div dir={isRtl ? 'rtl' : 'ltr'} className="min-h-screen bg-[#eceef1]">
       <div className="max-w-lg mx-auto min-h-screen bg-white flex flex-col">
-        <header className="sticky top-0 z-10 bg-white border-b border-gray-100 px-4 h-14 flex items-center justify-end relative">
-          {/* Логотип у начала строки; название — по центру, поверх флекса */}
-          {logo && <img src={logo} alt="" className="absolute start-4 w-9 h-9 rounded-full object-cover" />}
-          <span className="absolute inset-x-14 text-center font-bold text-lg text-gray-900 truncate pointer-events-none">
-            {title ?? ''}
-          </span>
-          <button
-            onClick={() => setLang(lang === 'he' ? 'ru' : 'he')}
-            className="h-9 px-3 rounded-xl bg-gray-100 text-sm font-semibold text-gray-700 active:scale-[0.96] transition-all"
-          >
-            {lang === 'he' ? 'RU' : 'עב'}
-          </button>
-        </header>
-        <div className="flex-1">{children}</div>
+        {hero ? (
+          <header className="relative px-8 pt-8 pb-2 text-center">
+            <div className="absolute top-4 end-4">{langBtn}</div>
+            {logo && <img src={logo} alt="" className="w-20 h-20 rounded-full object-cover mx-auto" />}
+            <h1 className={`text-2xl font-black text-gray-900 leading-tight ${logo ? 'mt-3' : 'mt-8'}`}>
+              {title ?? ''}
+            </h1>
+          </header>
+        ) : (
+          <header className="sticky top-0 z-10 bg-white border-b border-gray-100 px-4 h-14 flex items-center justify-end relative">
+            {/* Логотип у начала строки; название — по центру, поверх флекса */}
+            {logo && <img src={logo} alt="" className="absolute start-4 w-9 h-9 rounded-full object-cover" />}
+            <span className="absolute inset-x-14 text-center font-bold text-lg text-gray-900 truncate pointer-events-none">
+              {title ?? ''}
+            </span>
+            {langBtn}
+          </header>
+        )}
+        <div className="flex-1 flex flex-col">{children}</div>
       </div>
     </div>
+  )
+}
+
+/**
+ * Подвал главного экрана: Instagram / Facebook / отзыв в Google.
+ * Ссылки настраиваются в кассе (Настройки → Обслуживание → Онлайн-заказы);
+ * пустая ссылка = кнопки нет. padForCart — просвет под фиксированной
+ * кнопкой корзины.
+ */
+function SocialFooter({ links, lang, padForCart }: {
+  links?: PublicMenu['location']['links']
+  lang: Lang
+  padForCart: boolean
+}) {
+  const iconBtn =
+    'w-12 h-12 rounded-full bg-gray-100 text-gray-700 flex items-center justify-center active:scale-[0.94] transition-all'
+  const hasAny = !!(links?.instagram || links?.facebook || links?.google_review)
+  if (!hasAny) return padForCart ? <div className="pb-24" /> : null
+  return (
+    <footer className={`px-4 pt-10 flex flex-col items-center gap-4 ${padForCart ? 'pb-28' : 'pb-8'}`}>
+      {(links?.instagram || links?.facebook) && (
+        <div className="flex items-center gap-3">
+          {links?.instagram && (
+            <a href={links.instagram} target="_blank" rel="noopener noreferrer" aria-label="Instagram" className={iconBtn}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+                <rect x="3" y="3" width="18" height="18" rx="5" />
+                <circle cx="12" cy="12" r="4" />
+                <circle cx="17.2" cy="6.8" r="1.2" fill="currentColor" stroke="none" />
+              </svg>
+            </a>
+          )}
+          {links?.facebook && (
+            <a href={links.facebook} target="_blank" rel="noopener noreferrer" aria-label="Facebook" className={iconBtn}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" aria-hidden>
+                <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z" />
+              </svg>
+            </a>
+          )}
+        </div>
+      )}
+      {links?.google_review && (
+        <a
+          href={links.google_review}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="h-11 px-5 rounded-full bg-gray-100 text-sm font-semibold text-gray-700 flex items-center gap-2 active:scale-[0.96] transition-all"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z" />
+          </svg>
+          {t(lang, 'pubReviewGoogle')}
+        </a>
+      )}
+    </footer>
   )
 }
 
