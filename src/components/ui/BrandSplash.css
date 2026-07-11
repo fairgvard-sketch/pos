@@ -103,7 +103,10 @@
   to { transform: translateX(0); }
 }
 
+/* Сдвиг в px, не в %: композитная анимация запекает % в пиксели по ширине
+   fallback-шрифта, и после догрузки Archivo Black (блок шире) хвост «E»
+   вылезал из-под клипа. 240px покрывает NGLE любым шрифтом. */
 @keyframes bs-text {
-  from { transform: translateX(-104%); }
+  from { transform: translateX(-240px); }
   to { transform: translateX(0); }
 }

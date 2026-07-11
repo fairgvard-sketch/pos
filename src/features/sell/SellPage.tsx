@@ -401,11 +401,11 @@ export default function SellPage() {
   const noCats = activeCats.length === 0
   const showCatGrid = !search.trim() && activeCat === null && !noCats
 
-  // Количество доступных товаров в категории — подпись на плитке
-  const catCounts = useMemo(() => {
-    const m = new Map<string, number>()
+  // Фото плитки категории — первое фото среди её доступных товаров
+  const catImages = useMemo(() => {
+    const m = new Map<string, string>()
     for (const i of items) {
-      if (i.is_available) m.set(i.category_id, (m.get(i.category_id) ?? 0) + 1)
+      if (i.is_available && i.image_url && !m.has(i.category_id)) m.set(i.category_id, i.image_url)
     }
     return m
   }, [items])
@@ -1101,40 +1101,7 @@ export default function SellPage() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
-            {/* Середина строки: внутри категории — «назад» + её название;
-                стоп-лист прижат к правому физическому краю (auto-margin с
-                RTL-разворотом, как раньше у чипов). */}
-            <div className="flex-1 flex items-center gap-3 min-w-0 rtl:flex-row-reverse">
-              {!search.trim() && activeCat !== null && (
-                <>
-                  <button
-                    onClick={() => setActiveCat(null)}
-                    aria-label={t(lang, 'back')}
-                    className="shrink-0 w-11 h-11 rounded-2xl border border-gray-100 bg-gray-50 text-gray-500
-                               hover:text-gray-700 hover:bg-gray-100 flex items-center justify-center
-                               transition-all active:scale-[0.94]"
-                  >
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true" className="rtl:rotate-180">
-                      <path d="M15 5l-7 7 7 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  </button>
-                  <span className="font-semibold text-gray-900 truncate">
-                    {activeCat === 'fav'
-                      ? `★ ${t(lang, 'favorites')}`
-                      : activeCats.find((c) => c.id === activeCat)?.name}
-                  </span>
-                </>
-              )}
-              {/* Стоп-лист: виден только когда есть снятые товары */}
-              {stoppedItems.length > 0 && (
-                <span className="ms-auto rtl:ms-0 rtl:me-auto shrink-0">
-                  <Chip active={false} onClick={() => setShowStopList(true)}>
-                    {t(lang, 'stopListTitle')} · {stoppedItems.length}
-                  </Chip>
-                </span>
-              )}
-            </div>
-            {/* Правка витрины: тумблер-карандаш (только менеджер) */}
+            {/* Правка витрины: тумблер-карандаш (только менеджер) — рядом с поиском */}
             {isManager && (
               <button
                 onClick={() => setEditMode((v) => !v)}
@@ -1157,6 +1124,38 @@ export default function SellPage() {
                 </svg>
               </button>
             )}
+            {/* Середина строки: стоп-лист прижат к правому физическому краю
+                (auto-margin с RTL-разворотом, как раньше у чипов). */}
+            <div className="flex-1 flex items-center gap-3 min-w-0 rtl:flex-row-reverse">
+              {/* Стоп-лист: виден только когда есть снятые товары */}
+              {stoppedItems.length > 0 && (
+                <span className="ms-auto rtl:ms-0 rtl:me-auto shrink-0">
+                  <Chip active={false} onClick={() => setShowStopList(true)}>
+                    {t(lang, 'stopListTitle')} · {stoppedItems.length}
+                  </Chip>
+                </span>
+              )}
+            </div>
+            {/* Назад к категориям: стрелка и название — одна кнопка на правом краю
+                строки (в RTL это начало чтения — естественное место возврата) */}
+            {!search.trim() && activeCat !== null && (
+              <button
+                onClick={() => setActiveCat(null)}
+                aria-label={t(lang, 'back')}
+                className="min-w-0 h-11 ps-3 pe-4 rounded-2xl border border-gray-100 bg-gray-50
+                           hover:bg-gray-100 flex items-center gap-2
+                           transition-all active:scale-[0.97]"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true" className="shrink-0 text-gray-500 rtl:rotate-180">
+                  <path d="M15 5l-7 7 7 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                <span className="font-semibold text-gray-900 truncate">
+                  {activeCat === 'fav'
+                    ? `★ ${t(lang, 'favorites')}`
+                    : activeCats.find((c) => c.id === activeCat)?.name}
+                </span>
+              </button>
+            )}
           </div>
           {editMode && (
             <p className="text-xs text-gray-500 pb-2 -mt-2">{t(lang, 'menuEditHint')}</p>
@@ -1171,7 +1170,7 @@ export default function SellPage() {
                 <CatTile
                   icon={<span className="text-amber-400">★</span>}
                   name={t(lang, 'favorites')}
-                  sub={`${items.filter((i) => i.is_available && i.is_favorite).length} ${t(lang, 'catItemsShort')}`}
+                  image={items.find((i) => i.is_available && i.is_favorite && i.image_url)?.image_url ?? null}
                   onClick={() => setActiveCat('fav')}
                 />
               )}
@@ -1180,7 +1179,7 @@ export default function SellPage() {
                   key={c.id}
                   icon={c.icon}
                   name={c.name}
-                  sub={`${catCounts.get(c.id) ?? 0} ${t(lang, 'catItemsShort')}`}
+                  image={catImages.get(c.id) ?? null}
                   onClick={() => setActiveCat(c.id)}
                 />
               ))}
@@ -2296,20 +2295,23 @@ function ActionButton({
 }
 
 /** Плитка категории на корневом уровне витрины */
-function CatTile({ icon, name, sub, onClick }: { icon?: React.ReactNode; name: string; sub: string; onClick: () => void }) {
+function CatTile({ icon, name, image, onClick }: { icon?: React.ReactNode; name: string; image: string | null; onClick: () => void }) {
   return (
     <button
       onClick={onClick}
-      className="rounded-2xl border border-gray-300 bg-white p-4 text-start min-h-[112px]
-                 flex flex-col justify-between gap-3 transition-all duration-150
+      className="rounded-2xl border border-gray-300 bg-white p-3 min-h-[140px]
+                 flex flex-col justify-center transition-all duration-150
                  hover:border-gray-400 hover:shadow-[0_4px_16px_rgba(0,0,0,0.06)] active:scale-[0.97]"
     >
-      {/* Слот иконки всегда занимает место — названия на всех плитках на одной линии */}
-      <span className="h-7 text-2xl leading-none">{icon}</span>
-      <span className="min-w-0">
-        <span className="block font-semibold text-gray-900 leading-tight">{name}</span>
-        <span className="block mt-1 text-sm font-bold text-gray-500 tabular-nums">{sub}</span>
-      </span>
+      {/* Фото — первое из товаров категории; без фото — иконка категории или буква */}
+      {!image && icon ? (
+        <span className="w-[64%] mx-auto aspect-square rounded-xl bg-gray-50 flex items-center justify-center text-3xl leading-none select-none">
+          {icon}
+        </span>
+      ) : (
+        <ItemImage item={{ name, image_url: image }} size="card" />
+      )}
+      <span className="mt-2.5 w-full text-center font-semibold text-gray-900 text-sm leading-tight">{name}</span>
     </button>
   )
 }
