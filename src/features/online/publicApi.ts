@@ -39,6 +39,7 @@ export interface PublicItem {
   id: string
   name: string
   price: number
+  description: string | null
   image_url: string | null
   variants: PublicVariant[]
   modifier_groups: PublicModifierGroup[]

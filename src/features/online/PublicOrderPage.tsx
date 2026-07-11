@@ -128,6 +128,23 @@ export default function PublicOrderPage() {
       {view === 'menu' && (
         <>
           <CategoryNav categories={menu.categories} />
+          {/* Плитки категорий с фото — «обложка» меню (референс: сайты-меню) */}
+          <div className="px-4 mt-4 grid grid-cols-2 gap-2">
+            {menu.categories.map((cat) => {
+              const cover = cat.items.find((i) => i.image_url)?.image_url
+              return (
+                <button
+                  key={cat.id}
+                  onClick={() => document.getElementById(`cat-${cat.id}`)?.scrollIntoView({ block: 'start', behavior: 'smooth' })}
+                  className="relative h-20 rounded-2xl overflow-hidden bg-gray-100 active:scale-[0.98] transition-all text-start"
+                >
+                  {cover && <img src={cover} alt="" loading="lazy" className="absolute inset-0 w-full h-full object-cover" />}
+                  <span className="absolute inset-0 bg-gradient-to-t from-black/60 to-black/10" />
+                  <span className="absolute bottom-2 inset-x-3 text-white font-bold text-sm leading-tight">{cat.name}</span>
+                </button>
+              )
+            })}
+          </div>
           <div className="px-4 pb-32">
             {menu.categories.map((cat) => (
               // scroll-mt: заголовок не прячется под липкие шапку и навигацию
@@ -304,8 +321,11 @@ function ItemRow({ item, lang, onTap }: { item: PublicItem; lang: Lang; onTap: (
       )}
       <span className="flex-1 min-w-0">
         <span className="block font-semibold text-gray-900 leading-snug">{item.name}</span>
-        <span className="block text-sm text-gray-500 mt-1 tabular-nums">
-          {hasRange && <span>{t(lang, 'pubFrom')} </span>}
+        {item.description && (
+          <span className="block text-xs text-gray-500 mt-0.5 leading-snug line-clamp-2">{item.description}</span>
+        )}
+        <span className="block text-sm font-semibold text-gray-900 mt-1 tabular-nums">
+          {hasRange && <span className="text-gray-500 font-normal">{t(lang, 'pubFrom')} </span>}
           {/* dir=ltr: цена не пляшет в bidi-контексте ивритских названий */}
           <span dir="ltr">{formatMoney(minPrice, lang)}</span>
         </span>
@@ -387,8 +407,11 @@ function ItemConfigSheet({ item, lang, isRtl, onClose, onAdd }: {
         {item.image_url && (
           <img src={item.image_url} alt="" className="w-full h-44 object-cover shrink-0" />
         )}
-        <div className="px-6 pt-5 pb-3 flex items-center justify-between shrink-0">
-          <h3 className="text-lg font-bold text-gray-900">{item.name}</h3>
+        <div className="px-6 pt-5 pb-3 flex items-start justify-between gap-3 shrink-0">
+          <div className="min-w-0">
+            <h3 className="text-lg font-bold text-gray-900">{item.name}</h3>
+            {item.description && <p className="text-sm text-gray-500 mt-1 leading-snug">{item.description}</p>}
+          </div>
           <button onClick={onClose} className="w-9 h-9 rounded-xl bg-gray-100 text-gray-500 font-bold active:scale-[0.94] transition-all">✕</button>
         </div>
 

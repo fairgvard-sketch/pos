@@ -124,7 +124,7 @@ const [kassaState] = await sql(`
     'categories', (SELECT COALESCE(json_agg(json_build_object('id', id, 'name', name, 'sort', sort_order)), '[]'::json)
                    FROM menu_categories WHERE location_id = '${LOCATION_ID}'),
     'items', (SELECT COALESCE(json_agg(json_build_object(
-                'id', mi.id, 'name', mi.name, 'price', mi.price, 'category_id', mi.category_id,
+                'id', mi.id, 'name', mi.name, 'price', mi.price, 'category_id', mi.category_id, 'description', mi.description,
                 'variants', (SELECT COALESCE(json_agg(json_build_object('id', v.id, 'name', v.name, 'price', v.price) ORDER BY v.sort_order), '[]'::json)
                              FROM item_variants v WHERE v.item_id = mi.id),
                 'group_ids', (SELECT COALESCE(json_agg(l.group_id), '[]'::json)
@@ -158,6 +158,7 @@ const plan = {
   newItems: [],      // {uuid, catRef, name, price, img, available, sort, variants:[], groupRefs:[]}
   links: [],         // {itemId|itemRef, groupId|groupRef} — привязки групп
   matched: [],
+  descUpdates: [], // {itemId, desc} — долить описание существующим
   warnings: [],
   skipped: [],
 }
@@ -255,6 +256,11 @@ for (const [catId, docs] of Object.entries(siteCats)) {
       const variants = {}
       for (const v of existing.variants) variants[v.name] = v.id
       map.items[doc.id] = { kassaItemId: existing.id, name: existing.name, category: catId, variants, sizeAddonId: sizeAddon?.id ?? null }
+      // Описание: в кассе пусто, на сайте есть → долить (иврит канонический)
+      const siteDesc = (doc.descHe || doc.descRu || doc.desc || '').trim()
+      if (siteDesc && !(existing.description || '').trim()) {
+        plan.descUpdates.push({ itemId: existing.id, itemName: existing.name, desc: siteDesc.slice(0, 300) })
+      }
       // Добавки сайта, которых нет у кассовой позиции → привязать группу
       // (иначе онлайн-заказ с этой добавкой отклонится: группа не у товара)
       for (const a of itemAddons) {
@@ -299,6 +305,7 @@ for (const [catId, docs] of Object.entries(siteCats)) {
     const uuid = randomUUID()
     plan.newItems.push({
       uuid, catId, name: nameHe, price: prices[0],
+      desc: (doc.descHe || doc.descRu || doc.desc || '').trim().slice(0, 300) || null,
       img: doc.img || null,
       available: doc.available !== false,
       sort: Number(doc.order ?? 0),
@@ -339,6 +346,9 @@ for (const i of plan.newItems) {
   const v = i.variants.length ? ` [${i.variants.map((v) => `${v.name} ${v.price / 100}₪`).join(' / ')}]` : ` ${i.price / 100}₪`
   console.log(`  + [${i.catId}] ${i.name}${v}${i.groupIds.length ? ` +${i.groupIds.length} гр.мод.` : ''}${i.available ? '' : ' (стоп)'}`)
 }
+if (plan.descUpdates.length) {
+  console.log(`\n═══ Описания дольются существующим: ${plan.descUpdates.length}`)
+}
 if (plan.warnings.length) {
   console.log(`\n⚠ Предупреждения: ${plan.warnings.length}`)
   for (const w of plan.warnings) console.log('  !', w)
@@ -356,7 +366,10 @@ if (!APPLY) {
 // ── запись ───────────────────────────────────────────────────
 
 const stmts = ['BEGIN;']
-for (const c of plan.newCategories) {
+// Категорию создаём, только если в неё реально едут новые товары —
+// иначе повторный прогон воскрешает категории, слитые/удалённые на кассе
+const usedCatUuids = new Set(plan.newItems.map((i) => catRef[i.catId].uuid).filter(Boolean))
+for (const c of plan.newCategories.filter((c) => usedCatUuids.has(c.uuid))) {
   stmts.push(`INSERT INTO menu_categories (id, org_id, location_id, name, sort_order) VALUES ('${c.uuid}', '${ORG}', '${LOCATION_ID}', '${esc(c.he)}', ${c.order});`)
 }
 for (const g of plan.newGroups) {
@@ -373,13 +386,16 @@ for (const g of plan.addGroupMods) {
 for (const i of plan.newItems) {
   const cat = catRef[i.catId]
   const catIdSql = cat.id ?? cat.uuid
-  stmts.push(`INSERT INTO menu_items (id, org_id, category_id, name, price, image_url, is_available, ask_modifiers, sort_order) VALUES ('${i.uuid}', '${ORG}', '${catIdSql}', '${esc(i.name)}', ${i.price}, ${i.img ? `'${esc(i.img)}'` : 'NULL'}, ${i.available}, ${i.groupIds.length > 0 || i.variants.length > 0}, ${i.sort});`)
+  stmts.push(`INSERT INTO menu_items (id, org_id, category_id, name, price, description, image_url, is_available, ask_modifiers, sort_order) VALUES ('${i.uuid}', '${ORG}', '${catIdSql}', '${esc(i.name)}', ${i.price}, ${i.desc ? `'${esc(i.desc)}'` : 'NULL'}, ${i.img ? `'${esc(i.img)}'` : 'NULL'}, ${i.available}, ${i.groupIds.length > 0 || i.variants.length > 0}, ${i.sort});`)
   i.variants.forEach((v, vi) => {
     stmts.push(`INSERT INTO item_variants (id, org_id, item_id, name, price, is_default, sort_order) VALUES ('${v.uuid}', '${ORG}', '${i.uuid}', '${esc(v.name)}', ${v.price}, ${v.def}, ${vi * 10});`)
   })
   i.groupIds.forEach((gid, gi) => {
     stmts.push(`INSERT INTO menu_item_modifier_groups (item_id, group_id, org_id, sort_order) VALUES ('${i.uuid}', '${gid}', '${ORG}', ${gi * 10});`)
   })
+}
+for (const d of plan.descUpdates) {
+  stmts.push(`UPDATE menu_items SET description = '${esc(d.desc)}' WHERE id = '${d.itemId}' AND COALESCE(description, '') = '';`)
 }
 for (const l of plan.links) {
   stmts.push(`INSERT INTO menu_item_modifier_groups (item_id, group_id, org_id, sort_order) VALUES ('${l.itemId}', '${l.groupId}', '${ORG}', 100) ON CONFLICT DO NOTHING;`)

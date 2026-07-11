@@ -49,7 +49,7 @@ Deno.serve(async (req) => {
       .select(`
         id, name, sort_order,
         menu_items (
-          id, name, price, image_url, sort_order, is_available,
+          id, name, price, description, image_url, sort_order, is_available,
           item_variants ( id, name, price, is_default, sort_order ),
           menu_item_modifier_groups (
             sort_order,
@@ -81,6 +81,7 @@ Deno.serve(async (req) => {
           id: i.id,
           name: i.name,
           price: i.price,
+          description: i.description,
           image_url: i.image_url,
           variants: (i.item_variants ?? []).sort(bySort).map((v) => ({
             id: v.id, name: v.name, price: v.price, is_default: v.is_default,
