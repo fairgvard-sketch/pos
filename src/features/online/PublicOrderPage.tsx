@@ -95,7 +95,7 @@ export default function PublicOrderPage() {
   // ── Экран статуса активной заявки ──────────────────────────
   if (activeUuid) {
     return (
-      <Shell isRtl={isRtl} lang={lang} setLang={setLang} title={menu?.location.name}>
+      <Shell isRtl={isRtl} lang={lang} setLang={setLang} title={menu?.location.business_name || menu?.location.name}>
         <StatusScreen lang={lang} clientUuid={activeUuid} onNewOrder={startNewOrder} />
       </Shell>
     )
@@ -117,7 +117,7 @@ export default function PublicOrderPage() {
   }
 
   return (
-    <Shell isRtl={isRtl} lang={lang} setLang={setLang} title={menu.location.name}>
+    <Shell isRtl={isRtl} lang={lang} setLang={setLang} title={menu.location.business_name || menu.location.name}>
       {menu.location.accepting === false ? (
         <div className="mx-4 mt-4 rounded-2xl bg-amber-50 text-amber-800 text-sm font-semibold px-4 py-3">
           {t(lang, 'pubPaused')}
@@ -258,8 +258,11 @@ function Shell({ isRtl, lang, setLang, title, children }: {
   return (
     <div dir={isRtl ? 'rtl' : 'ltr'} className="min-h-screen bg-[#eceef1]">
       <div className="max-w-lg mx-auto min-h-screen bg-white flex flex-col">
-        <header className="sticky top-0 z-10 bg-white border-b border-gray-100 px-4 h-14 flex items-center justify-between">
-          <span className="font-bold text-gray-900 truncate">{title ?? ''}</span>
+        <header className="sticky top-0 z-10 bg-white border-b border-gray-100 px-4 h-14 flex items-center justify-end relative">
+          {/* Название заведения — по центру, поверх флекса (не сдвигается кнопкой языка) */}
+          <span className="absolute inset-x-14 text-center font-bold text-lg text-gray-900 truncate pointer-events-none">
+            {title ?? ''}
+          </span>
           <button
             onClick={() => setLang(lang === 'he' ? 'ru' : 'he')}
             className="h-9 px-3 rounded-xl bg-gray-100 text-sm font-semibold text-gray-700 active:scale-[0.96] transition-all"
