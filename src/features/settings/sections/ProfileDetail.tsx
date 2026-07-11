@@ -1,17 +1,19 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { useLangStore } from '../../../store/langStore'
 import { t } from '../../../lib/i18n'
-import { updateLocationProfile } from '../../auth/api'
+import { updateLocationProfile, updateDevicePassword } from '../../auth/api'
 import { uploadItemImage } from '../../menu/api'
-import { Group, Field } from '../ui'
+import { supabase } from '../../../lib/supabase'
+import { Group, Field, InputRow, NavRow } from '../ui'
 import type { Location } from '../../../types'
 
 /**
  * Профиль заведения (052): логотип (аватар), название заведения и точки.
+ * Плюс аккаунт входа и смена его пароля (единственное место).
  * Открывается тапом по карточке точки. Логотип виден в карточке настроек
- * и на публичной странице заказа. Пароль устройства — в «Устройстве».
+ * и на публичной странице заказа.
  */
 export default function ProfileDetail({ location }: { location: Location | undefined }) {
   const lang = useLangStore((s) => s.lang)
@@ -19,6 +21,23 @@ export default function ProfileDetail({ location }: { location: Location | undef
   const fileRef = useRef<HTMLInputElement>(null)
 
   const [bizName, setBizName] = useState(location?.receipt_business_name ?? '')
+  // Аккаунт входа (email Supabase Auth) и смена его пароля — единственное место
+  const [email, setEmail] = useState<string | null>(null)
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => setEmail(data.session?.user.email ?? null))
+  }, [])
+  const [pwOpen, setPwOpen] = useState(false)
+  const [pw1, setPw1] = useState('')
+  const [pw2, setPw2] = useState('')
+  const pwValid = pw1.length >= 6 && pw1 === pw2
+  const changePw = useMutation({
+    mutationFn: () => updateDevicePassword(pw1),
+    onSuccess: () => {
+      setPwOpen(false); setPw1(''); setPw2('')
+      toast.success(t(lang, 'passwordSaved'))
+    },
+    onError: (e) => toast.error((e as Error).message),
+  })
   const [locName, setLocName] = useState(location?.name ?? '')
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['current_location'] })
@@ -106,6 +125,48 @@ export default function ProfileDetail({ location }: { location: Location | undef
         </div>
       </Group>
 
+      {/* Аккаунт и пароль входа — здесь, а не в «Устройстве» */}
+      <section>
+        <h3 className="text-xs font-bold uppercase tracking-wide text-gray-500 mb-2 px-1">
+          {t(lang, 'devicePasswordTitle')}
+        </h3>
+        <Group>
+          <InputRow label={t(lang, 'deviceAccount')}>
+            <span className="text-sm text-gray-500 truncate max-w-[220px]">{email ?? '…'}</span>
+          </InputRow>
+          <div>
+            <NavRow
+              label={t(lang, 'changePassword')}
+              hint={t(lang, 'devicePasswordHint')}
+              onClick={() => { setPwOpen((v) => !v); setPw1(''); setPw2('') }}
+            />
+            {pwOpen && (
+              <div className="px-4 pb-4 pt-1 space-y-2">
+                <input
+                  type="password" className="input !py-2" autoFocus autoComplete="new-password"
+                  placeholder={t(lang, 'newPassword')} value={pw1}
+                  onChange={(e) => setPw1(e.target.value)}
+                />
+                <input
+                  type="password" className="input !py-2" autoComplete="new-password"
+                  placeholder={t(lang, 'repeatPassword')} value={pw2}
+                  onChange={(e) => setPw2(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && pwValid && changePw.mutate()}
+                />
+                {pw1.length > 0 && pw1.length < 6 && <p className="text-xs text-amber-600">{t(lang, 'passwordShort')}</p>}
+                {pw2.length > 0 && pw1 !== pw2 && <p className="text-xs text-red-500">{t(lang, 'passwordMismatch')}</p>}
+                <button
+                  onClick={() => changePw.mutate()}
+                  disabled={!pwValid || changePw.isPending}
+                  className="btn-primary !py-2.5 !px-6"
+                >
+                  {t(lang, 'save')}
+                </button>
+              </div>
+            )}
+          </div>
+        </Group>
+      </section>
     </div>
   )
 }
