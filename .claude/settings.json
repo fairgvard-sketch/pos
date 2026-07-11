@@ -62,7 +62,14 @@
       "Bash(npx supabase *)",
       "Bash(supabase functions *)",
       "PowerShell([Environment]::GetEnvironmentVariable\\('SUPABASE_ACCESS_TOKEN','User'\\) -ne $null; [Environment]::GetEnvironmentVariable\\('SUPABASE_ACCESS_TOKEN','Machine'\\) -ne $null; cmdkey /list | Select-String -Pattern 'supabase' -SimpleMatch)",
-      "PowerShell(npx tsc --noEmit)"
+      "PowerShell(npx tsc --noEmit)",
+      "PowerShell(Test-NetConnection -ComputerName localhost -Port 5173 -InformationLevel Quiet -WarningAction SilentlyContinue)",
+      "PowerShell(Start-Process \"http://localhost:5173/order/fe2eebf0-65e3-45b4-a81f-331359d71955\")",
+      "PowerShell(npx tsc --noEmit 2>&1)",
+      "PowerShell(npm run build 2>&1)",
+      "PowerShell(git add src/features/sell/SellPage.tsx src/lib/i18n.ts)",
+      "PowerShell(git add src/features/online/PublicOrderPage.tsx)",
+      "PowerShell(git add .claude/settings.json)"
     ]
   }
 }
