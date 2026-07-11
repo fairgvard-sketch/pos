@@ -156,7 +156,8 @@ export default function SellPage() {
   const cart = useCartStore()
 
   const hasFavorites = useMemo(() => items.some((i) => i.is_favorite && i.is_available), [items])
-  const [activeCat, setActiveCat] = useState<string | 'all' | 'fav' | null>(null)
+  // null = корневой уровень витрины (плитки категорий)
+  const [activeCat, setActiveCat] = useState<string | 'fav' | null>(null)
   const [search, setSearch] = useState('')
   const [picker, setPicker] = useState<{ item: MenuItem; line: CartLine | null } | null>(null)
   const [showDiscount, setShowDiscount] = useState(false)
@@ -393,9 +394,21 @@ export default function SellPage() {
   // Режим столов: после финальной части цепочки сплита вернуться в зал
   const returnToHall = useRef(false)
 
-  // Стартовая вкладка — первая категория по списку (иначе всё)
-  const firstCat = categories.find((c) => c.is_active)?.id
-  const currentCat = activeCat ?? firstCat ?? 'all'
+  // Витрина двухуровневая: корень — плитки категорий, тап — товары категории.
+  // Поиск работает с любого уровня по всему каталогу.
+  const activeCats = useMemo(() => categories.filter((c) => c.is_active), [categories])
+  // Категорий нет вовсе — уровень категорий пропускаем, сразу все товары
+  const noCats = activeCats.length === 0
+  const showCatGrid = !search.trim() && activeCat === null && !noCats
+
+  // Количество доступных товаров в категории — подпись на плитке
+  const catCounts = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const i of items) {
+      if (i.is_available) m.set(i.category_id, (m.get(i.category_id) ?? 0) + 1)
+    }
+    return m
+  }, [items])
 
   const visibleItems = useMemo(() => {
     // В режиме правки показываем и снятые с продажи (приглушёнными)
@@ -404,20 +417,21 @@ export default function SellPage() {
       const q = search.trim().toLowerCase()
       return list.filter((i) => i.name.toLowerCase().includes(q))
     }
-    if (currentCat === 'fav') list = list.filter((i) => i.is_favorite)
-    else if (currentCat !== 'all') list = list.filter((i) => i.category_id === currentCat)
+    if (activeCat === 'fav') list = list.filter((i) => i.is_favorite)
+    else if (activeCat) list = list.filter((i) => i.category_id === activeCat)
+    else if (!noCats) return [] // корень: вместо товаров рисуются плитки категорий
     if (tileOrder) {
       // Перетаскивание: локальный порядок поверх серверного (до инвалидации)
       const pos = new Map(tileOrder.map((id, i) => [id, i]))
       list = list.slice().sort((a, b) => (pos.get(a.id) ?? Infinity) - (pos.get(b.id) ?? Infinity))
     }
     return list
-  }, [items, currentCat, search, editMode, tileOrder])
+  }, [items, activeCat, noCats, search, editMode, tileOrder])
 
   // Смена контекста (категория/поиск/выход из правки) сбрасывает локальный порядок
   useEffect(() => {
     setTileOrder(null)
-  }, [editMode, currentCat, search])
+  }, [editMode, activeCat, search])
 
   function itemGroups(item: MenuItem): ModifierGroup[] {
     const links = (item.menu_item_modifier_groups ?? []).slice().sort((a, b) => a.sort_order - b.sort_order)
@@ -1087,30 +1101,38 @@ export default function SellPage() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
-            {/* flex-1 + чипы прижаты к ПРАВОМУ физическому краю (напротив поиска).
-                НЕ justify-end: при переполнении контейнера с justify-end хвост
-                уезжает за НАЧАЛО, куда скролл не достаёт (категории пропадали).
-                Вместо этого auto-margin у внутренней обёртки: мало чипов —
-                прижаты к краю, много — обычный горизонтальный скролл. */}
-            <div className="flex-1 flex overflow-x-auto min-w-0">
-              <div className="flex gap-2 ms-auto rtl:ms-0 rtl:me-auto">
-              {hasFavorites && (
-                <Chip active={!search && currentCat === 'fav'} onClick={() => { setSearch(''); setActiveCat('fav') }}>
-                  ★ {t(lang, 'favorites')}
-                </Chip>
+            {/* Середина строки: внутри категории — «назад» + её название;
+                стоп-лист прижат к правому физическому краю (auto-margin с
+                RTL-разворотом, как раньше у чипов). */}
+            <div className="flex-1 flex items-center gap-3 min-w-0 rtl:flex-row-reverse">
+              {!search.trim() && activeCat !== null && (
+                <>
+                  <button
+                    onClick={() => setActiveCat(null)}
+                    aria-label={t(lang, 'back')}
+                    className="shrink-0 w-11 h-11 rounded-2xl border border-gray-100 bg-gray-50 text-gray-500
+                               hover:text-gray-700 hover:bg-gray-100 flex items-center justify-center
+                               transition-all active:scale-[0.94]"
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true" className="rtl:rotate-180">
+                      <path d="M15 5l-7 7 7 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+                  <span className="font-semibold text-gray-900 truncate">
+                    {activeCat === 'fav'
+                      ? `★ ${t(lang, 'favorites')}`
+                      : activeCats.find((c) => c.id === activeCat)?.name}
+                  </span>
+                </>
               )}
-              {categories.filter((c) => c.is_active).map((c) => (
-                <Chip key={c.id} active={!search && currentCat === c.id} onClick={() => { setSearch(''); setActiveCat(c.id) }}>
-                  {c.name}
-                </Chip>
-              ))}
               {/* Стоп-лист: виден только когда есть снятые товары */}
               {stoppedItems.length > 0 && (
-                <Chip active={false} onClick={() => setShowStopList(true)}>
-                  {t(lang, 'stopListTitle')} · {stoppedItems.length}
-                </Chip>
+                <span className="ms-auto rtl:ms-0 rtl:me-auto shrink-0">
+                  <Chip active={false} onClick={() => setShowStopList(true)}>
+                    {t(lang, 'stopListTitle')} · {stoppedItems.length}
+                  </Chip>
+                </span>
               )}
-              </div>
             </div>
             {/* Правка витрины: тумблер-карандаш (только менеджер) */}
             {isManager && (
@@ -1142,7 +1164,28 @@ export default function SellPage() {
         </div>
 
         <div className="flex-1 overflow-y-auto px-5 pb-5">
-          {visibleItems.length === 0 && !editMode ? (
+          {showCatGrid ? (
+            /* Корень витрины: плитки категорий (+ Избранное первой) */
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-3">
+              {hasFavorites && (
+                <CatTile
+                  icon={<span className="text-amber-400">★</span>}
+                  name={t(lang, 'favorites')}
+                  sub={`${items.filter((i) => i.is_available && i.is_favorite).length} ${t(lang, 'catItemsShort')}`}
+                  onClick={() => setActiveCat('fav')}
+                />
+              )}
+              {activeCats.map((c) => (
+                <CatTile
+                  key={c.id}
+                  icon={c.icon}
+                  name={c.name}
+                  sub={`${catCounts.get(c.id) ?? 0} ${t(lang, 'catItemsShort')}`}
+                  onClick={() => setActiveCat(c.id)}
+                />
+              ))}
+            </div>
+          ) : visibleItems.length === 0 && !editMode ? (
             <p className="text-gray-300 text-sm text-center pt-20">{t(lang, 'nothingFound')}</p>
           ) : (
             <div ref={gridRef} className="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-3">
@@ -1734,7 +1777,7 @@ export default function SellPage() {
             <ItemEditor
               key={editorItem === 'new' ? 'new' : editorItem.id}
               item={editorItem === 'new' ? null : editorItem}
-              defaultCategoryId={currentCat !== 'all' && currentCat !== 'fav' ? currentCat : (firstCat ?? '')}
+              defaultCategoryId={activeCat && activeCat !== 'fav' ? activeCat : (activeCats[0]?.id ?? '')}
               onSaved={() => setEditorItem(null)}
               onDeleted={() => setEditorItem(null)}
               onBack={() => setEditorItem(null)}
@@ -2248,6 +2291,25 @@ function ActionButton({
     >
       <Icon name={icon} size={18} />
       {label}
+    </button>
+  )
+}
+
+/** Плитка категории на корневом уровне витрины */
+function CatTile({ icon, name, sub, onClick }: { icon?: React.ReactNode; name: string; sub: string; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="rounded-2xl border border-gray-300 bg-white p-4 text-start min-h-[112px]
+                 flex flex-col justify-between gap-3 transition-all duration-150
+                 hover:border-gray-400 hover:shadow-[0_4px_16px_rgba(0,0,0,0.06)] active:scale-[0.97]"
+    >
+      {/* Слот иконки всегда занимает место — названия на всех плитках на одной линии */}
+      <span className="h-7 text-2xl leading-none">{icon}</span>
+      <span className="min-w-0">
+        <span className="block font-semibold text-gray-900 leading-tight">{name}</span>
+        <span className="block mt-1 text-sm font-bold text-gray-500 tabular-nums">{sub}</span>
+      </span>
     </button>
   )
 }
