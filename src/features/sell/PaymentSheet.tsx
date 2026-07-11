@@ -8,6 +8,12 @@ import type { PaymentInput } from './api'
 import Icon from '../../components/Icon'
 import NumPad from '../../components/NumPad'
 
+/** Реквизиты покупателя-бизнеса (048): попадают на чек прямо при оплате */
+export interface OrderBuyer {
+  name: string
+  taxId: string | null
+}
+
 interface Props {
   /** К оплате, уже ВКЛЮЧАЯ чаевые */
   total: number
@@ -15,11 +21,13 @@ interface Props {
   tip?: number
   startMode?: 'choose' | 'cash'
   onCancel: () => void
-  onPay: (payments: PaymentInput[]) => void
+  onPay: (payments: PaymentInput[], buyer: OrderBuyer | null) => void
   /** Разделить по позициям (отдельные чеки). Не передан — кнопка скрыта. */
   onSplitItems?: () => void
   /** Разделить поровну на N гостей (один чек). Не передан — кнопка скрыта. */
   onSplitEqually?: () => void
+  /** Чек на компанию до оплаты (048). false/нет — кнопка скрыта (офлайн). */
+  allowBuyer?: boolean
   busy: boolean
 }
 
@@ -51,7 +59,7 @@ function quickCashOptions(total: number, mode: 'smart' | 'manual' | 'off', manua
  * ввёл МЕНЬШЕ остатка → часть фиксируется чипом, касса переключается на
  * другой способ добрать остаток. onPay уходит один раз со всеми частями.
  */
-export default function PaymentSheet({ total, tip = 0, startMode = 'choose', onCancel, onPay, onSplitItems, onSplitEqually, busy }: Props) {
+export default function PaymentSheet({ total, tip = 0, startMode = 'choose', onCancel, onPay, onSplitItems, onSplitEqually, allowBuyer = false, busy }: Props) {
   const lang = useLangStore((s) => s.lang)
   // Порядок способов настраивается на кассе (Настройки → Оплата → Способы оплаты);
   // первый — выбран по умолчанию. «Наличные» с кнопки перебивают
@@ -62,6 +70,14 @@ export default function PaymentSheet({ total, tip = 0, startMode = 'choose', onC
   const [method, setMethod] = useState<Method>(startMode === 'cash' ? 'cash' : firstPayMethod)
   const [tenderedStr, setTenderedStr] = useState('')
   const [cardStr, setCardStr] = useState('')
+
+  // Чек на компанию (048): реквизиты собираются ДО оплаты, применяются
+  // сразу после pay_order — автопечать выходит уже с блоком לכבוד
+  const [buyer, setBuyer] = useState<OrderBuyer | null>(null)
+  const [buyerOpen, setBuyerOpen] = useState(false)
+  const [bizName, setBizName] = useState('')
+  const [bizTaxId, setBizTaxId] = useState('')
+  const taxIdValid = bizTaxId === '' || /^\d{9}$/.test(bizTaxId)
 
   // Зафиксированные части смешанной оплаты (ещё НЕ отправлены на сервер —
   // onPay уходит один раз, целиком, при доборе остатка)
@@ -86,10 +102,10 @@ export default function PaymentSheet({ total, tip = 0, startMode = 'choose', onC
   /** Наличные: полная оплата остатка (со сдачей) или частичная → добор безналом */
   function confirmCash(tenderedAmount: number) {
     if (tenderedAmount >= remaining) {
-      onPay([
-        ...parts,
-        { method: 'cash', amount: remaining, tendered: tenderedAmount, change_due: tenderedAmount - remaining },
-      ])
+      onPay(
+        [...parts, { method: 'cash', amount: remaining, tendered: tenderedAmount, change_due: tenderedAmount - remaining }],
+        buyer
+      )
     } else if (tenderedAmount > 0) {
       setParts([...parts, { method: 'cash', amount: tenderedAmount, tendered: tenderedAmount, change_due: 0 }])
       setTenderedStr('')
@@ -101,7 +117,7 @@ export default function PaymentSheet({ total, tip = 0, startMode = 'choose', onC
   function confirmNonCash() {
     if (cardAmount <= 0) return
     if (cardAmount >= remaining) {
-      onPay([...parts, { method, amount: remaining }])
+      onPay([...parts, { method, amount: remaining }], buyer)
     } else {
       setParts([...parts, { method, amount: cardAmount }])
       setCardStr('')
@@ -121,7 +137,8 @@ export default function PaymentSheet({ total, tip = 0, startMode = 'choose', onC
       .map((m) => ({ id: m, icon: payMethodIcon(m), label: payMethodLabel(lang, m) }))
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+    // Без backdrop-blur: полноэкранный blur жанкует на GPU Sunmi T2 в каждой оплате
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
       <div className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl overflow-hidden animate-[rise-in_0.2s_ease-out]">
 
         {/* Шапка: заголовок + сумма + закрыть */}
@@ -185,8 +202,24 @@ export default function PaymentSheet({ total, tip = 0, startMode = 'choose', onC
               )
             })}
 
-            {(onSplitItems || onSplitEqually) && (
+            {(onSplitItems || onSplitEqually || allowBuyer) && (
               <div className="hidden sm:block mt-auto pt-3 border-t border-gray-200" />
+            )}
+            {/* Чек на компанию — просят при оплате; реквизиты лягут на чек сразу */}
+            {allowBuyer && (
+              <button
+                onClick={() => setBuyerOpen(true)}
+                disabled={busy}
+                className={`flex-1 sm:flex-none h-14 px-4 rounded-2xl flex items-center gap-3 font-semibold text-sm
+                            transition-all active:scale-[0.97] ${
+                  buyer
+                    ? 'bg-gray-900 text-white shadow-sm'
+                    : 'bg-white text-gray-900 border border-gray-200 hover:border-gray-400'
+                }`}
+              >
+                <Icon name="note" size={22} />
+                <span className="truncate">{buyer ? buyer.name : t(lang, 'bizInvoiceBtn')}</span>
+              </button>
             )}
             {/* Разделить поровну на N (один чек) */}
             {onSplitEqually && (
@@ -355,6 +388,63 @@ export default function PaymentSheet({ total, tip = 0, startMode = 'choose', onC
           </div>
         </div>
       </div>
+
+      {/* Мини-форма реквизитов компании поверх окна оплаты */}
+      {buyerOpen && (
+        <div
+          className="fixed inset-0 z-[60] bg-black/40 flex items-center justify-center p-4"
+          onClick={() => setBuyerOpen(false)}
+        >
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-gray-900 mb-4">{t(lang, 'bizInvoiceBtn')}</h3>
+            <div className="space-y-2">
+              <input
+                className="input"
+                autoFocus
+                placeholder={t(lang, 'bizName')}
+                value={bizName}
+                onChange={(e) => setBizName(e.target.value)}
+              />
+              <input
+                className="input"
+                inputMode="numeric"
+                placeholder={t(lang, 'bizTaxId')}
+                value={bizTaxId}
+                onChange={(e) => setBizTaxId(e.target.value.replace(/\D/g, '').slice(0, 9))}
+              />
+              <p className="text-xs text-gray-500">{t(lang, 'bizInvoiceHint')}</p>
+            </div>
+            <div className="grid grid-cols-2 gap-2 mt-4">
+              <button
+                onClick={() => {
+                  setBuyer({ name: bizName.trim(), taxId: bizTaxId || null })
+                  setBuyerOpen(false)
+                }}
+                disabled={!bizName.trim() || !taxIdValid}
+                className="btn-primary !py-3 !rounded-2xl disabled:opacity-40"
+              >
+                {t(lang, 'save')}
+              </button>
+              <button onClick={() => setBuyerOpen(false)} className="btn-ghost !py-3 !rounded-2xl">
+                {t(lang, 'cancel')}
+              </button>
+            </div>
+            {buyer && (
+              <button
+                onClick={() => {
+                  setBuyer(null)
+                  setBizName('')
+                  setBizTaxId('')
+                  setBuyerOpen(false)
+                }}
+                className="btn-secondary w-full !py-3 !rounded-2xl mt-2"
+              >
+                {t(lang, 'bizRemove')}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -16,6 +16,11 @@ interface Props {
   orderId?: string
   /** Готовый чек (офлайн: временный документ, собранный на кассе) — без запроса */
   receipt?: Receipt
+  /**
+   * Перепечатка (Операции/возврат): оригинал уже выдан при оплате,
+   * фиск. правило — повторная печать только как *העתק*.
+   */
+  reprint?: boolean
   onClose: () => void
 }
 
@@ -24,7 +29,7 @@ interface Props {
  * Сам чек — ВСЕГДА на иврите и RTL (фискальный документ Израиля),
  * независимо от языка интерфейса. Кнопки модалки — на языке UI.
  */
-export default function ReceiptSheet({ orderId, receipt: localReceipt, onClose }: Props) {
+export default function ReceiptSheet({ orderId, receipt: localReceipt, reprint = false, onClose }: Props) {
   const lang = useLangStore((s) => s.lang)
   const printMode = useDeviceStore((s) => s.printMode)
   const qc = useQueryClient()
@@ -62,19 +67,20 @@ export default function ReceiptSheet({ orderId, receipt: localReceipt, onClose }
    */
   function handlePrint() {
     if (!receipt) return
-    // Второй экземпляр (настройка точки) печатается как *העתק*
+    // Второй экземпляр (настройка точки) печатается как *העתק*;
+    // перепечатка (reprint) — копией с первого же экземпляра
     const copies = location?.settings?.receipt?.copies ?? 1
     const bridge = window.KassaAndroid
     if (bridge?.isAvailable()) {
-      bridge.printBase64(canvasToEscposBase64(renderReceiptCanvas(receipt, location)))
-      if (copies === 2) {
+      bridge.printBase64(canvasToEscposBase64(renderReceiptCanvas(receipt, location, { copy: reprint })))
+      if (copies === 2 && !reprint) {
         bridge.printBase64(canvasToEscposBase64(renderReceiptCanvas(receipt, location, { copy: true })))
       }
       return
     }
     if (printMode === 'rawbt') {
-      window.location.href = canvasToRawbtUrl(renderReceiptCanvas(receipt, location))
-      if (copies === 2) {
+      window.location.href = canvasToRawbtUrl(renderReceiptCanvas(receipt, location, { copy: reprint }))
+      if (copies === 2 && !reprint) {
         // RawBT принимает по одной ссылке за раз — копию отправляем с паузой
         setTimeout(() => {
           window.location.href = canvasToRawbtUrl(renderReceiptCanvas(receipt, location, { copy: true }))
@@ -93,7 +99,7 @@ export default function ReceiptSheet({ orderId, receipt: localReceipt, onClose }
           {isLoading || !receipt ? (
             <p className="text-center text-gray-400 py-12">…</p>
           ) : (
-            <ReceiptBody receipt={receipt} location={location} />
+            <ReceiptBody receipt={receipt} location={location} copy={reprint} />
           )}
         </div>
 
@@ -168,7 +174,11 @@ function docTypeLabel(dt: Receipt['doc_type']): string {
 }
 
 /** Тело чека — оно же печатается (класс receipt-print). Иврит, RTL. */
-function ReceiptBody({ receipt: r, location }: { receipt: Receipt; location: Location | undefined }) {
+function ReceiptBody({ receipt: r, location, copy = false }: {
+  receipt: Receipt
+  location: Location | undefined
+  copy?: boolean
+}) {
   const businessName = location?.receipt_business_name || location?.name || ''
   const dt = new Date(r.paid_at ?? r.created_at)
   const dateStr = dt.toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' })
@@ -190,8 +200,10 @@ function ReceiptBody({ receipt: r, location }: { receipt: Receipt; location: Loc
       <div className="text-center font-bold text-sm">
         {docTypeLabel(r.doc_type)} {r.receipt_number ?? '—'}
       </div>
-      {/* Оригинал; офлайн — временный документ (номер присвоится при синке) */}
-      <div className="text-center text-xs mb-1">{r.provisional ? '*מסמך זמני*' : '*מקור*'}</div>
+      {/* Оригинал; перепечатка — *העתק*; офлайн — временный документ */}
+      <div className="text-center text-xs mb-1">
+        {r.provisional ? '*מסמך זמני*' : copy ? '*העתק*' : '*מקור*'}
+      </div>
 
       <Divider />
 

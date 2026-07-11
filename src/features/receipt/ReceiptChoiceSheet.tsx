@@ -90,7 +90,7 @@ export default function ReceiptChoiceSheet({ orderId, location, receipt: localRe
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
       <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 animate-[rise-in_0.2s_ease-out]">
         <h2 className="text-lg font-bold text-gray-900 text-center mb-5">
           {step === 'choose' ? t(lang, 'receiptHowTitle') : t(lang, 'customerPhone')}

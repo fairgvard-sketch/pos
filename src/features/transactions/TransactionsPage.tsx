@@ -35,7 +35,8 @@ export default function TransactionsPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [showReceipt, setShowReceipt] = useState(false)
   const [refunding, setRefunding] = useState(false)
-  const [refundReceiptId, setRefundReceiptId] = useState<string | null>(null)
+  // reprint: свежий зикуй после возврата — оригинал; переоткрытие из истории — копия
+  const [refundReceipt, setRefundReceipt] = useState<{ id: string; reprint: boolean } | null>(null)
 
   // ── Офлайн (фаза 7): эхо неотправленных продаж + журнал очереди ──
   const localOrders = useOutboxStore((s) => s.localOrders)
@@ -245,7 +246,7 @@ export default function TransactionsPage() {
                 {refunds.map((r) => (
                   <button
                     key={r.id}
-                    onClick={() => setRefundReceiptId(r.id)}
+                    onClick={() => setRefundReceipt({ id: r.id, reprint: true })}
                     className="w-full flex items-center gap-3 px-2 py-2 rounded-xl text-start hover:bg-red-50 active:scale-[0.99] text-sm"
                   >
                     <span className="text-gray-600 flex-1 min-w-0 truncate">
@@ -336,7 +337,8 @@ export default function TransactionsPage() {
       </aside>
 
       {showReceipt && selected && (
-        <ReceiptSheet orderId={selected.id} onClose={() => setShowReceipt(false)} />
+        // Из Операций чек всегда перепечатка: оригинал выдан при оплате
+        <ReceiptSheet orderId={selected.id} reprint onClose={() => setShowReceipt(false)} />
       )}
       {refunding && selected && remaining > 0 && (
         <RefundSheet
@@ -345,14 +347,18 @@ export default function TransactionsPage() {
           onClose={() => setRefunding(false)}
           onDone={(refundId) => {
             setRefunding(false)
-            setRefundReceiptId(refundId)
+            setRefundReceipt({ id: refundId, reprint: false })
             // Зикуй — фискальный документ: при включённой автопечати уходит на принтер сразу
             if (autoPrintOn) void autoPrintRefundReceipt(refundId, location, printMode === 'rawbt')
           }}
         />
       )}
-      {refundReceiptId && (
-        <RefundReceiptSheet refundId={refundReceiptId} onClose={() => setRefundReceiptId(null)} />
+      {refundReceipt && (
+        <RefundReceiptSheet
+          refundId={refundReceipt.id}
+          reprint={refundReceipt.reprint}
+          onClose={() => setRefundReceipt(null)}
+        />
       )}
       {/* Временный чек офлайн-продажи */}
       {localReceiptView && (

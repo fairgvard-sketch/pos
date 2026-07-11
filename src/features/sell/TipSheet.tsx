@@ -59,7 +59,8 @@ export default function TipSheet({ total, percentBase, options, allowCustom, rou
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+    // Без backdrop-blur: полноэкранный blur жанкует на GPU Sunmi T2, а шит открывается на каждой продаже
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
       <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-[rise-in_0.2s_ease-out]">
 
         {/* Шапка: заголовок + сумма заказа + закрыть */}

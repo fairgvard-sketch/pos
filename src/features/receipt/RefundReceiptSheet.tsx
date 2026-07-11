@@ -10,6 +10,8 @@ import type { Location } from '../../types'
 
 interface Props {
   refundId: string
+  /** Перепечатка старого зикуя — только как *העתק* (оригинал уже выдан) */
+  reprint?: boolean
   onClose: () => void
 }
 
@@ -18,7 +20,7 @@ interface Props {
  * иврит/RTL (фискальный), кнопки — на языке UI. Печать тем же
  * конвейером, что и чек: мост APK → RawBT → браузерный диалог.
  */
-export default function RefundReceiptSheet({ refundId, onClose }: Props) {
+export default function RefundReceiptSheet({ refundId, reprint = false, onClose }: Props) {
   const lang = useLangStore((s) => s.lang)
   const printMode = useDeviceStore((s) => s.printMode)
   const { data: receipt, isLoading } = useQuery({
@@ -31,12 +33,12 @@ export default function RefundReceiptSheet({ refundId, onClose }: Props) {
     if (!receipt) return
     const bridge = window.KassaAndroid
     if (bridge?.isAvailable()) {
-      const canvas = renderRefundReceiptCanvas(receipt, location)
+      const canvas = renderRefundReceiptCanvas(receipt, location, { copy: reprint })
       bridge.printBase64(canvasToEscposBase64(canvas))
       return
     }
     if (printMode === 'rawbt') {
-      const canvas = renderRefundReceiptCanvas(receipt, location)
+      const canvas = renderRefundReceiptCanvas(receipt, location, { copy: reprint })
       window.location.href = canvasToRawbtUrl(canvas)
       return
     }
@@ -50,7 +52,7 @@ export default function RefundReceiptSheet({ refundId, onClose }: Props) {
           {isLoading || !receipt ? (
             <p className="text-center text-gray-400 py-12">…</p>
           ) : (
-            <RefundReceiptBody receipt={receipt} location={location} />
+            <RefundReceiptBody receipt={receipt} location={location} copy={reprint} />
           )}
         </div>
 
@@ -72,7 +74,11 @@ function fmt(agorot: number): string {
 }
 
 /** Тело зикуя — оно же печатается (класс receipt-print). Иврит, RTL. */
-function RefundReceiptBody({ receipt: r, location }: { receipt: RefundReceipt; location: Location | undefined }) {
+function RefundReceiptBody({ receipt: r, location, copy = false }: {
+  receipt: RefundReceipt
+  location: Location | undefined
+  copy?: boolean
+}) {
   const businessName = location?.receipt_business_name || location?.name || ''
   const dt = new Date(r.created_at)
   const dateStr = dt.toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' })
@@ -88,7 +94,7 @@ function RefundReceiptBody({ receipt: r, location }: { receipt: RefundReceipt; l
       </div>
 
       <div className="text-center font-bold text-sm">תעודת זיכוי {r.refund_number ?? '—'}</div>
-      <div className="text-center text-xs mb-1">*מקור*</div>
+      <div className="text-center text-xs mb-1">{copy ? '*העתק*' : '*מקור*'}</div>
 
       <Divider />
 

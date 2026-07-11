@@ -236,7 +236,11 @@ export function renderReceiptCanvas(
  * исходный чек, возвращённые позиции (или одна строка суммой),
  * доля НДС, способ выдачи. Иврит/RTL, раскладка как у чека.
  */
-export function renderRefundReceiptCanvas(r: RefundReceipt, location: Location | undefined): HTMLCanvasElement {
+export function renderRefundReceiptCanvas(
+  r: RefundReceipt,
+  location: Location | undefined,
+  opts: ReceiptRenderOpts = {}
+): HTMLCanvasElement {
   const tall = document.createElement('canvas')
   tall.width = W
   tall.height = 2000
@@ -289,7 +293,7 @@ export function renderRefundReceiptCanvas(r: RefundReceipt, location: Location |
 
   // ── Тип документа + номер ──
   center(`תעודת זיכוי ${r.refund_number ?? '—'}`, 28, true, 6)
-  center('*מקור*', 22, false, 4)
+  center(opts.copy ? '*העתק*' : '*מקור*', 22, false, 4)
   divider()
 
   // ── Мета: дата, исходный документ ──
@@ -567,30 +571,44 @@ export function renderKitchenTicketCanvas(d: KitchenTicketData): HTMLCanvasEleme
   ctx.fillRect(0, 0, W, tall.height)
   ctx.fillStyle = '#000'
 
-  let y = 44
+  let y = 56
 
-  // Номер — очень крупно (виден с расстояния); дозаказ — метка стола
-  ctx.textAlign = 'center'
-  if (d.dailyNumber !== null) {
-    ctx.font = FONT(72, true)
-    // Офлайн-заказ приходит с локальным номером K-n (уже с префиксом)
-    ctx.fillText(typeof d.dailyNumber === 'string' ? d.dailyNumber : `#${d.dailyNumber}`, W / 2, y + 28)
-    y += 100
-  } else {
-    ctx.font = FONT(48, true)
-    ctx.fillText(d.labels.addon, W / 2, y + 12)
-    y += 72
-  }
-
-  // Тип заказа / стол / имя / время
-  ctx.font = FONT(28, true)
+  // Шапка одной строкой: номер крупно + стол/тип, имя, время — на общей
+  // базовой линии. Вся строка ужимается под ширину ленты (без обрезки).
+  // Офлайн-заказ приходит с локальным номером K-n (уже с префиксом)
+  const numText = d.dailyNumber !== null
+    ? (typeof d.dailyNumber === 'string' ? d.dailyNumber : `#${d.dailyNumber}`)
+    : d.labels.addon
   const meta: string[] = []
   if (d.tableLabel) meta.push(`${d.labels.table} ${d.tableLabel}`)
   else meta.push(d.labels[d.orderType])
   if (d.customerName) meta.push(d.customerName)
   meta.push(new Date().toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' }))
-  ctx.fillText(meta.join(' · '), W / 2, y)
-  y += 44
+  const metaText = meta.join(' · ')
+
+  let numSize = 52
+  let metaSize = 28
+  const gapX = 16
+  const measure = () => {
+    ctx.font = FONT(numSize, true)
+    const nw = ctx.measureText(numText).width
+    ctx.font = FONT(metaSize, true)
+    return { nw, mw: ctx.measureText(metaText).width }
+  }
+  let { nw, mw } = measure()
+  if (nw + gapX + mw > RIGHT - MX) {
+    const k = (RIGHT - MX - gapX) / (nw + mw)
+    numSize = Math.max(32, Math.floor(numSize * k))
+    metaSize = Math.max(20, Math.floor(metaSize * k))
+    ;({ nw, mw } = measure())
+  }
+  const startX = Math.max(MX, (W - nw - gapX - mw) / 2)
+  ctx.textAlign = 'left'
+  ctx.font = FONT(numSize, true)
+  ctx.fillText(numText, startX, y)
+  ctx.font = FONT(metaSize, true)
+  ctx.fillText(metaText, startX + nw + gapX, y)
+  y += 28
 
   // Разделитель
   ctx.save()

@@ -73,7 +73,7 @@ export default function OfflineOpsSheet({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div dir={isRtl ? 'rtl' : 'ltr'} className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+    <div dir={isRtl ? 'rtl' : 'ltr'} className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
       <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden animate-[rise-in_0.2s_ease-out] flex flex-col max-h-[80vh]">
         <div className="flex items-center justify-between gap-4 px-6 py-4 border-b border-gray-100 shrink-0">
           <h2 className="text-lg font-bold text-gray-900">{t(lang, 'offlineOpsTitle')}</h2>

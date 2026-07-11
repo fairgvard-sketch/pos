@@ -14,7 +14,7 @@ import { useDeviceStore, DEFAULT_ACTION_ORDER } from '../../store/deviceStore'
 import { playPaymentChime } from '../../lib/sound'
 import { autoPrintReceipt, autoPrintLocalReceipt, printKitchenTicket } from '../receipt/printService'
 import { buildLocalReceipt } from '../receipt/localReceipt'
-import type { Receipt } from '../receipt/api'
+import { setOrderBuyer, type Receipt } from '../receipt/api'
 import { OfflineError, withOfflineFallback, useNetStore } from '../../lib/offline/net'
 import { enqueueOfflineSale, enqueueOfflinePayment, enqueueTableAppend, enqueueTablePayment, enqueueTableVoid } from '../../lib/offline/enqueue'
 import { useOutboxStore } from '../../lib/offline/outboxStore'
@@ -26,7 +26,7 @@ import { can } from '../../lib/perms'
 import { formatMoney, formatMoneyList, roundTipToWholeTotal } from '../../lib/money'
 import type { MenuItem, ModifierGroup } from '../../types'
 import ItemPicker from './ItemPicker'
-import PaymentSheet from './PaymentSheet'
+import PaymentSheet, { type OrderBuyer } from './PaymentSheet'
 import TipSheet, { type TipOption } from './TipSheet'
 import DiscountSheet from './DiscountSheet'
 import PriceSheet from './PriceSheet'
@@ -531,7 +531,14 @@ export default function SellPage() {
   //   таймаут pay   → заказ уже создан: в очередь только pay (с тем же
   //                   payment_uuid — если вызов долетел, replay вернёт его результат)
   const pay = useMutation({
-    mutationFn: async (v: { orderId: string; dailyNumber: number; payments: PaymentInput[]; tip?: number; offline?: boolean }) => {
+    mutationFn: async (v: {
+      orderId: string
+      dailyNumber: number
+      payments: PaymentInput[]
+      tip?: number
+      offline?: boolean
+      buyer?: OrderBuyer | null
+    }) => {
       const c = useCartStore.getState()
       const tip = v.tip ?? 0
       const paidAt = new Date().toISOString()
@@ -620,9 +627,20 @@ export default function SellPage() {
       const paymentUuid = crypto.randomUUID()
       try {
         await withOfflineFallback(() => payOrder(v.orderId, v.payments, tip, paymentUuid, null))
+        // Чек на компанию (048): реквизиты — сразу после оплаты, ДО автопечати,
+        // чтобы чек вышел с блоком לכבוד. Ошибка не валит оплату — реквизиты
+        // можно добавить из окна чека.
+        if (v.buyer) {
+          try {
+            await setOrderBuyer(v.orderId, v.buyer.name, v.buyer.taxId)
+          } catch {
+            toast.error(t(lang, 'bizPayFailed'))
+          }
+        }
         return null
       } catch (e) {
         if (e instanceof OfflineError) {
+          if (v.buyer) toast.error(t(lang, 'bizPayFailed'))
           // Стол: таймаут оплаты серверного счёта → в очередь с тем же uuid
           if (c.tableCtx) return enqueueTablePay(paymentUuid)
           // Итог заказа известен серверу (place прошёл): сумма платежей − tip
@@ -1406,11 +1424,13 @@ export default function SellPage() {
           startMode={payingOrder.intent === 'cash' ? 'cash' : 'choose'}
           busy={pay.isPending}
           onCancel={() => cancelPayFlow(payingOrder)}
-          onPay={(payments) => pay.mutate({ orderId: payingOrder.orderId, dailyNumber: payingOrder.dailyNumber, payments, tip: payingOrder.tip ?? 0, offline: payingOrder.offline })}
+          onPay={(payments, buyer) => pay.mutate({ orderId: payingOrder.orderId, dailyNumber: payingOrder.dailyNumber, payments, tip: payingOrder.tip ?? 0, offline: payingOrder.offline, buyer })}
           // split_order пересчитывает итоги без loyalty_discount — при выбранной
           // награде сплит недоступен; офлайн — тоже (split_order не идемпотентен)
           onSplitItems={cart.redeem || payingOrder.offline || !online ? undefined : () => setShowSplit(true)}
           onSplitEqually={() => setShowEqualSplit(true)}
+          // set_order_buyer требует сеть и серверный заказ — офлайн скрываем
+          allowBuyer={!payingOrder.offline && online}
         />
       )}
 

@@ -57,7 +57,7 @@ export default function EqualSplitSheet({ total, onBack, onCancel, onPay, busy }
   const methodBtns = payMethodOrder.filter((m, i) => payMethodOrder.indexOf(m) === i)
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
       <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-[rise-in_0.2s_ease-out]">
 
         {/* Шапка: назад + заголовок + сумма + закрыть */}
