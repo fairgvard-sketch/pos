@@ -13,12 +13,14 @@ import { useAuthStore } from '../../store/authStore'
 import { useLangStore } from '../../store/langStore'
 import { useDeviceStore } from '../../store/deviceStore'
 import { t, formatTime } from '../../lib/i18n'
+import { payMethodLabel, receiptMethodLabel, type PayMethodId } from '../../lib/payMethods'
 import { can } from '../../lib/perms'
 import { useOutboxStore, pendingOpsCount } from '../../lib/offline/outboxStore'
 import { useNetStore } from '../../lib/offline/net'
 import { formatMoney, parseMoney } from '../../lib/money'
 import AppSidebar from '../../components/AppSidebar'
 import BackButton from '../../components/BackButton'
+import WasteSheet from './WasteSheet'
 import type { Location } from '../../types'
 
 /** Данные печатного דו"ח Z из результата close_shift (поля 037 с фолбэками) */
@@ -31,6 +33,10 @@ function toZReportData(res: CloseResult, openedAt: string | undefined, staffName
     ordersCount: res.orders_count,
     grossCash: res.gross_cash ?? res.cash_sales,
     grossCard: res.gross_card ?? res.card_sales,
+    // Кошельки (046): всё, что не cash/card, отдельными строками Z
+    grossWallets: Object.entries(res.method_gross ?? {})
+      .filter(([m]) => m !== 'cash' && m !== 'card')
+      .map(([method, amount]) => ({ method, amount })),
     refundsTotal: res.refunds_total ?? 0,
     netTotal: res.total_sales,
     vatTotal: res.vat_total ?? null,
@@ -75,6 +81,8 @@ export default function ShiftPage() {
   // ── Движение наличных (038): внесение/изъятие в течение смены ──
   const canCashMove = can(staff?.role, 'cash_movement', location?.settings)
   const [movementType, setMovementType] = useState<'in' | 'out' | null>(null)
+  // Списание дня (047): онлайн-only — add_waste не идемпотентен
+  const [showWaste, setShowWaste] = useState(false)
   const { data: movements = [] } = useQuery({
     queryKey: ['cash_movements', shift?.id],
     queryFn: () => fetchShiftMovements(shift!.id),
@@ -173,6 +181,11 @@ export default function ShiftPage() {
             <Line label={t(lang, 'ordersCount')} value={String(result.orders_count)} />
             <Line label={t(lang, 'cashSales')} value={formatMoney(result.gross_cash ?? result.cash_sales, lang)} />
             <Line label={t(lang, 'cardSales')} value={formatMoney(result.gross_card ?? result.card_sales, lang)} />
+            {Object.entries(result.method_gross ?? {})
+              .filter(([m]) => m !== 'cash' && m !== 'card')
+              .map(([m, amount]) => (
+                <Line key={m} label={payMethodLabel(lang, m as PayMethodId)} value={formatMoney(amount, lang)} />
+              ))}
             {(result.refunds_total ?? 0) > 0 && (
               <Line label={t(lang, 'refundsTotal')} value={`−${formatMoney(result.refunds_total!, lang)}`} />
             )}
@@ -244,6 +257,11 @@ export default function ShiftPage() {
             <Line label={t(lang, 'ordersCount')} value={String(report.orders_count)} />
             <Line label={t(lang, 'cashSales')} value={formatMoney(report.cash_sales, lang)} />
             <Line label={t(lang, 'cardSales')} value={formatMoney(report.card_sales, lang)} />
+            {Object.entries(report.method_sales ?? {})
+              .filter(([m]) => m !== 'cash' && m !== 'card')
+              .map(([m, amount]) => (
+                <Line key={m} label={payMethodLabel(lang, m as PayMethodId)} value={formatMoney(amount, lang)} />
+              ))}
             <Line label={t(lang, 'totalSales')} value={formatMoney(report.total_sales, lang)} bold />
             {report.tips_total > 0 && (
               <Line label={t(lang, 'tipsTotal')} value={formatMoney(report.tips_total, lang)} />
@@ -286,6 +304,17 @@ export default function ShiftPage() {
                 {t(lang, 'cashOutBtn')}
               </button>
             </div>
+
+            {/* Списание дня (047): сколько выбросили — остатки и отчёт потерь */}
+            <button
+              onClick={() => {
+                if (!online) { toast.error(t(lang, 'offlineBlockedHint')); return }
+                setShowWaste(true)
+              }}
+              className={`btn-secondary w-full !rounded-2xl mt-2 ${online ? '' : '!opacity-40'}`}
+            >
+              {t(lang, 'wasteDayBtn')}
+            </button>
 
             {movements.length > 0 && (
               <div className="mt-3 space-y-1.5">
@@ -381,6 +410,8 @@ export default function ShiftPage() {
           onConfirm={(amount, reason) => addMovement.mutate({ type: movementType, amount, reason })}
         />
       )}
+
+      {showWaste && <WasteSheet onClose={() => setShowWaste(false)} />}
     </Shell>
   )
 }
@@ -604,7 +635,14 @@ function ZReportPrintBody({ z, location }: { z: ZReportData; location: Location 
 
       <ZRow label="מכירות מזומן" value={fmt(z.grossCash)} />
       <ZRow label="מכירות אשראי" value={fmt(z.grossCard)} />
-      <ZRow label='סה"כ מכירות' value={fmt(z.grossCash + z.grossCard)} bold />
+      {z.grossWallets.map((w) => (
+        <ZRow key={w.method} label={`מכירות ${receiptMethodLabel(w.method)}`} value={fmt(w.amount)} />
+      ))}
+      <ZRow
+        label='סה"כ מכירות'
+        value={fmt(z.grossCash + z.grossCard + z.grossWallets.reduce((s, w) => s + w.amount, 0))}
+        bold
+      />
       {z.refundsTotal > 0 && <ZRow label="החזרים" value={`−${fmt(z.refundsTotal)}`} />}
       <ZRow label='סה"כ נטו' value={fmt(z.netTotal)} bold />
       {z.vatTotal != null && <ZRow label='מתוך זה מע"מ' value={fmt(z.vatTotal)} />}

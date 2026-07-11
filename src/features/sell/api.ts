@@ -1,5 +1,6 @@
 import { supabase } from '../../lib/supabase'
 import type { CartDiscount, CartLine, CartRedeem, OrderType } from '../../store/cartStore'
+import type { PayMethodId } from '../../lib/payMethods'
 import { applyLoyalty } from '../loyalty/api'
 
 export interface PlaceOrderResult {
@@ -64,7 +65,7 @@ export async function placeOrder(
 }
 
 export interface PaymentInput {
-  method: 'cash' | 'card'
+  method: PayMethodId
   amount: number
   tendered?: number
   change_due?: number

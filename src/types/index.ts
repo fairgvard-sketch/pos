@@ -88,6 +88,8 @@ export interface StaffSession {
   name: string
   role: Role
   location_id: string | null
+  /** Токен серверной сессии (044); optional — сессии до обновления его не имеют */
+  session_token?: string | null
 }
 
 // ── Каталог ──────────────────────────────────────────────

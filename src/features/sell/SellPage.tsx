@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, Navigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { fetchCategories, fetchItems, fetchModifierGroups } from '../menu/api'
+import { fetchCategories, fetchItems, fetchModifierGroups, toggleItemAvailability } from '../menu/api'
 import { placeOrder, payOrder, splitOrder, type PaymentInput } from './api'
 import { fetchCurrentShift } from '../shift/api'
 import { fetchCurrentLocation } from '../auth/api'
@@ -21,6 +21,7 @@ import { useOutboxStore } from '../../lib/offline/outboxStore'
 import { billLineToReceiptLine } from '../receipt/localReceipt'
 import type { KitchenTicketLine } from '../receipt/printCanvas'
 import { t } from '../../lib/i18n'
+import { payMethodIcon, payMethodLabel, type PayMethodId } from '../../lib/payMethods'
 import { can } from '../../lib/perms'
 import { formatMoney, formatMoneyList, roundTipToWholeTotal } from '../../lib/money'
 import type { MenuItem, ModifierGroup } from '../../types'
@@ -79,7 +80,7 @@ interface PayingOrder {
   orderId: string
   dailyNumber: number
   total: number
-  intent: 'cash' | 'card' | 'choose'
+  intent: PayMethodId | 'choose'
   fromCart?: boolean
   /** Выбранные чаевые (агороты) — сверх total, вне базы НДС */
   tip?: number
@@ -164,6 +165,40 @@ export default function SellPage() {
   const [editingPrice, setEditingPrice] = useState<CartLine | null>(null)
   // Строка, у которой правим количество (QtySheet)
   const [editingQty, setEditingQty] = useState<CartLine | null>(null)
+
+  // ── Стоп-лист (047): long-press по товару → «Нет в наличии» ──
+  const [stopCandidate, setStopCandidate] = useState<MenuItem | null>(null)
+  const [showStopList, setShowStopList] = useState(false)
+  const stoppedItems = useMemo(() => items.filter((i) => !i.is_available), [items])
+  const stopItemMut = useMutation({
+    mutationFn: (v: { id: string; available: boolean }) => toggleItemAvailability(v.id, v.available),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['menu_items'] }),
+    onError: (e) => toast.error(e.message),
+  })
+  // Long-press по плитке товара (порог движения — чтобы не мешать скроллу)
+  const tileTimer = useRef<number | null>(null)
+  const tileFired = useRef(false)
+  const tileStart = useRef({ x: 0, y: 0 })
+  function tilePressStart(item: MenuItem, e: React.PointerEvent) {
+    tileFired.current = false
+    tileStart.current = { x: e.clientX, y: e.clientY }
+    tileTimer.current = window.setTimeout(() => {
+      tileTimer.current = null
+      tileFired.current = true
+      setStopCandidate(item)
+    }, 550)
+  }
+  function tilePressCancel() {
+    if (tileTimer.current !== null) {
+      clearTimeout(tileTimer.current)
+      tileTimer.current = null
+    }
+  }
+  function tilePressMove(e: React.PointerEvent) {
+    if (Math.abs(e.clientX - tileStart.current.x) > 10 || Math.abs(e.clientY - tileStart.current.y) > 10) {
+      tilePressCancel()
+    }
+  }
 
   // ── Перестановка кнопок ряда действий long-press'ом (как на iPhone) ──
   // Долгое нажатие «поднимает» кнопку, движение по горизонтали меняет её
@@ -341,12 +376,12 @@ export default function SellPage() {
     }
   }
 
-  // Чаевые выбраны (или шаг пропущен): карта-intent платит сразу
-  // одним тапом, остальное — окно оплаты с итогом total + tip
+  // Чаевые выбраны (или шаг пропущен): безнал-intent (карта/кошелёк)
+  // платит сразу одним тапом, остальное — окно оплаты с итогом total + tip
   function proceedPayment(o: PayingOrder, tip: number) {
     setTipping(null)
-    if (o.intent === 'card') {
-      pay.mutate({ orderId: o.orderId, dailyNumber: o.dailyNumber, payments: [{ method: 'card', amount: o.total + tip }], tip, offline: o.offline })
+    if (o.intent !== 'cash' && o.intent !== 'choose') {
+      pay.mutate({ orderId: o.orderId, dailyNumber: o.dailyNumber, payments: [{ method: o.intent, amount: o.total + tip }], tip, offline: o.offline })
     } else {
       setPayingOrder({ ...o, tip })
     }
@@ -462,7 +497,7 @@ export default function SellPage() {
   // очередь при подтверждении оплаты. Лояльность офлайн недоступна
   // (баланс гостя валидирует сервер) — с гостем требуем сеть.
   const place = useMutation({
-    mutationFn: async (intent: 'cash' | 'card' | 'choose') => {
+    mutationFn: async (intent: PayMethodId | 'choose') => {
       const c = useCartStore.getState()
       try {
         const r = await withOfflineFallback(() =>
@@ -944,6 +979,12 @@ export default function SellPage() {
                   {c.name}
                 </Chip>
               ))}
+              {/* Стоп-лист: виден только когда есть снятые товары */}
+              {stoppedItems.length > 0 && (
+                <Chip active={false} onClick={() => setShowStopList(true)}>
+                  {t(lang, 'stopListTitle')} · {stoppedItems.length}
+                </Chip>
+              )}
             </div>
           </div>
         </div>
@@ -956,7 +997,16 @@ export default function SellPage() {
               {visibleItems.map((item) => (
                 <button
                   key={item.id}
-                  onClick={() => handleItemTap(item)}
+                  onClick={() => {
+                    // Клик после long-press (стоп-лист) — не добавлять в корзину
+                    if (tileFired.current) { tileFired.current = false; return }
+                    handleItemTap(item)
+                  }}
+                  onPointerDown={(e) => tilePressStart(item, e)}
+                  onPointerUp={tilePressCancel}
+                  onPointerLeave={tilePressCancel}
+                  onPointerMove={tilePressMove}
+                  onContextMenu={(e) => e.preventDefault()}
                   className="relative rounded-2xl border border-gray-300 p-3 text-start bg-white
                              hover:border-gray-400 hover:shadow-[0_4px_16px_rgba(0,0,0,0.06)]
                              transition-all duration-150 active:scale-[0.97]"
@@ -1304,7 +1354,7 @@ export default function SellPage() {
                         disabled={disabled}
                         className="btn-secondary min-h-[52px] !rounded-2xl flex items-center justify-center gap-2"
                       >
-                        <Icon name={m} size={18} /> {t(lang, m === 'cash' ? 'payCash' : 'payCard')}
+                        <Icon name={payMethodIcon(m)} size={18} /> {payMethodLabel(lang, m)}
                       </button>
                     ))}
                   </div>
@@ -1493,6 +1543,70 @@ export default function SellPage() {
           }}
           onCancel={() => setEditingQty(null)}
         />
+      )}
+
+      {/* Подтверждение стоп-листа: long-press по товару */}
+      {stopCandidate && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => setStopCandidate(null)}>
+          <div className="card w-full max-w-sm p-6 animate-[rise-in_0.2s_ease-out]" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-lg font-black text-gray-900 mb-1">{stopCandidate.name}</h2>
+            <p className="text-sm text-gray-500 mb-5">
+              {t(lang, 'itemOutOfStock')}?
+              {stopCandidate.track_inventory && stopCandidate.stock != null && (
+                <span className="tabular-nums"> · {t(lang, 'stockLeft')}: {stopCandidate.stock}</span>
+              )}
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => {
+                  stopItemMut.mutate({ id: stopCandidate.id, available: false })
+                  setStopCandidate(null)
+                }}
+                className="btn-primary !py-3 !rounded-2xl"
+              >
+                {t(lang, 'stopItemBtn')}
+              </button>
+              <button onClick={() => setStopCandidate(null)} className="btn-secondary !py-3 !rounded-2xl">
+                {t(lang, 'cancel')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Стоп-лист: снятые товары, возврат в продажу одним тапом */}
+      {showStopList && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => setShowStopList(false)}>
+          <div className="card w-full max-w-md p-6 max-h-[80vh] overflow-y-auto animate-[rise-in_0.2s_ease-out]" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-lg font-black text-gray-900 mb-4">{t(lang, 'stopListTitle')}</h2>
+            {stoppedItems.length === 0 ? (
+              <p className="text-sm text-gray-500 py-8 text-center">{t(lang, 'stopListEmpty')}</p>
+            ) : (
+              <div className="space-y-1">
+                {stoppedItems.map((i) => (
+                  <div key={i.id} className="flex items-center gap-3 min-h-[52px] px-2 border-b border-gray-100">
+                    <span className="flex-1 min-w-0 truncate font-semibold text-gray-900">
+                      {i.name}
+                      {i.track_inventory && i.stock != null && (
+                        <span className="font-normal text-gray-400 text-sm tabular-nums"> · {t(lang, 'stockLeft')}: {i.stock}</span>
+                      )}
+                    </span>
+                    <button
+                      onClick={() => stopItemMut.mutate({ id: i.id, available: true })}
+                      disabled={stopItemMut.isPending}
+                      className="btn-secondary !py-2 !px-4 !text-sm shrink-0"
+                    >
+                      {t(lang, 'returnToSale')}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <button onClick={() => setShowStopList(false)} className="btn-ghost w-full !py-3 !rounded-2xl mt-4">
+              {t(lang, 'close')}
+            </button>
+          </div>
+        </div>
       )}
 
       {placedNumber !== null && (

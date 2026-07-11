@@ -1,10 +1,13 @@
-import { useQuery } from '@tanstack/react-query'
-import { fetchReceipt, type Receipt } from './api'
+import { useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import toast from 'react-hot-toast'
+import { fetchReceipt, setOrderBuyer, type Receipt } from './api'
 import { renderReceiptCanvas } from './printCanvas'
 import { fetchCurrentLocation } from '../auth/api'
 import { useLangStore } from '../../store/langStore'
 import { useDeviceStore } from '../../store/deviceStore'
 import { canvasToRawbtUrl, canvasToEscposBase64 } from '../../lib/escpos'
+import { receiptMethodLabel } from '../../lib/payMethods'
 import { t } from '../../lib/i18n'
 import type { Location } from '../../types'
 
@@ -24,6 +27,7 @@ interface Props {
 export default function ReceiptSheet({ orderId, receipt: localReceipt, onClose }: Props) {
   const lang = useLangStore((s) => s.lang)
   const printMode = useDeviceStore((s) => s.printMode)
+  const qc = useQueryClient()
   const { data: fetched, isLoading } = useQuery({
     queryKey: ['receipt', orderId],
     queryFn: () => fetchReceipt(orderId!),
@@ -31,6 +35,23 @@ export default function ReceiptSheet({ orderId, receipt: localReceipt, onClose }
   })
   const receipt = localReceipt ?? fetched
   const { data: location } = useQuery({ queryKey: ['current_location'], queryFn: fetchCurrentLocation })
+
+  // Чек на компанию (048): реквизиты покупателя добавляются один раз,
+  // после — печать уже с блоком «לכבוד». Только для серверных чеков.
+  const [buyerOpen, setBuyerOpen] = useState(false)
+  const [bizName, setBizName] = useState('')
+  const [bizTaxId, setBizTaxId] = useState('')
+  const taxIdValid = bizTaxId === '' || /^\d{9}$/.test(bizTaxId)
+  const saveBuyer = useMutation({
+    mutationFn: () => setOrderBuyer(orderId!, bizName.trim(), bizTaxId || null),
+    onSuccess: () => {
+      setBuyerOpen(false)
+      qc.invalidateQueries({ queryKey: ['receipt', orderId] })
+      toast.success(t(lang, 'bizInvoiceSaved'))
+    },
+    onError: (e) => toast.error(e.message),
+  })
+  const canAddBuyer = !!orderId && !!receipt && !receipt.provisional && !receipt.buyer_name
 
   /**
    * Печать чека, по приоритету:
@@ -76,13 +97,56 @@ export default function ReceiptSheet({ orderId, receipt: localReceipt, onClose }
           )}
         </div>
 
-        <div className="p-4 pt-3 border-t border-gray-100 grid grid-cols-2 gap-2 shrink-0">
-          <button onClick={handlePrint} disabled={!receipt} className="btn-primary !py-3.5 !rounded-2xl">
-            {t(lang, 'printReceipt')}
-          </button>
-          <button onClick={onClose} className="btn-ghost !py-3.5 !rounded-2xl">
-            {t(lang, 'close')}
-          </button>
+        <div className="p-4 pt-3 border-t border-gray-100 shrink-0 space-y-2">
+          {/* Чек на компанию: свёрнутая кнопка → мини-форма (название + ח.פ.) */}
+          {canAddBuyer && !buyerOpen && (
+            <button
+              onClick={() => setBuyerOpen(true)}
+              className="btn-secondary w-full !py-2.5 !rounded-2xl !text-sm"
+            >
+              {t(lang, 'bizInvoiceBtn')}
+            </button>
+          )}
+          {canAddBuyer && buyerOpen && (
+            <div className="space-y-2">
+              <input
+                className="input !py-2.5"
+                autoFocus
+                placeholder={t(lang, 'bizName')}
+                value={bizName}
+                onChange={(e) => setBizName(e.target.value)}
+              />
+              <input
+                className="input !py-2.5"
+                inputMode="numeric"
+                placeholder={t(lang, 'bizTaxId')}
+                value={bizTaxId}
+                onChange={(e) => setBizTaxId(e.target.value.replace(/\D/g, '').slice(0, 9))}
+              />
+              <p className="text-xs text-gray-500">{t(lang, 'bizInvoiceHint')}</p>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => saveBuyer.mutate()}
+                  disabled={saveBuyer.isPending || !bizName.trim() || !taxIdValid}
+                  className="btn-primary !py-2.5 !rounded-2xl !text-sm disabled:opacity-40"
+                >
+                  {t(lang, 'save')}
+                </button>
+                <button onClick={() => setBuyerOpen(false)} className="btn-ghost !py-2.5 !rounded-2xl !text-sm">
+                  {t(lang, 'cancel')}
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-2">
+            <button onClick={handlePrint} disabled={!receipt} className="btn-primary !py-3.5 !rounded-2xl">
+              {t(lang, 'printReceipt')}
+            </button>
+            <button onClick={onClose} className="btn-ghost !py-3.5 !rounded-2xl">
+              {t(lang, 'close')}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -138,6 +202,9 @@ function ReceiptBody({ receipt: r, location }: { receipt: Receipt; location: Loc
       {r.customer_name && <MetaRow label="לקוח/ה:" value={r.customer_name} />}
       {r.staff_name && <MetaRow label="מוכר/ת:" value={r.staff_name} />}
       {r.allocation_number && <MetaRow label="מספר הקצאה:" value={r.allocation_number} />}
+      {/* Покупатель-бизнес (048) — блок реквизитов на чеке */}
+      {r.buyer_name && <MetaRow label="לכבוד:" value={r.buyer_name} />}
+      {r.buyer_name && r.buyer_tax_id && <MetaRow label="ח.פ./ע.מ:" value={r.buyer_tax_id} />}
 
       <Divider />
 
@@ -217,7 +284,7 @@ function ReceiptBody({ receipt: r, location }: { receipt: Receipt; location: Loc
           <Divider />
           {r.payments.map((p, i) => (
             <div key={i}>
-              <MetaRow label={p.method === 'cash' ? 'מזומן' : 'אשראי'} value={fmt(p.amount)} />
+              <MetaRow label={receiptMethodLabel(p.method)} value={fmt(p.amount)} />
               {p.method === 'cash' && p.tendered != null && p.change_due != null && p.change_due > 0 && (
                 <>
                   <MetaRow label="שולם" value={fmt(p.tendered)} />

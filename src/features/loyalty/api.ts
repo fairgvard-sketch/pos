@@ -1,5 +1,5 @@
 import { supabase } from '../../lib/supabase'
-import { getDeviceContext } from '../auth/api'
+import { currentStaffToken } from '../../store/authStore'
 import type { CartRedeem } from '../../store/cartStore'
 import type { Location } from '../../types'
 
@@ -69,9 +69,11 @@ export type LoyaltySettings = Pick<
 >
 
 export async function updateLoyaltySettings(s: LoyaltySettings): Promise<void> {
-  const ctx = await getDeviceContext()
-  if (!ctx?.locationId) throw new Error('Device not bootstrapped')
-  const { error } = await supabase.from('locations').update(s).eq('id', ctx.locationId)
+  // Через RPC (044): сервер требует manager-сессию, прямой UPDATE locations закрыт 045
+  const { error } = await supabase.rpc('update_location_config', {
+    p_patch: s,
+    p_staff_session: currentStaffToken(),
+  })
   if (error) throw new Error(error.message)
 }
 

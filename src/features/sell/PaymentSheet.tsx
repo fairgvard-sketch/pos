@@ -3,6 +3,7 @@ import { useLangStore } from '../../store/langStore'
 import { useDeviceStore } from '../../store/deviceStore'
 import { t } from '../../lib/i18n'
 import { formatMoney, parseMoney } from '../../lib/money'
+import { payMethodIcon, payMethodLabel, type PayMethodId } from '../../lib/payMethods'
 import type { PaymentInput } from './api'
 import Icon from '../../components/Icon'
 import NumPad from '../../components/NumPad'
@@ -22,7 +23,7 @@ interface Props {
   busy: boolean
 }
 
-type Method = 'card' | 'cash'
+type Method = PayMethodId
 
 /**
  * Быстрые купюры для расчёта сдачи (Square: Quick amounts), по режиму кассы:
@@ -79,7 +80,10 @@ export default function PaymentSheet({ total, tip = 0, startMode = 'choose', onC
   const cardAmount = cardEntered === null ? remaining : Math.min(cardEntered, remaining)
   const cardPartial = cardEntered !== null && cardEntered > 0 && cardEntered < remaining
 
-  /** Наличные: полная оплата остатка (со сдачей) или частичная → добор картой */
+  // Кем добирать частичную оплату: первый безналичный способ из порядка
+  const firstNonCash: Method = payMethodOrder.find((m) => m !== 'cash') ?? 'card'
+
+  /** Наличные: полная оплата остатка (со сдачей) или частичная → добор безналом */
   function confirmCash(tenderedAmount: number) {
     if (tenderedAmount >= remaining) {
       onPay([
@@ -89,17 +93,17 @@ export default function PaymentSheet({ total, tip = 0, startMode = 'choose', onC
     } else if (tenderedAmount > 0) {
       setParts([...parts, { method: 'cash', amount: tenderedAmount, tendered: tenderedAmount, change_due: 0 }])
       setTenderedStr('')
-      setMethod('card')
+      setMethod(firstNonCash)
     }
   }
 
-  /** Карта: полный остаток или частично → добор наличными */
-  function confirmCard() {
+  /** Безнал (карта/кошелёк): полный остаток или частично → добор наличными */
+  function confirmNonCash() {
     if (cardAmount <= 0) return
     if (cardAmount >= remaining) {
-      onPay([...parts, { method: 'card', amount: remaining }])
+      onPay([...parts, { method, amount: remaining }])
     } else {
-      setParts([...parts, { method: 'card', amount: cardAmount }])
+      setParts([...parts, { method, amount: cardAmount }])
       setCardStr('')
       setMethod('cash')
     }
@@ -110,12 +114,11 @@ export default function PaymentSheet({ total, tip = 0, startMode = 'choose', onC
     setParts(parts.filter((_, i) => i !== idx))
   }
 
-  const card = { id: 'card', icon: 'card', label: t(lang, 'payCard') } as const
-  const cash = { id: 'cash', icon: 'cash', label: t(lang, 'payCash') } as const
-  const byId = { cash, card } as const
   const methods: { id: Method; icon: 'card' | 'cash'; label: string }[] =
-    // Порядок из настроек кассы (payMethodOrder); дубли/пропуски отсекаем
-    payMethodOrder.filter((m, i) => payMethodOrder.indexOf(m) === i).map((m) => byId[m])
+    // Порядок из настроек кассы (payMethodOrder); дубли отсекаем
+    payMethodOrder
+      .filter((m, i) => payMethodOrder.indexOf(m) === i)
+      .map((m) => ({ id: m, icon: payMethodIcon(m), label: payMethodLabel(lang, m) }))
 
   return (
     <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
@@ -244,12 +247,12 @@ export default function PaymentSheet({ total, tip = 0, startMode = 'choose', onC
                 </div>
               )}
 
-              {method === 'card' && (
+              {method !== 'cash' && (
                 <div className="flex-1 flex flex-col gap-4">
-                  {/* Сумма картой: пусто = весь остаток; меньше — добор наличными */}
+                  {/* Сумма безналом: пусто = весь остаток; меньше — добор наличными */}
                   <div className="flex items-baseline justify-between px-1">
                     <span className="text-sm text-gray-500 flex items-center gap-1.5">
-                      <Icon name="card" size={14} /> {t(lang, 'payCard')}
+                      <Icon name="card" size={14} /> {payMethodLabel(lang, method)}
                     </span>
                     <span className={`text-3xl font-black tabular-nums ${cardStr ? 'text-gray-900' : 'text-gray-400'}`}>
                       {formatMoney(cardAmount, lang)}
@@ -275,7 +278,7 @@ export default function PaymentSheet({ total, tip = 0, startMode = 'choose', onC
                   </div>
 
                   <button
-                    onClick={confirmCard}
+                    onClick={confirmNonCash}
                     disabled={busy || cardAmount <= 0}
                     className="btn-primary w-full !py-4 !text-base !rounded-2xl mt-auto"
                   >
@@ -320,7 +323,7 @@ export default function PaymentSheet({ total, tip = 0, startMode = 'choose', onC
                     {tendered !== null && tendered > 0 && tendered < remaining ? (
                       <>
                         <span className="text-sm text-gray-500 flex items-center gap-1.5">
-                          <Icon name="card" size={14} /> {t(lang, 'restByCard')}
+                          <Icon name="card" size={14} /> {t(lang, 'restBy')} {payMethodLabel(lang, firstNonCash)}
                         </span>
                         <span className="text-2xl font-black text-gray-900 tabular-nums">
                           {formatMoney(remaining - tendered, lang)}
@@ -342,7 +345,7 @@ export default function PaymentSheet({ total, tip = 0, startMode = 'choose', onC
                     className="btn-primary w-full !py-4 !text-base !rounded-2xl mt-auto"
                   >
                     {tendered !== null && tendered > 0 && tendered < remaining
-                      ? `${t(lang, 'acceptPart')} ${formatMoney(tendered, lang)} · ${t(lang, 'restByCard')}`
+                      ? `${t(lang, 'acceptPart')} ${formatMoney(tendered, lang)} · ${t(lang, 'restBy')} ${payMethodLabel(lang, firstNonCash)}`
                       : t(lang, 'confirmPayment')}
                   </button>
                 </div>

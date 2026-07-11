@@ -94,6 +94,8 @@ export function buildLocalReceipt(args: {
     receipt_number: null,
     doc_type: 'invoice_receipt', // дефолт orders.doc_type (020)
     allocation_number: null,
+    buyer_name: null, // реквизиты покупателя (048) добавляются онлайн, после синка
+    buyer_tax_id: null,
     order_type: args.orderType,
     customer_name: args.customerName || null,
     table_label: args.tableLabel,

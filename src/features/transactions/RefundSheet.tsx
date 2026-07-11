@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { fetchRefundableItems, issueRefund, type Transaction } from './api'
+import { payMethodIcon, payMethodLabel, type PayMethodId } from '../../lib/payMethods'
 import Icon from '../../components/Icon'
 import { useAuthStore } from '../../store/authStore'
 import { useLangStore } from '../../store/langStore'
@@ -36,16 +37,22 @@ export default function RefundSheet({ tx, remaining, onClose, onDone }: Props) {
     queryFn: () => fetchRefundableItems(tx.id),
   })
 
-  // Возврат тем же способом, которым платили: нал → нал, карта → карта.
-  // Доступно по способу = оплачено им минус уже возвращено им
-  // (в payments возвраты — отрицательные строки, сумма нетто).
+  // Возврат тем же способом, которым платили: нал → нал, карта → карта,
+  // кошелёк → кошелёк (046). Доступно по способу = оплачено им минус
+  // уже возвращено им (в payments возвраты — отрицательные строки).
   const avail = useMemo(() => {
-    const a: Record<'cash' | 'card', number> = { cash: 0, card: 0 }
-    for (const p of tx.payments) a[p.method] += p.amount
-    return a
+    const a: Partial<Record<PayMethodId, number>> = {}
+    for (const p of tx.payments) a[p.method] = (a[p.method] ?? 0) + p.amount
+    return a as Record<PayMethodId, number>
   }, [tx.payments])
   const methods = useMemo(
-    () => (['cash', 'card'] as const).filter((m) => tx.payments.some((p) => p.method === m && p.amount > 0)),
+    () => {
+      const seen: PayMethodId[] = []
+      for (const p of tx.payments) {
+        if (p.amount > 0 && !seen.includes(p.method)) seen.push(p.method)
+      }
+      return seen
+    },
     [tx.payments],
   )
 
@@ -53,8 +60,10 @@ export default function RefundSheet({ tx, remaining, onClose, onDone }: Props) {
   const [tab, setTab] = useState<'items' | 'amount'>('items')
   const [picked, setPicked] = useState<Set<string>>(new Set())
   const [amountStr, setAmountStr] = useState('')
-  const [method, setMethod] = useState<'cash' | 'card'>(
-    () => (avail.card > avail.cash ? 'card' : 'cash')
+  const [method, setMethod] = useState<PayMethodId>(
+    // По умолчанию — способ с наибольшим доступным остатком
+    () => (Object.entries(avail) as [PayMethodId, number][])
+      .sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'cash'
   )
   const [reasonKey, setReasonKey] = useState<ReasonKey | null>(null)
   const [otherReason, setOtherReason] = useState('')
@@ -65,13 +74,13 @@ export default function RefundSheet({ tx, remaining, onClose, onDone }: Props) {
   const amount = tab === 'items' ? Math.min(pickedSum, remaining) : (parseMoney(amountStr) ?? 0)
   const amountValid = amount > 0 && amount <= remaining
   // Выбранный способ покрывает сумму; иначе — смешанная оплата, нужно два возврата
-  const methodValid = amount <= avail[method]
-  const anyMethodCovers = methods.some((m) => avail[m] >= amount)
+  const methodValid = amount <= (avail[method] ?? 0)
+  const anyMethodCovers = methods.some((m) => (avail[m] ?? 0) >= amount)
 
   // Сумма изменилась и текущий способ её не тянет — переключиться на тот, что тянет
   useEffect(() => {
     if (!methodValid) {
-      const other = methods.find((m) => avail[m] >= amount)
+      const other = methods.find((m) => (avail[m] ?? 0) >= amount)
       if (other) setMethod(other)
     }
   }, [amount, methodValid, methods, avail])
@@ -215,7 +224,7 @@ export default function RefundSheet({ tx, remaining, onClose, onDone }: Props) {
             </div>
             <div className="mb-4">
               {methods.map((m) => {
-                const covers = avail[m] >= amount
+                const covers = (avail[m] ?? 0) >= amount
                 return (
                   <label
                     key={m}
@@ -223,13 +232,13 @@ export default function RefundSheet({ tx, remaining, onClose, onDone }: Props) {
                       covers ? 'cursor-pointer' : 'opacity-40'
                     }`}
                   >
-                    <Icon name={m} size={20} />
+                    <Icon name={payMethodIcon(m)} size={20} />
                     <span className="flex-1 font-semibold text-gray-900">
-                      {t(lang, m === 'cash' ? 'payCash' : 'payCard')}
+                      {payMethodLabel(lang, m)}
                       {/* Смешанная оплата: показать потолок каждого способа */}
                       {methods.length > 1 && (
                         <span className="font-normal text-gray-400 text-sm">
-                          {' '}· {t(lang, 'upTo')} {formatMoney(avail[m], lang)}
+                          {' '}· {t(lang, 'upTo')} {formatMoney(avail[m] ?? 0, lang)}
                         </span>
                       )}
                     </span>

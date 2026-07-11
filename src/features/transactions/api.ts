@@ -1,7 +1,9 @@
 import { supabase } from '../../lib/supabase'
+import { currentStaffToken } from '../../store/authStore'
+import type { PayMethodId } from '../../lib/payMethods'
 
 export interface TxPayment {
-  method: 'cash' | 'card'
+  method: PayMethodId
   amount: number
 }
 
@@ -71,7 +73,7 @@ export interface RefundRow {
   id: string
   refund_number: number | null
   amount: number
-  method: 'cash' | 'card'
+  method: PayMethodId
   reason: string | null
   items: { name: string; qty: number; amount: number }[] | null
   created_at: string
@@ -93,7 +95,7 @@ export interface IssueRefundParams {
   orderId: string
   staffId: string
   amount: number
-  method: 'cash' | 'card'
+  method: PayMethodId
   reason?: string
   items?: { name: string; qty: number; amount: number }[]
 }
@@ -110,6 +112,7 @@ export async function issueRefund(p: IssueRefundParams): Promise<string> {
     p_method: p.method,
     p_reason: p.reason ?? null,
     p_items: p.items ?? null,
+    p_staff_session: currentStaffToken(),
   })
   if (error) throw new Error(error.message)
   return refundId

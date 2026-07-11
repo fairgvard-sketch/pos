@@ -1,4 +1,5 @@
 import type { Receipt, RefundReceipt } from './api'
+import { receiptMethodLabel } from '../../lib/payMethods'
 import type { Location } from '../../types'
 
 /**
@@ -109,6 +110,11 @@ export function renderReceiptCanvas(
   if (r.customer_name) metaRow('לקוח/ה:', r.customer_name)
   if (r.staff_name) metaRow('מוכר/ת:', r.staff_name)
   if (r.allocation_number) metaRow('מספר הקצאה:', r.allocation_number)
+  // Покупатель-бизнес (048): חשבונית מס для B2B — реквизиты покупателя
+  if (r.buyer_name) {
+    metaRow('לכבוד:', r.buyer_name, 26, true)
+    if (r.buyer_tax_id) metaRow('ח.פ./ע.מ:', r.buyer_tax_id)
+  }
   divider()
 
   // ── Таблица позиций ──
@@ -198,7 +204,7 @@ export function renderReceiptCanvas(
   if (r.payments.length > 0) {
     divider()
     for (const p of r.payments) {
-      metaRow(p.method === 'cash' ? 'מזומן' : 'אשראי', fmt(p.amount))
+      metaRow(receiptMethodLabel(p.method), fmt(p.amount))
       if (p.method === 'cash' && p.tendered != null && p.change_due != null && p.change_due > 0) {
         metaRow('שולם', fmt(p.tendered))
         metaRow('עודף', fmt(p.change_due))
@@ -319,7 +325,7 @@ export function renderRefundReceiptCanvas(r: RefundReceipt, location: Location |
 
   // Способ выдачи
   divider()
-  metaRow(r.method === 'cash' ? 'מזומן' : 'אשראי', `−${fmt(r.amount)}`)
+  metaRow(receiptMethodLabel(r.method), `−${fmt(r.amount)}`)
 
   if (location?.receipt_footer) {
     divider()
@@ -346,6 +352,8 @@ export interface ZReportData {
   ordersCount: number
   grossCash: number
   grossCard: number
+  /** Кошельки (046): брутто по каждому способу кроме cash/card */
+  grossWallets: { method: string; amount: number }[]
   refundsTotal: number
   /** Нетто-выручка (продажи − возвраты) */
   netTotal: number
@@ -428,7 +436,11 @@ export function renderZReportCanvas(z: ZReportData, location: Location | undefin
   // ── Продажи (брутто) ──
   metaRow('מכירות מזומן', fmt(z.grossCash))
   metaRow('מכירות אשראי', fmt(z.grossCard))
-  metaRow('סה"כ מכירות', fmt(z.grossCash + z.grossCard), 28, true)
+  for (const w of z.grossWallets) {
+    metaRow(`מכירות ${receiptMethodLabel(w.method)}`, fmt(w.amount))
+  }
+  const grossAll = z.grossCash + z.grossCard + z.grossWallets.reduce((s, w) => s + w.amount, 0)
+  metaRow('סה"כ מכירות', fmt(grossAll), 28, true)
   if (z.refundsTotal > 0) metaRow('החזרים', `−${fmt(z.refundsTotal)}`)
   metaRow('סה"כ נטו', fmt(z.netTotal), 28, true)
   if (z.vatTotal != null) metaRow('מתוך זה מע"מ', fmt(z.vatTotal))

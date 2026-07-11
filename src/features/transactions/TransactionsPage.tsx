@@ -17,6 +17,7 @@ import Icon from '../../components/Icon'
 import { useAuthStore } from '../../store/authStore'
 import { useLangStore } from '../../store/langStore'
 import { t, orderTypeLabel } from '../../lib/i18n'
+import { payMethodIcon, payMethodLabel } from '../../lib/payMethods'
 import { can } from '../../lib/perms'
 import { formatMoney } from '../../lib/money'
 
@@ -272,9 +273,9 @@ export default function TransactionsPage() {
             </div>
             {selected.payments.filter((p) => p.amount > 0).map((p, i) => (
               <div key={i} className="flex items-center gap-3 h-12 border-b border-gray-100 text-sm">
-                <Icon name={p.method === 'cash' ? 'cash' : 'card'} size={20} />
+                <Icon name={payMethodIcon(p.method)} size={20} />
                 <span className="flex-1 font-semibold text-gray-900">
-                  {t(lang, p.method === 'cash' ? 'payCash' : 'payCard')}
+                  {payMethodLabel(lang, p.method)}
                 </span>
                 <span className="tabular-nums font-semibold text-gray-900">{formatMoney(p.amount, lang)}</span>
               </div>

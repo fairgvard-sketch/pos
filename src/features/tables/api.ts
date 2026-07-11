@@ -1,5 +1,6 @@
 import { supabase } from '../../lib/supabase'
 import { getDeviceContext } from '../auth/api'
+import { currentStaffToken } from '../../store/authStore'
 import type { CartLine } from '../../store/cartStore'
 import type { Table, TableStatus, TableShape } from '../../types'
 
@@ -128,7 +129,11 @@ export async function appendToOrder(
 }
 
 export async function voidTableOrder(orderId: string, reason?: string): Promise<void> {
-  const { error } = await supabase.rpc('void_table_order', { p_order_id: orderId, p_reason: reason ?? null })
+  const { error } = await supabase.rpc('void_table_order', {
+    p_order_id: orderId,
+    p_reason: reason ?? null,
+    p_staff_session: currentStaffToken(),
+  })
   if (error) throw new Error(error.message)
 }
 
@@ -186,6 +191,7 @@ export async function setOrderDiscount(
     p_type: type,
     p_value: value ?? null,
     p_reason: reason ?? null,
+    p_staff_session: currentStaffToken(),
   })
   if (error) throw new Error(error.message)
   return data as { total: number; discount_amount: number; subtotal: number }
@@ -197,6 +203,7 @@ export async function voidOrderItem(itemId: string, staffId: string, reason?: st
     p_item_id: itemId,
     p_staff_id: staffId,
     p_reason: reason ?? null,
+    p_staff_session: currentStaffToken(),
   })
   if (error) throw new Error(error.message)
   return data as { total: number }

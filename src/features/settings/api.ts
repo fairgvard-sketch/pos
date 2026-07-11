@@ -1,14 +1,14 @@
 import { supabase } from '../../lib/supabase'
+import { currentStaffToken } from '../../store/authStore'
 import type { Role, Staff } from '../../types'
 
 /**
  * Управление сотрудниками. БД-слой готов с фазы 1 (001_foundation.sql):
  * - создание/смена PIN — только через SECURITY DEFINER RPC (bcrypt в БД),
  *   pin_hash на клиент не приходит (колоночные гранты);
- * - UPDATE разрешён только по name/role/location_id/is_active;
  * - деактивация вместо удаления — верифицируется в verify_staff_pin().
- * Ролевое ограничение (кто кого может править) — на клиенте, в StaffTab
- * (известный компромисс модели авторизации: БД доверяет устройству).
+ * Все мутации несут p_staff_session (044): сервер требует manager-сессию
+ * (require_staff_perm 'manage'), прямой UPDATE staff закрывает 045.
  */
 
 export async function fetchStaffList(): Promise<Staff[]> {
@@ -30,13 +30,18 @@ export async function createStaffMember(name: string, role: Role, pin: string): 
     p_name: name,
     p_role: role,
     p_pin: pin,
+    p_staff_session: currentStaffToken(),
   })
   if (error) throw new Error(error.message)
   return data as string
 }
 
 export async function setStaffPin(staffId: string, pin: string): Promise<void> {
-  const { error } = await supabase.rpc('set_staff_pin', { p_staff_id: staffId, p_pin: pin })
+  const { error } = await supabase.rpc('set_staff_pin', {
+    p_staff_id: staffId,
+    p_pin: pin,
+    p_staff_session: currentStaffToken(),
+  })
   if (error) throw new Error(error.message)
 }
 
@@ -44,7 +49,11 @@ export async function updateStaffMember(
   staffId: string,
   patch: Partial<Pick<Staff, 'name' | 'role' | 'is_active'>>
 ): Promise<void> {
-  const { error } = await supabase.from('staff').update(patch).eq('id', staffId)
+  const { error } = await supabase.rpc('update_staff', {
+    p_staff_id: staffId,
+    p_patch: patch,
+    p_staff_session: currentStaffToken(),
+  })
   if (error) throw new Error(error.message)
 }
 
@@ -54,7 +63,10 @@ export async function updateStaffMember(
  * тогда предлагаем деактивацию. Флаг hasRecords в ошибке для UI.
  */
 export async function deleteStaffMember(staffId: string): Promise<void> {
-  const { error } = await supabase.rpc('delete_staff', { p_staff_id: staffId })
+  const { error } = await supabase.rpc('delete_staff', {
+    p_staff_id: staffId,
+    p_staff_session: currentStaffToken(),
+  })
   if (error) {
     if (error.message.includes('staff has records')) {
       const e = new Error('staff has records') as Error & { hasRecords?: boolean }

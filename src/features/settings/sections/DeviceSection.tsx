@@ -17,6 +17,19 @@ import type { Location } from '../../../types'
  * Категория «Устройство»: имя этой кассы, аккаунт входа, статус печати +
  * тестовый оттиск, версия приложения, отвязка устройства.
  */
+
+/** Мажор Chrome/Chromium из UA — версия WebView в APK, браузера иначе */
+function chromeMajor(): number | null {
+  const m = navigator.userAgent.match(/Chrom(?:e|ium)\/(\d+)/)
+  return m ? parseInt(m[1], 10) : null
+}
+
+/**
+ * Порог «движок устарел». T2 (Android 7.1) поставляется с Chrome 52 —
+ * минимальный поддерживаемый таргет (plugin-legacy); всё ниже 80 (2020)
+ * помечаем: работает, но каждая фича платит налог совместимости.
+ */
+const WEBVIEW_FRESH_MAJOR = 80
 export default function DeviceSection({ location }: { location: Location | undefined }) {
   const lang = useLangStore((s) => s.lang)
   const navigate = useNavigate()
@@ -48,6 +61,7 @@ export default function DeviceSection({ location }: { location: Location | undef
     onError: (e) => toast.error(e.message),
   })
 
+  const engine = chromeMajor()
   const bridgeReady = typeof window !== 'undefined' && !!window.KassaAndroid?.isAvailable()
   const printStatus = bridgeReady
     ? t(lang, 'printBridgeApk')
@@ -147,6 +161,14 @@ export default function DeviceSection({ location }: { location: Location | undef
       <Group>
         <InputRow label={t(lang, 'appVersion')}>
           <span className="text-sm text-gray-500 tabular-nums">{__APP_VERSION__}</span>
+        </InputRow>
+        <InputRow
+          label={t(lang, 'browserEngine')}
+          hint={engine !== null && engine < WEBVIEW_FRESH_MAJOR ? t(lang, 'webviewOutdatedHint') : undefined}
+        >
+          <span className={`text-sm tabular-nums ${engine !== null && engine < WEBVIEW_FRESH_MAJOR ? 'text-amber-600' : 'text-gray-500'}`}>
+            {engine !== null ? `Chrome ${engine}` : '—'}
+          </span>
         </InputRow>
       </Group>
 

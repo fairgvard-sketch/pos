@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { useLangStore } from '../../store/langStore'
 import { useDeviceStore } from '../../store/deviceStore'
 import { t } from '../../lib/i18n'
+import { payMethodIcon, payMethodLabel, type PayMethodId } from '../../lib/payMethods'
 import { formatMoney, splitEvenly } from '../../lib/money'
 import type { PaymentInput } from './api'
 import Icon from '../../components/Icon'
@@ -34,7 +35,7 @@ export default function EqualSplitSheet({ total, onBack, onCancel, onPay, busy }
   const [guests, setGuests] = useState(2)
   const [paid, setPaid] = useState<PaymentInput[]>([])
   // Способ текущей доли (по умолчанию — первый способ кассы)
-  const [method, setMethod] = useState<'cash' | 'card'>(firstMethod)
+  const [method, setMethod] = useState<PayMethodId>(firstMethod)
 
   // Доли: первые (total mod n) на 1 агорот больше — сумма точно = total
   const shares = useMemo(() => splitEvenly(total, guests), [total, guests])
@@ -147,7 +148,7 @@ export default function EqualSplitSheet({ total, onBack, onCancel, onPay, busy }
                     {t(lang, 'splitGuestN')} {i + 1}
                     {isPaid && paid[i] && (
                       <span className="ms-2 text-xs font-medium text-gray-400">
-                        {t(lang, paid[i].method === 'cash' ? 'payCash' : 'payCard')}
+                        {payMethodLabel(lang, paid[i].method)}
                       </span>
                     )}
                   </span>
@@ -182,8 +183,8 @@ export default function EqualSplitSheet({ total, onBack, onCancel, onPay, busy }
                         : 'bg-white border border-gray-200 text-gray-900 hover:border-gray-400'
                     }`}
                   >
-                    <Icon name={m} size={18} />
-                    {t(lang, m === 'cash' ? 'payCash' : 'payCard')}
+                    <Icon name={payMethodIcon(m)} size={18} />
+                    {payMethodLabel(lang, m)}
                   </button>
                 ))}
               </div>

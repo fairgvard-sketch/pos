@@ -1,4 +1,5 @@
 import { supabase } from '../../lib/supabase'
+import { currentStaffToken } from '../../store/authStore'
 
 export interface Shift {
   id: string
@@ -18,6 +19,8 @@ export interface ShiftReport {
   cash_sales: number
   card_sales: number
   total_sales: number
+  /** Нетто по каждому способу, вкл. кошельки (046): {"cash":..,"cibus":..} */
+  method_sales?: Record<string, number>
   /** Чаевые за смену (входят в cash/card_sales — деньги, вне выручки) */
   tips_total: number
   expected_cash: number
@@ -53,6 +56,8 @@ export interface CloseResult {
   gross_cash?: number
   gross_card?: number
   gross_total?: number
+  /** Брутто по каждому способу, вкл. кошельки (046) */
+  method_gross?: Record<string, number>
   refunds_total?: number
   vat_total?: number
   opened_at?: string
@@ -99,6 +104,44 @@ export async function addCashMovement(
     p_type: type,
     p_amount: amount,
     p_reason: reason || null,
+    p_staff_session: currentStaffToken(),
+  })
+  if (error) throw new Error(error.message)
+}
+
+// ── Списание дня (047) ────────────────────────────────────
+
+export interface WasteEntry {
+  id: string
+  name: string
+  qty: number
+  reason: string | null
+  created_at: string
+  staff: { name: string } | null
+}
+
+/** Списания за сегодня (день устройства), свежие сверху */
+export async function fetchTodayWaste(): Promise<WasteEntry[]> {
+  const dayStart = new Date()
+  dayStart.setHours(0, 0, 0, 0)
+  const { data, error } = await supabase
+    .from('waste_entries')
+    .select('id, name, qty, reason, created_at, staff(name)')
+    .gte('created_at', dayStart.toISOString())
+    .order('created_at', { ascending: false })
+  if (error) throw new Error(error.message)
+  return (data ?? []) as unknown as WasteEntry[]
+}
+
+/** Записать списание: строки waste + уменьшение остатков (add_waste, 047) */
+export async function addWaste(
+  staffId: string,
+  items: { menu_item_id: string; qty: number; reason?: string | null }[]
+): Promise<void> {
+  const { error } = await supabase.rpc('add_waste', {
+    p_staff_id: staffId,
+    p_items: items,
+    p_staff_session: currentStaffToken(),
   })
   if (error) throw new Error(error.message)
 }
@@ -125,6 +168,7 @@ export async function closeShift(
     p_staff_id: staffId,
     p_counted_cash: countedCash,
     p_note: note || null,
+    p_staff_session: currentStaffToken(),
   })
   if (error) throw new Error(error.message)
   return data as CloseResult

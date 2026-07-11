@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import type { PayMethodId } from '../lib/payMethods'
 
 /**
  * Настройки КОНКРЕТНОЙ кассы (per-device) — localStorage, не БД:
@@ -9,8 +10,12 @@ import { persist } from 'zustand/middleware'
 /** Способ печати чека: браузерный диалог / RawBT (встроенный принтер Sunmi) */
 export type PrintMode = 'browser' | 'rawbt'
 
-/** Способ оплаты (Square: payment types). Пока наличные/карта */
-export type PayMethod = 'cash' | 'card'
+/**
+ * Способ оплаты (Square: payment types): наличные/карта + кошельки
+ * Cibus/Tenbis/Bit (046). В payMethodOrder перечислены ВКЛЮЧЁННЫЕ
+ * способы в порядке показа; кошельки включаются в Настройки → Оплата.
+ */
+export type PayMethod = PayMethodId
 /** @deprecated синоним PayMethod — оставлен, чтобы не ломать импорты */
 export type FirstPayMethod = PayMethod
 

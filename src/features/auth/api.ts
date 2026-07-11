@@ -1,4 +1,5 @@
 import { supabase } from '../../lib/supabase'
+import { currentStaffToken } from '../../store/authStore'
 import type { Location, LocationSettings, ServiceMode, StaffSession } from '../../types'
 
 export interface DeviceContext {
@@ -31,15 +32,21 @@ export async function fetchCurrentLocation(): Promise<Location> {
   return data as Location
 }
 
-/** Сменить режим обслуживания точки. RLS (locations_all) допускает UPDATE в своей org. */
-export async function updateServiceMode(mode: ServiceMode): Promise<void> {
-  const ctx = await getDeviceContext()
-  if (!ctx?.locationId) throw new Error('Device not bootstrapped')
-  const { error } = await supabase
-    .from('locations')
-    .update({ service_mode: mode })
-    .eq('id', ctx.locationId)
+/**
+ * Запись полей точки — через RPC update_location_config (044): сервер
+ * проверяет manager-сессию, прямой UPDATE locations закрывает 045.
+ */
+async function updateLocationConfig(patch: Record<string, unknown>): Promise<void> {
+  const { error } = await supabase.rpc('update_location_config', {
+    p_patch: patch,
+    p_staff_session: currentStaffToken(),
+  })
   if (error) throw new Error(error.message)
+}
+
+/** Сменить режим обслуживания точки */
+export async function updateServiceMode(mode: ServiceMode): Promise<void> {
+  await updateLocationConfig({ service_mode: mode })
 }
 
 /** Реквизиты для чека */
@@ -51,21 +58,15 @@ export interface ReceiptDetails {
   receipt_footer: string | null
 }
 
-/** Сохранить реквизиты заведения для чека. RLS (locations_all) — UPDATE в своей org. */
+/** Сохранить реквизиты заведения для чека */
 export async function updateReceiptDetails(details: ReceiptDetails): Promise<void> {
-  const ctx = await getDeviceContext()
-  if (!ctx?.locationId) throw new Error('Device not bootstrapped')
-  const { error } = await supabase
-    .from('locations')
-    .update({
-      receipt_business_name: details.receipt_business_name || null,
-      receipt_address: details.receipt_address || null,
-      receipt_tax_id: details.receipt_tax_id || null,
-      receipt_phone: details.receipt_phone || null,
-      receipt_footer: details.receipt_footer || null,
-    })
-    .eq('id', ctx.locationId)
-  if (error) throw new Error(error.message)
+  await updateLocationConfig({
+    receipt_business_name: details.receipt_business_name || null,
+    receipt_address: details.receipt_address || null,
+    receipt_tax_id: details.receipt_tax_id || null,
+    receipt_phone: details.receipt_phone || null,
+    receipt_footer: details.receipt_footer || null,
+  })
 }
 
 /**
@@ -74,25 +75,13 @@ export async function updateReceiptDetails(details: ReceiptDetails): Promise<voi
  * из кеша current_location и накладывает свой раздел (perms/receipt/shift).
  */
 export async function updateLocationSettings(settings: LocationSettings): Promise<void> {
-  const ctx = await getDeviceContext()
-  if (!ctx?.locationId) throw new Error('Device not bootstrapped')
-  const { error } = await supabase
-    .from('locations')
-    .update({ settings })
-    .eq('id', ctx.locationId)
-  if (error) throw new Error(error.message)
+  await updateLocationConfig({ settings })
 }
 
 /** Сменить ставку НДС точки. Снапшот в заказ делает сервер (place_order) —
  *  меняются только будущие заказы, пробитые не трогаем (аудит). */
 export async function updateVatRate(rate: number): Promise<void> {
-  const ctx = await getDeviceContext()
-  if (!ctx?.locationId) throw new Error('Device not bootstrapped')
-  const { error } = await supabase
-    .from('locations')
-    .update({ vat_rate: rate })
-    .eq('id', ctx.locationId)
-  if (error) throw new Error(error.message)
+  await updateLocationConfig({ vat_rate: rate })
 }
 
 export async function signInDevice(email: string, password: string) {
@@ -116,26 +105,20 @@ export async function bootstrapOrg(
   ownerPin: string,
   businessAddress?: string
 ) {
+  // Реквизиты чека (название/адрес) сеет сам bootstrap_org (044):
+  // staff-сессии в онбординге ещё нет, а прямой UPDATE locations закрыт 045.
   const { error } = await supabase.rpc('bootstrap_org', {
     p_org_name: orgName,
     p_location_name: locationName,
     p_owner_name: ownerName,
     p_owner_pin: ownerPin,
+    p_business_address: businessAddress?.trim() || null,
   })
   if (error) throw new Error(error.message)
   // app_metadata изменилась на сервере — перевыпускаем JWT,
   // иначе RLS не увидит org_id до истечения старого токена
   const { error: refreshError } = await supabase.auth.refreshSession()
   if (refreshError) throw new Error(refreshError.message)
-  // Название бизнеса → шапка чека; адрес (если указан) → строка адреса чека.
-  // Ошибку здесь не роняем: онбординг уже прошёл, реквизиты правятся в настройках.
-  await updateReceiptDetails({
-    receipt_business_name: orgName || null,
-    receipt_address: businessAddress?.trim() || null,
-    receipt_tax_id: null,
-    receipt_phone: null,
-    receipt_footer: null,
-  }).catch(() => {})
 }
 
 export async function verifyStaffPin(pin: string): Promise<StaffSession> {

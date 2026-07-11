@@ -1,4 +1,6 @@
 import { supabase } from '../../lib/supabase'
+import { currentStaffToken } from '../../store/authStore'
+import type { PayMethodId } from '../../lib/payMethods'
 
 export interface ReceiptLine {
   name: string
@@ -10,7 +12,7 @@ export interface ReceiptLine {
 }
 
 export interface ReceiptPayment {
-  method: 'cash' | 'card'
+  method: PayMethodId
   amount: number
   tendered: number | null
   change_due: number | null
@@ -22,6 +24,9 @@ export interface Receipt {
   receipt_number: number | null
   doc_type: 'receipt' | 'tax_invoice' | 'invoice_receipt'
   allocation_number: string | null
+  /** Покупатель-бизнес (048): блок на чеке — חשבונית מס для B2B */
+  buyer_name: string | null
+  buyer_tax_id: string | null
   order_type: 'here' | 'takeaway' | 'delivery'
   customer_name: string | null
   table_label: string | null
@@ -54,7 +59,7 @@ export interface RefundReceipt {
   refund_id: string
   refund_number: number | null
   amount: number
-  method: 'cash' | 'card'
+  method: PayMethodId
   reason: string | null
   items: { name: string; qty: number; amount: number }[] | null
   created_at: string
@@ -80,7 +85,7 @@ export async function fetchRefundReceipt(refundId: string): Promise<RefundReceip
     id: string
     refund_number: number | null
     amount: number
-    method: 'cash' | 'card'
+    method: PayMethodId
     reason: string | null
     items: { name: string; qty: number; amount: number }[] | null
     created_at: string
@@ -111,6 +116,8 @@ interface OrderRow {
   receipt_number: number | null
   doc_type: 'receipt' | 'tax_invoice' | 'invoice_receipt'
   allocation_number: string | null
+  buyer_name: string | null
+  buyer_tax_id: string | null
   order_type: 'here' | 'takeaway' | 'delivery'
   customer_name: string | null
   table_label: string | null
@@ -136,7 +143,21 @@ interface OrderRow {
     voided_at: string | null
     order_item_modifiers: { name: string; price_delta: number }[]
   }[]
-  payments: { method: 'cash' | 'card'; amount: number; tendered: number | null; change_due: number | null }[]
+  payments: { method: PayMethodId; amount: number; tendered: number | null; change_due: number | null }[]
+}
+
+/**
+ * Реквизиты покупателя-бизнеса на оплаченный документ (048):
+ * печатаются блоком на чеке (חשבונית מס для B2B). Один раз на документ.
+ */
+export async function setOrderBuyer(orderId: string, name: string, taxId: string | null): Promise<void> {
+  const { error } = await supabase.rpc('set_order_buyer', {
+    p_order_id: orderId,
+    p_name: name,
+    p_tax_id: taxId,
+    p_staff_session: currentStaffToken(),
+  })
+  if (error) throw new Error(error.message)
 }
 
 /** Полный чек по заказу: снапшот-итоги, активные позиции, платежи, кассир */
@@ -145,6 +166,7 @@ export async function fetchReceipt(orderId: string): Promise<Receipt> {
     .from('orders')
     .select(`
       id, daily_number, receipt_number, doc_type, allocation_number,
+      buyer_name, buyer_tax_id,
       order_type, customer_name, table_label, status,
       subtotal, discount_type, discount_value, discount_amount, loyalty_discount, vat_rate, vat_amount, total, tip_amount,
       paid_at, created_at,
@@ -162,6 +184,8 @@ export async function fetchReceipt(orderId: string): Promise<Receipt> {
     receipt_number: o.receipt_number,
     doc_type: o.doc_type,
     allocation_number: o.allocation_number,
+    buyer_name: o.buyer_name,
+    buyer_tax_id: o.buyer_tax_id,
     order_type: o.order_type,
     customer_name: o.customer_name,
     table_label: o.table_label,

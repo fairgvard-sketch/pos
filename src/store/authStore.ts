@@ -14,6 +14,17 @@ interface AuthState {
   lock: () => void
 }
 
+/**
+ * Токен серверной staff-сессии (044) для привилегированных RPC —
+ * сервер проверяет право по роли сессии (require_staff_perm).
+ * Читается в момент вызова: replay офлайн-очереди подхватывает
+ * токен того, кто залогинен при синке (авторизация), авторство
+ * операции остаётся в p_staff_id.
+ */
+export function currentStaffToken(): string | null {
+  return useAuthStore.getState().staff?.session_token ?? null
+}
+
 export const useAuthStore = create<AuthState>()(
   persist(
     (set) => ({
