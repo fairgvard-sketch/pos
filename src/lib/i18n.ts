@@ -839,6 +839,26 @@ export const translations = {
     onlineStats7d: 'За 7 дней',
     onlineStatReqs: 'заявок',
     onlineStatAcc: 'принято',
+
+    // Профиль заведения (052)
+    profileTitle: 'Профиль заведения',
+    profileHint: 'Логотип, названия, пароль аккаунта',
+    uploadLogo: 'Загрузить логотип',
+    removeLogo: 'Убрать',
+    logoHint: 'Квадратная картинка. Видна в настройках и на странице онлайн-заказа.',
+    bizNameLabel: 'Название заведения',
+    bizNameHint: 'Печатается в шапке чека и показывается гостям онлайн',
+    locNameLabel: 'Название точки',
+    locNameHint: 'Для вас: различать филиалы и кассы',
+    devicePasswordTitle: 'Пароль аккаунта',
+    devicePasswordHint: 'Пароль входа устройства (email-аккаунт кассы). После смены другие кассы попросят войти заново.',
+    newPassword: 'Новый пароль',
+    repeatPassword: 'Повторите пароль',
+    changePassword: 'Сменить пароль',
+    passwordSaved: 'Пароль обновлён',
+    passwordShort: 'Минимум 6 символов',
+    passwordMismatch: 'Пароли не совпадают',
+    pinsElsewhereHint: 'PIN-коды сотрудников меняются в разделе «Сотрудники».',
   },
   he: {
     // Общее
@@ -1678,6 +1698,26 @@ export const translations = {
     onlineStats7d: 'ב־7 ימים',
     onlineStatReqs: 'הזמנות',
     onlineStatAcc: 'אושרו',
+
+    // Профиль заведения (052)
+    profileTitle: 'פרופיל העסק',
+    profileHint: 'לוגו, שמות, סיסמת חשבון',
+    uploadLogo: 'להעלות לוגו',
+    removeLogo: 'להסיר',
+    logoHint: 'תמונה מרובעת. מוצגת בהגדרות ובדף ההזמנה אונליין.',
+    bizNameLabel: 'שם העסק',
+    bizNameHint: 'מודפס בראש הקבלה ומוצג לאורחים אונליין',
+    locNameLabel: 'שם הנקודה',
+    locNameHint: 'בשבילכם: להבחין בין סניפים וקופות',
+    devicePasswordTitle: 'סיסמת חשבון',
+    devicePasswordHint: 'סיסמת הכניסה של המכשיר (חשבון האימייל של הקופה). אחרי שינוי קופות אחרות יתבקשו להתחבר מחדש.',
+    newPassword: 'סיסמה חדשה',
+    repeatPassword: 'חזרו על הסיסמה',
+    changePassword: 'להחליף סיסמה',
+    passwordSaved: 'הסיסמה עודכנה',
+    passwordShort: 'לפחות 6 תווים',
+    passwordMismatch: 'הסיסמאות אינן תואמות',
+    pinsElsewhereHint: 'קודי PIN של עובדים משתנים בקטגוריית «עובדים».',
   },
 } as const
 

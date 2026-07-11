@@ -56,6 +56,8 @@ export interface Location {
   receipt_tax_id: string | null
   receipt_phone: string | null
   receipt_footer: string | null
+  /** Логотип заведения (052) — аватар в настройках и на странице заказа */
+  logo_url: string | null
   // Программа лояльности (031)
   loyalty_mode: 'off' | 'stamps' | 'points'
   loyalty_stamps_goal: number

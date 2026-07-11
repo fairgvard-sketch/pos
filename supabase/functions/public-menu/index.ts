@@ -42,7 +42,7 @@ Deno.serve(async (req) => {
 
   const [locRes, shiftRes, catRes] = await Promise.all([
     // Наружу — только флаг онлайн-заказов, НЕ весь settings (там права ролей)
-    supabase.from('locations').select('id, name, currency, receipt_business_name, online_settings:settings->online_orders').eq('id', loc).maybeSingle(),
+    supabase.from('locations').select('id, name, currency, receipt_business_name, logo_url, online_settings:settings->online_orders').eq('id', loc).maybeSingle(),
     supabase.from('shifts').select('id').eq('location_id', loc).eq('status', 'open').limit(1),
     supabase
       .from('menu_categories')
@@ -112,6 +112,7 @@ Deno.serve(async (req) => {
         name: locRes.data.name,
         // Название ЗАВЕДЕНИЯ (шапка чека) — для витрины; имя точки — запасное
         business_name: locRes.data.receipt_business_name || locRes.data.name,
+        logo_url: locRes.data.logo_url ?? null,
         currency: locRes.data.currency,
         is_open: (shiftRes.data ?? []).length > 0,
         // Тумблер 051: false = владелец выключил приём онлайн-заказов

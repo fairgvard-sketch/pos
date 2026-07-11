@@ -25,6 +25,7 @@ import OfflineBanner from '../../components/OfflineBanner'
 import BusinessSection from './sections/BusinessSection'
 import ReceiptDetailsDetail from './sections/ReceiptDetailsDetail'
 import DeviceSection from './sections/DeviceSection'
+import ProfileDetail from './sections/ProfileDetail'
 
 /** Стартовая категория — запоминаем на время сессии (возврат в настройки открывает то же место) */
 const CAT_KEY = 'kassa-settings-cat'
@@ -41,6 +42,7 @@ const DETAIL_TITLES: Record<DetailId, TranslationKey> = {
   guests: 'guestsTitle',
   perms: 'permsTitle',
   'receipt-details': 'receiptDetailsTitle',
+  profile: 'profileTitle',
 }
 
 /**
@@ -106,18 +108,30 @@ export default function SettingsPage() {
             />
           </div>
 
-          {/* Карточка контекста: точка · касса + кто за кассой */}
-          <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3">
-            <div className="text-sm font-bold text-gray-900 truncate">
-              {location?.name ?? '…'}
-              {deviceName && <span className="text-gray-400 font-semibold"> · {deviceName}</span>}
-            </div>
-            {staff && (
-              <div className="text-xs text-gray-500 mt-0.5 truncate">
-                {staff.name} · {t(lang, staff.role)}
-              </div>
+          {/* Карточка-профиль заведения: тап открывает редактирование (052) */}
+          <button
+            onClick={() => go('business', 'profile')}
+            className="rounded-2xl border border-gray-100 bg-gray-50 hover:bg-gray-100 px-4 py-3 flex items-center gap-3 text-start transition-colors"
+          >
+            {location?.logo_url ? (
+              <img src={location.logo_url} alt="" className="w-10 h-10 rounded-full object-cover shrink-0" />
+            ) : (
+              <span className="w-10 h-10 rounded-full bg-gray-900 text-white font-bold flex items-center justify-center shrink-0">
+                {(location?.receipt_business_name || location?.name || '?').slice(0, 1).toUpperCase()}
+              </span>
             )}
-          </div>
+            <span className="min-w-0">
+              <span className="block text-sm font-bold text-gray-900 truncate">
+                {location?.receipt_business_name || location?.name || '…'}
+                {deviceName && <span className="text-gray-400 font-semibold"> · {deviceName}</span>}
+              </span>
+              {staff && (
+                <span className="block text-xs text-gray-500 mt-0.5 truncate">
+                  {staff.name} · {t(lang, staff.role)}
+                </span>
+              )}
+            </span>
+          </button>
 
           <div className="flex flex-col gap-0.5">
             {CATEGORIES.map((c) => {
@@ -172,6 +186,7 @@ export default function SettingsPage() {
                 {detail === 'guests' && <GuestsDetail location={location} />}
                 {detail === 'perms' && <PermsDetail location={location} />}
                 {detail === 'receipt-details' && <ReceiptDetailsDetail location={location} />}
+                {detail === 'profile' && <ProfileDetail key={location?.id ?? 'no-loc'} location={location} />}
               </div>
             ) : (
               // key на cat → плавная смена при переключении категории

@@ -49,6 +49,15 @@ export async function updateServiceMode(mode: ServiceMode): Promise<void> {
   await updateLocationConfig({ service_mode: mode })
 }
 
+/** Профиль заведения (052): имя точки, название бизнеса, логотип */
+export async function updateLocationProfile(patch: {
+  name?: string
+  receipt_business_name?: string | null
+  logo_url?: string | null
+}): Promise<void> {
+  await updateLocationConfig(patch)
+}
+
 /** Реквизиты для чека */
 export interface ReceiptDetails {
   receipt_business_name: string | null

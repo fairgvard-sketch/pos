@@ -51,6 +51,8 @@ export interface PublicMenu {
     name: string
     /** Название заведения (шапка чека); показываем его, не имя точки */
     business_name?: string
+    /** Логотип заведения (052) */
+    logo_url?: string | null
     currency: string
     is_open: boolean
     /** false = владелец выключил приём онлайн-заказов (051) */

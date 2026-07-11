@@ -95,7 +95,7 @@ export default function PublicOrderPage() {
   // ── Экран статуса активной заявки ──────────────────────────
   if (activeUuid) {
     return (
-      <Shell isRtl={isRtl} lang={lang} setLang={setLang} title={menu?.location.business_name || menu?.location.name}>
+      <Shell isRtl={isRtl} lang={lang} setLang={setLang} title={menu?.location.business_name || menu?.location.name} logo={menu?.location.logo_url}>
         <StatusScreen lang={lang} clientUuid={activeUuid} onNewOrder={startNewOrder} />
       </Shell>
     )
@@ -117,7 +117,7 @@ export default function PublicOrderPage() {
   }
 
   return (
-    <Shell isRtl={isRtl} lang={lang} setLang={setLang} title={menu.location.business_name || menu.location.name}>
+    <Shell isRtl={isRtl} lang={lang} setLang={setLang} title={menu.location.business_name || menu.location.name} logo={menu.location.logo_url}>
       {menu.location.accepting === false ? (
         <div className="mx-4 mt-4 rounded-2xl bg-amber-50 text-amber-800 text-sm font-semibold px-4 py-3">
           {t(lang, 'pubPaused')}
@@ -248,18 +248,20 @@ export default function PublicOrderPage() {
 }
 
 /** Каркас страницы: шапка с названием кофейни и переключателем языка */
-function Shell({ isRtl, lang, setLang, title, children }: {
+function Shell({ isRtl, lang, setLang, title, logo, children }: {
   isRtl: boolean
   lang: Lang
   setLang: (l: Lang) => void
   title?: string
+  logo?: string | null
   children: React.ReactNode
 }) {
   return (
     <div dir={isRtl ? 'rtl' : 'ltr'} className="min-h-screen bg-[#eceef1]">
       <div className="max-w-lg mx-auto min-h-screen bg-white flex flex-col">
         <header className="sticky top-0 z-10 bg-white border-b border-gray-100 px-4 h-14 flex items-center justify-end relative">
-          {/* Название заведения — по центру, поверх флекса (не сдвигается кнопкой языка) */}
+          {/* Логотип у начала строки; название — по центру, поверх флекса */}
+          {logo && <img src={logo} alt="" className="absolute start-4 w-9 h-9 rounded-full object-cover" />}
           <span className="absolute inset-x-14 text-center font-bold text-lg text-gray-900 truncate pointer-events-none">
             {title ?? ''}
           </span>
