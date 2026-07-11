@@ -1,0 +1,666 @@
+import { useEffect, useMemo, useState } from 'react'
+import { useParams } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
+import { t, type Lang } from '../../lib/i18n'
+import { formatMoney } from '../../lib/money'
+import {
+  fetchPublicMenu, fetchPublicStatus, submitPublicOrder, PublicApiError,
+  type PublicItem, type PublicStatus,
+} from './publicApi'
+
+/**
+ * Публичная страница «закажи и забери» (050): меню → корзина → заявка →
+ * ожидание подтверждения кассой. Оплата на кассе при получении.
+ * Мобильная, he по умолчанию (гости кофейни), язык переключается.
+ * Никакого Supabase-клиента: только Edge Functions с anon-ключом.
+ */
+
+const LANG_KEY = 'kassa-public-lang'
+const ACTIVE_KEY = 'kassa-public-active' // {clientUuid, locId} — текущая заявка
+
+interface CartLine {
+  key: string
+  itemId: string
+  name: string
+  variantId: string | null
+  variantName: string | null
+  modIds: string[]
+  modNames: string[]
+  unitPrice: number // агороты, оценка для показа (сервер пересчитает)
+  qty: number
+}
+
+function readActive(locId: string): string | null {
+  try {
+    const raw = localStorage.getItem(ACTIVE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as { clientUuid: string; locId: string }
+    return parsed.locId === locId ? parsed.clientUuid : null
+  } catch {
+    return null
+  }
+}
+
+export default function PublicOrderPage() {
+  const { locId = '' } = useParams()
+  const [lang, setLang] = useState<Lang>(() => (localStorage.getItem(LANG_KEY) as Lang) ?? 'he')
+  useEffect(() => { localStorage.setItem(LANG_KEY, lang) }, [lang])
+  const isRtl = lang === 'he'
+
+  // Незавершённая заявка переживает перезагрузку страницы
+  const [activeUuid, setActiveUuid] = useState<string | null>(() => readActive(locId))
+
+  const [cart, setCart] = useState<CartLine[]>([])
+  const [view, setView] = useState<'menu' | 'checkout'>('menu')
+  const [configItem, setConfigItem] = useState<PublicItem | null>(null)
+
+  const { data: menu, isLoading, isError } = useQuery({
+    queryKey: ['public_menu', locId],
+    queryFn: () => fetchPublicMenu(locId),
+    staleTime: 30_000,
+    enabled: !activeUuid, // на экране статуса меню не нужно
+  })
+
+  const cartCount = cart.reduce((s, l) => s + l.qty, 0)
+  const cartTotal = cart.reduce((s, l) => s + l.unitPrice * l.qty, 0)
+
+  function addLine(line: Omit<CartLine, 'key' | 'qty'>) {
+    setCart((prev) => {
+      const same = prev.find(
+        (l) =>
+          l.itemId === line.itemId &&
+          l.variantId === line.variantId &&
+          l.modIds.length === line.modIds.length &&
+          l.modIds.every((id, i) => id === line.modIds[i])
+      )
+      if (same) return prev.map((l) => (l.key === same.key ? { ...l, qty: l.qty + 1 } : l))
+      return [...prev, { ...line, key: Math.random().toString(36).slice(2), qty: 1 }]
+    })
+  }
+
+  function updateQty(key: string, qty: number) {
+    setCart((prev) => (qty <= 0 ? prev.filter((l) => l.key !== key) : prev.map((l) => (l.key === key ? { ...l, qty } : l))))
+  }
+
+  function startNewOrder() {
+    localStorage.removeItem(ACTIVE_KEY)
+    setActiveUuid(null)
+    setCart([])
+    setView('menu')
+  }
+
+  // ── Экран статуса активной заявки ──────────────────────────
+  if (activeUuid) {
+    return (
+      <Shell isRtl={isRtl} lang={lang} setLang={setLang} title={menu?.location.name}>
+        <StatusScreen lang={lang} clientUuid={activeUuid} onNewOrder={startNewOrder} />
+      </Shell>
+    )
+  }
+
+  if (isLoading) {
+    return (
+      <Shell isRtl={isRtl} lang={lang} setLang={setLang}>
+        <div className="py-24 text-center text-gray-500">{t(lang, 'loading')}</div>
+      </Shell>
+    )
+  }
+  if (isError || !menu) {
+    return (
+      <Shell isRtl={isRtl} lang={lang} setLang={setLang}>
+        <div className="py-24 text-center text-gray-500">{t(lang, 'pubMenuError')}</div>
+      </Shell>
+    )
+  }
+
+  return (
+    <Shell isRtl={isRtl} lang={lang} setLang={setLang} title={menu.location.name}>
+      {!menu.location.is_open && (
+        <div className="mx-4 mt-4 rounded-2xl bg-amber-50 text-amber-800 text-sm font-semibold px-4 py-3">
+          {t(lang, 'pubClosed')}
+        </div>
+      )}
+
+      {view === 'menu' && (
+        <>
+          <div className="px-4 pb-32">
+            {menu.categories.map((cat) => (
+              <section key={cat.id} className="mt-6">
+                <h2 className="text-sm font-bold text-gray-500 uppercase tracking-wide mb-2">{cat.name}</h2>
+                <div className="space-y-2">
+                  {cat.items.map((item) => (
+                    <ItemRow key={item.id} item={item} lang={lang} onTap={() => {
+                      // Простой товар — сразу в корзину; сложный — конфигуратор
+                      if (item.variants.length === 0 && item.modifier_groups.length === 0) {
+                        addLine({
+                          itemId: item.id, name: item.name, variantId: null, variantName: null,
+                          modIds: [], modNames: [], unitPrice: item.price,
+                        })
+                      } else {
+                        setConfigItem(item)
+                      }
+                    }} />
+                  ))}
+                </div>
+              </section>
+            ))}
+          </div>
+
+          {cartCount > 0 && (
+            <div className="fixed bottom-0 inset-x-0 p-4 bg-gradient-to-t from-white via-white to-transparent">
+              <button
+                onClick={() => setView('checkout')}
+                className="w-full h-14 rounded-2xl bg-gray-900 text-white font-bold text-base active:scale-[0.98] transition-all"
+              >
+                {t(lang, 'pubCart')} · {cartCount} · {formatMoney(cartTotal, lang)}
+              </button>
+            </div>
+          )}
+        </>
+      )}
+
+      {view === 'checkout' && (
+        <CheckoutScreen
+          lang={lang}
+          locId={locId}
+          isOpen={menu.location.is_open}
+          cart={cart}
+          total={cartTotal}
+          onQty={updateQty}
+          onBack={() => setView('menu')}
+          onSubmitted={(clientUuid) => {
+            localStorage.setItem(ACTIVE_KEY, JSON.stringify({ clientUuid, locId }))
+            setActiveUuid(clientUuid)
+            setCart([])
+            setView('menu')
+          }}
+        />
+      )}
+
+      {configItem && (
+        <ItemConfigSheet
+          item={configItem}
+          lang={lang}
+          isRtl={isRtl}
+          onClose={() => setConfigItem(null)}
+          onAdd={(line) => {
+            addLine(line)
+            setConfigItem(null)
+          }}
+        />
+      )}
+    </Shell>
+  )
+}
+
+/** Каркас страницы: шапка с названием кофейни и переключателем языка */
+function Shell({ isRtl, lang, setLang, title, children }: {
+  isRtl: boolean
+  lang: Lang
+  setLang: (l: Lang) => void
+  title?: string
+  children: React.ReactNode
+}) {
+  return (
+    <div dir={isRtl ? 'rtl' : 'ltr'} className="min-h-screen bg-[#eceef1]">
+      <div className="max-w-lg mx-auto min-h-screen bg-white flex flex-col">
+        <header className="sticky top-0 z-10 bg-white border-b border-gray-100 px-4 h-14 flex items-center justify-between">
+          <span className="font-bold text-gray-900 truncate">{title ?? ''}</span>
+          <button
+            onClick={() => setLang(lang === 'he' ? 'ru' : 'he')}
+            className="h-9 px-3 rounded-xl bg-gray-100 text-sm font-semibold text-gray-700 active:scale-[0.96] transition-all"
+          >
+            {lang === 'he' ? 'RU' : 'עב'}
+          </button>
+        </header>
+        <div className="flex-1">{children}</div>
+      </div>
+    </div>
+  )
+}
+
+function ItemRow({ item, lang, onTap }: { item: PublicItem; lang: Lang; onTap: () => void }) {
+  const prices = item.variants.length > 0 ? item.variants.map((v) => v.price) : [item.price]
+  const minPrice = Math.min(...prices)
+  return (
+    <button
+      onClick={onTap}
+      className="w-full min-h-[56px] px-4 py-3 rounded-2xl bg-gray-50 hover:bg-gray-100 active:scale-[0.99] transition-all flex items-center gap-3 text-start"
+    >
+      <span className="flex-1 min-w-0 font-semibold text-gray-900">{item.name}</span>
+      <span className="shrink-0 tabular-nums text-gray-900 font-semibold">
+        {item.variants.length > 0 && <span className="text-gray-500 font-normal">{t(lang, 'pubFrom')} </span>}
+        {formatMoney(minPrice, lang)}
+      </span>
+    </button>
+  )
+}
+
+/** Конфигуратор позиции: размер, модификаторы (min/max по группе), количество */
+function ItemConfigSheet({ item, lang, isRtl, onClose, onAdd }: {
+  item: PublicItem
+  lang: Lang
+  isRtl: boolean
+  onClose: () => void
+  onAdd: (line: Omit<CartLine, 'key' | 'qty'>) => void
+}) {
+  const defaultVariant = item.variants.find((v) => v.is_default) ?? item.variants[0] ?? null
+  const [variantId, setVariantId] = useState<string | null>(defaultVariant?.id ?? null)
+  const [selected, setSelected] = useState<Set<string>>(() => {
+    // Дефолтные модификаторы — предвыбраны (в пределах max_select группы)
+    const initial = new Set<string>()
+    for (const g of item.modifier_groups) {
+      let picked = 0
+      for (const m of g.modifiers) {
+        if (m.is_default && (g.max_select === 0 || picked < g.max_select)) {
+          initial.add(m.id)
+          picked++
+        }
+      }
+    }
+    return initial
+  })
+  const [qty, setQty] = useState(1)
+
+  const variant = item.variants.find((v) => v.id === variantId) ?? null
+  const base = variant?.price ?? item.price
+  const modsDelta = item.modifier_groups
+    .flatMap((g) => g.modifiers)
+    .filter((m) => selected.has(m.id))
+    .reduce((s, m) => s + m.price_delta, 0)
+  const unit = base + modsDelta
+
+  // min_select всех групп должен быть соблюдён
+  const missingGroup = item.modifier_groups.find(
+    (g) => g.modifiers.filter((m) => selected.has(m.id)).length < g.min_select
+  )
+
+  function toggleMod(groupId: string, modId: string) {
+    const group = item.modifier_groups.find((g) => g.id === groupId)!
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(modId)) {
+        next.delete(modId)
+        return next
+      }
+      const inGroup = group.modifiers.filter((m) => next.has(m.id))
+      if (group.max_select === 1) {
+        // Радио-поведение: выбор заменяет предыдущий
+        for (const m of inGroup) next.delete(m.id)
+      } else if (group.max_select > 0 && inGroup.length >= group.max_select) {
+        return next // лимит достигнут
+      }
+      next.add(modId)
+      return next
+    })
+  }
+
+  return (
+    <div dir={isRtl ? 'rtl' : 'ltr'} className="fixed inset-0 z-20 flex items-end justify-center bg-black/40" onClick={onClose}>
+      <div
+        className="w-full max-w-lg bg-white rounded-t-3xl max-h-[85vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="px-6 pt-5 pb-3 flex items-center justify-between shrink-0">
+          <h3 className="text-lg font-bold text-gray-900">{item.name}</h3>
+          <button onClick={onClose} className="w-9 h-9 rounded-xl bg-gray-100 text-gray-500 font-bold active:scale-[0.94] transition-all">✕</button>
+        </div>
+
+        <div className="px-6 overflow-y-auto space-y-5 pb-4">
+          {item.variants.length > 0 && (
+            <div className="flex gap-2 flex-wrap">
+              {item.variants.map((v) => (
+                <Chip key={v.id} active={variantId === v.id} onClick={() => setVariantId(v.id)}>
+                  {v.name} · {formatMoney(v.price, lang)}
+                </Chip>
+              ))}
+            </div>
+          )}
+
+          {item.modifier_groups.map((g) => (
+            <div key={g.id}>
+              <div className="text-sm font-bold text-gray-500 mb-2">
+                {g.name}
+                {g.min_select > 0 && <span className="text-gray-400 font-normal"> · {t(lang, 'pubRequired')}</span>}
+              </div>
+              <div className="flex gap-2 flex-wrap">
+                {g.modifiers.map((m) => (
+                  <Chip key={m.id} active={selected.has(m.id)} onClick={() => toggleMod(g.id, m.id)}>
+                    {m.name}
+                    {m.price_delta !== 0 && ` +${formatMoney(m.price_delta, lang)}`}
+                  </Chip>
+                ))}
+              </div>
+            </div>
+          ))}
+
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-bold text-gray-500">{t(lang, 'pubQty')}</span>
+            <div className="flex items-center gap-1">
+              <Stepper onClick={() => setQty((q) => Math.max(1, q - 1))}>−</Stepper>
+              <span className="w-10 text-center font-bold tabular-nums text-gray-900">{qty}</span>
+              <Stepper onClick={() => setQty((q) => Math.min(99, q + 1))}>+</Stepper>
+            </div>
+          </div>
+        </div>
+
+        <div className="p-4 border-t border-gray-100 shrink-0">
+          <button
+            disabled={!!missingGroup}
+            onClick={() => {
+              const mods = item.modifier_groups.flatMap((g) => g.modifiers).filter((m) => selected.has(m.id))
+              for (let i = 0; i < qty; i++) {
+                onAdd({
+                  itemId: item.id,
+                  name: item.name,
+                  variantId: variant?.id ?? null,
+                  variantName: variant?.name ?? null,
+                  modIds: mods.map((m) => m.id),
+                  modNames: mods.map((m) => m.name),
+                  unitPrice: unit,
+                })
+              }
+            }}
+            className="w-full h-14 rounded-2xl bg-gray-900 text-white font-bold disabled:opacity-40 active:scale-[0.98] transition-all"
+          >
+            {missingGroup
+              ? `${t(lang, 'pubChoose')}: ${missingGroup.name}`
+              : `${t(lang, 'pubAdd')} · ${formatMoney(unit * qty, lang)}`}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/** Корзина + форма контактов + отправка заявки */
+function CheckoutScreen({ lang, locId, isOpen, cart, total, onQty, onBack, onSubmitted }: {
+  lang: Lang
+  locId: string
+  isOpen: boolean
+  cart: CartLine[]
+  total: number
+  onQty: (key: string, qty: number) => void
+  onBack: () => void
+  onSubmitted: (clientUuid: string) => void
+}) {
+  const [name, setName] = useState('')
+  const [phone, setPhone] = useState('')
+  const [asap, setAsap] = useState(true)
+  const [time, setTime] = useState('')
+  const [note, setNote] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  // client_uuid создаётся один раз на попытку оформления: ретрай после
+  // сбоя сети не создаст дубликат (идемпотентность submit_online_order)
+  const clientUuid = useMemo(() => crypto.randomUUID(), [])
+
+  const phoneDigits = phone.replace(/\D/g, '')
+  const valid = cart.length > 0 && name.trim().length > 0 && phoneDigits.length >= 9 && (asap || time !== '')
+
+  async function submit() {
+    if (!valid || busy) return
+    setBusy(true)
+    setError(null)
+    try {
+      let pickupIso: string | null = null
+      if (!asap && time) {
+        const [h, m] = time.split(':').map(Number)
+        const d = new Date()
+        d.setHours(h, m, 0, 0)
+        // Время сегодняшнего дня; прошедшее сервер трактует как «как можно скорее»
+        pickupIso = d.toISOString()
+      }
+      await submitPublicOrder({
+        loc: locId,
+        client_uuid: clientUuid,
+        name: name.trim(),
+        phone: phoneDigits,
+        pickup_at: pickupIso,
+        note: note.trim() || null,
+        items: cart.map((l) => ({
+          menu_item_id: l.itemId,
+          variant_id: l.variantId,
+          modifier_ids: l.modIds,
+          qty: l.qty,
+          notes: null,
+        })),
+      })
+      onSubmitted(clientUuid)
+    } catch (e) {
+      const code = e instanceof PublicApiError ? e.code : 'unknown'
+      const detail = e instanceof PublicApiError ? e.detail : undefined
+      setError(publicErrorText(lang, code, detail))
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="px-4 pb-8">
+      <button onClick={onBack} className="mt-4 h-11 px-4 rounded-xl bg-gray-100 text-sm font-semibold text-gray-700 active:scale-[0.96] transition-all">
+        ← {t(lang, 'back')}
+      </button>
+
+      <h2 className="text-lg font-bold text-gray-900 mt-4 mb-3">{t(lang, 'pubCart')}</h2>
+      <div className="space-y-2">
+        {cart.map((l) => (
+          <div key={l.key} className="flex items-center gap-3 rounded-2xl bg-gray-50 px-4 py-3">
+            <div className="flex-1 min-w-0">
+              <div className="font-semibold text-gray-900 text-sm">{l.name}</div>
+              {(l.variantName || l.modNames.length > 0) && (
+                <div className="text-xs text-gray-500 mt-0.5">{[l.variantName, ...l.modNames].filter(Boolean).join(' · ')}</div>
+              )}
+            </div>
+            <div className="flex items-center gap-1 shrink-0">
+              <Stepper onClick={() => onQty(l.key, l.qty - 1)}>−</Stepper>
+              <span className="w-8 text-center font-bold tabular-nums text-sm text-gray-900">{l.qty}</span>
+              <Stepper onClick={() => onQty(l.key, l.qty + 1)}>+</Stepper>
+            </div>
+            <span className="w-20 text-end tabular-nums font-semibold text-sm text-gray-900 shrink-0">
+              {formatMoney(l.unitPrice * l.qty, lang)}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex items-center justify-between mt-4 px-1">
+        <span className="font-bold text-gray-900">{t(lang, 'pubTotal')}</span>
+        <span className="font-black text-xl tabular-nums text-gray-900">{formatMoney(total, lang)}</span>
+      </div>
+      <p className="text-xs text-gray-500 mt-1 px-1">{t(lang, 'pubPayAtPickup')}</p>
+
+      <h2 className="text-lg font-bold text-gray-900 mt-6 mb-3">{t(lang, 'pubContact')}</h2>
+      <div className="space-y-3">
+        <input
+          className="w-full h-12 rounded-xl border border-gray-200 px-4 text-base focus:outline-none focus:border-gray-900"
+          placeholder={t(lang, 'pubYourName')}
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
+        <input
+          className="w-full h-12 rounded-xl border border-gray-200 px-4 text-base focus:outline-none focus:border-gray-900"
+          placeholder={t(lang, 'pubPhone')}
+          type="tel"
+          dir="ltr"
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+        />
+
+        <div className="flex gap-2">
+          <Chip active={asap} onClick={() => setAsap(true)}>{t(lang, 'pubAsap')}</Chip>
+          <Chip active={!asap} onClick={() => setAsap(false)}>{t(lang, 'pubAtTime')}</Chip>
+          {!asap && (
+            <input
+              type="time"
+              className="h-11 rounded-xl border border-gray-200 px-3 text-base focus:outline-none focus:border-gray-900"
+              value={time}
+              onChange={(e) => setTime(e.target.value)}
+            />
+          )}
+        </div>
+
+        <input
+          className="w-full h-12 rounded-xl border border-gray-200 px-4 text-base focus:outline-none focus:border-gray-900"
+          placeholder={t(lang, 'pubNote')}
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+        />
+      </div>
+
+      {error && <div className="mt-4 rounded-2xl bg-red-50 text-red-600 text-sm font-semibold px-4 py-3">{error}</div>}
+      {!isOpen && <div className="mt-4 rounded-2xl bg-amber-50 text-amber-800 text-sm font-semibold px-4 py-3">{t(lang, 'pubClosed')}</div>}
+
+      <button
+        disabled={!valid || busy || !isOpen}
+        onClick={submit}
+        className="w-full h-14 mt-4 rounded-2xl bg-gray-900 text-white font-bold disabled:opacity-40 active:scale-[0.98] transition-all"
+      >
+        {busy ? t(lang, 'pubSubmitting') : `${t(lang, 'pubSubmit')} · ${formatMoney(total, lang)}`}
+      </button>
+    </div>
+  )
+}
+
+/** Статус заявки: поллинг каждые 5 секунд, пока не решена и не выдана */
+function StatusScreen({ lang, clientUuid, onNewOrder }: {
+  lang: Lang
+  clientUuid: string
+  onNewOrder: () => void
+}) {
+  const [status, setStatus] = useState<PublicStatus | null>(null)
+  const [lost, setLost] = useState(false)
+
+  useEffect(() => {
+    let stopped = false
+    async function poll() {
+      try {
+        const s = await fetchPublicStatus(clientUuid)
+        if (!stopped) {
+          setStatus(s)
+          setLost(false)
+        }
+      } catch (e) {
+        if (!stopped && e instanceof PublicApiError && e.code === 'not_found') setLost(true)
+      }
+    }
+    poll()
+    const id = setInterval(poll, 5000)
+    return () => {
+      stopped = true
+      clearInterval(id)
+    }
+  }, [clientUuid])
+
+  if (lost) {
+    return (
+      <CenterCard>
+        <p className="font-bold text-gray-900">{t(lang, 'pubStatusLost')}</p>
+        <NewOrderBtn lang={lang} onClick={onNewOrder} />
+      </CenterCard>
+    )
+  }
+  if (!status) {
+    return <CenterCard><p className="text-gray-500">{t(lang, 'loading')}</p></CenterCard>
+  }
+
+  if (status.status === 'rejected') {
+    return (
+      <CenterCard>
+        <p className="text-2xl font-black text-gray-900">{t(lang, 'pubRejectedTitle')}</p>
+        <p className="text-sm text-gray-500 mt-2">{status.reject_reason || t(lang, 'pubRejectedHint')}</p>
+        <NewOrderBtn lang={lang} onClick={onNewOrder} />
+      </CenterCard>
+    )
+  }
+
+  if (status.status === 'new') {
+    return (
+      <CenterCard>
+        <div className="w-10 h-10 mx-auto rounded-full border-4 border-gray-200 border-t-gray-900 animate-spin" />
+        <p className="text-xl font-bold text-gray-900 mt-5">{t(lang, 'pubWaiting')}</p>
+        <p className="text-sm text-gray-500 mt-2">{t(lang, 'pubWaitingHint')}</p>
+      </CenterCard>
+    )
+  }
+
+  // accepted
+  const os = status.order_status
+  if (os === 'voided') {
+    return (
+      <CenterCard>
+        <p className="text-2xl font-black text-gray-900">{t(lang, 'pubCancelledTitle')}</p>
+        <NewOrderBtn lang={lang} onClick={onNewOrder} />
+      </CenterCard>
+    )
+  }
+  const isDone = os === 'paid' || os === 'fulfilled'
+  return (
+    <CenterCard>
+      <p className="text-sm font-bold text-gray-500 uppercase tracking-wide">{t(lang, 'pubOrderNumber')}</p>
+      <p className="text-6xl font-black tabular-nums text-gray-900 mt-2">#{status.daily_number}</p>
+      <p className="text-xl font-bold text-gray-900 mt-5">
+        {isDone ? t(lang, 'pubDone') : t(lang, 'pubAccepted')}
+      </p>
+      <p className="text-sm text-gray-500 mt-2">
+        {isDone ? t(lang, 'pubDoneHint') : t(lang, 'pubShowNumber')}
+      </p>
+      <p className="text-lg font-bold tabular-nums text-gray-900 mt-3">{formatMoney(status.total, lang)}</p>
+      {isDone && <NewOrderBtn lang={lang} onClick={onNewOrder} />}
+    </CenterCard>
+  )
+}
+
+function CenterCard({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="min-h-[70vh] flex items-center justify-center px-6">
+      <div className="text-center w-full">{children}</div>
+    </div>
+  )
+}
+
+function NewOrderBtn({ lang, onClick }: { lang: Lang; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="mt-6 h-12 px-6 rounded-2xl bg-gray-900 text-white font-bold active:scale-[0.98] transition-all"
+    >
+      {t(lang, 'pubNewOrder')}
+    </button>
+  )
+}
+
+function Chip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`h-11 px-4 rounded-xl text-sm font-semibold transition-all active:scale-[0.96] ${
+        active ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+      }`}
+    >
+      {children}
+    </button>
+  )
+}
+
+function Stepper({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      onClick={onClick}
+      className="w-11 h-11 rounded-xl bg-white border border-gray-200 font-bold text-gray-700 active:scale-[0.94] transition-all"
+    >
+      {children}
+    </button>
+  )
+}
+
+/** Код ошибки публичного API → текст гостю */
+function publicErrorText(lang: Lang, code: string, detail?: string): string {
+  switch (code) {
+    case 'closed': return t(lang, 'pubErrClosed')
+    case 'rate_limited': return t(lang, 'pubErrRate')
+    case 'busy': return t(lang, 'pubErrBusy')
+    case 'item_unavailable': return `${t(lang, 'pubErrUnavailable')}${detail ? `: ${detail}` : ''}`
+    case 'invalid_phone': return t(lang, 'pubErrPhone')
+    default: return t(lang, 'pubErrGeneric')
+  }
+}

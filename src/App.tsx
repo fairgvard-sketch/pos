@@ -19,6 +19,9 @@ import AutoLock from './components/AutoLock'
 // Менеджерские экраны — lazy: не тормозят парсинг на слабом CPU терминала,
 // подгружаются при первом заходе (и кэшируются SW наравне с основным бандлом).
 const MenuPage = lazy(() => import('./features/menu/MenuPage'))
+const OnlineOrdersPage = lazy(() => import('./features/online/OnlineOrdersPage'))
+// Публичная страница заказа для гостей (050) — без auth, ходит в Edge Functions
+const PublicOrderPage = lazy(() => import('./features/online/PublicOrderPage'))
 const ShiftPage = lazy(() => import('./features/shift/ShiftPage'))
 const TimesheetPage = lazy(() => import('./features/timesheet/TimesheetPage'))
 const TransactionsPage = lazy(() => import('./features/transactions/TransactionsPage'))
@@ -141,6 +144,18 @@ export default function App() {
               </ProtectedRoute>
             }
           />
+
+          <Route
+            path="/online"
+            element={
+              <ProtectedRoute>
+                <OnlineOrdersPage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Гость сайта: меню и «закажи и забери» (050). Публичный маршрут. */}
+          <Route path="/order/:locId" element={<PublicOrderPage />} />
 
           <Route
             path="/shift"

@@ -1,19 +1,22 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import toast from 'react-hot-toast'
 import { useAuthStore } from '../store/authStore'
 import { useLangStore } from '../store/langStore'
 import { useCartStore } from '../store/cartStore'
 import { fetchCurrentLocation } from '../features/auth/api'
 import { voidTableOrder } from '../features/tables/api'
+import { fetchOnlineOrders, subscribeOnlineOrders } from '../features/online/api'
 import { useOutboxStore } from '../lib/offline/outboxStore'
 import { enqueueTableVoid } from '../lib/offline/enqueue'
+import { playNewOrderChime } from '../lib/sound'
 import { t } from '../lib/i18n'
 import Icon from './Icon'
 import type { IconName } from './Icon'
 import OfflineBadge from './OfflineBadge'
 
-export type SidebarPage = 'sell' | 'hall' | 'queue' | 'transactions' | 'shift' | 'timesheet' | 'menu' | 'analytics' | 'settings'
+export type SidebarPage = 'sell' | 'hall' | 'queue' | 'online' | 'transactions' | 'shift' | 'timesheet' | 'menu' | 'analytics' | 'settings'
 
 /** Общий сайдбар кассы: навигация, часы, сотрудник */
 export default function AppSidebar({ active }: { active: SidebarPage }) {
@@ -24,6 +27,31 @@ export default function AppSidebar({ active }: { active: SidebarPage }) {
 
   const { data: location } = useQuery({ queryKey: ['current_location'], queryFn: fetchCurrentLocation })
   const qc = useQueryClient()
+
+  // ── Онлайн-заказы (050): бейдж + звонок. Сайдбар смонтирован на всех
+  // рабочих экранах — уведомление о новой заявке глобальное. Realtime
+  // основной канал, интервал — страховка от пропущенного события.
+  const { data: onlineOrders = [] } = useQuery({
+    queryKey: ['online_orders'],
+    queryFn: fetchOnlineOrders,
+    refetchInterval: 90_000,
+  })
+  useEffect(() => subscribeOnlineOrders(() => qc.invalidateQueries({ queryKey: ['online_orders'] })), [qc])
+  const newOnlineCount = onlineOrders.filter((o) => o.status === 'new').length
+  // Звонок при ПОЯВЛЕНИИ новой заявки (сравниваем множества id, не количество)
+  const knownOnlineIds = useRef<Set<string> | null>(null)
+  useEffect(() => {
+    const ids = new Set(onlineOrders.filter((o) => o.status === 'new').map((o) => o.id))
+    if (knownOnlineIds.current === null) {
+      knownOnlineIds.current = ids // первый рендер после навигации — не звеним
+      return
+    }
+    if ([...ids].some((id) => !knownOnlineIds.current!.has(id))) {
+      playNewOrderChime()
+      toast(t(lang, 'onlineNewToast'))
+    }
+    knownOnlineIds.current = ids
+  }, [onlineOrders, lang])
   const tableCtx = useCartStore((s) => s.tableCtx)
   const lines = useCartStore((s) => s.lines)
   const clearCart = useCartStore((s) => s.clear)
@@ -82,6 +110,13 @@ export default function AppSidebar({ active }: { active: SidebarPage }) {
           <SideLink active={active === 'sell'} label={t(lang, 'sell')} iconName="orders" onClick={() => navigate('/sell')} />
         )}
         <SideLink active={active === 'queue'} label={t(lang, 'queue')} iconName="queue" onClick={() => navigate('/queue')} />
+        <SideLink
+          active={active === 'online'}
+          label={t(lang, 'onlineTitle')}
+          iconName="orders"
+          badge={newOnlineCount}
+          onClick={() => navigate('/online')}
+        />
         <SideLink active={active === 'transactions'} label={t(lang, 'transactions')} iconName="card" onClick={() => navigate('/transactions')} />
         <SideLink active={active === 'shift'} label={t(lang, 'shift')} iconName="shift" onClick={() => navigate('/shift')} />
         <SideLink active={active === 'timesheet'} label={t(lang, 'timesheet')} iconName="customers" onClick={() => navigate('/timesheet')} />
@@ -117,7 +152,7 @@ export default function AppSidebar({ active }: { active: SidebarPage }) {
   )
 }
 
-function SideLink({ label, iconName, active, onClick }: { label: string; iconName: IconName; active?: boolean; onClick: () => void }) {
+function SideLink({ label, iconName, active, badge = 0, onClick }: { label: string; iconName: IconName; active?: boolean; badge?: number; onClick: () => void }) {
   return (
     <button
       onClick={onClick}
@@ -126,7 +161,12 @@ function SideLink({ label, iconName, active, onClick }: { label: string; iconNam
       }`}
     >
       <Icon name={iconName} isActive={active} size={20} />
-      {label}
+      <span className="flex-1 text-start truncate">{label}</span>
+      {badge > 0 && (
+        <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-gray-900 text-white text-[11px] font-bold flex items-center justify-center tabular-nums">
+          {badge}
+        </span>
+      )}
     </button>
   )
 }

@@ -34,3 +34,6 @@ android/local.properties
 *.njsproj
 *.sln
 *.sw?
+
+# Supabase CLI artifacts
+supabase/.temp/

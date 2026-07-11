@@ -4,7 +4,7 @@ import toast from 'react-hot-toast'
 import { fetchQueue, subscribeQueue, markItemReady, markOrderReady, type QueueOrder, type QueueItem } from './api'
 import { fetchStations } from '../menu/api'
 import { useLangStore } from '../../store/langStore'
-import { t, orderTypeLabel } from '../../lib/i18n'
+import { t, orderTypeLabel, formatTime } from '../../lib/i18n'
 import { playNewOrderChime } from '../../lib/sound'
 import { useOutboxStore } from '../../lib/offline/outboxStore'
 import { useNetStore } from '../../lib/offline/net'
@@ -281,6 +281,12 @@ function OrderCard({
           {order.table_label ? (
             <span className={`text-xs font-bold uppercase tracking-wide ${theme.number}`}>
               {t(lang, 'tableLabel')} {order.table_label}
+            </span>
+          ) : order.source === 'site' ? (
+            // Онлайн-заказ (050): бариста видит источник и «к какому времени»
+            <span className={`text-xs font-bold uppercase tracking-wide ${theme.number}`}>
+              {t(lang, 'onlineBadge')}
+              {order.pickup_at && ` · ${formatTime(order.pickup_at, lang)}`}
             </span>
           ) : (
             <span className={`text-xs font-semibold uppercase tracking-wide ${theme.itemDetailIdle}`}>

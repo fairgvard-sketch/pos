@@ -85,6 +85,8 @@ supabase/migrations/
 | `/setup` | — | DeviceSetupPage |
 | `/pin` | сессия устройства | PinLoginPage |
 | `/home` | PIN-сессия | HomePage |
+| `/online` | PIN-сессия | OnlineOrdersPage — заявки с сайта (050) |
+| `/order/:locId` | публичный | PublicOrderPage — гость: «закажи и забери» |
 
 ## Роли
 
@@ -176,7 +178,20 @@ PIN после продажи, звук оплаты, способ печати.
 в payments 046; план и что нужно от кабинета — `docs/cardcom-plan.md`); лояльность
 v2 (возврат баллов при refund, лояльность на счетах столов, QR-карта); офлайн v2
 (скидка/void-item офлайн-строк стола, правка payload pending-append); серверный
-гейт отчётов (sales_report/табель — manager-сессия).
+гейт отчётов (sales_report/табель — manager-сессия); склад v2 (приход,
+инвентаризация, отчёт движения); брони с сайта; онлайн-заказы фазы 2–3
+(Cardcom Low Profile, доставка/Wolt).
+
+**Онлайн-заказы фаза 1 (050 + `src/features/online/` + `supabase/functions/`,
+июль 2026):** «закажи и забери» — публичная страница `/order/:locId` (гость,
+he/ru, Edge Functions `public-menu`/`public-order` под service_role, анти-спам
+и цены в БД `submit_online_order`), стейджинг `online_orders`, экран кассы
+`/online` (принять → `accept_online_order` → обычный `place_order` takeaway
+`source='site'` → очередь бариста + кухонный тикет; отклонить с причиной;
+оплата при получении — обычный PaymentSheet/pay_order), бейдж+звонок в
+сайдбаре. Приём заявок только при открытой смене; незабранные заказы
+аннулирует закрытие смены (035). Деплой и детали — `docs/online-orders.md`
+(порядок: миграция → edge functions → фронтенд!).
 
 **Офлайн-слой (фаза 7, миграция 042 + `src/lib/offline/`):**
 - Работают без сети: counter-продажа (place+pay в очередь, временный чек
