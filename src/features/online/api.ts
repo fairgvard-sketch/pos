@@ -80,11 +80,15 @@ export async function rejectOnlineOrder(onlineId: string, staffId: string, reaso
 
 /**
  * Realtime-подписка на заявки: любое изменение → onChange (инвалидация
- * кэша). Отдельный канал от 'queue' — сайдбар живёт на всех экранах.
+ * кэша). Имя канала уникально на каждый вызов: supabase.channel(name)
+ * возвращает УЖЕ подписанный канал с тем же именем, и повторный .on()
+ * после subscribe() кидает исключение (белый экран /online в проде,
+ * когда подписывались и сайдбар, и страница).
  */
+let channelSeq = 0
 export function subscribeOnlineOrders(onChange: () => void) {
   const channel = supabase
-    .channel('online-orders')
+    .channel(`online-orders-${++channelSeq}`)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'online_orders' }, onChange)
     .subscribe()
   return () => { supabase.removeChannel(channel) }

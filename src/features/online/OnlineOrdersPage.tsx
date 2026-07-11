@@ -16,7 +16,7 @@ import ReceiptChoiceSheet from '../receipt/ReceiptChoiceSheet'
 import { autoPrintReceipt, printKitchenTicket } from '../receipt/printService'
 import AppSidebar from '../../components/AppSidebar'
 import {
-  fetchOnlineOrders, acceptOnlineOrder, rejectOnlineOrder, subscribeOnlineOrders,
+  fetchOnlineOrders, acceptOnlineOrder, rejectOnlineOrder,
   type OnlineOrder,
 } from './api'
 
@@ -40,7 +40,8 @@ export default function OnlineOrdersPage() {
   const { data: orders = [] } = useQuery({ queryKey: ['online_orders'], queryFn: fetchOnlineOrders })
   const { data: location } = useQuery({ queryKey: ['current_location'], queryFn: fetchCurrentLocation })
 
-  useEffect(() => subscribeOnlineOrders(() => qc.invalidateQueries({ queryKey: ['online_orders'] })), [qc])
+  // Realtime-подписки здесь нет: AppSidebar (смонтирован на этом экране)
+  // уже подписан на online_orders и инвалидирует ['online_orders']
 
   // Тик раз в 30с — «5 мин назад» на карточках живёт без перезапросов
   const [nowTs, setNowTs] = useState(() => Date.now())
