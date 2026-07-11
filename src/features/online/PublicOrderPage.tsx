@@ -321,16 +321,16 @@ function Shell({ isRtl, lang, setLang, title, logo, hero, headerImg, bgImg, chil
         {hero ? (
           headerImg ? (
             // Баннер-шапка: фото, поверх — логотип и название (белым на скриме)
-            <header className="relative h-44 shrink-0">
+            <header className="relative h-32 shrink-0">
               <img src={headerImg} alt="" className="absolute inset-0 w-full h-full object-cover" />
-              <span className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/15 to-black/25" />
-              <div className="absolute top-4 end-4">{langBtn}</div>
-              <div className="absolute bottom-4 inset-x-4 flex items-center gap-3">
-                {logo && <img src={logo} alt="" className="w-12 h-12 rounded-full object-cover border-2 border-white/80 shrink-0" />}
-                <h1 className="text-2xl font-black text-white leading-tight truncate [text-shadow:0_1px_8px_rgba(0,0,0,0.45)]">
+              <span className="absolute inset-0 bg-black/35" />
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-4 pointer-events-none">
+                {logo && <img src={logo} alt="" className="w-11 h-11 rounded-full object-cover border-2 border-white/80 shrink-0" />}
+                <h1 className="text-2xl font-black text-white leading-tight text-center [text-shadow:0_1px_8px_rgba(0,0,0,0.45)]">
                   {title ?? ''}
                 </h1>
               </div>
+              <div className="absolute top-3 end-3">{langBtn}</div>
             </header>
           ) : (
           <header className="relative px-8 pt-8 pb-2 text-center">
