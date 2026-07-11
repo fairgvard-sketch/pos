@@ -834,6 +834,11 @@ export const translations = {
     qrPrintSent: 'QR отправлен на печать',
     qrPrintFail: 'Не получилось — проверьте способ печати',
     qrHint: 'Распечатайте QR на термоленте и приклейте на стойку или витрину',
+    previewShow: 'Показать превью страницы',
+    previewHide: 'Скрыть превью',
+    onlineStats7d: 'За 7 дней',
+    onlineStatReqs: 'заявок',
+    onlineStatAcc: 'принято',
   },
   he: {
     // Общее
@@ -1668,6 +1673,11 @@ export const translations = {
     qrPrintSent: 'ה-QR נשלח להדפסה',
     qrPrintFail: 'לא הצליח — בדקו את שיטת ההדפסה',
     qrHint: 'הדפיסו את הקוד על סרט תרמי והדביקו בדלפק או בחלון הראווה',
+    previewShow: 'להציג תצוגה מקדימה',
+    previewHide: 'להסתיר תצוגה מקדימה',
+    onlineStats7d: 'ב־7 ימים',
+    onlineStatReqs: 'הזמנות',
+    onlineStatAcc: 'אושרו',
   },
 } as const
 

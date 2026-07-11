@@ -16,7 +16,7 @@ import ReceiptChoiceSheet from '../receipt/ReceiptChoiceSheet'
 import { autoPrintReceipt, printKitchenTicket } from '../receipt/printService'
 import AppSidebar from '../../components/AppSidebar'
 import {
-  fetchOnlineOrders, acceptOnlineOrder, rejectOnlineOrder,
+  fetchOnlineOrders, fetchOnlineStats, acceptOnlineOrder, rejectOnlineOrder,
   type OnlineOrder,
 } from './api'
 
@@ -39,6 +39,7 @@ export default function OnlineOrdersPage() {
 
   const { data: orders = [] } = useQuery({ queryKey: ['online_orders'], queryFn: fetchOnlineOrders })
   const { data: location } = useQuery({ queryKey: ['current_location'], queryFn: fetchCurrentLocation })
+  const { data: stats } = useQuery({ queryKey: ['online_stats'], queryFn: fetchOnlineStats, staleTime: 60_000 })
 
   // Realtime-подписки здесь нет: AppSidebar (смонтирован на этом экране)
   // уже подписан на online_orders и инвалидирует ['online_orders']
@@ -147,9 +148,15 @@ export default function OnlineOrdersPage() {
       <main className="flex-1 min-w-0 bg-white rounded-3xl flex flex-col overflow-hidden">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
           <h1 className="text-xl font-bold text-gray-900">{t(lang, 'onlineOrders')}</h1>
-          <span className="text-sm text-gray-500">
-            {t(lang, 'onlineNewCount')}: <span className="font-bold tabular-nums text-gray-900">{fresh.length}</span>
-          </span>
+          {/* Статистика за 7 дней (идея из Square Online) */}
+          {stats && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-500 me-1">{t(lang, 'onlineStats7d')}</span>
+              <span className="badge-gray tabular-nums">{stats.requests} {t(lang, 'onlineStatReqs')}</span>
+              <span className="badge-green tabular-nums">{stats.accepted} {t(lang, 'onlineStatAcc')}</span>
+              <span className="badge-blue tabular-nums">{formatMoney(stats.revenue, lang)}</span>
+            </div>
+          )}
         </div>
 
         <div className="flex-1 overflow-y-auto p-6">

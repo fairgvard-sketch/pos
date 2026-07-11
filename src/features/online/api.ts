@@ -78,6 +78,29 @@ export async function rejectOnlineOrder(onlineId: string, staffId: string, reaso
   if (error) throw new Error(error.message)
 }
 
+export interface OnlineStats {
+  requests: number  // заявок за 7 дней
+  accepted: number
+  revenue: number   // продано онлайн-заказов (paid/fulfilled), агороты
+}
+
+/** Статистика онлайн-заказов за 7 дней (идея из Square Online) */
+export async function fetchOnlineStats(): Promise<OnlineStats> {
+  const since = new Date(Date.now() - 7 * 24 * 3600_000).toISOString()
+  const [oo, orders] = await Promise.all([
+    supabase.from('online_orders').select('status').gte('created_at', since),
+    supabase.from('orders').select('total, status').eq('source', 'site')
+      .in('status', ['paid', 'fulfilled']).gte('created_at', since),
+  ])
+  if (oo.error) throw new Error(oo.error.message)
+  if (orders.error) throw new Error(orders.error.message)
+  return {
+    requests: oo.data.length,
+    accepted: oo.data.filter((r) => r.status === 'accepted').length,
+    revenue: orders.data.reduce((s, o) => s + o.total, 0),
+  }
+}
+
 /**
  * Realtime-подписка на заявки: любое изменение → onChange (инвалидация
  * кэша). Имя канала уникально на каждый вызов: supabase.channel(name)
