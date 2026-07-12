@@ -5,7 +5,7 @@ import { t, type Lang } from '../../lib/i18n'
 import { formatMoney } from '../../lib/money'
 import {
   fetchPublicMenu, fetchPublicStatus, submitPublicOrder, PublicApiError,
-  type PublicItem, type PublicMenu, type PublicStatus,
+  type PublicItem, type PublicMenu, type PublicStatus, type PublicOrderType,
 } from './publicApi'
 import BrandSplash from '../../components/ui/BrandSplash'
 
@@ -245,6 +245,7 @@ export default function PublicOrderPage() {
           lang={lang}
           locId={locId}
           isOpen={menu.location.is_open && menu.location.accepting !== false}
+          orderTypes={menu.location.order_types ?? ['here', 'takeaway']}
           cart={cart}
           total={cartTotal}
           onQty={updateQty}
@@ -543,39 +544,45 @@ function ItemConfigSheet({ item, lang, isRtl, onClose, onAdd }: {
             </div>
           ))}
 
-          <div className="flex items-center gap-3">
-            <span className="text-sm font-bold text-gray-500">{t(lang, 'pubQty')}</span>
-            <div className="flex items-center gap-1">
-              <Stepper onClick={() => setQty((q) => Math.max(1, q - 1))}>−</Stepper>
-              <span className="w-10 text-center font-bold tabular-nums text-gray-900">{qty}</span>
-              <Stepper onClick={() => setQty((q) => Math.min(99, q + 1))}>+</Stepper>
-            </div>
-          </div>
         </div>
 
         <div className="p-4 border-t border-gray-100 shrink-0">
-          <button
-            disabled={!!missingGroup}
-            onClick={() => {
-              const mods = item.modifier_groups.flatMap((g) => g.modifiers).filter((m) => selected.has(m.id))
-              for (let i = 0; i < qty; i++) {
-                onAdd({
-                  itemId: item.id,
-                  name: item.name,
-                  variantId: variant?.id ?? null,
-                  variantName: variant?.name ?? null,
-                  modIds: mods.map((m) => m.id),
-                  modNames: mods.map((m) => m.name),
-                  unitPrice: unit,
-                })
-              }
-            }}
-            className="w-full h-14 rounded-2xl bg-gray-900 text-white font-bold disabled:opacity-40 active:scale-[0.98] transition-all"
-          >
-            {missingGroup
-              ? `${t(lang, 'pubChoose')}: ${missingGroup.name}`
-              : `${t(lang, 'pubAdd')} · ${formatMoney(unit * qty, lang)}`}
-          </button>
+          {/* Количество + добавление — одна полоса: степпер слева, кнопка справа */}
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1 shrink-0">
+              <Stepper onClick={() => setQty((q) => Math.max(1, q - 1))}>−</Stepper>
+              <span className="w-8 text-center font-bold tabular-nums text-gray-900">{qty}</span>
+              <Stepper onClick={() => setQty((q) => Math.min(99, q + 1))}>+</Stepper>
+            </div>
+            <button
+              disabled={!!missingGroup}
+              onClick={() => {
+                const mods = item.modifier_groups.flatMap((g) => g.modifiers).filter((m) => selected.has(m.id))
+                for (let i = 0; i < qty; i++) {
+                  onAdd({
+                    itemId: item.id,
+                    name: item.name,
+                    variantId: variant?.id ?? null,
+                    variantName: variant?.name ?? null,
+                    modIds: mods.map((m) => m.id),
+                    modNames: mods.map((m) => m.name),
+                    unitPrice: unit,
+                  })
+                }
+              }}
+              className="flex-1 min-w-0 h-14 rounded-2xl bg-gray-900 text-white font-bold disabled:opacity-40
+                         active:scale-[0.98] transition-all flex items-center justify-center gap-2 px-4"
+            >
+              {missingGroup ? (
+                <span className="truncate">{`${t(lang, 'pubChoose')}: ${missingGroup.name}`}</span>
+              ) : (
+                <>
+                  <span>{t(lang, 'pubAdd')}</span>
+                  <span className="tabular-nums" dir="ltr">{formatMoney(unit * qty, lang)}</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -583,10 +590,11 @@ function ItemConfigSheet({ item, lang, isRtl, onClose, onAdd }: {
 }
 
 /** Корзина + форма контактов + отправка заявки */
-function CheckoutScreen({ lang, locId, isOpen, cart, total, onQty, onBack, onSubmitted }: {
+function CheckoutScreen({ lang, locId, isOpen, orderTypes, cart, total, onQty, onBack, onSubmitted }: {
   lang: Lang
   locId: string
   isOpen: boolean
+  orderTypes: PublicOrderType[]
   cart: CartLine[]
   total: number
   onQty: (key: string, qty: number) => void
@@ -598,6 +606,10 @@ function CheckoutScreen({ lang, locId, isOpen, cart, total, onQty, onBack, onSub
   const [asap, setAsap] = useState(true)
   const [time, setTime] = useState('')
   const [note, setNote] = useState('')
+  // Тип заказа: первый включённый по умолчанию. Если включён один —
+  // вопрос не показываем (нечего выбирать).
+  const [orderType, setOrderType] = useState<PublicOrderType>(orderTypes[0] ?? 'takeaway')
+  const [address, setAddress] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   // client_uuid создаётся один раз на попытку оформления: ретрай после
@@ -605,7 +617,8 @@ function CheckoutScreen({ lang, locId, isOpen, cart, total, onQty, onBack, onSub
   const clientUuid = useMemo(() => crypto.randomUUID(), [])
 
   const phoneDigits = phone.replace(/\D/g, '')
-  const valid = cart.length > 0 && name.trim().length > 0 && phoneDigits.length >= 9 && (asap || time !== '')
+  const addressOk = orderType !== 'delivery' || address.trim().length > 0
+  const valid = cart.length > 0 && name.trim().length > 0 && phoneDigits.length >= 9 && (asap || time !== '') && addressOk
 
   async function submit() {
     if (!valid || busy) return
@@ -627,6 +640,8 @@ function CheckoutScreen({ lang, locId, isOpen, cart, total, onQty, onBack, onSub
         phone: phoneDigits,
         pickup_at: pickupIso,
         note: note.trim() || null,
+        order_type: orderType,
+        delivery_address: orderType === 'delivery' ? address.trim() : null,
         items: cart.map((l) => ({
           menu_item_id: l.itemId,
           variant_id: l.variantId,
@@ -677,6 +692,30 @@ function CheckoutScreen({ lang, locId, isOpen, cart, total, onQty, onBack, onSub
         <span className="font-black text-xl tabular-nums text-gray-900" dir="ltr">{formatMoney(total, lang)}</span>
       </div>
       <p className="text-xs text-gray-500 mt-1 px-1">{t(lang, 'pubPayAtPickup')}</p>
+
+      {/* Тип заказа (055): показываем вопрос только если вариантов >1 */}
+      {orderTypes.length > 1 && (
+        <>
+          <h2 className="text-lg font-bold text-gray-900 mt-6 mb-3">{t(lang, 'pubOrderTypeTitle')}</h2>
+          <div className="flex gap-2 flex-wrap">
+            {orderTypes.map((tp) => (
+              <Chip key={tp} active={orderType === tp} onClick={() => setOrderType(tp)}>
+                {t(lang, tp === 'here' ? 'pubTypeHere' : tp === 'delivery' ? 'pubTypeDelivery' : 'pubTypeTakeaway')}
+              </Chip>
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* Адрес доставки — обязателен только для доставки */}
+      {orderType === 'delivery' && (
+        <input
+          className="w-full h-12 mt-3 rounded-xl border border-gray-200 px-4 text-base focus:outline-none focus:border-gray-900"
+          placeholder={t(lang, 'pubAddress')}
+          value={address}
+          onChange={(e) => setAddress(e.target.value)}
+        />
+      )}
 
       <h2 className="text-lg font-bold text-gray-900 mt-6 mb-3">{t(lang, 'pubContact')}</h2>
       <div className="space-y-3">
@@ -871,6 +910,7 @@ function publicErrorText(lang: Lang, code: string, detail?: string): string {
     case 'busy': return t(lang, 'pubErrBusy')
     case 'item_unavailable': return `${t(lang, 'pubErrUnavailable')}${detail ? `: ${detail}` : ''}`
     case 'invalid_phone': return t(lang, 'pubErrPhone')
+    case 'invalid_address': return t(lang, 'pubErrAddress')
     default: return t(lang, 'pubErrGeneric')
   }
 }

@@ -16,7 +16,7 @@ import Icon from './Icon'
 import type { IconName } from './Icon'
 import OfflineBadge from './OfflineBadge'
 
-export type SidebarPage = 'sell' | 'hall' | 'queue' | 'online' | 'transactions' | 'shift' | 'timesheet' | 'menu' | 'analytics' | 'settings'
+export type SidebarPage = 'sell' | 'hall' | 'reservations' | 'queue' | 'online' | 'transactions' | 'shift' | 'timesheet' | 'menu' | 'analytics' | 'settings'
 
 /** Общий сайдбар кассы: навигация, часы, сотрудник */
 export default function AppSidebar({ active }: { active: SidebarPage }) {
@@ -108,6 +108,10 @@ export default function AppSidebar({ active }: { active: SidebarPage }) {
         )}
         {showSell && (
           <SideLink active={active === 'sell'} label={t(lang, 'sell')} iconName="orders" onClick={() => navigate('/sell')} />
+        )}
+        {/* Брони — только в режиме столов (053) */}
+        {tablesMode && (
+          <SideLink active={active === 'reservations'} label={t(lang, 'reservations')} iconName="note" onClick={() => navigate('/reservations')} />
         )}
         <SideLink active={active === 'queue'} label={t(lang, 'queue')} iconName="queue" onClick={() => navigate('/queue')} />
         <SideLink

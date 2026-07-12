@@ -69,7 +69,15 @@
       "PowerShell(npm run build 2>&1)",
       "PowerShell(git add src/features/sell/SellPage.tsx src/lib/i18n.ts)",
       "PowerShell(git add src/features/online/PublicOrderPage.tsx)",
-      "PowerShell(git add .claude/settings.json)"
+      "PowerShell(git add .claude/settings.json)",
+      "PowerShell(git push origin main)",
+      "PowerShell(npx supabase migration list --linked 2>&1)",
+      "PowerShell(npx supabase link --project-ref qgmnxrgtlpyqglwqmsej 2>&1)",
+      "PowerShell(npx supabase db dump --linked --schema public -f \"$env:TEMP\\\\kassa_schema.sql\" 2>&1 | Select-Object -Last 5)",
+      "PowerShell($tok = [Environment]::GetEnvironmentVariable\\('SUPABASE_ACCESS_TOKEN','User'\\); if \\(-not $tok\\) { $tok = $env:SUPABASE_ACCESS_TOKEN }; if \\(-not $tok\\) { 'NO TOKEN'; exit }; $body = '{\"query\":\"select polname from pg_policies_check\"}'; $q = @{ query = \"select policyname from pg_policies where tablename = 'locations' union all select 'FN:' || case when prosrc like '%staff session required%' then 'strict' else 'soft' end from pg_proc where proname = 'require_staff_perm'\" } | ConvertTo-Json; try { Invoke-RestMethod -Method Post -Uri \"https://api.supabase.com/v1/projects/qgmnxrgtlpyqglwqmsej/database/query\" -Headers @{ Authorization = \"Bearer $tok\"; 'Content-Type' = 'application/json' } -Body $q | ConvertTo-Json -Depth 4 } catch { $_.Exception.Message })",
+      "PowerShell($loc = Join-Path $env:APPDATA 'supabase'; Get-ChildItem $loc -ErrorAction SilentlyContinue | Select-Object Name; cmdkey /list | Select-String supabase)",
+      "PowerShell($m = Invoke-WebRequest -UseBasicParsing 'http://localhost:5173/src/features/online/PublicOrderPage.tsx'; \\($m.Content | Select-String -Pattern 'text-\\\\[64px\\\\]' -AllMatches\\).Matches.Count; $css = Invoke-WebRequest -UseBasicParsing 'http://localhost:5173/src/index.css'; \\($css.Content | Select-String -Pattern '64px' -AllMatches\\).Matches.Count)",
+      "PowerShell(git add src/features/sell/SellPage.tsx src/lib/i18n.ts src/components/ui/BrandSplash.css)"
     ]
   }
 }

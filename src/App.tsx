@@ -21,6 +21,7 @@ import BrandSplash from './components/ui/BrandSplash'
 // подгружаются при первом заходе (и кэшируются SW наравне с основным бандлом).
 const MenuPage = lazy(() => import('./features/menu/MenuPage'))
 const OnlineOrdersPage = lazy(() => import('./features/online/OnlineOrdersPage'))
+const ReservationsPage = lazy(() => import('./features/reservations/ReservationsPage'))
 // Публичная страница заказа для гостей (050) — без auth, ходит в Edge Functions
 const PublicOrderPage = lazy(() => import('./features/online/PublicOrderPage'))
 const ShiftPage = lazy(() => import('./features/shift/ShiftPage'))
@@ -144,6 +145,16 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <QueuePage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Книга броней (053) — режим столов; управляет любой сотрудник */}
+          <Route
+            path="/reservations"
+            element={
+              <ProtectedRoute>
+                <ReservationsPage />
               </ProtectedRoute>
             }
           />

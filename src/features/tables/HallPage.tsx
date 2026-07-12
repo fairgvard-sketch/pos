@@ -3,12 +3,13 @@ import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { fetchTables, fetchOpenTableOrders, openTableOrder, setTableStatus, setTableLayout, type TableOccupancy } from './api'
+import { fetchActiveTableReservations } from '../reservations/api'
 import { fetchCurrentLocation } from '../auth/api'
 import { fetchCurrentShift } from '../shift/api'
 import { useCartStore } from '../../store/cartStore'
 import { useAuthStore } from '../../store/authStore'
 import { useLangStore } from '../../store/langStore'
-import { t, formatElapsed } from '../../lib/i18n'
+import { t, formatElapsed, formatTime } from '../../lib/i18n'
 import { supabase } from '../../lib/supabase'
 import { OfflineError, withOfflineFallback } from '../../lib/offline/net'
 import { useOutboxStore } from '../../lib/offline/outboxStore'
@@ -35,6 +36,8 @@ export default function HallPage() {
   const { data: location } = useQuery({ queryKey: ['current_location'], queryFn: fetchCurrentLocation })
   const { data: tables = [] } = useQuery({ queryKey: ['tables'], queryFn: fetchTables })
   const { data: open = [] } = useQuery({ queryKey: ['open_table_orders'], queryFn: fetchOpenTableOrders })
+  // Ближайшие активные брони с назначенным столом — бейдж на карточке стола (053)
+  const { data: reservations = [] } = useQuery({ queryKey: ['table_reservations'], queryFn: fetchActiveTableReservations })
 
   // Тик раз в 30 сек — чтобы «сколько сидят» на карточках обновлялось само
   const [nowTs, setNowTs] = useState(Date.now())
@@ -52,6 +55,9 @@ export default function HallPage() {
       )
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tables' }, () =>
         qc.invalidateQueries({ queryKey: ['tables'] })
+      )
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'reservations' }, () =>
+        qc.invalidateQueries({ queryKey: ['table_reservations'] })
       )
       .subscribe()
     return () => { supabase.removeChannel(ch) }
@@ -79,6 +85,13 @@ export default function HallPage() {
     }
     return map
   }, [open, localOrders])
+
+  // Ближайшая активная бронь по столу (список уже отсортирован по времени)
+  const reservationByTable = useMemo(() => {
+    const m = new Map<string, (typeof reservations)[number]>()
+    for (const r of reservations) if (r.table_id && !m.has(r.table_id)) m.set(r.table_id, r)
+    return m
+  }, [reservations])
 
   // Раскладка на холсте: у неразмещённых столов (pos_x=null) — дефолтная
   // сетка, чтобы их можно было увидеть и растащить. Размещённые — как есть.
@@ -307,6 +320,7 @@ export default function HallPage() {
                 const busy = !!occ
                 const disabled = !busy && tb.status === 'disabled'
                 const reserved = !busy && tb.status === 'reserved'
+                const nextResv = busy ? undefined : reservationByTable.get(tb.id)
                 // Возраст счёта красит стол: до 30 мин — жёлтый, дальше — красный
                 const ageMin = occ ? Math.floor((nowTs - new Date(occ.opened_at).getTime()) / 60000) : 0
                 const overdue = ageMin >= TABLE_WARN_MIN
@@ -379,10 +393,14 @@ export default function HallPage() {
                       <span className={`text-[11px] font-semibold ${overdue ? 'text-red-500' : 'text-amber-600'}`}>
                         {t(lang, 'tableBusy')} · {formatElapsed(occ!.opened_at, nowTs, lang)}
                       </span>
-                    ) : reserved ? (
-                      <span className="text-[11px] font-semibold text-blue-500">{t(lang, 'tableReserved')}</span>
                     ) : disabled ? (
                       <span className="text-[11px] text-gray-400">{t(lang, 'tableDisabled')}</span>
+                    ) : nextResv ? (
+                      <span className="text-[10px] font-semibold text-blue-500 tabular-nums leading-tight text-center truncate max-w-full px-1">
+                        {formatTime(nextResv.reserved_at, lang)} · {nextResv.customer_name}
+                      </span>
+                    ) : reserved ? (
+                      <span className="text-[11px] font-semibold text-blue-500">{t(lang, 'tableReserved')}</span>
                     ) : (
                       <span className="text-[11px] text-emerald-600">{t(lang, 'tableFree')}</span>
                     )}

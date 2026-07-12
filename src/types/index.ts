@@ -41,9 +41,24 @@ export interface LocationSettings {
     /** Порог предупреждения «много наличных в кассе», агороты */
     cash_warn_threshold?: number | null
   }
+  /** Брони (053/054). Часы работы и слоты — дефолты формы + мягкая валидация. */
+  reservations?: {
+    /** Часы приёма гостей, 'HH:MM' локального времени (для дефолтов/предупреждений) */
+    open?: string | null
+    close?: string | null
+    /** Шаг слота, мин (для будущей публичной брони, фаза C) */
+    slot_min?: number | null
+    /** Длительность новой брони по умолчанию, мин */
+    default_duration_min?: number | null
+  }
   /** Онлайн-заказы с сайта (051). Отсутствие ключа = включено. */
   online_orders?: {
     enabled?: boolean
+    /**
+     * Типы заказа, доступные гостю (055): 'here' | 'takeaway' | 'delivery'.
+     * Отсутствие/пусто = ['here','takeaway'] (дефолт, зеркало БД).
+     */
+    order_types?: ('here' | 'takeaway' | 'delivery')[]
     // Ссылки в подвале гостевой страницы (пусто/null = не показывать)
     instagram?: string | null
     facebook?: string | null
@@ -141,6 +156,36 @@ export interface Station {
   location_id: string
   name: string
   sort_order: number
+}
+
+// ── Брони (053) ──────────────────────────────────────────
+export type ReservationStatus =
+  | 'requested'   // заявка (с сайта, фаза C) — ждёт подтверждения
+  | 'confirmed'   // подтверждена, ждём гостя
+  | 'seated'      // гость посажен, открыт счёт (order_id)
+  | 'completed'   // гость ушёл / счёт оплачен
+  | 'no_show'     // не пришёл
+  | 'cancelled'   // отменена
+
+export interface Reservation {
+  id: string
+  org_id: string
+  location_id: string
+  table_id: string | null
+  reserved_at: string       // ISO дата+время
+  duration_min: number
+  party_size: number
+  customer_name: string
+  customer_phone: string | null
+  note: string | null
+  tags: string[]
+  status: ReservationStatus
+  source: 'pos' | 'site'
+  order_id: string | null
+  client_uuid: string
+  created_by: string | null
+  created_at: string
+  updated_at: string
 }
 
 export interface MenuCategory {

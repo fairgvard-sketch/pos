@@ -23,6 +23,10 @@ export interface OnlineOrder {
   customer_phone: string
   pickup_at: string | null // null = как можно скорее
   note: string | null
+  /** Тип заказа гостя (055): here | takeaway | delivery */
+  order_type: 'here' | 'takeaway' | 'delivery'
+  /** Адрес доставки — только при order_type='delivery' */
+  delivery_address: string | null
   items: OnlineOrderLine[]
   subtotal: number
   total: number

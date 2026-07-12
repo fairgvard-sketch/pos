@@ -57,6 +57,8 @@ export interface PublicMenu {
     is_open: boolean
     /** false = владелец выключил приём онлайн-заказов (051) */
     accepting?: boolean
+    /** Типы заказа для гостя (055): здесь/с собой/доставка. Дефолт — here+takeaway */
+    order_types?: ('here' | 'takeaway' | 'delivery')[]
     /** Баннер-шапка главного экрана; логотип и название — поверх */
     header_url?: string | null
     /** Фон главного экрана; шапка накладывается поверх */
@@ -99,6 +101,8 @@ export async function fetchPublicMenu(locId: string): Promise<PublicMenu> {
   return res.json()
 }
 
+export type PublicOrderType = 'here' | 'takeaway' | 'delivery'
+
 export interface SubmitPayload {
   loc: string
   client_uuid: string
@@ -106,6 +110,8 @@ export interface SubmitPayload {
   phone: string
   pickup_at: string | null
   note: string | null
+  order_type: PublicOrderType
+  delivery_address: string | null
   items: {
     menu_item_id: string
     variant_id: string | null
@@ -138,6 +144,8 @@ export interface PublicStatus {
   daily_number: number | null
   /** Статус настоящего заказа: open (готовится) | paid/fulfilled (выдан) | voided */
   order_status: string | null
+  /** Тип заказа гостя (055) */
+  order_type?: PublicOrderType
   created_at: string
 }
 
