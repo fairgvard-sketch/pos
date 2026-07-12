@@ -41,7 +41,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 // Ошибки, которые БД кидает осознанно — отдаём гостю как код, не 500
 const KNOWN_ERRORS = [
   'disabled', 'rate_limited', 'busy', 'invalid_location', 'invalid_name',
-  'invalid_phone', 'invalid_party', 'invalid_time', 'not_found',
+  'invalid_phone', 'invalid_party', 'invalid_time', 'outside_hours', 'not_found',
 ]
 
 function errorCode(message: string): string {
@@ -71,7 +71,7 @@ Deno.serve(async (req) => {
         .eq('id', loc)
         .maybeSingle()
       if (error || !data) return json({ error: 'invalid_location' }, 404)
-      const rsv = (data as { rsv?: { enabled?: boolean } }).rsv
+      const rsv = (data as { rsv?: { enabled?: boolean; open?: string | null; close?: string | null; slot_min?: number | null } }).rsv
       return json(
         {
           location: {
@@ -84,6 +84,10 @@ Deno.serve(async (req) => {
             logo_url: data.logo_url ?? null,
             // Тумблер 053: отсутствие ключа = бронирование ВЫКЛЮЧЕНО
             accepting: rsv?.enabled === true,
+            // Часы приёма (059): гостевая страница ограничивает слоты этим окном
+            open: rsv?.open ?? null,
+            close: rsv?.close ?? null,
+            slot_min: rsv?.slot_min ?? null,
             // Адрес и телефон — из реквизитов чека (кнопки «Навигация»/«Телефон»)
             address: data.receipt_address ?? null,
             phone: data.receipt_phone ?? null,

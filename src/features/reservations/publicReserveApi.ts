@@ -24,6 +24,11 @@ export interface ReserveInfo {
     logo_url?: string | null
     /** false = владелец не включил приём броней (тумблер 053, default off) */
     accepting: boolean
+    /** Часы приёма (059): обе заданы → слоты ограничены окном. 'HH:MM' */
+    open?: string | null
+    close?: string | null
+    /** Шаг слота времени, мин (по умолчанию 15) */
+    slot_min?: number | null
     /** Адрес и телефон из реквизитов чека — кнопки «Навигация»/«Телефон» */
     address?: string | null
     phone?: string | null

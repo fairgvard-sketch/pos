@@ -21,11 +21,25 @@ import BrandSplash from '../../components/ui/BrandSplash'
 const LANG_KEY = 'kassa-public-lang' // общий с /order — язык гость выбрал один раз
 const ACTIVE_KEY = 'kassa-public-reserve' // {clientUuid, locId} — текущая бронь
 
-// Слоты времени: 07:00–23:45 с шагом 15 минут (рабочих часов в модели нет —
-// неподходящее время касса просто отклонит)
-const SLOT_FROM_H = 7
-const SLOT_TO_H = 23
+// Слоты времени по умолчанию: 07:00–23:45, шаг 15 мин. Если владелец задал
+// часы приёма (059), окно и шаг приходят из настроек точки (slotParams).
+const DEF_FROM_MIN = 7 * 60
+const DEF_TO_MIN = 23 * 60 + 45
+const DEF_STEP_MIN = 15
 const DAYS_AHEAD = 30
+
+/** 'HH:MM' → минуты от полуночи; null/мусор → fallback */
+function hmToMin(s: string | null | undefined, fallback: number): number {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(s ?? '')
+  if (!m) return fallback
+  return Number(m[1]) * 60 + Number(m[2])
+}
+
+export interface SlotParams {
+  fromMin: number
+  toMin: number
+  stepMin: number
+}
 
 function readActive(locId: string): string | null {
   try {
@@ -46,18 +60,21 @@ function toDateInput(d: Date): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
 
-/** Слоты дня; для сегодняшнего — не раньше minTs (бронь минимум за 30 мин) */
-function slotsFor(dateStr: string, todayStr: string, minTs: number): string[] {
+/** Слоты дня в окне [from,to] с шагом; для сегодняшнего — не раньше minTs */
+function slotsFor(dateStr: string, todayStr: string, minTs: number, p?: SlotParams): string[] {
+  const fromMin = p?.fromMin ?? DEF_FROM_MIN
+  const toMin = p?.toMin ?? DEF_TO_MIN
+  const step = p?.stepMin && p.stepMin > 0 ? p.stepMin : DEF_STEP_MIN
   const out: string[] = []
-  for (let h = SLOT_FROM_H; h <= SLOT_TO_H; h++) {
-    for (const m of [0, 15, 30, 45]) {
-      if (dateStr === todayStr) {
-        const d = new Date(`${dateStr}T00:00:00`)
-        d.setHours(h, m, 0, 0)
-        if (d.getTime() < minTs) continue
-      }
-      out.push(`${pad(h)}:${pad(m)}`)
+  for (let mins = fromMin; mins <= toMin; mins += step) {
+    const h = Math.floor(mins / 60)
+    const m = mins % 60
+    if (dateStr === todayStr) {
+      const d = new Date(`${dateStr}T00:00:00`)
+      d.setHours(h, m, 0, 0)
+      if (d.getTime() < minTs) continue
     }
+    out.push(`${pad(h)}:${pad(m)}`)
   }
   return out
 }
@@ -108,14 +125,28 @@ export default function PublicReservePage() {
   })
   const [guests, setGuests] = useState(2)
 
+  // Часы приёма из настроек точки (059): обе границы заданы → окно слотов
+  // сужается, иначе дефолт 07:00–23:45. slot_min задаёт шаг.
+  const slotParams = useMemo<SlotParams>(() => ({
+    fromMin: hmToMin(info?.location.open, DEF_FROM_MIN),
+    toMin: hmToMin(info?.location.close, DEF_TO_MIN),
+    stepMin: info?.location.slot_min && info.location.slot_min > 0 ? info.location.slot_min : DEF_STEP_MIN,
+  }), [info])
+
   const timeSlots = useMemo(
-    () => slotsFor(date, slotCtx.todayStr, slotCtx.minTs),
-    [date, slotCtx]
+    () => slotsFor(date, slotCtx.todayStr, slotCtx.minTs, slotParams),
+    [date, slotCtx, slotParams]
   )
+
+  // Сверка во время рендера (реком. React вместо эффекта): если выбранное
+  // время выпало из окна (часы подгрузились/сменился день) — берём ближайшее.
+  if (timeSlots.length > 0 && !timeSlots.includes(time)) {
+    setTime(timeSlots.find((s) => s >= '12:00') ?? timeSlots[0])
+  }
 
   function pickDate(next: string) {
     setDate(next)
-    const slots = slotsFor(next, slotCtx.todayStr, slotCtx.minTs)
+    const slots = slotsFor(next, slotCtx.todayStr, slotCtx.minTs, slotParams)
     if (!slots.includes(time)) setTime(slots.find((s) => s >= '12:00') ?? slots[0] ?? '12:00')
   }
 
@@ -438,6 +469,7 @@ function reserveErrorText(lang: Lang, code: string): string {
     case 'rate_limited': return t(lang, 'rsvErrRate')
     case 'busy': return t(lang, 'rsvErrBusy')
     case 'invalid_time': return t(lang, 'rsvErrTime')
+    case 'outside_hours': return t(lang, 'rsvErrHours')
     case 'invalid_phone': return t(lang, 'rsvErrPhone')
     default: return t(lang, 'rsvErrUnknown')
   }

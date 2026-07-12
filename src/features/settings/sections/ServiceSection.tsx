@@ -65,6 +65,7 @@ function ReservationsBlock({ location }: { location: Location | undefined }) {
   const { settings, update } = useLocationSettings(location)
   // Отсутствие ключа = ВЫКЛЮЧЕНО (в отличие от online_orders)
   const enabled = settings.reservations?.enabled === true
+  const rsv = settings.reservations ?? {}
   const url = location ? `${window.location.origin}/reserve/${location.id}` : ''
 
   const qrRef = useRef<HTMLCanvasElement>(null)
@@ -120,6 +121,42 @@ function ReservationsBlock({ location }: { location: Location | undefined }) {
           checked={enabled}
           onChange={(v) => update({ reservations: { enabled: v } })}
         />
+        {enabled && (
+          <div className="px-4 py-3 border-t border-gray-100">
+            <div className="text-sm font-semibold text-gray-900">{t(lang, 'resHoursTitle')}</div>
+            <p className="text-xs text-gray-500 mt-0.5">{t(lang, 'resHoursHint')}</p>
+            <div className="grid grid-cols-3 gap-3 mt-3">
+              <label className="block">
+                <span className="block text-xs font-semibold text-gray-500 mb-1.5">{t(lang, 'resOpenTime')}</span>
+                <input
+                  type="time"
+                  className="input"
+                  value={rsv.open ?? ''}
+                  onChange={(e) => update({ reservations: { open: e.target.value || null } })}
+                />
+              </label>
+              <label className="block">
+                <span className="block text-xs font-semibold text-gray-500 mb-1.5">{t(lang, 'resCloseTime')}</span>
+                <input
+                  type="time"
+                  className="input"
+                  value={rsv.close ?? ''}
+                  onChange={(e) => update({ reservations: { close: e.target.value || null } })}
+                />
+              </label>
+              <label className="block">
+                <span className="block text-xs font-semibold text-gray-500 mb-1.5">{t(lang, 'resSlot')}</span>
+                <select
+                  className="input"
+                  value={rsv.slot_min ?? 15}
+                  onChange={(e) => update({ reservations: { slot_min: Number(e.target.value) } })}
+                >
+                  {[15, 30, 60].map((d) => <option key={d} value={d}>{d}</option>)}
+                </select>
+              </label>
+            </div>
+          </div>
+        )}
         {enabled && (
           <div className="px-4 py-3 border-t border-gray-100">
             <div className="text-sm font-semibold text-gray-900">{t(lang, 'reserveLinkTitle')}</div>

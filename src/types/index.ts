@@ -72,6 +72,12 @@ export interface LocationSettings {
   /** Бронирование столов с сайта (053). Отсутствие ключа = ВЫКЛЮЧЕНО. */
   reservations?: {
     enabled?: boolean
+    /** Часы приёма гостей, 'HH:MM' локального времени (059). Обе заданы =
+     *  слоты на гостевой странице и submit_reservation ограничены окном. */
+    open?: string | null
+    close?: string | null
+    /** Шаг слота времени на гостевой странице, мин (по умолчанию 15) */
+    slot_min?: number | null
   }
 }
 
