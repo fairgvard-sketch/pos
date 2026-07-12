@@ -13,11 +13,12 @@ import { useOutboxStore } from '../lib/offline/outboxStore'
 import { enqueueTableVoid } from '../lib/offline/enqueue'
 import { playNewOrderChime, playReservationChime } from '../lib/sound'
 import { t } from '../lib/i18n'
+import { can } from '../lib/perms'
 import Icon from './Icon'
 import type { IconName } from './Icon'
 import OfflineBadge from './OfflineBadge'
 
-export type SidebarPage = 'sell' | 'hall' | 'queue' | 'online' | 'reservations' | 'transactions' | 'shift' | 'timesheet' | 'menu' | 'analytics' | 'settings'
+export type SidebarPage = 'sell' | 'hall' | 'queue' | 'online' | 'reservations' | 'transactions' | 'shift' | 'inventory' | 'timesheet' | 'menu' | 'analytics' | 'settings'
 
 /** Общий сайдбар кассы: навигация, часы, сотрудник */
 export default function AppSidebar({ active }: { active: SidebarPage }) {
@@ -176,6 +177,10 @@ export default function AppSidebar({ active }: { active: SidebarPage }) {
         />
         <SideLink active={active === 'transactions'} label={t(lang, 'transactions')} iconName="card" onClick={() => navigate('/transactions')} />
         <SideLink active={active === 'shift'} label={t(lang, 'shift')} iconName="shift" onClick={() => navigate('/shift')} />
+        {/* Склад (055): виден тем, кому доступен приход (право точки) */}
+        {can(staff.role, 'stock_receive', location?.settings) && (
+          <SideLink active={active === 'inventory'} label={t(lang, 'inventory')} iconName="note" onClick={() => navigate('/inventory')} />
+        )}
         {/* Менеджерский блок отделён. Редкие экраны из сайдбара убраны:
             Табель — со страницы Смены, Меню — правка витрины на экране продажи
             (полная админка в Настройках → Бизнес), Дашборд — тоже там. */}

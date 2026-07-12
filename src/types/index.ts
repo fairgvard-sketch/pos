@@ -30,6 +30,10 @@ export interface LocationSettings {
     cash_movement?: PermLevel
     /** Пауза онлайн-заказов и время приготовления (054) */
     online_pause?: PermLevel
+    /** Приход товара (055) */
+    stock_receive?: PermLevel
+    /** Инвентаризация (055) */
+    stock_take?: PermLevel
   }
   receipt?: {
     print_modifiers?: boolean

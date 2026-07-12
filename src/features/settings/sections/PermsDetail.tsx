@@ -13,6 +13,8 @@ const PERM_ROWS: { key: PermKey; label: TranslationKey; hint: TranslationKey }[]
   { key: 'close_shift', label: 'permCloseShift', hint: 'permCloseShiftHint' },
   { key: 'cash_movement', label: 'permCashMovement', hint: 'permCashMovementHint' },
   { key: 'online_pause', label: 'permOnlinePause', hint: 'permOnlinePauseHint' },
+  { key: 'stock_receive', label: 'permStockReceive', hint: 'permStockReceiveHint' },
+  { key: 'stock_take', label: 'permStockTake', hint: 'permStockTakeHint' },
 ]
 
 /**

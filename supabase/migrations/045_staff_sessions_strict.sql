@@ -49,7 +49,8 @@ BEGIN
 
   v_level := COALESCE(
     (SELECT l.settings #>> ARRAY['perms', p_perm] FROM locations l WHERE l.id = auth_location_id()),
-    CASE p_perm WHEN 'refund' THEN 'manager' WHEN 'manage' THEN 'manager' ELSE 'all' END
+    CASE p_perm WHEN 'refund' THEN 'manager' WHEN 'manage' THEN 'manager'
+                WHEN 'stock_take' THEN 'manager' ELSE 'all' END
   );
 
   IF v_level = 'manager' AND v_staff.role NOT IN ('manager', 'owner') THEN

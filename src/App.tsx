@@ -31,6 +31,7 @@ const TimesheetPage = lazy(() => import('./features/timesheet/TimesheetPage'))
 const TransactionsPage = lazy(() => import('./features/transactions/TransactionsPage'))
 const SettingsPage = lazy(() => import('./features/settings/SettingsPage'))
 const ReportsPage = lazy(() => import('./features/reports/ReportsPage'))
+const InventoryPage = lazy(() => import('./features/inventory/InventoryPage'))
 const DashboardPage = lazy(() => import('./features/dashboard/DashboardPage'))
 
 const queryClient = new QueryClient({
@@ -218,6 +219,17 @@ export default function App() {
             element={
               <ProtectedRoute allowedRoles={['owner', 'manager']}>
                 <ReportsPage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Склад (055): без allowedRoles — журнал читается любым сотрудником,
+              кнопки прихода/инвентаризации гейтятся правами точки внутри */}
+          <Route
+            path="/inventory"
+            element={
+              <ProtectedRoute>
+                <InventoryPage />
               </ProtectedRoute>
             }
           />
