@@ -217,12 +217,13 @@ BEGIN
   RETURN json_build_object('online_id', v_id, 'total', v_subtotal, 'duplicate', FALSE);
 END $$;
 
+-- Прежняя 7-аргументная сигнатура (до p_order_type) остаётся в pg_proc
+-- перегрузкой — снимаем ПЕРЕД grant'ами: пока есть две перегрузки, REVOKE/
+-- GRANT ON FUNCTION submit_online_order (без списка аргументов) неоднозначны.
+DROP FUNCTION IF EXISTS submit_online_order(UUID, UUID, TEXT, TEXT, JSONB, TIMESTAMPTZ, TEXT);
+
 REVOKE ALL ON FUNCTION submit_online_order FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION submit_online_order TO service_role;
-
--- Прежняя 7-аргументная сигнатура (до p_order_type) остаётся в pg_proc
--- перегрузкой — снимаем, чтобы Edge Function однозначно резолвил новую.
-DROP FUNCTION IF EXISTS submit_online_order(UUID, UUID, TEXT, TEXT, JSONB, TIMESTAMPTZ, TEXT);
 
 -- ============================================================
 -- accept_online_order (пересоздание): тип заказа берётся из заявки,
