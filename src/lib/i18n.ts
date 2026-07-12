@@ -998,6 +998,18 @@ export const translations = {
     resCloseTime: 'Закрытие',
     resSlot: 'Шаг, мин',
     rsvErrHours: 'Выберите время в часы приёма',
+    // Ручная бронь на кассе (060) — телефонный звонок
+    resNewBooking: 'Новая бронь',
+    resCreatedToast: 'Бронь создана',
+    resGuestName: 'Имя гостя',
+    resPhoneLabel: 'Телефон',
+    resDate: 'Дата',
+    resTimeLabel: 'Время',
+    resPartySize: 'Гостей',
+    resTable: 'Стол',
+    resNote: 'Заметка',
+    resNeedName: 'Введите имя гостя',
+    resNeedTime: 'Укажите дату и время',
 
     // Брони — публичная страница гостя
     rsvClosed: 'Бронирование сейчас недоступно',
@@ -2032,6 +2044,18 @@ export const translations = {
     resCloseTime: 'סגירה',
     resSlot: 'מרווח (דק׳)',
     rsvErrHours: 'בחרו שעה בתוך שעות הקבלה',
+    // הזמנה ידנית בקופה (060) — שיחת טלפון
+    resNewBooking: 'הזמנה חדשה',
+    resCreatedToast: 'ההזמנה נוצרה',
+    resGuestName: 'שם האורח',
+    resPhoneLabel: 'טלפון',
+    resDate: 'תאריך',
+    resTimeLabel: 'שעה',
+    resPartySize: 'סועדים',
+    resTable: 'שולחן',
+    resNote: 'הערה',
+    resNeedName: 'הזינו שם אורח',
+    resNeedTime: 'בחרו תאריך ושעה',
 
     // Брони — публичная страница гостя
     rsvClosed: 'הזמנת שולחנות אינה זמינה כרגע',

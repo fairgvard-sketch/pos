@@ -59,6 +59,38 @@ export async function fetchUpcomingTableReservations(): Promise<Reservation[]> {
   return data as Reservation[]
 }
 
+export interface CreateReservationInput {
+  name: string
+  phone: string
+  partySize: number
+  reservedAt: string // ISO
+  note: string | null
+  tableId: string | null
+}
+
+/**
+ * Ручная бронь на кассе (060) — телефонный звонок. Создаётся сразу
+ * в статусе 'confirmed'. locationId берётся из контекста устройства.
+ */
+export async function createReservation(
+  locationId: string,
+  staffId: string,
+  input: CreateReservationInput,
+): Promise<{ reservation_id: string }> {
+  const { data, error } = await supabase.rpc('create_reservation', {
+    p_location_id: locationId,
+    p_staff_id: staffId,
+    p_name: input.name,
+    p_phone: input.phone,
+    p_party_size: input.partySize,
+    p_reserved_at: input.reservedAt,
+    p_note: input.note,
+    p_table_id: input.tableId,
+  })
+  if (error) throw new Error(error.message)
+  return data as { reservation_id: string }
+}
+
 /** Подтвердить бронь, опционально сразу назначив стол */
 export async function acceptReservation(id: string, staffId: string, tableId?: string | null): Promise<void> {
   const { error } = await supabase.rpc('accept_reservation', {

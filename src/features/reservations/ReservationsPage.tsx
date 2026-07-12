@@ -7,11 +7,14 @@ import { useAuthStore } from '../../store/authStore'
 import { useCartStore } from '../../store/cartStore'
 import { t, formatTime, formatElapsed, type Lang } from '../../lib/i18n'
 import { fetchTables } from '../tables/api'
+import { fetchCurrentLocation } from '../auth/api'
 import AppSidebar from '../../components/AppSidebar'
 import {
   fetchReservations, acceptReservation, rejectReservation, setReservationTable, seatReservation,
+  createReservation, type CreateReservationInput,
   type Reservation,
 } from './api'
+import type { Table } from '../../types'
 
 /**
  * Брони (053): заявки на бронирование стола с сайта. Новые —
@@ -29,6 +32,10 @@ export default function ReservationsPage() {
 
   const { data: reservations = [] } = useQuery({ queryKey: ['reservations'], queryFn: fetchReservations })
   const { data: tables = [] } = useQuery({ queryKey: ['tables'], queryFn: fetchTables })
+  const { data: location } = useQuery({ queryKey: ['current_location'], queryFn: fetchCurrentLocation })
+
+  // Ручная бронь (060): форма создания открыта
+  const [creating, setCreating] = useState(false)
 
   // Realtime-подписки здесь нет: AppSidebar (смонтирован на этом экране)
   // уже подписан на reservations и инвалидирует ['reservations']
@@ -127,10 +134,15 @@ export default function ReservationsPage() {
 
       <main className="flex-1 min-w-0 bg-white rounded-3xl flex flex-col overflow-hidden">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
-          <h1 className="text-xl font-bold text-gray-900">{t(lang, 'reservationsTitle')}</h1>
-          {today.length > 0 && (
-            <span className="badge-blue tabular-nums">{today.length} {t(lang, 'resTodayCount')}</span>
-          )}
+          <div className="flex items-center gap-3">
+            <h1 className="text-xl font-bold text-gray-900">{t(lang, 'reservationsTitle')}</h1>
+            {today.length > 0 && (
+              <span className="badge-blue tabular-nums">{today.length} {t(lang, 'resTodayCount')}</span>
+            )}
+          </div>
+          <button className="btn-primary !py-2.5 !px-5" onClick={() => setCreating(true)}>
+            {t(lang, 'resNewBooking')}
+          </button>
         </div>
 
         <div className="flex-1 overflow-y-auto p-6">
@@ -256,7 +268,129 @@ export default function ReservationsPage() {
           onClose={() => setPicking(null)}
         />
       )}
+
+      {creating && location && staff && (
+        <NewReservationSheet
+          lang={lang}
+          locationId={location.id}
+          staffId={staff.id}
+          tables={tables}
+          onClose={() => setCreating(false)}
+          onCreated={() => {
+            setCreating(false)
+            toast.success(t(lang, 'resCreatedToast'))
+            invalidateAll()
+          }}
+        />
+      )}
     </div>
+  )
+}
+
+/** Форма ручной брони (060): телефонный звонок → бронь сразу «Подтверждена» */
+function NewReservationSheet({ lang, locationId, staffId, tables, onClose, onCreated }: {
+  lang: Lang
+  locationId: string
+  staffId: string
+  tables: Table[]
+  onClose: () => void
+  onCreated: () => void
+}) {
+  const isRtl = lang === 'he'
+  const [name, setName] = useState('')
+  const [phone, setPhone] = useState('')
+  const [dateStr, setDateStr] = useState(() => {
+    const d = new Date()
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  })
+  const [timeStr, setTimeStr] = useState('19:00')
+  const [guests, setGuests] = useState(2)
+  const [tableId, setTableId] = useState<string | null>(null)
+  const [note, setNote] = useState('')
+
+  const create = useMutation({
+    mutationFn: () => {
+      const reservedAt = new Date(`${dateStr}T${timeStr}:00`)
+      const input: CreateReservationInput = {
+        name: name.trim(),
+        phone: phone.trim(),
+        partySize: guests,
+        reservedAt: reservedAt.toISOString(),
+        note: note.trim() || null,
+        tableId,
+      }
+      return createReservation(locationId, staffId, input)
+    },
+    onSuccess: onCreated,
+    onError: (e) => toast.error((e as Error).message),
+  })
+
+  function submit() {
+    if (!name.trim()) { toast.error(t(lang, 'resNeedName')); return }
+    if (!dateStr || !timeStr) { toast.error(t(lang, 'resNeedTime')); return }
+    if (Number.isNaN(new Date(`${dateStr}T${timeStr}:00`).getTime())) { toast.error(t(lang, 'resNeedTime')); return }
+    create.mutate()
+  }
+
+  return (
+    <div
+      dir={isRtl ? 'rtl' : 'ltr'}
+      className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div className="card w-full max-w-md p-6 animate-[rise-in_0.2s_ease-out] max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <h2 className="text-lg font-black text-gray-900 mb-4">{t(lang, 'resNewBooking')}</h2>
+
+        <div className="space-y-4">
+          <Field label={t(lang, 'resGuestName')}>
+            <input className="input" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+          </Field>
+          <Field label={t(lang, 'resPhoneLabel')}>
+            <input type="tel" inputMode="tel" dir="ltr" className="input" value={phone} onChange={(e) => setPhone(e.target.value)} />
+          </Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label={t(lang, 'resDate')}>
+              <input type="date" className="input" value={dateStr} onChange={(e) => setDateStr(e.target.value)} />
+            </Field>
+            <Field label={t(lang, 'resTimeLabel')}>
+              <input type="time" className="input" value={timeStr} onChange={(e) => setTimeStr(e.target.value)} />
+            </Field>
+          </div>
+          <Field label={t(lang, 'resPartySize')}>
+            <div className="flex items-center gap-3">
+              <button onClick={() => setGuests((g) => Math.max(1, g - 1))} className="w-11 h-11 rounded-xl border border-gray-200 text-xl font-bold text-gray-700 hover:border-gray-400 active:scale-[0.95]">−</button>
+              <span className="text-lg font-black text-gray-900 tabular-nums w-8 text-center">{guests}</span>
+              <button onClick={() => setGuests((g) => Math.min(20, g + 1))} className="w-11 h-11 rounded-xl border border-gray-200 text-xl font-bold text-gray-700 hover:border-gray-400 active:scale-[0.95]">+</button>
+            </div>
+          </Field>
+          <Field label={t(lang, 'resTable')}>
+            <select className="input" value={tableId ?? ''} onChange={(e) => setTableId(e.target.value || null)}>
+              <option value="">{t(lang, 'resNoTable')}</option>
+              {tables.map((tb) => (
+                <option key={tb.id} value={tb.id}>{tb.label}{tb.zone ? ` · ${tb.zone}` : ''}</option>
+              ))}
+            </select>
+          </Field>
+          <Field label={t(lang, 'resNote')}>
+            <input className="input" value={note} onChange={(e) => setNote(e.target.value)} />
+          </Field>
+        </div>
+
+        <div className="flex gap-2 mt-6">
+          <button onClick={onClose} className="btn-ghost flex-1">{t(lang, 'cancel')}</button>
+          <button onClick={submit} disabled={create.isPending} className="btn-primary flex-1 disabled:opacity-50">{t(lang, 'save')}</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="block">
+      <span className="block text-xs font-semibold text-gray-500 mb-1.5">{label}</span>
+      {children}
+    </label>
   )
 }
 
