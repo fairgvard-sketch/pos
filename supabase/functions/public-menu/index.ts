@@ -110,6 +110,8 @@ Deno.serve(async (req) => {
       enabled?: boolean
       paused_until?: string | null
       prep_minutes?: number | null
+      prep_min?: number | null
+      prep_max?: number | null
       instagram?: string | null
       facebook?: string | null
       google_review?: string | null
@@ -132,6 +134,11 @@ Deno.serve(async (req) => {
     : [])
   const enabledTypes = orderTypes.length > 0 ? orderTypes : ['here', 'takeaway']
 
+  // Время приготовления — вилка мин–макс (061). Новые ключи в приоритете;
+  // старый prep_minutes (054) читаем как min=max. 0/0 = не показывать.
+  const prepMin = onlineSettings?.prep_min ?? onlineSettings?.prep_minutes ?? null
+  const prepMax = onlineSettings?.prep_max ?? onlineSettings?.prep_minutes ?? null
+
   return json(
     {
       location: {
@@ -149,8 +156,9 @@ Deno.serve(async (req) => {
         accepting: onlineSettings?.enabled !== false && !pausedUntil,
         // Пауза с кассы: когда приём возобновится (null = паузы нет)
         paused_until: pausedUntil,
-        // Время приготовления — «готовим ~N мин» на странице гостя
-        prep_minutes: onlineSettings?.prep_minutes ?? null,
+        // Время приготовления — вилка «готовим ~N–M мин» на странице гостя (061)
+        prep_min: prepMin,
+        prep_max: prepMax,
         // Типы заказа для гостя (058): здесь / с собой / доставка
         order_types: enabledTypes,
         // Оформление главного экрана: баннер-шапка и фон (Настройки → Онлайн-заказы)

@@ -133,15 +133,29 @@ export default function PublicReservePage() {
     stepMin: info?.location.slot_min && info.location.slot_min > 0 ? info.location.slot_min : DEF_STEP_MIN,
   }), [info])
 
+  // Лимит гостей (061): настройка владельца, дефолт 20, потолок 50
+  const maxParty = useMemo(() => {
+    const m = info?.location.max_party
+    return m && m >= 1 && m <= 50 ? m : 20
+  }, [info])
+
   const timeSlots = useMemo(
     () => slotsFor(date, slotCtx.todayStr, slotCtx.minTs, slotParams),
     [date, slotCtx, slotParams]
   )
 
-  // Сверка во время рендера (реком. React вместо эффекта): если выбранное
-  // время выпало из окна (часы подгрузились/сменился день) — берём ближайшее.
-  if (timeSlots.length > 0 && !timeSlots.includes(time)) {
+  // Сверки во время рендера (реком. React вместо эффекта):
+  // 1) Сегодня без слотов (часы приёма подгрузились и окно на сегодня пусто) —
+  //    сдвигаем выбор на следующий день.
+  if (date === slotCtx.todayStr && timeSlots.length === 0 && slotCtx.days.length > 1) {
+    setDate(slotCtx.days[1])
+  } else if (timeSlots.length > 0 && !timeSlots.includes(time)) {
+    // 2) Выбранное время выпало из окна (часы подгрузились/сменился день) — берём ближайшее.
     setTime(timeSlots.find((s) => s >= '12:00') ?? timeSlots[0])
+  }
+  // 3) Гостей больше нового лимита — подрезаем.
+  if (guests > maxParty) {
+    setGuests(maxParty)
   }
 
   function pickDate(next: string) {
@@ -212,6 +226,7 @@ export default function PublicReservePage() {
             date={date}
             time={time}
             guests={guests}
+            maxParty={maxParty}
             timeSlots={timeSlots}
             onDate={pickDate}
             onTime={setTime}
@@ -281,7 +296,7 @@ function Shell({ isRtl, info, lang, hero, children }: {
             <img src={loc.logo_url} alt="" className="w-16 h-16 rounded-full object-cover mx-auto mb-3" />
           )}
           <div className="text-sm text-gray-500">{t(lang, 'rsvPageLabel')}</div>
-          <h1 className="text-3xl font-black leading-tight text-gray-900 mt-1">{title ?? ''}</h1>
+          <h1 className="font-display text-4xl font-semibold leading-tight text-gray-900 mt-1">{title ?? ''}</h1>
           {loc?.address && <p className="text-sm text-gray-500 mt-1">{loc.address}</p>}
         </header>
         <div className="flex-1 flex flex-col">{children}</div>
@@ -298,15 +313,15 @@ function dayOptionLabel(dateStr: string, todayStr: string, lang: Lang): string {
   return `${wd} ${d.getDate()}/${d.getMonth() + 1}`
 }
 
-/** Ячейка слот-панели: значение — текстом, невидимый select растянут на всю плитку (тап везде) */
-function SlotCell({ icon, label, children }: { icon: React.ReactNode; label: string; children: React.ReactNode }) {
+/** Ячейка слот-панели: значение — текстом, под ним маленькая стрелка вниз;
+ *  невидимый select растянут на всю плитку (тап везде) */
+function SlotCell({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="relative flex-1 min-w-0 py-3">
-      <div className="flex justify-center text-gray-400">{icon}</div>
-      <div className="mt-1 px-6 text-center font-bold text-gray-900 text-base truncate">{label}</div>
-      <span className="pointer-events-none absolute top-3 end-2 text-gray-400">
+    <div className="relative flex-1 min-w-0 py-3 px-2">
+      <div className="text-center font-bold text-gray-900 text-base truncate">{label}</div>
+      <div className="flex justify-center text-gray-400 mt-1">
         <Chevron />
-      </span>
+      </div>
       {children}
     </div>
   )
@@ -314,7 +329,7 @@ function SlotCell({ icon, label, children }: { icon: React.ReactNode; label: str
 
 const SELECT_CLS = 'absolute inset-0 w-full h-full opacity-0 cursor-pointer text-base'
 
-function SlotScreen({ lang, info, days, todayStr, todayHasSlots, date, time, guests, timeSlots, onDate, onTime, onGuests, onNext }: {
+function SlotScreen({ lang, info, days, todayStr, todayHasSlots, date, time, guests, maxParty, timeSlots, onDate, onTime, onGuests, onNext }: {
   lang: Lang
   info: ReserveInfo
   days: string[]
@@ -323,6 +338,7 @@ function SlotScreen({ lang, info, days, todayStr, todayHasSlots, date, time, gue
   date: string
   time: string
   guests: number
+  maxParty: number
   timeSlots: string[]
   onDate: (v: string) => void
   onTime: (v: string) => void
@@ -330,9 +346,15 @@ function SlotScreen({ lang, info, days, todayStr, todayHasSlots, date, time, gue
   onNext: () => void
 }) {
   const loc = info.location
-  const mapsUrl = loc.address
-    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(loc.address)}`
-    : null
+  // Навигация (062): координаты → точный пин; иначе текстовый поиск по адресу.
+  // query=lat,lng открывает Google Maps на точке (на телефоне — с выбором
+  // приложения, включая Waze/Apple Maps через геосхему ОС).
+  const mapsUrl =
+    loc.lat != null && loc.lng != null
+      ? `https://www.google.com/maps/search/?api=1&query=${loc.lat},${loc.lng}`
+      : loc.address
+        ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(loc.address)}`
+        : null
   return (
     <div className="px-4 pb-8 flex flex-col items-center">
       {!todayHasSlots && (
@@ -341,9 +363,17 @@ function SlotScreen({ lang, info, days, todayStr, todayHasSlots, date, time, gue
         </div>
       )}
 
-      {/* Слот-панель: дата · время · гости (селекты, время дискретно по 15 мин) */}
+      {/* Слот-панель: гости · дата · время (в RTL справа налево — как у Tabit;
+          селекты, время дискретно по 15 мин) */}
       <div className="w-full mt-4 rounded-2xl border border-gray-200 shadow-sm flex divide-x divide-gray-100 rtl:divide-x-reverse">
-        <SlotCell icon={<CalendarIcon />} label={dayOptionLabel(date, todayStr, lang)}>
+        <SlotCell label={`${guests} ${t(lang, 'resGuestsShort')}`}>
+          <select className={SELECT_CLS} value={guests} onChange={(e) => onGuests(Number(e.target.value))} aria-label={t(lang, 'rsvGuests')}>
+            {Array.from({ length: maxParty }, (_, i) => i + 1).map((n) => (
+              <option key={n} value={n}>{n} {t(lang, 'resGuestsShort')}</option>
+            ))}
+          </select>
+        </SlotCell>
+        <SlotCell label={dayOptionLabel(date, todayStr, lang)}>
           <select className={SELECT_CLS} value={date} onChange={(e) => onDate(e.target.value)} aria-label={t(lang, 'rsvDate')}>
             {days.map((d) => (
               // Сегодня без слотов — день виден, но выбрать нельзя
@@ -353,17 +383,10 @@ function SlotScreen({ lang, info, days, todayStr, todayHasSlots, date, time, gue
             ))}
           </select>
         </SlotCell>
-        <SlotCell icon={<ClockIcon />} label={time}>
+        <SlotCell label={time}>
           <select className={SELECT_CLS} value={time} onChange={(e) => onTime(e.target.value)} aria-label={t(lang, 'rsvTime')}>
             {timeSlots.map((s) => (
               <option key={s} value={s}>{s}</option>
-            ))}
-          </select>
-        </SlotCell>
-        <SlotCell icon={<PersonIcon />} label={`${guests} ${t(lang, 'resGuestsShort')}`}>
-          <select className={SELECT_CLS} value={guests} onChange={(e) => onGuests(Number(e.target.value))} aria-label={t(lang, 'rsvGuests')}>
-            {Array.from({ length: 20 }, (_, i) => i + 1).map((n) => (
-              <option key={n} value={n}>{n} {t(lang, 'resGuestsShort')}</option>
             ))}
           </select>
         </SlotCell>
@@ -372,7 +395,7 @@ function SlotScreen({ lang, info, days, todayStr, todayHasSlots, date, time, gue
       <button
         onClick={onNext}
         disabled={timeSlots.length === 0}
-        className="h-14 px-10 mt-6 rounded-2xl bg-gray-900 text-white font-bold disabled:opacity-40 active:scale-[0.98] transition-all"
+        className="w-full h-14 mt-4 rounded-2xl bg-gray-900 text-white font-bold disabled:opacity-40 active:scale-[0.98] transition-all"
       >
         {t(lang, 'rsvSubmit')}
       </button>

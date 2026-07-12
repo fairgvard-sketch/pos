@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import QRCode from 'qrcode'
 import { useLangStore } from '../../../store/langStore'
@@ -9,7 +9,7 @@ import { renderQrFlyerCanvas } from '../../receipt/printCanvas'
 import { useLocationSettings } from '../useLocationSettings'
 import { Group, NavRow, ToggleRow } from '../ui'
 import type { DetailId } from '../registry'
-import type { Location, ServiceMode } from '../../../types'
+import type { Location, LocationSettings, ServiceMode } from '../../../types'
 
 /** Название текущего режима обслуживания — для значения на строке */
 function modeLabel(mode: ServiceMode | undefined): TranslationKey {
@@ -125,7 +125,7 @@ function ReservationsBlock({ location }: { location: Location | undefined }) {
           <div className="px-4 py-3 border-t border-gray-100">
             <div className="text-sm font-semibold text-gray-900">{t(lang, 'resHoursTitle')}</div>
             <p className="text-xs text-gray-500 mt-0.5">{t(lang, 'resHoursHint')}</p>
-            <div className="grid grid-cols-3 gap-3 mt-3">
+            <div className="grid grid-cols-2 gap-3 mt-3">
               <label className="block">
                 <span className="block text-xs font-semibold text-gray-500 mb-1.5">{t(lang, 'resOpenTime')}</span>
                 <input
@@ -154,9 +154,20 @@ function ReservationsBlock({ location }: { location: Location | undefined }) {
                   {[15, 30, 60].map((d) => <option key={d} value={d}>{d}</option>)}
                 </select>
               </label>
+              <label className="block">
+                <span className="block text-xs font-semibold text-gray-500 mb-1.5">{t(lang, 'resMaxParty')}</span>
+                <select
+                  className="input"
+                  value={rsv.max_party ?? 20}
+                  onChange={(e) => update({ reservations: { max_party: Number(e.target.value) } })}
+                >
+                  {[2, 4, 6, 8, 10, 12, 15, 20, 30, 50].map((n) => <option key={n} value={n}>{n}</option>)}
+                </select>
+              </label>
             </div>
           </div>
         )}
+        {enabled && <ReserveAddressBlock rsv={rsv} update={update} />}
         {enabled && (
           <div className="px-4 py-3 border-t border-gray-100">
             <div className="text-sm font-semibold text-gray-900">{t(lang, 'reserveLinkTitle')}</div>
@@ -186,5 +197,69 @@ function ReservationsBlock({ location }: { location: Location | undefined }) {
         )}
       </Group>
     </section>
+  )
+}
+
+/**
+ * Точный адрес заведения для гостя брони (062). Адрес — текст под
+ * названием; координаты (необязательно) делают кнопку «Навигация»
+ * точной (открывает пин lat,lng вместо текстового поиска). Пустой
+ * адрес → гость видит адрес из реквизитов чека (обратная совместимость).
+ * Координаты вводятся как «lat, lng» одной строкой и парсятся на blur.
+ */
+function ReserveAddressBlock({ rsv, update }: {
+  rsv: NonNullable<LocationSettings['reservations']>
+  update: (patch: LocationSettings) => void
+}) {
+  const lang = useLangStore((s) => s.lang)
+  // Черновик координат: показываем как есть, коммитим на blur (парсинг «lat, lng»)
+  const [coords, setCoords] = useState(
+    rsv.lat != null && rsv.lng != null ? `${rsv.lat}, ${rsv.lng}` : ''
+  )
+
+  function commitCoords() {
+    const s = coords.trim()
+    if (s === '') {
+      update({ reservations: { lat: null, lng: null } })
+      return
+    }
+    const m = s.match(/^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/)
+    if (!m) {
+      toast.error(t(lang, 'resGeoInvalid'))
+      // Откатываем черновик к сохранённому
+      setCoords(rsv.lat != null && rsv.lng != null ? `${rsv.lat}, ${rsv.lng}` : '')
+      return
+    }
+    const lat = Number(m[1])
+    const lng = Number(m[2])
+    if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+      toast.error(t(lang, 'resGeoInvalid'))
+      setCoords(rsv.lat != null && rsv.lng != null ? `${rsv.lat}, ${rsv.lng}` : '')
+      return
+    }
+    update({ reservations: { lat, lng } })
+  }
+
+  return (
+    <div className="px-4 py-3 border-t border-gray-100">
+      <div className="text-sm font-semibold text-gray-900">{t(lang, 'resAddressTitle')}</div>
+      <p className="text-xs text-gray-500 mt-0.5">{t(lang, 'resAddressHint')}</p>
+      <input
+        className="input mt-3"
+        placeholder={t(lang, 'resAddressPlaceholder')}
+        value={rsv.address ?? ''}
+        onChange={(e) => update({ reservations: { address: e.target.value || null } })}
+      />
+      <div className="text-xs font-semibold text-gray-500 mt-4 mb-1.5">{t(lang, 'resGeoLabel')}</div>
+      <input
+        className="input"
+        dir="ltr"
+        placeholder="32.0853, 34.7818"
+        value={coords}
+        onChange={(e) => setCoords(e.target.value)}
+        onBlur={commitCoords}
+      />
+      <p className="text-xs text-gray-500 mt-1.5">{t(lang, 'resGeoHint')}</p>
+    </div>
   )
 }

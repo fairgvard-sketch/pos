@@ -59,8 +59,9 @@ export interface PublicMenu {
     accepting?: boolean
     /** Пауза с кассы (054): ISO-время, когда приём возобновится */
     paused_until?: string | null
-    /** Время приготовления, минуты — «готовим ~N мин» (054) */
-    prep_minutes?: number | null
+    /** Время приготовления — вилка мин–макс, минуты; «готовим ~N–M мин» (061) */
+    prep_min?: number | null
+    prep_max?: number | null
     /** Типы заказа для гостя (058): здесь/с собой/доставка. Дефолт — here+takeaway */
     order_types?: ('here' | 'takeaway' | 'delivery')[]
     /** Баннер-шапка главного экрана; логотип и название — поверх */
@@ -151,6 +152,11 @@ export interface PublicStatus {
   /** Тип заказа гостя (055) */
   order_type?: PublicOrderType
   created_at: string
+  /** Момент принятия заказа кассой (061), ISO — старт таймера у гостя */
+  decided_at?: string | null
+  /** Вилка приготовления, минуты (061): финиш таймера = decided_at + prep_max */
+  prep_min?: number | null
+  prep_max?: number | null
 }
 
 export async function fetchPublicStatus(clientUuid: string): Promise<PublicStatus> {

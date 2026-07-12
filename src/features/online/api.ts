@@ -118,10 +118,14 @@ export async function setOnlinePause(pausedUntil: string | null): Promise<void> 
   if (error) throw new Error(error.message)
 }
 
-/** Время приготовления в минутах — гость видит его при заказе (054) */
-export async function setOnlinePrepMinutes(minutes: number): Promise<void> {
-  const { error } = await supabase.rpc('set_online_prep_minutes', {
-    p_minutes: minutes,
+/**
+ * Время приготовления — вилка мин–макс, минуты (061): гость видит её
+ * при заказе, а после принятия — таймер до max. min=max=0 = не показывать.
+ */
+export async function setOnlinePrepRange(min: number, max: number): Promise<void> {
+  const { error } = await supabase.rpc('set_online_prep_range', {
+    p_min: min,
+    p_max: max,
     p_staff_session: currentStaffToken(),
   })
   if (error) throw new Error(error.message)

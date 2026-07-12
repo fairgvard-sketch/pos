@@ -19,6 +19,15 @@ import BrandSplash from '../../components/ui/BrandSplash'
 const LANG_KEY = 'kassa-public-lang'
 const ACTIVE_KEY = 'kassa-public-active' // {clientUuid, locId} — текущая заявка
 
+/** «~20–35 мин» / «~20 мин» / '' — вилка приготовления для гостя (061) */
+function formatPrepRange(lang: Lang, min: number, max: number): string {
+  const hi = Math.max(min, max)
+  if (hi <= 0) return ''
+  const lo = min > 0 ? min : hi
+  const num = lo === hi ? `${hi}` : `${lo}–${hi}`
+  return `~${num} ${t(lang, 'minShort')}`
+}
+
 interface CartLine {
   key: string
   itemId: string
@@ -248,7 +257,8 @@ export default function PublicOrderPage() {
           lang={lang}
           locId={locId}
           isOpen={menu.location.is_open && menu.location.accepting !== false}
-          prepMinutes={menu.location.prep_minutes ?? 0}
+          prepMin={menu.location.prep_min ?? 0}
+          prepMax={menu.location.prep_max ?? 0}
           orderTypes={menu.location.order_types ?? ['here', 'takeaway']}
           cart={cart}
           total={cartTotal}
@@ -317,9 +327,9 @@ function Shell({ isRtl, title, logo, hero, headerImg, bgImg, children }: {
             <header className="relative h-32 shrink-0">
               <img src={headerImg} alt="" className="absolute inset-0 w-full h-full object-cover" />
               <span className="absolute inset-0 bg-black/35" />
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-4 pointer-events-none">
-                {logo && <img src={logo} alt="" className="w-11 h-11 rounded-full object-cover border-2 border-white/80 shrink-0" />}
-                <h1 className="text-[64px] font-black text-white leading-tight text-center [text-shadow:0_1px_8px_rgba(0,0,0,0.45)]">
+              {/* Логотип на баннере не дублируем — сам баннер уже брендирован */}
+              <div className="absolute inset-0 flex flex-col items-center justify-center px-4 pointer-events-none">
+                <h1 className="font-display text-[64px] font-semibold text-white leading-tight text-center [text-shadow:0_1px_8px_rgba(0,0,0,0.45)]">
                   {title ?? ''}
                 </h1>
               </div>
@@ -327,7 +337,7 @@ function Shell({ isRtl, title, logo, hero, headerImg, bgImg, children }: {
           ) : (
           <header className="relative px-8 pt-8 pb-2 text-center">
             {logo && <img src={logo} alt="" className="w-20 h-20 rounded-full object-cover mx-auto" />}
-            <h1 className={`text-[64px] font-black leading-tight ${logo ? 'mt-3' : 'mt-8'} ${
+            <h1 className={`font-display text-[64px] font-semibold leading-tight ${logo ? 'mt-3' : 'mt-8'} ${
               hasBg ? 'text-white [text-shadow:0_1px_8px_rgba(0,0,0,0.45)]' : 'text-gray-900'
             }`}>
               {title ?? ''}
@@ -338,7 +348,7 @@ function Shell({ isRtl, title, logo, hero, headerImg, bgImg, children }: {
           <header className="sticky top-0 z-10 bg-white border-b border-gray-100 px-4 h-14 flex items-center justify-center relative">
             {/* Логотип у начала строки; название — по центру */}
             {logo && <img src={logo} alt="" className="absolute start-4 w-9 h-9 rounded-full object-cover" />}
-            <span className="px-14 text-center font-bold text-lg text-gray-900 truncate">
+            <span className="font-display px-14 text-center font-semibold text-xl text-gray-900 truncate">
               {title ?? ''}
             </span>
           </header>
@@ -594,12 +604,13 @@ function ItemConfigSheet({ item, lang, isRtl, onClose, onAdd }: {
 }
 
 /** Корзина + форма контактов + отправка заявки */
-function CheckoutScreen({ lang, locId, isOpen, prepMinutes, orderTypes, cart, total, onQty, onBack, onSubmitted }: {
+function CheckoutScreen({ lang, locId, isOpen, prepMin, prepMax, orderTypes, cart, total, onQty, onBack, onSubmitted }: {
   lang: Lang
   locId: string
   isOpen: boolean
-  /** Время приготовления (054): 0 = не показывать */
-  prepMinutes: number
+  /** Время приготовления — вилка мин–макс (061): 0/0 = не показывать */
+  prepMin: number
+  prepMax: number
   orderTypes: PublicOrderType[]
   cart: CartLine[]
   total: number
@@ -743,7 +754,9 @@ function CheckoutScreen({ lang, locId, isOpen, prepMinutes, orderTypes, cart, to
         <div className="flex gap-2">
           <Chip active={asap} onClick={() => setAsap(true)}>
             {t(lang, 'pubAsap')}
-            {prepMinutes > 0 && <span dir="ltr"> · ~{prepMinutes} {t(lang, 'minShort')}</span>}
+            {formatPrepRange(lang, prepMin, prepMax) && (
+              <span dir="ltr"> · {formatPrepRange(lang, prepMin, prepMax)}</span>
+            )}
           </Chip>
           <Chip active={!asap} onClick={() => setAsap(false)}>{t(lang, 'pubAtTime')}</Chip>
           {!asap && (
@@ -855,6 +868,16 @@ function StatusScreen({ lang, clientUuid, onNewOrder }: {
     <CenterCard>
       <p className="text-sm font-bold text-gray-500 uppercase tracking-wide">{t(lang, 'pubOrderNumber')}</p>
       <p className="text-6xl font-black tabular-nums text-gray-900 mt-2">#{status.daily_number}</p>
+      {/* Таймер в стиле Wolt (061): пока заказ готовится — обратный отсчёт
+          до decided_at + prep_max. Готов → просто «Заказ выдан». */}
+      {!isDone && status.decided_at && (status.prep_max ?? 0) > 0 && (
+        <PrepTimer
+          lang={lang}
+          decidedAt={status.decided_at}
+          prepMin={status.prep_min ?? 0}
+          prepMax={status.prep_max ?? 0}
+        />
+      )}
       <p className="text-xl font-bold text-gray-900 mt-5">
         {isDone ? t(lang, 'pubDone') : t(lang, 'pubAccepted')}
       </p>
@@ -865,6 +888,76 @@ function StatusScreen({ lang, clientUuid, onNewOrder }: {
       {/* Пока заказ не выдан — вторичная, чтобы случайно не потерять экран с номером */}
       <NewOrderBtn lang={lang} onClick={onNewOrder} secondary={!isDone} />
     </CenterCard>
+  )
+}
+
+/**
+ * Обратный отсчёт до готовности (061, стиль Wolt): кольцо-прогресс
+ * от момента принятия (decided_at) до decided_at + prep_max минут.
+ * Тик раз в секунду. Дошли до нуля → «скоро будет готово» (заказ ещё
+ * не отмечен выданным — реальная готовность придёт статусом paid).
+ */
+function PrepTimer({ lang, decidedAt, prepMin, prepMax }: {
+  lang: Lang
+  decidedAt: string
+  prepMin: number
+  prepMax: number
+}) {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(id)
+  }, [])
+
+  const startMs = Date.parse(decidedAt)
+  const totalMs = prepMax * 60_000
+  const endMs = startMs + totalMs
+  const remainMs = Math.max(0, endMs - now)
+  const remainMin = Math.ceil(remainMs / 60_000)
+  // Прогресс 0→1 (сколько прошло). Ограничиваем [0,1] на случай сдвига часов.
+  const progress = totalMs > 0 ? Math.min(1, Math.max(0, (now - startMs) / totalMs)) : 1
+
+  // Кольцо-прогресс: SVG, окружность r=52 → длина ≈ 326.7
+  const R = 52
+  const C = 2 * Math.PI * R
+  const dash = C * progress
+
+  const overdue = remainMs <= 0
+  // Показ: пока идёт — «~N мин» (или вилка, если мы ещё в нижней зоне);
+  // на нуле — «почти готово»
+  const showRange = prepMin > 0 && prepMin < prepMax && !overdue && progress < 0.5
+  const label = overdue
+    ? t(lang, 'pubAlmostReady')
+    : showRange
+      ? `${Math.max(1, remainMin - (prepMax - prepMin))}–${remainMin}`
+      : `${remainMin}`
+
+  return (
+    <div className="mt-6 flex flex-col items-center">
+      <div className="relative w-32 h-32">
+        <svg viewBox="0 0 120 120" className="w-32 h-32 -rotate-90">
+          <circle cx="60" cy="60" r={R} fill="none" stroke="#e5e7eb" strokeWidth="8" />
+          <circle
+            cx="60" cy="60" r={R} fill="none" stroke="#111827" strokeWidth="8"
+            strokeLinecap="round" strokeDasharray={C} strokeDashoffset={C - dash}
+            style={{ transition: 'stroke-dashoffset 1s linear' }}
+          />
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          {overdue ? (
+            <span className="text-base font-bold text-gray-900 px-2 text-center leading-tight">{label}</span>
+          ) : (
+            <>
+              <span className="text-3xl font-black tabular-nums text-gray-900" dir="ltr">{label}</span>
+              <span className="text-xs font-semibold text-gray-500 mt-0.5">{t(lang, 'minShort')}</span>
+            </>
+          )}
+        </div>
+      </div>
+      {!overdue && (
+        <p className="text-sm text-gray-500 mt-3">{t(lang, 'pubReadyIn')}</p>
+      )}
+    </div>
   )
 }
 

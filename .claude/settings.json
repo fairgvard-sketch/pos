@@ -77,7 +77,23 @@
       "PowerShell($tok = [Environment]::GetEnvironmentVariable\\('SUPABASE_ACCESS_TOKEN','User'\\); if \\(-not $tok\\) { $tok = $env:SUPABASE_ACCESS_TOKEN }; if \\(-not $tok\\) { 'NO TOKEN'; exit }; $body = '{\"query\":\"select polname from pg_policies_check\"}'; $q = @{ query = \"select policyname from pg_policies where tablename = 'locations' union all select 'FN:' || case when prosrc like '%staff session required%' then 'strict' else 'soft' end from pg_proc where proname = 'require_staff_perm'\" } | ConvertTo-Json; try { Invoke-RestMethod -Method Post -Uri \"https://api.supabase.com/v1/projects/qgmnxrgtlpyqglwqmsej/database/query\" -Headers @{ Authorization = \"Bearer $tok\"; 'Content-Type' = 'application/json' } -Body $q | ConvertTo-Json -Depth 4 } catch { $_.Exception.Message })",
       "PowerShell($loc = Join-Path $env:APPDATA 'supabase'; Get-ChildItem $loc -ErrorAction SilentlyContinue | Select-Object Name; cmdkey /list | Select-String supabase)",
       "PowerShell($m = Invoke-WebRequest -UseBasicParsing 'http://localhost:5173/src/features/online/PublicOrderPage.tsx'; \\($m.Content | Select-String -Pattern 'text-\\\\[64px\\\\]' -AllMatches\\).Matches.Count; $css = Invoke-WebRequest -UseBasicParsing 'http://localhost:5173/src/index.css'; \\($css.Content | Select-String -Pattern '64px' -AllMatches\\).Matches.Count)",
-      "PowerShell(git add src/features/sell/SellPage.tsx src/lib/i18n.ts src/components/ui/BrandSplash.css)"
+      "PowerShell(git add src/features/sell/SellPage.tsx src/lib/i18n.ts src/components/ui/BrandSplash.css)",
+      "Bash(sed -E 's#.*//\\([a-z0-9]+\\)\\\\.supabase.*#\\\\1#')",
+      "Bash(env)",
+      "Bash(supabase projects *)",
+      "Bash(echo \"--- exit: $? ---\")",
+      "Bash(npx --no-install supabase projects list)",
+      "Bash(echo \"=== exit $? ===\")",
+      "Bash(npx --no-install supabase migration list --linked)",
+      "Read(//c/Users/Hub/.supabase/**)",
+      "Read(//c/Users/Hub/AppData/Roaming/supabase/**)",
+      "PowerShell($p = \"$env:APPDATA\\\\supabase\\\\access-token\"; if \\(Test-Path $p\\) { \"FOUND: $p \\($\\(\\( \\(Get-Content $p -Raw\\).Trim\\(\\).Length \\)\\) chars\\)\" } else { \"NOT at $p\"; Get-ChildItem \"$env:APPDATA\\\\supabase\" -ErrorAction SilentlyContinue | Select-Object Name })",
+      "PowerShell(Get-ChildItem \"$env:APPDATA\\\\supabase\" -Recurse -ErrorAction SilentlyContinue | Select-Object FullName; \"--- also check LocalAppData ---\"; Get-ChildItem \"$env:LOCALAPPDATA\\\\supabase\" -Recurse -ErrorAction SilentlyContinue | Select-Object FullName)",
+      "Bash(psql --version)",
+      "Read(//c/Users/Hub/AppData/**)",
+      "Read(//c/Users/Hub/.config/**)",
+      "Read(//c/Users/Hub/**)",
+      "Bash(npx --no-install supabase --help)"
     ]
   }
 }

@@ -17,7 +17,7 @@ import { autoPrintReceipt, printKitchenTicket } from '../receipt/printService'
 import AppSidebar from '../../components/AppSidebar'
 import {
   fetchOnlineOrders, fetchOnlineStats, acceptOnlineOrder, rejectOnlineOrder,
-  setOnlinePause, setOnlinePrepMinutes,
+  setOnlinePause, setOnlinePrepRange,
   type OnlineOrder,
 } from './api'
 import type { Location, LocationSettings } from '../../types'
@@ -145,6 +145,9 @@ export default function OnlineOrdersPage() {
   // Истёкшая пауза снимается сама — тик nowTs раз в 30с гасит пилюлю
   const pausedUntil = oo?.paused_until && Date.parse(oo.paused_until) > nowTs ? oo.paused_until : null
   const canPause = can(staff?.role, 'online_pause', location?.settings)
+  // Вилка приготовления (061): новые ключи в приоритете, legacy prep_minutes = min=max
+  const prepMin = oo?.prep_min ?? oo?.prep_minutes ?? 0
+  const prepMax = oo?.prep_max ?? oo?.prep_minutes ?? 0
 
   const patchOnline = (patch: NonNullable<LocationSettings['online_orders']>) => {
     qc.setQueryData(['current_location'], (old: Location | undefined) =>
@@ -168,8 +171,16 @@ export default function OnlineOrdersPage() {
     ...onlineMutOpts,
   })
   const prepMut = useMutation({
-    mutationFn: (patch: NonNullable<LocationSettings['online_orders']>) => setOnlinePrepMinutes(patch.prep_minutes ?? 0),
-    ...onlineMutOpts,
+    mutationFn: (r: { min: number; max: number }) => setOnlinePrepRange(r.min, r.max),
+    onMutate: async (r: { min: number; max: number }) => {
+      await qc.cancelQueries({ queryKey: ['current_location'] })
+      const prev = qc.getQueryData(['current_location'])
+      // Пишем новые ключи и гасим legacy prep_minutes (зеркало 061)
+      patchOnline({ prep_min: r.min, prep_max: r.max, prep_minutes: null })
+      return { prev }
+    },
+    onError: onlineMutOpts.onError,
+    onSettled: onlineMutOpts.onSettled,
   })
 
   const canVoid = can(staff?.role, 'void_order', location?.settings)
@@ -211,7 +222,9 @@ export default function OnlineOrdersPage() {
               >
                 <ClockIcon />
                 <span className="text-sm font-semibold text-gray-900 tabular-nums">
-                  {oo?.prep_minutes ? `~${oo.prep_minutes} ${t(lang, 'minShort')}` : t(lang, 'onlinePrepTitle')}
+                  {prepMax > 0
+                    ? `~${prepMin && prepMin < prepMax ? `${prepMin}–${prepMax}` : prepMax} ${t(lang, 'minShort')}`
+                    : t(lang, 'onlinePrepTitle')}
                 </span>
                 <Chevron />
               </button>
@@ -335,12 +348,13 @@ export default function OnlineOrdersPage() {
           lang={lang}
           enabled={enabled}
           pausedUntil={pausedUntil}
-          prepMinutes={oo?.prep_minutes ?? 0}
+          prepMin={prepMin}
+          prepMax={prepMax}
           canPause={canPause}
           busy={pauseMut.isPending || prepMut.isPending}
           onPause={(untilIso) => pauseMut.mutate({ paused_until: untilIso })}
           onResume={() => pauseMut.mutate({ paused_until: null })}
-          onPrep={(m) => prepMut.mutate({ prep_minutes: m })}
+          onPrep={(min, max) => prepMut.mutate({ min, max })}
           onClose={() => setStateSheet(false)}
         />
       )}
@@ -448,16 +462,17 @@ const PREP_PRESETS = [10, 15, 20, 30, 45, 60]
  * Изменения применяются сразу — шит не закрывается, статус в пилюлях
  * обновляется optimistic-патчем кеша current_location.
  */
-function OnlineStateSheet({ lang, enabled, pausedUntil, prepMinutes, canPause, busy, onPause, onResume, onPrep, onClose }: {
+function OnlineStateSheet({ lang, enabled, pausedUntil, prepMin, prepMax, canPause, busy, onPause, onResume, onPrep, onClose }: {
   lang: 'ru' | 'he'
   enabled: boolean
   pausedUntil: string | null
-  prepMinutes: number
+  prepMin: number
+  prepMax: number
   canPause: boolean
   busy: boolean
   onPause: (untilIso: string) => void
   onResume: () => void
-  onPrep: (minutes: number) => void
+  onPrep: (min: number, max: number) => void
   onClose: () => void
 }) {
   function pauseFor(preset: number | 'eod') {
@@ -515,16 +530,57 @@ function OnlineStateSheet({ lang, enabled, pausedUntil, prepMinutes, canPause, b
           <div className="mt-6 pt-4 border-t border-gray-100">
             <div className="text-sm font-bold text-gray-500">{t(lang, 'onlinePrepTitle')}</div>
             <p className="text-sm text-gray-500 mt-1">{t(lang, 'onlinePrepHint')}</p>
+
+            {/* Выкл — гасит обе границы; иначе — две строки вилки «от … до …» */}
             <div className="flex flex-wrap gap-2 mt-3">
-              <PrepChip active={!prepMinutes} disabled={!canPause || busy} onClick={() => onPrep(0)}>
+              <PrepChip active={!prepMax} disabled={!canPause || busy} onClick={() => onPrep(0, 0)}>
                 {t(lang, 'onlinePrepOff')}
               </PrepChip>
-              {PREP_PRESETS.map((m) => (
-                <PrepChip key={m} active={prepMinutes === m} disabled={!canPause || busy} onClick={() => onPrep(m)}>
-                  {m} {t(lang, 'minShort')}
-                </PrepChip>
-              ))}
             </div>
+
+            {prepMax > 0 && (
+              <>
+                <div className="text-xs font-semibold text-gray-500 mt-4 mb-2">{t(lang, 'onlinePrepFrom')}</div>
+                <div className="flex flex-wrap gap-2">
+                  {PREP_PRESETS.map((m) => (
+                    <PrepChip
+                      key={`min-${m}`}
+                      active={prepMin === m}
+                      disabled={!canPause || busy}
+                      // Нижняя граница не может превышать верхнюю — тянем max за собой
+                      onClick={() => onPrep(m, Math.max(m, prepMax))}
+                    >
+                      {m}
+                    </PrepChip>
+                  ))}
+                </div>
+
+                <div className="text-xs font-semibold text-gray-500 mt-4 mb-2">{t(lang, 'onlinePrepTo')}</div>
+                <div className="flex flex-wrap gap-2">
+                  {PREP_PRESETS.map((m) => (
+                    <PrepChip
+                      key={`max-${m}`}
+                      active={prepMax === m}
+                      disabled={!canPause || busy || m < prepMin}
+                      onClick={() => onPrep(Math.min(prepMin, m), m)}
+                    >
+                      {m}
+                    </PrepChip>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {/* Пока вилка выключена — быстрый старт с дефолта */}
+            {!prepMax && (
+              <div className="flex flex-wrap gap-2 mt-3">
+                {PREP_PRESETS.map((m) => (
+                  <PrepChip key={`start-${m}`} active={false} disabled={!canPause || busy} onClick={() => onPrep(m, m)}>
+                    {m} {t(lang, 'minShort')}
+                  </PrepChip>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>

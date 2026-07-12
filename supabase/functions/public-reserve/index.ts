@@ -71,7 +71,11 @@ Deno.serve(async (req) => {
         .eq('id', loc)
         .maybeSingle()
       if (error || !data) return json({ error: 'invalid_location' }, 404)
-      const rsv = (data as { rsv?: { enabled?: boolean; open?: string | null; close?: string | null; slot_min?: number | null } }).rsv
+      const rsv = (data as { rsv?: {
+        enabled?: boolean; open?: string | null; close?: string | null
+        slot_min?: number | null; max_party?: number | null
+        address?: string | null; lat?: number | null; lng?: number | null
+      } }).rsv
       return json(
         {
           location: {
@@ -88,8 +92,14 @@ Deno.serve(async (req) => {
             open: rsv?.open ?? null,
             close: rsv?.close ?? null,
             slot_min: rsv?.slot_min ?? null,
-            // Адрес и телефон — из реквизитов чека (кнопки «Навигация»/«Телефон»)
-            address: data.receipt_address ?? null,
+            // Лимит гостей на бронь (061): гостевой селект ограничен этим числом
+            max_party: rsv?.max_party ?? null,
+            // Адрес брони (062): точный адрес из настроек приоритетнее адреса
+            // из реквизитов чека. Телефон — из реквизитов чека.
+            address: rsv?.address || data.receipt_address || null,
+            // Координаты пина (062): заданы → «Навигация» открывает точную точку
+            lat: rsv?.lat ?? null,
+            lng: rsv?.lng ?? null,
             phone: data.receipt_phone ?? null,
             // Фото-шапка — общая с гостевой страницей заказа (Настройки → Онлайн-заказы)
             header_url: (data as { header_url?: string | null }).header_url ?? null,

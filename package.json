@@ -14,6 +14,7 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@fontsource/archivo-black": "^5.2.8",
+    "@fontsource/fredoka": "^5.2.10",
     "@fontsource/inter": "^5.2.8",
     "@supabase/supabase-js": "^2.106.2",
     "@tanstack/query-sync-storage-persister": "^5.101.2",
