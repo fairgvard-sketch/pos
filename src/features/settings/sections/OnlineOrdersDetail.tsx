@@ -151,6 +151,13 @@ export default function OnlineOrdersDetail({ location }: { location: Location | 
         <div className="text-sm font-semibold text-gray-900">{t(lang, 'onlineDesignTitle')}</div>
         <p className="text-xs text-gray-500 mt-0.5">{t(lang, 'onlineDesignHint')}</p>
         <div className="space-y-3 mt-3">
+          <TextField
+            label={t(lang, 'onlineNameLabel')}
+            hint={t(lang, 'onlineNameHint')}
+            placeholder={location?.receipt_business_name || location?.name || ''}
+            value={settings.online_orders?.display_name ?? ''}
+            onSave={(v) => update({ online_orders: { display_name: v || null } })}
+          />
           <ImageField
             label={t(lang, 'onlineImgHeader')}
             hint={t(lang, 'onlineImgHeaderHint')}
@@ -248,6 +255,39 @@ function ImageField({ label, hint, url, onChange }: {
         }}
       />
     </div>
+  )
+}
+
+/** Текстовое поле с сохранением на blur (без URL-логики) */
+function TextField({ label, hint, placeholder, value, onSave }: {
+  label: string
+  hint?: string
+  placeholder?: string
+  value: string
+  onSave: (v: string) => void
+}) {
+  const [val, setVal] = useState(value)
+  const [prevValue, setPrevValue] = useState(value)
+  if (prevValue !== value) {
+    setPrevValue(value)
+    setVal(value)
+  }
+  return (
+    <label className="block">
+      <span className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">{label}</span>
+      <input
+        className="input text-sm"
+        value={val}
+        placeholder={placeholder}
+        onChange={(e) => setVal(e.target.value)}
+        onBlur={() => {
+          const v = val.trim()
+          if (v !== val) setVal(v)
+          if (v !== value) onSave(v)
+        }}
+      />
+      {hint && <p className="text-xs text-gray-500 mt-1">{hint}</p>}
+    </label>
   )
 }
 

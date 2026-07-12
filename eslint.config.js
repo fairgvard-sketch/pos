@@ -22,6 +22,13 @@ export default defineConfig([
     rules: {
       // Паттерн «{ omitted, ...rest }» для выбрасывания поля — легален
       '@typescript-eslint/no-unused-vars': ['error', { ignoreRestSiblings: true, argsIgnorePattern: '^_' }],
+      // React Compiler НЕ подключён к сборке (нет babel-plugin-react-compiler
+      // в vite.config) — наши useMemo/useCallback работают как написаны. Это
+      // правило проверяет, сможет ли компилятор «сохранить» ручную мемоизацию,
+      // что для нас нерелевантно и ложно срабатывает рядом с легальной
+      // корректировкой state во время рендера. Включить обратно, если/когда
+      // заведём React Compiler в билд.
+      'react-hooks/preserve-manual-memoization': 'off',
     },
   },
 ])

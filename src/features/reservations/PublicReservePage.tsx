@@ -18,7 +18,6 @@ import BrandSplash from '../../components/ui/BrandSplash'
  * Никакого Supabase-клиента: только Edge Function с anon-ключом.
  */
 
-const LANG_KEY = 'kassa-public-lang' // общий с /order — язык гость выбрал один раз
 const ACTIVE_KEY = 'kassa-public-reserve' // {clientUuid, locId} — текущая бронь
 
 // Слоты времени по умолчанию: 07:00–23:45, шаг 15 мин. Если владелец задал
@@ -81,13 +80,13 @@ function slotsFor(dateStr: string, todayStr: string, minTs: number, p?: SlotPara
 
 export default function PublicReservePage() {
   const { locId = '' } = useParams()
-  const [lang] = useState<Lang>(() => (localStorage.getItem(LANG_KEY) as Lang) ?? 'he')
+  // Гостевая страница — всегда иврит (бронь he-first), без переключения языка.
+  const lang: Lang = 'he'
   useEffect(() => {
-    localStorage.setItem(LANG_KEY, lang)
     // <html lang> решает RTL в проде: start/end скомпилированы через :lang(he)
     document.documentElement.lang = lang
-  }, [lang])
-  const isRtl = lang === 'he'
+  }, [])
+  const isRtl = true
 
   // Незавершённая бронь переживает перезагрузку страницы
   const [activeUuid, setActiveUuid] = useState<string | null>(() => readActive(locId))
@@ -296,7 +295,7 @@ function Shell({ isRtl, info, lang, hero, children }: {
             <img src={loc.logo_url} alt="" className="w-16 h-16 rounded-full object-cover mx-auto mb-3" />
           )}
           <div className="text-sm text-gray-500">{t(lang, 'rsvPageLabel')}</div>
-          <h1 className="font-display text-4xl font-semibold leading-tight text-gray-900 mt-1">{title ?? ''}</h1>
+          <h1 className="font-display text-4xl font-bold leading-tight text-gray-900 mt-1">{title ?? ''}</h1>
           {loc?.address && <p className="text-sm text-gray-500 mt-1">{loc.address}</p>}
         </header>
         <div className="flex-1 flex flex-col">{children}</div>

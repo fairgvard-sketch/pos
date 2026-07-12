@@ -19,8 +19,11 @@ const FADE_MS = 400
 
 export default function BrandSplash({ done = true }: { done?: boolean }) {
   const [played, setPlayed] = useState(false)
-  const [leaving, setLeaving] = useState(false)
   const [gone, setGone] = useState(false)
+
+  // Fade запускается, когда анимация доиграла и данные готовы — это
+  // производное состояние, не отдельный setState:
+  const leaving = played && done && !gone
 
   useEffect(() => {
     const t = setTimeout(() => setPlayed(true), PLAY_MS)
@@ -28,11 +31,10 @@ export default function BrandSplash({ done = true }: { done?: boolean }) {
   }, [])
 
   useEffect(() => {
-    if (!played || !done || gone) return
-    setLeaving(true)
+    if (!leaving) return
     const t = setTimeout(() => setGone(true), FADE_MS)
     return () => clearTimeout(t)
-  }, [played, done, gone])
+  }, [leaving])
 
   if (gone) return null
 

@@ -416,6 +416,18 @@ export default function SellPage() {
     return m
   }, [items])
 
+  // Смена контекста (категория/поиск/выход из правки) сбрасывает локальный
+  // порядок и wiggle-режим. Сброс по смене ключа прямо в рендере (не setState
+  // в эффекте): React перерисует с обнулёнными значениями до отрисовки. Стоит
+  // ДО visibleItems, чтобы актуальный tileOrder уже участвовал в мемоизации.
+  const tileCtxKey = `${editMode}|${activeCat ?? ''}|${search}`
+  const [prevTileCtx, setPrevTileCtx] = useState(tileCtxKey)
+  if (tileCtxKey !== prevTileCtx) {
+    setPrevTileCtx(tileCtxKey)
+    setTileOrder(null)
+    setWiggleMode(false)
+  }
+
   const visibleItems = useMemo(() => {
     // В режиме правки показываем и снятые с продажи (приглушёнными)
     let list = editMode ? items : items.filter((i) => i.is_available)
@@ -433,12 +445,6 @@ export default function SellPage() {
     }
     return list
   }, [items, activeCat, noCats, search, editMode, tileOrder])
-
-  // Смена контекста (категория/поиск/выход из правки) сбрасывает локальный порядок и wiggle-режим
-  useEffect(() => {
-    setTileOrder(null)
-    setWiggleMode(false)
-  }, [editMode, activeCat, search])
 
   function itemGroups(item: MenuItem): ModifierGroup[] {
     const links = (item.menu_item_modifier_groups ?? []).slice().sort((a, b) => a.sort_order - b.sort_order)
@@ -844,7 +850,13 @@ export default function SellPage() {
   // set_order_discount. Локально помним последнюю применённую — для бейджа
   // и предзаполнения диалога в рамках текущего захода на стол.
   const [tableDiscount, setTableDiscount] = useState<(CartDiscount & { amount: number }) | null>(null)
-  useEffect(() => setTableDiscount(null), [tableCtx?.orderId])
+  // Сброс при переходе на другой счёт стола (сравнение с прошлым orderId в
+  // рендере вместо setState в эффекте)
+  const [prevDiscOrderId, setPrevDiscOrderId] = useState(tableCtx?.orderId)
+  if (tableCtx?.orderId !== prevDiscOrderId) {
+    setPrevDiscOrderId(tableCtx?.orderId)
+    setTableDiscount(null)
+  }
 
   const orderDiscount = useMutation({
     mutationFn: (d: CartDiscount | null) =>
@@ -1054,14 +1066,18 @@ export default function SellPage() {
     return min
   }, [cart.lines, items, stampCatIds])
 
-  // Корзина изменилась → «бесплатный напиток» следует за ней (или отменяется)
+  // Корзина изменилась → «бесплатный напиток» следует за ней (или отменяется).
+  // setRedeem меняет стор корзины — держим его в эффекте, но сам эффект
+  // реагирует на согласованный флаг рассинхрона, а не зовёт setState «в лоб».
   const setRedeem = cart.setRedeem
   const stampRedeemAmount = cart.redeem?.type === 'stamps' ? cart.redeem.amount : null
+  const stampRedeemStale =
+    stampRedeemAmount !== null && stampRedeemAmount !== (freeItemPrice ?? null)
   useEffect(() => {
-    if (stampRedeemAmount === null) return
+    if (!stampRedeemStale) return
     if (freeItemPrice === null) setRedeem(null)
-    else if (stampRedeemAmount !== freeItemPrice) setRedeem({ type: 'stamps', amount: freeItemPrice })
-  }, [stampRedeemAmount, freeItemPrice, setRedeem])
+    else setRedeem({ type: 'stamps', amount: freeItemPrice })
+  }, [stampRedeemStale, freeItemPrice, setRedeem])
 
   const loyAmount = loyaltyAmount(subtotal, cart.discount, cart.redeem)
   const total = cartTotal(cart.lines, cart.discount, cart.redeem)
@@ -1071,10 +1087,10 @@ export default function SellPage() {
   // Итог панели заказа: в режиме стола — уже в счёте + добавленное
   const shownTotal = tableCtx ? tableCtx.existingTotal + total : total
 
-  // Корзина опустела (сняли позиции) — ручные чаевые больше не к чему
-  useEffect(() => {
-    if (shownTotal === 0 && cartTip > 0) setCartTip(0)
-  }, [shownTotal, cartTip])
+  // Корзина опустела (сняли позиции) — ручные чаевые больше не к чему.
+  // Обнуляем во время рендера (не setState в эффекте): после сброса условие
+  // сразу перестаёт выполняться, каскада нет.
+  if (shownTotal === 0 && cartTip > 0) setCartTip(0)
 
   if (!staff) return null
 
@@ -2190,26 +2206,28 @@ function OrderTypeSwitch({
 }) {
   const start = useRef<{ x: number; y: number } | null>(null)
   const moved = useRef(false)   // был ли распознан свайп — тогда клик игнорируем
-  const justChanged = useRef(false)  // тип только что сменился → анимация выезда (не откат)
   // drag: смещение пальца во время жеста (экранные px); null — покоя
   const [drag, setDrag] = useState<number | null>(null)
   // Экранное направление последнего перехода: 1 — вправо, -1 — влево.
   // Подпись выезжает с той стороны, откуда пришёл жест/тап.
   const [screenDir, setScreenDir] = useState<1 | -1>(isRtl ? -1 : 1)
+  // «Выезд»: анимируем, когда текущий value — тот, на который мы только что
+  // перелистнули через slide(). Храним целевой тип (а не булев флаг), чтобы
+  // выезд играл ровно на рендере со сменившимся value: как только slide меняет
+  // тип, animateTo === value → анимация; при откате незавершённого свайпа value
+  // не меняется, animateTo !== value → span откатывается через transition.
+  // (Заменяет ref justChanged + эффект-сброс, которые читали ref в рендере.)
+  const [animateTo, setAnimateTo] = useState<OrderType | null>(null)
+  const justChanged = animateTo === value
   const idx = ORDER_TYPES.indexOf(value)
-
-  // Флаг «выезд» живёт один рендер после смены типа: span перемонтировался,
-  // анимация запущена — снимаем, чтобы откат незавершённого свайпа шёл через
-  // transition, а не повторял выезд.
-  useEffect(() => { justChanged.current = false }, [value])
 
   // Перелистнуть по экранному направлению. sd>0 (вправо) в LTR = следующий,
   // в RTL = предыдущий (список растёт влево). Зеркалим шаг через isRtl.
   function slide(sd: 1 | -1) {
     setScreenDir(sd)
-    justChanged.current = true
     const step = isRtl ? -sd : sd
     const next = (idx + step + ORDER_TYPES.length) % ORDER_TYPES.length
+    setAnimateTo(ORDER_TYPES[next])
     onChange(ORDER_TYPES[next])
   }
 
@@ -2261,7 +2279,7 @@ function OrderTypeSwitch({
           style={
             dragging
               ? { transform: `translateX(${drag}px)`, opacity: 1 - Math.min(Math.abs(drag!) / 160, 0.5) }
-              : justChanged.current
+              : justChanged
                 ? { animation: `${screenDir === 1 ? 'ot-in-right' : 'ot-in-left'} 0.18s ease-out` }
                 : { transform: 'translateX(0)', transition: 'transform 0.18s ease-out' }
           }

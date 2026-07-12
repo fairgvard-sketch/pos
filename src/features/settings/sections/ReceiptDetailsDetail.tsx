@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { updateReceiptDetails, type ReceiptDetails } from '../../auth/api'
@@ -15,17 +15,19 @@ export default function ReceiptDetailsDetail({ location }: { location: Location 
   const [receipt, setReceipt] = useState<ReceiptDetails>({
     receipt_business_name: '', receipt_address: '', receipt_tax_id: '', receipt_phone: '', receipt_footer: '',
   })
-  useEffect(() => {
-    if (location) {
-      setReceipt({
-        receipt_business_name: location.receipt_business_name ?? '',
-        receipt_address: location.receipt_address ?? '',
-        receipt_tax_id: location.receipt_tax_id ?? '',
-        receipt_phone: location.receipt_phone ?? '',
-        receipt_footer: location.receipt_footer ?? '',
-      })
-    }
-  }, [location])
+  // Заполняем поля из точки при её появлении/смене (сравнение с прошлым
+  // location в рендере вместо setState в эффекте):
+  const [prevLoc, setPrevLoc] = useState(location)
+  if (location && location !== prevLoc) {
+    setPrevLoc(location)
+    setReceipt({
+      receipt_business_name: location.receipt_business_name ?? '',
+      receipt_address: location.receipt_address ?? '',
+      receipt_tax_id: location.receipt_tax_id ?? '',
+      receipt_phone: location.receipt_phone ?? '',
+      receipt_footer: location.receipt_footer ?? '',
+    })
+  }
 
   const saveReceipt = useMutation({
     mutationFn: () => updateReceiptDetails(receipt),

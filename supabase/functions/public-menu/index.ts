@@ -117,6 +117,7 @@ Deno.serve(async (req) => {
       google_review?: string | null
       header_url?: string | null
       background_url?: string | null
+      display_name?: string | null
       order_types?: string[]
     }
   }).online_settings
@@ -144,8 +145,10 @@ Deno.serve(async (req) => {
       location: {
         id: locRes.data.id,
         name: locRes.data.name,
-        // Отображаемое имя (профиль 052) → название из чека → имя точки
+        // Название в шапке гостевой страницы: настройка «Онлайн-заказы» (062)
+        // → отображаемое имя (профиль 052) → название из чека → имя точки
         business_name:
+          onlineSettings?.display_name ||
           (locRes.data as { display_name?: string | null }).display_name ||
           locRes.data.receipt_business_name ||
           locRes.data.name,

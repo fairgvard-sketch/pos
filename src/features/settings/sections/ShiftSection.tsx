@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useLangStore } from '../../../store/langStore'
 import { t } from '../../../lib/i18n'
 import { parseMoney, type Agorot } from '../../../lib/money'
@@ -53,17 +53,22 @@ function MoneyRow({
   value: Agorot | null
   onCommit: (v: Agorot | null) => void
 }) {
-  const [str, setStr] = useState(value === null ? '' : String(value / 100))
-  useEffect(() => {
-    setStr(value === null ? '' : String(value / 100))
-  }, [value])
+  const fmt = (v: Agorot | null) => (v === null ? '' : String(v / 100))
+  const [str, setStr] = useState(() => fmt(value))
+  // Ресинк локального драфта, когда извне приезжает новое значение (сравнение
+  // с прошлым source прямо в рендере — вместо setState в эффекте):
+  const [prevValue, setPrevValue] = useState(value)
+  if (value !== prevValue) {
+    setPrevValue(value)
+    setStr(fmt(value))
+  }
 
   function commit() {
     const trimmed = str.trim()
     const next = trimmed === '' ? null : parseMoney(trimmed)
     if (trimmed !== '' && next === null) {
       // невалидный ввод — откатываем к сохранённому
-      setStr(value === null ? '' : String(value / 100))
+      setStr(fmt(value))
       return
     }
     if (next !== value) onCommit(next)

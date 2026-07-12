@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { openShift } from './api'
@@ -19,16 +19,17 @@ export default function ShiftGate() {
   const online = useNetStore((s) => s.online)
   const [floatStr, setFloatStr] = useState('')
 
-  // Префилл размена из настроек точки (Смена → стартовая сумма по умолчанию)
+  // Префилл размена из настроек точки (Смена → стартовая сумма по умолчанию).
+  // Срабатывает один раз, когда defaultFloat впервые приезжает не-null и поле
+  // ещё не трогали — сравнением с прошлым значением в рендере (не setState в
+  // эффекте):
   const { data: location } = useQuery({ queryKey: ['current_location'], queryFn: fetchCurrentLocation })
   const defaultFloat = location?.settings?.shift?.default_opening_float ?? null
   const [prefilled, setPrefilled] = useState(false)
-  useEffect(() => {
-    if (!prefilled && defaultFloat !== null && floatStr === '') {
-      setFloatStr(String(defaultFloat / 100))
-      setPrefilled(true)
-    }
-  }, [prefilled, defaultFloat, floatStr])
+  if (!prefilled && defaultFloat !== null && floatStr === '') {
+    setPrefilled(true)
+    setFloatStr(String(defaultFloat / 100))
+  }
 
   const open = useMutation({
     mutationFn: () => {

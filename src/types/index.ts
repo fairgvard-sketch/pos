@@ -72,6 +72,8 @@ export interface LocationSettings {
     header_url?: string | null
     /** Фон главного экрана; шапка и плитки — поверх */
     background_url?: string | null
+    /** Название в шапке гостевой страницы (062); пусто/null = имя точки/чека */
+    display_name?: string | null
   }
   /** Бронирование столов с сайта (053). Отсутствие ключа = ВЫКЛЮЧЕНО. */
   reservations?: {

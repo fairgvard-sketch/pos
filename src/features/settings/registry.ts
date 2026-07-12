@@ -15,7 +15,7 @@ export type CategoryId =
   | 'business'
   | 'device'
 
-export type DetailId = 'tipping' | 'service-mode' | 'online-orders' | 'tables' | 'loyalty' | 'guests' | 'perms' | 'receipt-details' | 'quick-amounts' | 'pay-methods' | 'profile'
+export type DetailId = 'tipping' | 'service-mode' | 'online-orders' | 'reservations' | 'tables' | 'loyalty' | 'guests' | 'perms' | 'receipt-details' | 'quick-amounts' | 'pay-methods' | 'profile'
 
 export const CATEGORIES: { id: CategoryId; label: TranslationKey }[] = [
   { id: 'payments', label: 'catPayments' },
@@ -57,8 +57,8 @@ export const SEARCH_INDEX: SearchEntry[] = [
   { cat: 'service', detail: 'tables', label: 'tablesManage' },
   { cat: 'service', detail: 'online-orders', label: 'onlineOrders', hint: 'onlineSettingsToggleHint' },
   { cat: 'service', detail: 'online-orders', label: 'onlineLinkTitle', hint: 'onlineLinkHint' },
-  { cat: 'service', label: 'reservationsTitle', hint: 'reservationsToggleHint' },
-  { cat: 'service', label: 'reserveLinkTitle', hint: 'reserveLinkHint' },
+  { cat: 'service', detail: 'reservations', label: 'reservationsTitle', hint: 'reservationsToggleHint' },
+  { cat: 'service', detail: 'reservations', label: 'reserveLinkTitle', hint: 'reserveLinkHint' },
   { cat: 'shift', label: 'defaultFloatTitle', hint: 'defaultFloatHint' },
   { cat: 'shift', label: 'closeReminderTitle', hint: 'closeReminderHint' },
   { cat: 'shift', label: 'cashWarnTitle', hint: 'cashWarnHint' },

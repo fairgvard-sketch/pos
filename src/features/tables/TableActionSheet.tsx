@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { moveTableOrder, mergeTableOrders, voidTableOrder, fetchOrderLines, type TableOccupancy } from './api'
@@ -230,10 +230,18 @@ function TableInfo({ occ, onBack }: { occ: TableOccupancy; onBack: () => void })
     queryFn: () => fetchOrderLines(occ.order_id),
   })
 
+  // «Занято N мин» тикает раз в 30 с (Date.now() нельзя звать прямо в рендере —
+  // нечистый вызов; держим момент в state)
+  const [nowTs, setNowTs] = useState(() => Date.now())
+  useEffect(() => {
+    const id = setInterval(() => setNowTs(Date.now()), 30_000)
+    return () => clearInterval(id)
+  }, [])
+
   const meta: { label: string; value: string }[] = [
     { label: t(lang, 'infoOrderNo'), value: `#${occ.daily_number}` },
     { label: t(lang, 'infoOpenedAt'), value: formatTime(occ.opened_at, lang) },
-    { label: t(lang, 'infoOccupied'), value: formatElapsed(occ.opened_at, Date.now(), lang) },
+    { label: t(lang, 'infoOccupied'), value: formatElapsed(occ.opened_at, nowTs, lang) },
     ...(occ.staff_name ? [{ label: t(lang, 'infoStaff'), value: occ.staff_name }] : []),
     { label: t(lang, 'infoItems'), value: String(occ.item_count) },
   ]

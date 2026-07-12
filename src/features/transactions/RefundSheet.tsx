@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { fetchRefundableItems, issueRefund, type Transaction } from './api'
@@ -77,13 +77,13 @@ export default function RefundSheet({ tx, remaining, onClose, onDone }: Props) {
   const methodValid = amount <= (avail[method] ?? 0)
   const anyMethodCovers = methods.some((m) => (avail[m] ?? 0) >= amount)
 
-  // Сумма изменилась и текущий способ её не тянет — переключиться на тот, что тянет
-  useEffect(() => {
-    if (!methodValid) {
-      const other = methods.find((m) => (avail[m] ?? 0) >= amount)
-      if (other) setMethod(other)
-    }
-  }, [amount, methodValid, methods, avail])
+  // Сумма изменилась и текущий способ её не тянет — переключиться на тот, что
+  // тянет (корректировка state во время рендера вместо setState в эффекте:
+  // React перерисует с новым способом до отрисовки, без каскадного ре-рендера).
+  if (!methodValid) {
+    const other = methods.find((m) => (avail[m] ?? 0) >= amount)
+    if (other) setMethod(other)
+  }
 
   const togglePick = (id: string) =>
     setPicked((prev) => {

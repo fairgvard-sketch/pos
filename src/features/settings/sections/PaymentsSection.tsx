@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { updateVatRate } from '../../auth/api'
@@ -34,11 +34,14 @@ export default function PaymentsSection({
   const methodsLabel = payMethodOrder.map((m) => t(lang, m === 'cash' ? 'payCash' : 'payCard')).join(' · ')
   const loyaltyMode = location?.loyalty_mode ?? 'off'
 
-  // НДС точки — настройка уровня заведения (не устройства)
+  // НДС точки — настройка уровня заведения (не устройства). Синхронизация
+  // с точкой при её появлении/смене — сравнением с прошлым location в рендере:
   const [vat, setVat] = useState('')
-  useEffect(() => {
-    if (location) setVat(String(Number(location.vat_rate)))
-  }, [location])
+  const [prevLoc, setPrevLoc] = useState(location)
+  if (location && location !== prevLoc) {
+    setPrevLoc(location)
+    setVat(String(Number(location.vat_rate)))
+  }
 
   const vatNum = Number(vat.replace(',', '.'))
   const vatValid = vat.trim() !== '' && Number.isFinite(vatNum) && vatNum >= 0 && vatNum <= 50

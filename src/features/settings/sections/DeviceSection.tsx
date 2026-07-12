@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { signOutDevice } from '../../auth/api'
@@ -50,7 +50,13 @@ export default function DeviceSection({ location }: { location: Location | undef
   const setLockAfterSale = useDeviceStore((s) => s.setLockAfterSale)
 
   const [name, setName] = useState(deviceName)
-  useEffect(() => setName(deviceName), [deviceName])
+  // Ресинк драфта имени при внешней смене deviceName (сравнение с прошлым
+  // значением в рендере вместо setState в эффекте):
+  const [prevDeviceName, setPrevDeviceName] = useState(deviceName)
+  if (deviceName !== prevDeviceName) {
+    setPrevDeviceName(deviceName)
+    setName(deviceName)
+  }
 
   const [confirmUnlink, setConfirmUnlink] = useState(false)
 

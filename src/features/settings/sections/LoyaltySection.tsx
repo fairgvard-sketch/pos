@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { fetchCategories, updateCategory } from '../../menu/api'
@@ -23,13 +23,16 @@ export default function LoyaltySection({
   const [goal, setGoal] = useState('10')
   const [percent, setPercent] = useState('5')
   const [minRedeem, setMinRedeem] = useState('10') // ₪-строка
-  useEffect(() => {
-    if (!location) return
+  // Синхронизация локальных полей с точкой, когда та приезжает/меняется
+  // (сравнение с прошлым location прямо в рендере — не setState в эффекте):
+  const [prevLoc, setPrevLoc] = useState(location)
+  if (location && location !== prevLoc) {
+    setPrevLoc(location)
     setMode(location.loyalty_mode)
     setGoal(String(location.loyalty_stamps_goal))
     setPercent(String(Number(location.loyalty_points_percent)))
     setMinRedeem(String(location.loyalty_points_min_redeem / 100))
-  }, [location])
+  }
 
   const goalNum = parseInt(goal, 10)
   const percentNum = Number(percent.replace(',', '.'))

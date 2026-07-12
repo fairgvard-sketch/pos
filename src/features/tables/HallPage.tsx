@@ -24,6 +24,9 @@ import TableEditSheet from './TableEditSheet'
 /** Порог «стол сидит долго» (мин): до него жёлтая рамка, после — красная */
 const TABLE_WARN_MIN = 30
 
+/** Счётчик для уникального имени realtime-канала (см. useEffect ниже) */
+let hallChannelSeq = 0
+
 export default function HallPage() {
   const lang = useLangStore((s) => s.lang)
   const isRtl = lang === 'he'
@@ -51,10 +54,14 @@ export default function HallPage() {
     return () => clearInterval(id)
   }, [])
 
-  // Realtime: заказ меняется → занятость; стол меняется → статус/справочник
+  // Realtime: заказ меняется → занятость; стол меняется → статус/справочник.
+  // Имя канала уникально на каждый монтаж (StrictMode-double-mount / повторный
+  // вход на страницу): supabase.channel(name) с уже занятым именем возвращает
+  // подписанный канал, и повторный .on() кидает исключение (белый экран —
+  // урок online/reservations api).
   useEffect(() => {
     const ch = supabase
-      .channel('hall')
+      .channel(`hall-${++hallChannelSeq}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () =>
         qc.invalidateQueries({ queryKey: ['open_table_orders'] })
       )

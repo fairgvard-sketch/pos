@@ -16,6 +16,7 @@ import ReceiptsSection from './sections/ReceiptsSection'
 import ServiceSection from './sections/ServiceSection'
 import ServiceModeDetail from './sections/ServiceModeDetail'
 import OnlineOrdersDetail from './sections/OnlineOrdersDetail'
+import ReservationsDetail from './sections/ReservationsDetail'
 import TablesDetail from './sections/TablesDetail'
 import ShiftSection from './sections/ShiftSection'
 import LoyaltySection from './sections/LoyaltySection'
@@ -41,6 +42,7 @@ const DETAIL_TITLES: Record<DetailId, TranslationKey> = {
   'pay-methods': 'payMethodsTitle',
   'service-mode': 'serviceModeTitle',
   'online-orders': 'onlineOrders',
+  reservations: 'reservationsTitle',
   tables: 'tablesManage',
   loyalty: 'loyaltyTitle',
   guests: 'guestsTitle',
@@ -188,6 +190,7 @@ export default function SettingsPage() {
                 {detail === 'pay-methods' && <PayMethodsDetail />}
                 {detail === 'service-mode' && <ServiceModeDetail location={location} openDetail={openDetail} />}
                 {detail === 'online-orders' && <OnlineOrdersDetail location={location} />}
+                {detail === 'reservations' && <ReservationsDetail location={location} />}
                 {detail === 'tables' && <TablesDetail />}
                 {detail === 'loyalty' && <LoyaltySection location={location} openDetail={openDetail} />}
                 {detail === 'guests' && <GuestsDetail location={location} />}

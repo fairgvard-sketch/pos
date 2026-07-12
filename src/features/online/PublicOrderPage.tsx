@@ -16,7 +16,6 @@ import BrandSplash from '../../components/ui/BrandSplash'
  * Никакого Supabase-клиента: только Edge Functions с anon-ключом.
  */
 
-const LANG_KEY = 'kassa-public-lang'
 const ACTIVE_KEY = 'kassa-public-active' // {clientUuid, locId} — текущая заявка
 
 /** «~20–35 мин» / «~20 мин» / '' — вилка приготовления для гостя (061) */
@@ -53,13 +52,13 @@ function readActive(locId: string): string | null {
 
 export default function PublicOrderPage() {
   const { locId = '' } = useParams()
-  const [lang] = useState<Lang>(() => (localStorage.getItem(LANG_KEY) as Lang) ?? 'he')
+  // Гостевая страница — всегда иврит (заказ he-first), без переключения языка.
+  const lang: Lang = 'he'
   useEffect(() => {
-    localStorage.setItem(LANG_KEY, lang)
     // <html lang> решает RTL в проде: start/end скомпилированы через :lang(he)
     document.documentElement.lang = lang
-  }, [lang])
-  const isRtl = lang === 'he'
+  }, [])
+  const isRtl = true
 
   // Незавершённая заявка переживает перезагрузку страницы
   const [activeUuid, setActiveUuid] = useState<string | null>(() => readActive(locId))
@@ -177,8 +176,8 @@ export default function PublicOrderPage() {
                   className="relative min-h-28 rounded-2xl overflow-hidden bg-gray-200 active:scale-[0.98] transition-all text-start"
                 >
                   {cover && <img src={cover} alt="" loading="lazy" className="absolute inset-0 w-full h-full object-cover" />}
-                  <span className="absolute inset-0 bg-gradient-to-t from-black/60 to-black/10" />
-                  <span className="absolute bottom-3 inset-x-3 text-white text-lg font-bold leading-tight">{cat.name}</span>
+                  <span className="absolute inset-0 bg-black/15" />
+                  <span className="absolute inset-0 flex items-center justify-center px-3 text-center text-white text-lg font-bold leading-tight [text-shadow:0_1px_6px_rgba(0,0,0,0.55)]">{cat.name}</span>
                 </button>
               )
             })}
@@ -243,9 +242,19 @@ export default function PublicOrderPage() {
             <div className="fixed bottom-0 inset-x-0 p-4 bg-gradient-to-t from-white via-white to-transparent">
               <button
                 onClick={() => setView('checkout')}
-                className="w-full h-14 rounded-2xl bg-gray-900 text-white font-bold text-base active:scale-[0.98] transition-all"
+                className="w-full h-16 rounded-full bg-gray-900 text-white ps-2 pe-6 flex items-center gap-4 active:scale-[0.98] transition-all"
               >
-                {t(lang, 'pubCart')} · {cartCount} · <span dir="ltr">{formatMoney(cartTotal, lang)}</span>
+                <span className="w-11 h-11 shrink-0 rounded-full bg-white text-gray-900 font-bold text-lg flex items-center justify-center tabular-nums">
+                  {cartCount}
+                </span>
+                <span className="font-bold text-lg">{t(lang, 'pubShowItems')}</span>
+                {/* Сумма к краю (на RTL — левому); знак ₪ слева от числа */}
+                <span className="ms-auto font-bold text-xl tabular-nums" dir="ltr">
+                  ₪{(cartTotal / 100).toLocaleString('he-IL', {
+                    minimumFractionDigits: cartTotal % 100 === 0 ? 0 : 2,
+                    maximumFractionDigits: 2,
+                  })}
+                </span>
               </button>
             </div>
           )}
@@ -329,15 +338,14 @@ function Shell({ isRtl, title, logo, hero, headerImg, bgImg, children }: {
               <span className="absolute inset-0 bg-black/35" />
               {/* Логотип на баннере не дублируем — сам баннер уже брендирован */}
               <div className="absolute inset-0 flex flex-col items-center justify-center px-4 pointer-events-none">
-                <h1 className="font-display text-[64px] font-semibold text-white leading-tight text-center [text-shadow:0_1px_8px_rgba(0,0,0,0.45)]">
+                <h1 className="font-display text-[64px] font-bold text-white leading-tight text-center [text-shadow:0_1px_8px_rgba(0,0,0,0.45)]">
                   {title ?? ''}
                 </h1>
               </div>
             </header>
           ) : (
           <header className="relative px-8 pt-8 pb-2 text-center">
-            {logo && <img src={logo} alt="" className="w-20 h-20 rounded-full object-cover mx-auto" />}
-            <h1 className={`font-display text-[64px] font-semibold leading-tight ${logo ? 'mt-3' : 'mt-8'} ${
+            <h1 className={`font-display text-[64px] font-bold leading-tight mt-8 ${
               hasBg ? 'text-white [text-shadow:0_1px_8px_rgba(0,0,0,0.45)]' : 'text-gray-900'
             }`}>
               {title ?? ''}
@@ -348,7 +356,7 @@ function Shell({ isRtl, title, logo, hero, headerImg, bgImg, children }: {
           <header className="sticky top-0 z-10 bg-white border-b border-gray-100 px-4 h-14 flex items-center justify-center relative">
             {/* Логотип у начала строки; название — по центру */}
             {logo && <img src={logo} alt="" className="absolute start-4 w-9 h-9 rounded-full object-cover" />}
-            <span className="font-display px-14 text-center font-semibold text-xl text-gray-900 truncate">
+            <span className="font-display px-14 text-center font-bold text-xl text-gray-900 truncate">
               {title ?? ''}
             </span>
           </header>
@@ -874,7 +882,6 @@ function StatusScreen({ lang, clientUuid, onNewOrder }: {
         <PrepTimer
           lang={lang}
           decidedAt={status.decided_at}
-          prepMin={status.prep_min ?? 0}
           prepMax={status.prep_max ?? 0}
         />
       )}
@@ -897,10 +904,9 @@ function StatusScreen({ lang, clientUuid, onNewOrder }: {
  * Тик раз в секунду. Дошли до нуля → «скоро будет готово» (заказ ещё
  * не отмечен выданным — реальная готовность придёт статусом paid).
  */
-function PrepTimer({ lang, decidedAt, prepMin, prepMax }: {
+function PrepTimer({ lang, decidedAt, prepMax }: {
   lang: Lang
   decidedAt: string
-  prepMin: number
   prepMax: number
 }) {
   const [now, setNow] = useState(() => Date.now())
@@ -913,7 +919,6 @@ function PrepTimer({ lang, decidedAt, prepMin, prepMax }: {
   const totalMs = prepMax * 60_000
   const endMs = startMs + totalMs
   const remainMs = Math.max(0, endMs - now)
-  const remainMin = Math.ceil(remainMs / 60_000)
   // Прогресс 0→1 (сколько прошло). Ограничиваем [0,1] на случай сдвига часов.
   const progress = totalMs > 0 ? Math.min(1, Math.max(0, (now - startMs) / totalMs)) : 1
 
@@ -923,14 +928,11 @@ function PrepTimer({ lang, decidedAt, prepMin, prepMax }: {
   const dash = C * progress
 
   const overdue = remainMs <= 0
-  // Показ: пока идёт — «~N мин» (или вилка, если мы ещё в нижней зоне);
-  // на нуле — «почти готово»
-  const showRange = prepMin > 0 && prepMin < prepMax && !overdue && progress < 0.5
-  const label = overdue
-    ? t(lang, 'pubAlmostReady')
-    : showRange
-      ? `${Math.max(1, remainMin - (prepMax - prepMin))}–${remainMin}`
-      : `${remainMin}`
+  // Обратный отсчёт MM:SS до нуля.
+  const totalSec = Math.ceil(remainMs / 1000)
+  const mm = Math.floor(totalSec / 60)
+  const ss = totalSec % 60
+  const clock = `${mm}:${String(ss).padStart(2, '0')}`
 
   return (
     <div className="mt-6 flex flex-col items-center">
@@ -945,12 +947,9 @@ function PrepTimer({ lang, decidedAt, prepMin, prepMax }: {
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
           {overdue ? (
-            <span className="text-base font-bold text-gray-900 px-2 text-center leading-tight">{label}</span>
+            <span className="text-base font-bold text-gray-900 px-2 text-center leading-tight">{t(lang, 'pubAlmostReady')}</span>
           ) : (
-            <>
-              <span className="text-3xl font-black tabular-nums text-gray-900" dir="ltr">{label}</span>
-              <span className="text-xs font-semibold text-gray-500 mt-0.5">{t(lang, 'minShort')}</span>
-            </>
+            <span className="text-3xl font-black tabular-nums text-gray-900" dir="ltr">{clock}</span>
           )}
         </div>
       </div>

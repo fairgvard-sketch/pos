@@ -147,7 +147,9 @@ export default function TimesheetPage() {
   )
   const backspace = useCallback(() => { if (!checking) setPin((p) => p.slice(0, -1)) }, [checking])
 
-  const entries = report?.entries ?? []
+  // Стабильная ссылка: `?? []` иначе даёт новый массив каждый рендер и рушит
+  // мемоизацию byStaff ниже
+  const entries = useMemo(() => report?.entries ?? [], [report?.entries])
   const totals = report?.totals ?? []
   const openEntries = entries.filter((e) => e.clock_out === null)
 

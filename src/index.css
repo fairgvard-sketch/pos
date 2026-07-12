@@ -13,13 +13,14 @@
 @import '@fontsource/inter/cyrillic-800.css';
 /* Archivo Black — только для словограммы ANGLE (сплэш, экраны входа) */
 @import '@fontsource/archivo-black/latin-400.css';
-/* Fredoka — крупные названия заведения на гостевой странице (061).
-   Округлый, тёплый; латиница + иврит (гости he-first). Кириллицы в
-   гарнитуре нет — русские названия падают на Inter (fallback в стеке). */
-@import '@fontsource/fredoka/latin-500.css';
-@import '@fontsource/fredoka/latin-600.css';
-@import '@fontsource/fredoka/hebrew-500.css';
-@import '@fontsource/fredoka/hebrew-600.css';
+/* Крупные названия заведения на гостевой странице (061). Rubik —
+   геометричный гротеск, латиница + иврит из одной гарнитуры (гости
+   he-first, название бренда латиницей). Кириллицы нет — русские названия
+   падают на Inter (fallback в стеке). */
+@import '@fontsource/rubik/latin-500.css';
+@import '@fontsource/rubik/latin-700.css';
+@import '@fontsource/rubik/hebrew-500.css';
+@import '@fontsource/rubik/hebrew-700.css';
 
 @tailwind base;
 @tailwind components;
@@ -49,10 +50,10 @@
 }
 
 @layer components {
-  /* Крупные названия заведения на гостевой странице (061). Fredoka —
-     округлый дисплейный шрифт; иврит из гарнитуры, кириллица — Inter. */
+  /* Крупные названия заведения на гостевой странице (061). Rubik —
+     геометричный гротеск, латиница + иврит; кириллица — Inter. */
   .font-display {
-    font-family: 'Fredoka', 'Inter', system-ui, sans-serif;
+    font-family: 'Rubik', 'Inter', system-ui, sans-serif;
     letter-spacing: -0.01em;
   }
 
