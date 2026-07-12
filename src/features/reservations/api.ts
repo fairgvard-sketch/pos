@@ -16,6 +16,8 @@ export interface Reservation {
   decided_at: string | null
   cancelled_at: string | null
   created_at: string
+  /** Открытый счёт стола после посадки (057). null = ещё не посажены */
+  order_id: string | null
   /** Назначенный стол (метка для карточки/чипа) */
   table: { id: string; label: string } | null
 }
@@ -75,6 +77,19 @@ export async function rejectReservation(id: string, staffId: string, reason?: st
     p_reason: reason ?? null,
   })
   if (error) throw new Error(error.message)
+}
+
+/**
+ * Посадить бронь за стол (057): открыть счёт стола и привязать к брони.
+ * Возвращает счёт для перехода в продажу. Идемпотентно (повтор → тот же счёт).
+ */
+export async function seatReservation(
+  id: string,
+  staffId: string,
+): Promise<{ order_id: string; daily_number: number; total: number; existing: boolean }> {
+  const { data, error } = await supabase.rpc('seat_reservation', { p_id: id, p_staff_id: staffId })
+  if (error) throw new Error(error.message)
+  return data as { order_id: string; daily_number: number; total: number; existing: boolean }
 }
 
 /** Назначить/сменить/снять (null) стол у подтверждённой брони */

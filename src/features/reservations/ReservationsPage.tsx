@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { useLangStore } from '../../store/langStore'
 import { useAuthStore } from '../../store/authStore'
+import { useCartStore } from '../../store/cartStore'
 import { t, formatTime, formatElapsed, type Lang } from '../../lib/i18n'
 import { fetchTables } from '../tables/api'
 import AppSidebar from '../../components/AppSidebar'
 import {
-  fetchReservations, acceptReservation, rejectReservation, setReservationTable,
+  fetchReservations, acceptReservation, rejectReservation, setReservationTable, seatReservation,
   type Reservation,
 } from './api'
 
@@ -21,6 +23,8 @@ export default function ReservationsPage() {
   const lang = useLangStore((s) => s.lang)
   const isRtl = lang === 'he'
   const staff = useAuthStore((s) => s.staff)
+  const navigate = useNavigate()
+  const cart = useCartStore()
   const qc = useQueryClient()
 
   const { data: reservations = [] } = useQuery({ queryKey: ['reservations'], queryFn: fetchReservations })
@@ -61,6 +65,20 @@ export default function ReservationsPage() {
       invalidateAll()
     },
     onError: (e) => toast.error((e as Error).message),
+  })
+
+  // ── Посадить бронь за стол (057): открыть счёт стола → перейти в продажу ──
+  const seat = useMutation({
+    mutationFn: (r: Reservation) => seatReservation(r.id, staff!.id),
+    onSuccess: (res, r) => {
+      cart.clear()
+      cart.setTableCtx({ tableId: r.table_id!, orderId: res.order_id, tableLabel: r.table?.label ?? '', existingTotal: res.total })
+      navigate('/sell')
+    },
+    onError: (e) => {
+      const m = (e as Error).message
+      toast.error(m.includes('table_busy') ? t(lang, 'resSeatBusy') : m)
+    },
   })
 
   // ── Отклонить / отменить бронь (двухшагово + необязательная причина) ──
@@ -164,6 +182,8 @@ export default function ReservationsPage() {
                       onCancelReject={() => { setRejecting(null); setRejectReason('') }}
                       onConfirmReject={() => reject.mutate(r)}
                       onPickTable={() => setPicking({ r, mode: 'change' })}
+                      onSeat={() => seat.mutate(r)}
+                      seatBusy={seat.isPending}
                     />
                   ))}
                 </Section>
@@ -317,18 +337,26 @@ function RejectForm({ lang, reason, setReason, busy, onCancel, onConfirm }: {
   )
 }
 
-/** Подтверждённая бронь: стол можно сменить, бронь — отменить */
-function ConfirmedCard({ r, lang, nowTs, rejecting, rejectReason, setRejectReason, rejectBusy, onStartReject, onCancelReject, onConfirmReject, onPickTable }: {
+/** Подтверждённая бронь: стол можно сменить, бронь — отменить, гостя — посадить */
+function ConfirmedCard({ r, lang, nowTs, rejecting, rejectReason, setRejectReason, rejectBusy, onStartReject, onCancelReject, onConfirmReject, onPickTable, onSeat, seatBusy }: {
   r: Reservation; lang: Lang; nowTs: number
   rejecting: boolean; rejectReason: string; setRejectReason: (v: string) => void
   rejectBusy: boolean
   onStartReject: () => void; onCancelReject: () => void; onConfirmReject: () => void
   onPickTable: () => void
+  /** Посадить гостя (только для секции «сегодня»); undefined — кнопки нет */
+  onSeat?: () => void
+  seatBusy?: boolean
 }) {
   return (
     <div className="card p-4">
       <ReservationHead r={r} lang={lang} nowTs={nowTs} />
-      {rejecting ? (
+      {r.order_id ? (
+        // Посажены (057): счётом дальше управляют из зала
+        <div className="mt-3">
+          <span className="badge-green">{t(lang, 'resSeatedBadge')}</span>
+        </div>
+      ) : rejecting ? (
         <RejectForm
           lang={lang}
           reason={rejectReason}
@@ -345,6 +373,11 @@ function ConfirmedCard({ r, lang, nowTs, rejecting, rejectReason, setRejectReaso
           <button className="btn-secondary h-11 px-5" onClick={onPickTable}>
             {r.table ? `${t(lang, 'tableLabel')} ${r.table.label}` : t(lang, 'resPickTable')}
           </button>
+          {onSeat && r.table && (
+            <button className="btn-primary flex-1 h-11" disabled={seatBusy} onClick={onSeat}>
+              {t(lang, 'resSeatGuest')}
+            </button>
+          )}
         </div>
       )}
     </div>
