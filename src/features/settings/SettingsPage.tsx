@@ -14,13 +14,14 @@ import QuickAmountsDetail from './sections/QuickAmountsDetail'
 import PayMethodsDetail from './sections/PayMethodsDetail'
 import ReceiptsSection from './sections/ReceiptsSection'
 import ServiceSection from './sections/ServiceSection'
+import ServiceModeDetail from './sections/ServiceModeDetail'
+import OnlineOrdersDetail from './sections/OnlineOrdersDetail'
 import TablesDetail from './sections/TablesDetail'
 import ShiftSection from './sections/ShiftSection'
 import LoyaltySection from './sections/LoyaltySection'
 import GuestsDetail from './sections/GuestsDetail'
 import StaffSection from './sections/StaffSection'
 import PermsDetail from './sections/PermsDetail'
-import SecuritySection from './sections/SecuritySection'
 import OfflineBanner from '../../components/OfflineBanner'
 import BusinessSection from './sections/BusinessSection'
 import ReceiptDetailsDetail from './sections/ReceiptDetailsDetail'
@@ -38,7 +39,10 @@ const DETAIL_TITLES: Record<DetailId, TranslationKey> = {
   tipping: 'tipTitle',
   'quick-amounts': 'quickAmountsTitle',
   'pay-methods': 'payMethodsTitle',
+  'service-mode': 'serviceModeTitle',
+  'online-orders': 'onlineOrders',
   tables: 'tablesManage',
+  loyalty: 'loyaltyTitle',
   guests: 'guestsTitle',
   perms: 'permsTitle',
   'receipt-details': 'receiptDetailsTitle',
@@ -182,7 +186,10 @@ export default function SettingsPage() {
                 {detail === 'tipping' && <TippingDetail />}
                 {detail === 'quick-amounts' && <QuickAmountsDetail />}
                 {detail === 'pay-methods' && <PayMethodsDetail />}
+                {detail === 'service-mode' && <ServiceModeDetail location={location} openDetail={openDetail} />}
+                {detail === 'online-orders' && <OnlineOrdersDetail location={location} />}
                 {detail === 'tables' && <TablesDetail />}
+                {detail === 'loyalty' && <LoyaltySection location={location} openDetail={openDetail} />}
                 {detail === 'guests' && <GuestsDetail location={location} />}
                 {detail === 'perms' && <PermsDetail location={location} />}
                 {detail === 'receipt-details' && <ReceiptDetailsDetail location={location} />}
@@ -198,9 +205,7 @@ export default function SettingsPage() {
                 {cat === 'receipts' && <ReceiptsSection location={location} />}
                 {cat === 'service' && <ServiceSection location={location} openDetail={openDetail} />}
                 {cat === 'shift' && <ShiftSection location={location} />}
-                {cat === 'loyalty' && <LoyaltySection location={location} openDetail={openDetail} />}
                 {cat === 'staff' && <StaffSection openDetail={openDetail} />}
-                {cat === 'security' && <SecuritySection />}
                 {cat === 'business' && <BusinessSection location={location} openDetail={openDetail} />}
                 {cat === 'device' && <DeviceSection location={location} />}
               </div>

@@ -54,6 +54,11 @@ export interface LocationSettings {
     paused_until?: string | null
     /** Время приготовления, минуты — гость видит при заказе (054) */
     prep_minutes?: number | null
+    /**
+     * Типы заказа, доступные гостю (058): 'here' | 'takeaway' | 'delivery'.
+     * Отсутствие/пусто = ['here','takeaway'] (дефолт, зеркало БД).
+     */
+    order_types?: ('here' | 'takeaway' | 'delivery')[]
     // Ссылки в подвале гостевой страницы (пусто/null = не показывать)
     instagram?: string | null
     facebook?: string | null

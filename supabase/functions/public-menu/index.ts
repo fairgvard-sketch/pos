@@ -115,6 +115,7 @@ Deno.serve(async (req) => {
       google_review?: string | null
       header_url?: string | null
       background_url?: string | null
+      order_types?: string[]
     }
   }).online_settings
 
@@ -123,6 +124,13 @@ Deno.serve(async (req) => {
     onlineSettings?.paused_until && Date.parse(onlineSettings.paused_until) > Date.now()
       ? onlineSettings.paused_until
       : null
+  // Типы заказа, включённые владельцем (058). Отсутствие ключа = дефолт
+  // ['here','takeaway'] (зеркало submit_online_order). Фильтруем мусор.
+  const ALL_TYPES = ['here', 'takeaway', 'delivery']
+  const orderTypes = (Array.isArray(onlineSettings?.order_types)
+    ? onlineSettings!.order_types.filter((tp) => ALL_TYPES.includes(tp))
+    : [])
+  const enabledTypes = orderTypes.length > 0 ? orderTypes : ['here', 'takeaway']
 
   return json(
     {
@@ -143,6 +151,8 @@ Deno.serve(async (req) => {
         paused_until: pausedUntil,
         // Время приготовления — «готовим ~N мин» на странице гостя
         prep_minutes: onlineSettings?.prep_minutes ?? null,
+        // Типы заказа для гостя (058): здесь / с собой / доставка
+        order_types: enabledTypes,
         // Оформление главного экрана: баннер-шапка и фон (Настройки → Онлайн-заказы)
         header_url: onlineSettings?.header_url || null,
         background_url: onlineSettings?.background_url || null,

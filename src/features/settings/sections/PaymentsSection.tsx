@@ -32,6 +32,7 @@ export default function PaymentsSection({
 
   const soon = () => toast(t(lang, 'featureSoon'))
   const methodsLabel = payMethodOrder.map((m) => t(lang, m === 'cash' ? 'payCash' : 'payCard')).join(' · ')
+  const loyaltyMode = location?.loyalty_mode ?? 'off'
 
   // НДС точки — настройка уровня заведения (не устройства)
   const [vat, setVat] = useState('')
@@ -103,6 +104,15 @@ export default function PaymentsSection({
               : t(lang, 'settingOff')
           }
           onClick={() => openDetail('tipping')}
+        />
+        <NavRow
+          label={t(lang, 'loyaltyTitle')}
+          hint={t(lang, 'loyaltyHint')}
+          value={t(
+            lang,
+            loyaltyMode === 'stamps' ? 'loyaltyModeStamps' : loyaltyMode === 'points' ? 'loyaltyModePoints' : 'loyaltyModeOff',
+          )}
+          onClick={() => openDetail('loyalty')}
         />
       </Group>
 

@@ -7,14 +7,24 @@ import { useDeviceStore } from '../../../store/deviceStore'
 import { renderTestPrintCanvas } from '../../receipt/printCanvas'
 import { canvasToRawbtUrl, canvasToEscposBase64 } from '../../../lib/escpos'
 import { t } from '../../../lib/i18n'
-import { Group, InputRow, NavRow } from '../ui'
+import { Group, InputRow, NavRow, SegmentRow, ToggleRow } from '../ui'
 import LangToggle from '../../../components/ui/LangToggle'
 import type { Location } from '../../../types'
 
 /**
- * Категория «Устройство»: имя этой кассы, статус печати +
- * тестовый оттиск, версия приложения, отвязка устройства.
+ * Категория «Устройство»: имя этой кассы, безопасность (автоблокировка +
+ * PIN после продажи), статус печати + тестовый оттиск, версия приложения,
+ * отвязка устройства.
  */
+
+/** Варианты автоблокировки (сек); 0 = выключена */
+const AUTOLOCK_OPTIONS = [0, 30, 60, 300, 900]
+
+function lockLabel(sec: number, lang: 'ru' | 'he'): string {
+  if (sec === 0) return t(lang, 'autoLockOff')
+  if (sec < 60) return `${sec} ${t(lang, 'secShort')}`
+  return `${sec / 60} ${t(lang, 'minShort')}`
+}
 
 /** Мажор Chrome/Chromium из UA — версия WebView в APK, браузера иначе */
 function chromeMajor(): number | null {
@@ -34,6 +44,10 @@ export default function DeviceSection({ location }: { location: Location | undef
   const deviceName = useDeviceStore((s) => s.deviceName)
   const setDeviceName = useDeviceStore((s) => s.setDeviceName)
   const printMode = useDeviceStore((s) => s.printMode)
+  const autoLockSec = useDeviceStore((s) => s.autoLockSec)
+  const lockAfterSale = useDeviceStore((s) => s.lockAfterSale)
+  const setAutoLockSec = useDeviceStore((s) => s.setAutoLockSec)
+  const setLockAfterSale = useDeviceStore((s) => s.setLockAfterSale)
 
   const [name, setName] = useState(deviceName)
   useEffect(() => setName(deviceName), [deviceName])
@@ -85,6 +99,24 @@ export default function DeviceSection({ location }: { location: Location | undef
         <InputRow label={t(lang, 'interfaceLanguage')} device>
           <LangToggle />
         </InputRow>
+      </Group>
+
+      <Group title={t(lang, 'catSecurity')}>
+        <SegmentRow<number>
+          label={t(lang, 'autoLock')}
+          hint={t(lang, 'autoLockHint')}
+          device
+          options={AUTOLOCK_OPTIONS.map((sec) => ({ value: sec, label: lockLabel(sec, lang) }))}
+          value={autoLockSec}
+          onChange={setAutoLockSec}
+        />
+        <ToggleRow
+          label={t(lang, 'lockAfterSale')}
+          hint={t(lang, 'lockAfterSaleHint')}
+          device
+          checked={lockAfterSale}
+          onChange={setLockAfterSale}
+        />
       </Group>
 
       <Group title={t(lang, 'groupPrinting')}>

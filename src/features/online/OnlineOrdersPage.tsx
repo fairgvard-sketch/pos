@@ -390,12 +390,20 @@ function OrderHead({ o, lang, nowTs, number }: { o: OnlineOrder; lang: 'ru' | 'h
           <span className="font-bold text-gray-900 truncate">{o.customer_name}</span>
           <span className="text-sm text-gray-500 tabular-nums" dir="ltr">{o.customer_phone}</span>
         </div>
-        <div className="text-sm text-gray-500 mt-1">
-          {agoText(o.created_at, nowTs, lang)} ·{' '}
-          <span className="font-semibold text-gray-900">
-            {o.pickup_at ? `${t(lang, 'onlinePickupAt')} ${formatTime(o.pickup_at, lang)}` : t(lang, 'onlineAsap')}
+        <div className="text-sm text-gray-500 mt-1 flex items-center gap-2 flex-wrap">
+          <span>
+            {agoText(o.created_at, nowTs, lang)} ·{' '}
+            <span className="font-semibold text-gray-900">
+              {o.pickup_at ? `${t(lang, 'onlinePickupAt')} ${formatTime(o.pickup_at, lang)}` : t(lang, 'onlineAsap')}
+            </span>
+          </span>
+          <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-700">
+            {t(lang, o.order_type === 'here' ? 'onlineTypeHere' : o.order_type === 'delivery' ? 'onlineTypeDelivery' : 'onlineTypeTakeaway')}
           </span>
         </div>
+        {o.order_type === 'delivery' && o.delivery_address && (
+          <div className="text-sm font-semibold text-gray-900 mt-1">{o.delivery_address}</div>
+        )}
         {o.note && <div className="text-sm text-gray-700 mt-1">«{o.note}»</div>}
       </div>
     </div>

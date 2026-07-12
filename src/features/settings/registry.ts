@@ -11,22 +11,18 @@ export type CategoryId =
   | 'receipts'
   | 'service'
   | 'shift'
-  | 'loyalty'
   | 'staff'
-  | 'security'
   | 'business'
   | 'device'
 
-export type DetailId = 'tipping' | 'tables' | 'guests' | 'perms' | 'receipt-details' | 'quick-amounts' | 'pay-methods' | 'profile'
+export type DetailId = 'tipping' | 'service-mode' | 'online-orders' | 'tables' | 'loyalty' | 'guests' | 'perms' | 'receipt-details' | 'quick-amounts' | 'pay-methods' | 'profile'
 
 export const CATEGORIES: { id: CategoryId; label: TranslationKey }[] = [
   { id: 'payments', label: 'catPayments' },
   { id: 'receipts', label: 'catReceipts' },
   { id: 'service', label: 'catService' },
   { id: 'shift', label: 'catShift' },
-  { id: 'loyalty', label: 'catLoyalty' },
   { id: 'staff', label: 'catStaff' },
-  { id: 'security', label: 'catSecurity' },
   { id: 'business', label: 'catBusiness' },
   { id: 'device', label: 'catDevice' },
 ]
@@ -48,6 +44,8 @@ export const SEARCH_INDEX: SearchEntry[] = [
   { cat: 'payments', detail: 'tipping', label: 'tipTitle', hint: 'collectTipsHint' },
   { cat: 'payments', detail: 'tipping', label: 'tipPresetsTitle' },
   { cat: 'payments', detail: 'tipping', label: 'tipSmartTitle' },
+  { cat: 'payments', detail: 'loyalty', label: 'loyaltyTitle', hint: 'loyaltyHint' },
+  { cat: 'payments', detail: 'guests', label: 'guestsTitle' },
   { cat: 'payments', label: 'vatRateTitle', hint: 'vatRateHint' },
   { cat: 'receipts', label: 'printModeTitle', hint: 'printModeHint' },
   { cat: 'receipts', label: 'autoPrintTitle', hint: 'autoPrintHint' },
@@ -55,21 +53,19 @@ export const SEARCH_INDEX: SearchEntry[] = [
   { cat: 'receipts', label: 'kitchenTicketTitle', hint: 'kitchenTicketHint' },
   { cat: 'receipts', label: 'printModifiersTitle', hint: 'printModifiersHint' },
   { cat: 'receipts', label: 'receiptCopiesTitle', hint: 'receiptCopiesHint' },
-  { cat: 'service', label: 'serviceModeTitle', hint: 'serviceModeHint' },
+  { cat: 'service', detail: 'service-mode', label: 'serviceModeTitle', hint: 'serviceModeHint' },
   { cat: 'service', detail: 'tables', label: 'tablesManage' },
-  { cat: 'service', label: 'onlineOrders', hint: 'onlineSettingsToggleHint' },
-  { cat: 'service', label: 'onlineLinkTitle', hint: 'onlineLinkHint' },
+  { cat: 'service', detail: 'online-orders', label: 'onlineOrders', hint: 'onlineSettingsToggleHint' },
+  { cat: 'service', detail: 'online-orders', label: 'onlineLinkTitle', hint: 'onlineLinkHint' },
   { cat: 'service', label: 'reservationsTitle', hint: 'reservationsToggleHint' },
   { cat: 'service', label: 'reserveLinkTitle', hint: 'reserveLinkHint' },
   { cat: 'shift', label: 'defaultFloatTitle', hint: 'defaultFloatHint' },
   { cat: 'shift', label: 'closeReminderTitle', hint: 'closeReminderHint' },
   { cat: 'shift', label: 'cashWarnTitle', hint: 'cashWarnHint' },
-  { cat: 'loyalty', label: 'loyaltyTitle', hint: 'loyaltyHint' },
-  { cat: 'loyalty', detail: 'guests', label: 'guestsTitle' },
   { cat: 'staff', label: 'staffTitle', hint: 'staffHint' },
   { cat: 'staff', detail: 'perms', label: 'permsTitle', hint: 'permsHint' },
-  { cat: 'security', label: 'autoLock', hint: 'autoLockHint' },
-  { cat: 'security', label: 'lockAfterSale', hint: 'lockAfterSaleHint' },
+  { cat: 'device', label: 'autoLock', hint: 'autoLockHint' },
+  { cat: 'device', label: 'lockAfterSale', hint: 'lockAfterSaleHint' },
   { cat: 'business', detail: 'profile', label: 'profileTitle', hint: 'profileHint' },
   { cat: 'business', detail: 'receipt-details', label: 'receiptDetailsTitle', hint: 'receiptDetailsHint' },
   { cat: 'business', label: 'menu', hint: 'menuAdminHint' },
