@@ -44,7 +44,7 @@ function readActive(locId: string): string | null {
 
 export default function PublicOrderPage() {
   const { locId = '' } = useParams()
-  const [lang, setLang] = useState<Lang>(() => (localStorage.getItem(LANG_KEY) as Lang) ?? 'he')
+  const [lang] = useState<Lang>(() => (localStorage.getItem(LANG_KEY) as Lang) ?? 'he')
   useEffect(() => {
     localStorage.setItem(LANG_KEY, lang)
     // <html lang> решает RTL в проде: start/end скомпилированы через :lang(he)
@@ -100,7 +100,7 @@ export default function PublicOrderPage() {
   // ── Экран статуса активной заявки ──────────────────────────
   if (activeUuid) {
     return (
-      <Shell isRtl={isRtl} lang={lang} setLang={setLang} title={menu?.location.business_name || menu?.location.name} logo={menu?.location.logo_url}>
+      <Shell isRtl={isRtl} title={menu?.location.business_name || menu?.location.name} logo={menu?.location.logo_url}>
         <StatusScreen lang={lang} clientUuid={activeUuid} onNewOrder={startNewOrder} />
       </Shell>
     )
@@ -113,7 +113,7 @@ export default function PublicOrderPage() {
     return (
       <>
         <BrandSplash done={false} />
-        <Shell isRtl={isRtl} lang={lang} setLang={setLang}>
+        <Shell isRtl={isRtl}>
           <div className="py-24 text-center text-gray-500">{t(lang, 'loading')}</div>
         </Shell>
       </>
@@ -123,7 +123,7 @@ export default function PublicOrderPage() {
     return (
       <>
         <BrandSplash />
-        <Shell isRtl={isRtl} lang={lang} setLang={setLang}>
+        <Shell isRtl={isRtl}>
           <div className="py-24 text-center text-gray-500">{t(lang, 'pubMenuError')}</div>
         </Shell>
       </>
@@ -135,8 +135,6 @@ export default function PublicOrderPage() {
     <BrandSplash />
     <Shell
       isRtl={isRtl}
-      lang={lang}
-      setLang={setLang}
       title={menu.location.business_name || menu.location.name}
       logo={menu.location.logo_url}
       hero={view === 'menu' && !activeCat}
@@ -286,10 +284,8 @@ export default function PublicOrderPage() {
  * белой hero-шапки; bgImg — фон главного экрана (fixed-подложка),
  * шапка и плитки накладываются поверх, текст шапки — белый.
  */
-function Shell({ isRtl, lang, setLang, title, logo, hero, headerImg, bgImg, children }: {
+function Shell({ isRtl, title, logo, hero, headerImg, bgImg, children }: {
   isRtl: boolean
-  lang: Lang
-  setLang: (l: Lang) => void
   title?: string
   logo?: string | null
   hero?: boolean
@@ -297,14 +293,6 @@ function Shell({ isRtl, lang, setLang, title, logo, hero, headerImg, bgImg, chil
   bgImg?: string | null
   children: React.ReactNode
 }) {
-  const langBtn = (
-    <button
-      onClick={() => setLang(lang === 'he' ? 'ru' : 'he')}
-      className="h-9 px-3 rounded-xl bg-gray-100 text-sm font-semibold text-gray-700 active:scale-[0.96] transition-all"
-    >
-      {lang === 'he' ? 'RU' : 'עב'}
-    </button>
-  )
   const hasBg = !!(hero && bgImg)
   return (
     <div dir={isRtl ? 'rtl' : 'ltr'} className="min-h-screen bg-[#eceef1]">
@@ -326,17 +314,15 @@ function Shell({ isRtl, lang, setLang, title, logo, hero, headerImg, bgImg, chil
               <span className="absolute inset-0 bg-black/35" />
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-4 pointer-events-none">
                 {logo && <img src={logo} alt="" className="w-11 h-11 rounded-full object-cover border-2 border-white/80 shrink-0" />}
-                <h1 className="text-2xl font-black text-white leading-tight text-center [text-shadow:0_1px_8px_rgba(0,0,0,0.45)]">
+                <h1 className="text-[64px] font-black text-white leading-tight text-center [text-shadow:0_1px_8px_rgba(0,0,0,0.45)]">
                   {title ?? ''}
                 </h1>
               </div>
-              <div className="absolute top-3 end-3">{langBtn}</div>
             </header>
           ) : (
           <header className="relative px-8 pt-8 pb-2 text-center">
-            <div className="absolute top-4 end-4">{langBtn}</div>
             {logo && <img src={logo} alt="" className="w-20 h-20 rounded-full object-cover mx-auto" />}
-            <h1 className={`text-2xl font-black leading-tight ${logo ? 'mt-3' : 'mt-8'} ${
+            <h1 className={`text-[64px] font-black leading-tight ${logo ? 'mt-3' : 'mt-8'} ${
               hasBg ? 'text-white [text-shadow:0_1px_8px_rgba(0,0,0,0.45)]' : 'text-gray-900'
             }`}>
               {title ?? ''}
@@ -344,13 +330,12 @@ function Shell({ isRtl, lang, setLang, title, logo, hero, headerImg, bgImg, chil
           </header>
           )
         ) : (
-          <header className="sticky top-0 z-10 bg-white border-b border-gray-100 px-4 h-14 flex items-center justify-end relative">
-            {/* Логотип у начала строки; название — по центру, поверх флекса */}
+          <header className="sticky top-0 z-10 bg-white border-b border-gray-100 px-4 h-14 flex items-center justify-center relative">
+            {/* Логотип у начала строки; название — по центру */}
             {logo && <img src={logo} alt="" className="absolute start-4 w-9 h-9 rounded-full object-cover" />}
-            <span className="absolute inset-x-14 text-center font-bold text-lg text-gray-900 truncate pointer-events-none">
+            <span className="px-14 text-center font-bold text-lg text-gray-900 truncate">
               {title ?? ''}
             </span>
-            {langBtn}
           </header>
         )}
         <div className="flex-1 flex flex-col">{children}</div>
