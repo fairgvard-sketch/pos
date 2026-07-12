@@ -823,7 +823,8 @@ function StatusScreen({ lang, clientUuid, onNewOrder }: {
         {isDone ? t(lang, 'pubDoneHint') : t(lang, 'pubShowNumber')}
       </p>
       <p className="text-lg font-bold tabular-nums text-gray-900 mt-3" dir="ltr">{formatMoney(status.total, lang)}</p>
-      {isDone && <NewOrderBtn lang={lang} onClick={onNewOrder} />}
+      {/* Пока заказ не выдан — вторичная, чтобы случайно не потерять экран с номером */}
+      <NewOrderBtn lang={lang} onClick={onNewOrder} secondary={!isDone} />
     </CenterCard>
   )
 }
@@ -836,11 +837,13 @@ function CenterCard({ children }: { children: React.ReactNode }) {
   )
 }
 
-function NewOrderBtn({ lang, onClick }: { lang: Lang; onClick: () => void }) {
+function NewOrderBtn({ lang, onClick, secondary }: { lang: Lang; onClick: () => void; secondary?: boolean }) {
   return (
     <button
       onClick={onClick}
-      className="mt-6 h-12 px-6 rounded-2xl bg-gray-900 text-white font-bold active:scale-[0.98] transition-all"
+      className={`mt-6 h-12 px-6 rounded-2xl font-bold active:scale-[0.98] transition-all ${
+        secondary ? 'border border-gray-300 text-gray-900' : 'bg-gray-900 text-white'
+      }`}
     >
       {t(lang, 'pubNewOrder')}
     </button>

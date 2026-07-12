@@ -267,21 +267,21 @@ function dayOptionLabel(dateStr: string, todayStr: string, lang: Lang): string {
   return `${wd} ${d.getDate()}/${d.getMonth() + 1}`
 }
 
-/** Ячейка слот-панели: иконка сверху, нативный select под ней, шеврон у края */
-function SlotCell({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
+/** Ячейка слот-панели: значение — текстом, невидимый select растянут на всю плитку (тап везде) */
+function SlotCell({ icon, label, children }: { icon: React.ReactNode; label: string; children: React.ReactNode }) {
   return (
     <div className="relative flex-1 min-w-0 py-3">
       <div className="flex justify-center text-gray-400">{icon}</div>
-      {children}
+      <div className="mt-1 px-6 text-center font-bold text-gray-900 text-base truncate">{label}</div>
       <span className="pointer-events-none absolute top-3 end-2 text-gray-400">
         <Chevron />
       </span>
+      {children}
     </div>
   )
 }
 
-const SELECT_CLS =
-  'w-full mt-1 bg-transparent text-center font-bold text-gray-900 text-base appearance-none focus:outline-none'
+const SELECT_CLS = 'absolute inset-0 w-full h-full opacity-0 cursor-pointer text-base'
 
 function SlotScreen({ lang, info, days, todayStr, todayHasSlots, date, time, guests, timeSlots, onDate, onTime, onGuests, onNext }: {
   lang: Lang
@@ -312,7 +312,7 @@ function SlotScreen({ lang, info, days, todayStr, todayHasSlots, date, time, gue
 
       {/* Слот-панель: дата · время · гости (селекты, время дискретно по 15 мин) */}
       <div className="w-full mt-4 rounded-2xl border border-gray-200 shadow-sm flex divide-x divide-gray-100 rtl:divide-x-reverse">
-        <SlotCell icon={<CalendarIcon />}>
+        <SlotCell icon={<CalendarIcon />} label={dayOptionLabel(date, todayStr, lang)}>
           <select className={SELECT_CLS} value={date} onChange={(e) => onDate(e.target.value)} aria-label={t(lang, 'rsvDate')}>
             {days.map((d) => (
               // Сегодня без слотов — день виден, но выбрать нельзя
@@ -322,14 +322,14 @@ function SlotScreen({ lang, info, days, todayStr, todayHasSlots, date, time, gue
             ))}
           </select>
         </SlotCell>
-        <SlotCell icon={<ClockIcon />}>
+        <SlotCell icon={<ClockIcon />} label={time}>
           <select className={SELECT_CLS} value={time} onChange={(e) => onTime(e.target.value)} aria-label={t(lang, 'rsvTime')}>
             {timeSlots.map((s) => (
               <option key={s} value={s}>{s}</option>
             ))}
           </select>
         </SlotCell>
-        <SlotCell icon={<PersonIcon />}>
+        <SlotCell icon={<PersonIcon />} label={`${guests} ${t(lang, 'resGuestsShort')}`}>
           <select className={SELECT_CLS} value={guests} onChange={(e) => onGuests(Number(e.target.value))} aria-label={t(lang, 'rsvGuests')}>
             {Array.from({ length: 20 }, (_, i) => i + 1).map((n) => (
               <option key={n} value={n}>{n} {t(lang, 'resGuestsShort')}</option>
