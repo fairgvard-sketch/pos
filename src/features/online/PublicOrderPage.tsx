@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { t, type Lang } from '../../lib/i18n'
+import { t, formatTime, type Lang } from '../../lib/i18n'
 import { formatMoney } from '../../lib/money'
 import {
   fetchPublicMenu, fetchPublicStatus, submitPublicOrder, PublicApiError,
@@ -143,7 +143,10 @@ export default function PublicOrderPage() {
     >
       {menu.location.accepting === false ? (
         <div className="mx-4 mt-4 rounded-2xl bg-amber-50 text-amber-800 text-sm font-semibold px-4 py-3">
-          {t(lang, 'pubPaused')}
+          {/* Пауза с кассы (054) — говорим, когда приём вернётся */}
+          {menu.location.paused_until
+            ? `${t(lang, 'pubPausedUntil')} ${formatTime(menu.location.paused_until, lang)}`
+            : t(lang, 'pubPaused')}
         </div>
       ) : !menu.location.is_open && (
         <div className="mx-4 mt-4 rounded-2xl bg-amber-50 text-amber-800 text-sm font-semibold px-4 py-3">
@@ -245,6 +248,7 @@ export default function PublicOrderPage() {
           lang={lang}
           locId={locId}
           isOpen={menu.location.is_open && menu.location.accepting !== false}
+          prepMinutes={menu.location.prep_minutes ?? 0}
           cart={cart}
           total={cartTotal}
           onQty={updateQty}
@@ -583,10 +587,12 @@ function ItemConfigSheet({ item, lang, isRtl, onClose, onAdd }: {
 }
 
 /** Корзина + форма контактов + отправка заявки */
-function CheckoutScreen({ lang, locId, isOpen, cart, total, onQty, onBack, onSubmitted }: {
+function CheckoutScreen({ lang, locId, isOpen, prepMinutes, cart, total, onQty, onBack, onSubmitted }: {
   lang: Lang
   locId: string
   isOpen: boolean
+  /** Время приготовления (054): 0 = не показывать */
+  prepMinutes: number
   cart: CartLine[]
   total: number
   onQty: (key: string, qty: number) => void
@@ -696,7 +702,10 @@ function CheckoutScreen({ lang, locId, isOpen, cart, total, onQty, onBack, onSub
         />
 
         <div className="flex gap-2">
-          <Chip active={asap} onClick={() => setAsap(true)}>{t(lang, 'pubAsap')}</Chip>
+          <Chip active={asap} onClick={() => setAsap(true)}>
+            {t(lang, 'pubAsap')}
+            {prepMinutes > 0 && <span dir="ltr"> · ~{prepMinutes} {t(lang, 'minShort')}</span>}
+          </Chip>
           <Chip active={!asap} onClick={() => setAsap(false)}>{t(lang, 'pubAtTime')}</Chip>
           {!asap && (
             <input
@@ -866,6 +875,7 @@ function Stepper({ onClick, children }: { onClick: () => void; children: React.R
 function publicErrorText(lang: Lang, code: string, detail?: string): string {
   switch (code) {
     case 'disabled': return t(lang, 'pubPaused')
+    case 'paused': return t(lang, 'pubPaused')
     case 'closed': return t(lang, 'pubErrClosed')
     case 'rate_limited': return t(lang, 'pubErrRate')
     case 'busy': return t(lang, 'pubErrBusy')

@@ -5,9 +5,9 @@ import type { LocationSettings, PermLevel, Role } from '../types'
  * Enforcement клиентский — модель авторизации доверяет устройству
  * (см. CLAUDE.md); ужесточение на staff-scoped токены — после MVP.
  */
-export type PermKey = 'discount' | 'price_edit' | 'refund' | 'void_order' | 'close_shift' | 'cash_movement'
+export type PermKey = 'discount' | 'price_edit' | 'refund' | 'void_order' | 'close_shift' | 'cash_movement' | 'online_pause'
 
-export const PERM_KEYS: PermKey[] = ['discount', 'price_edit', 'refund', 'void_order', 'close_shift', 'cash_movement']
+export const PERM_KEYS: PermKey[] = ['discount', 'price_edit', 'refund', 'void_order', 'close_shift', 'cash_movement', 'online_pause']
 
 /**
  * Дефолты повторяют поведение до миграции 036: возврат и раньше был
@@ -20,6 +20,7 @@ const DEFAULTS: Record<PermKey, PermLevel> = {
   void_order: 'all',
   close_shift: 'all',
   cash_movement: 'all',
+  online_pause: 'all',
 }
 
 /** Уровень права из настроек точки (с дефолтом) */

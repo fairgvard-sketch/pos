@@ -28,6 +28,8 @@ export interface LocationSettings {
     void_order?: PermLevel
     close_shift?: PermLevel
     cash_movement?: PermLevel
+    /** Пауза онлайн-заказов и время приготовления (054) */
+    online_pause?: PermLevel
   }
   receipt?: {
     print_modifiers?: boolean
@@ -44,6 +46,10 @@ export interface LocationSettings {
   /** Онлайн-заказы с сайта (051). Отсутствие ключа = включено. */
   online_orders?: {
     enabled?: boolean
+    /** Пауза приёма с кассы (054), ISO; истёкшая/null = паузы нет */
+    paused_until?: string | null
+    /** Время приготовления, минуты — гость видит при заказе (054) */
+    prep_minutes?: number | null
     // Ссылки в подвале гостевой страницы (пусто/null = не показывать)
     instagram?: string | null
     facebook?: string | null
@@ -53,6 +59,10 @@ export interface LocationSettings {
     header_url?: string | null
     /** Фон главного экрана; шапка и плитки — поверх */
     background_url?: string | null
+  }
+  /** Бронирование столов с сайта (053). Отсутствие ключа = ВЫКЛЮЧЕНО. */
+  reservations?: {
+    enabled?: boolean
   }
 }
 

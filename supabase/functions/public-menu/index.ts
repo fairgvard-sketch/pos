@@ -108,6 +108,8 @@ Deno.serve(async (req) => {
   const onlineSettings = (locRes.data as {
     online_settings?: {
       enabled?: boolean
+      paused_until?: string | null
+      prep_minutes?: number | null
       instagram?: string | null
       facebook?: string | null
       google_review?: string | null
@@ -115,6 +117,12 @@ Deno.serve(async (req) => {
       background_url?: string | null
     }
   }).online_settings
+
+  // Пауза с кассы (054): истёкшая метка = паузы нет (снимается сама)
+  const pausedUntil =
+    onlineSettings?.paused_until && Date.parse(onlineSettings.paused_until) > Date.now()
+      ? onlineSettings.paused_until
+      : null
 
   return json(
     {
@@ -129,8 +137,12 @@ Deno.serve(async (req) => {
         logo_url: locRes.data.logo_url ?? null,
         currency: locRes.data.currency,
         is_open: (shiftRes.data ?? []).length > 0,
-        // Тумблер 051: false = владелец выключил приём онлайн-заказов
-        accepting: onlineSettings?.enabled !== false,
+        // Тумблер 051 + пауза 054: false = заявки сейчас не принимаются
+        accepting: onlineSettings?.enabled !== false && !pausedUntil,
+        // Пауза с кассы: когда приём возобновится (null = паузы нет)
+        paused_until: pausedUntil,
+        // Время приготовления — «готовим ~N мин» на странице гостя
+        prep_minutes: onlineSettings?.prep_minutes ?? null,
         // Оформление главного экрана: баннер-шапка и фон (Настройки → Онлайн-заказы)
         header_url: onlineSettings?.header_url || null,
         background_url: onlineSettings?.background_url || null,

@@ -4,7 +4,7 @@ import toast from 'react-hot-toast'
 import { useLangStore } from '../../store/langStore'
 import { useAuthStore } from '../../store/authStore'
 import { useDeviceStore } from '../../store/deviceStore'
-import { t, formatTime, formatElapsed } from '../../lib/i18n'
+import { t, formatTime, formatElapsed, type TranslationKey } from '../../lib/i18n'
 import { formatMoney } from '../../lib/money'
 import { can } from '../../lib/perms'
 import { playPaymentChime } from '../../lib/sound'
@@ -17,8 +17,10 @@ import { autoPrintReceipt, printKitchenTicket } from '../receipt/printService'
 import AppSidebar from '../../components/AppSidebar'
 import {
   fetchOnlineOrders, fetchOnlineStats, acceptOnlineOrder, rejectOnlineOrder,
+  setOnlinePause, setOnlinePrepMinutes,
   type OnlineOrder,
 } from './api'
+import type { Location, LocationSettings } from '../../types'
 
 /**
  * Онлайн-заказы (050): заявки с сайта. Новые — принять/отклонить;
@@ -136,6 +138,40 @@ export default function OnlineOrdersPage() {
     onError: (e) => toast.error((e as Error).message),
   })
 
+  // ── Пауза приёма и время приготовления (054, идея из Square) ──
+  const [stateSheet, setStateSheet] = useState(false)
+  const oo = location?.settings?.online_orders
+  const enabled = oo?.enabled !== false
+  // Истёкшая пауза снимается сама — тик nowTs раз в 30с гасит пилюлю
+  const pausedUntil = oo?.paused_until && Date.parse(oo.paused_until) > nowTs ? oo.paused_until : null
+  const canPause = can(staff?.role, 'online_pause', location?.settings)
+
+  const patchOnline = (patch: NonNullable<LocationSettings['online_orders']>) => {
+    qc.setQueryData(['current_location'], (old: Location | undefined) =>
+      old ? { ...old, settings: { ...old.settings, online_orders: { ...old.settings?.online_orders, ...patch } } } : old)
+  }
+  const onlineMutOpts = {
+    onMutate: async (patch: NonNullable<LocationSettings['online_orders']>) => {
+      await qc.cancelQueries({ queryKey: ['current_location'] })
+      const prev = qc.getQueryData(['current_location'])
+      patchOnline(patch)
+      return { prev }
+    },
+    onError: (e: Error, _v: unknown, ctx?: { prev: unknown }) => {
+      qc.setQueryData(['current_location'], ctx?.prev)
+      toast.error(e.message)
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ['current_location'] }),
+  }
+  const pauseMut = useMutation({
+    mutationFn: (patch: NonNullable<LocationSettings['online_orders']>) => setOnlinePause(patch.paused_until ?? null),
+    ...onlineMutOpts,
+  })
+  const prepMut = useMutation({
+    mutationFn: (patch: NonNullable<LocationSettings['online_orders']>) => setOnlinePrepMinutes(patch.prep_minutes ?? 0),
+    ...onlineMutOpts,
+  })
+
   const canVoid = can(staff?.role, 'void_order', location?.settings)
   const fresh = orders.filter((o) => o.status === 'new')
   const awaiting = orders.filter((o) => o.status === 'accepted' && o.order?.status === 'open')
@@ -147,7 +183,40 @@ export default function OnlineOrdersPage() {
 
       <main className="flex-1 min-w-0 bg-white rounded-3xl flex flex-col overflow-hidden">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
-          <h1 className="text-xl font-bold text-gray-900">{t(lang, 'onlineOrders')}</h1>
+          <div className="flex items-center gap-3 min-w-0">
+            <h1 className="text-xl font-bold text-gray-900">{t(lang, 'onlineOrders')}</h1>
+            {/* Статус приёма и время приготовления — кликабельные пилюли (Square) */}
+            {location && (
+              <button
+                onClick={() => setStateSheet(true)}
+                className="h-11 px-4 rounded-full border border-gray-200 hover:border-gray-400 flex items-center gap-2 active:scale-[0.97] transition-all shrink-0"
+              >
+                <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${
+                  !enabled ? 'bg-gray-300' : pausedUntil ? 'bg-amber-400' : 'bg-green-500'
+                }`} />
+                <span className="text-sm font-semibold text-gray-900">
+                  {!enabled
+                    ? t(lang, 'onlineStateOff')
+                    : pausedUntil
+                      ? `${t(lang, 'onlinePausedUntil')} ${formatTime(pausedUntil, lang)}`
+                      : t(lang, 'onlineStateOn')}
+                </span>
+                <Chevron />
+              </button>
+            )}
+            {location && enabled && (
+              <button
+                onClick={() => setStateSheet(true)}
+                className="h-11 px-4 rounded-full border border-gray-200 hover:border-gray-400 flex items-center gap-2 active:scale-[0.97] transition-all shrink-0"
+              >
+                <ClockIcon />
+                <span className="text-sm font-semibold text-gray-900 tabular-nums">
+                  {oo?.prep_minutes ? `~${oo.prep_minutes} ${t(lang, 'minShort')}` : t(lang, 'onlinePrepTitle')}
+                </span>
+                <Chevron />
+              </button>
+            )}
+          </div>
           {/* Статистика за 7 дней (идея из Square Online) */}
           {stats && (
             <div className="flex items-center gap-2">
@@ -261,6 +330,21 @@ export default function OnlineOrdersPage() {
         </div>
       </main>
 
+      {stateSheet && location && (
+        <OnlineStateSheet
+          lang={lang}
+          enabled={enabled}
+          pausedUntil={pausedUntil}
+          prepMinutes={oo?.prep_minutes ?? 0}
+          canPause={canPause}
+          busy={pauseMut.isPending || prepMut.isPending}
+          onPause={(untilIso) => pauseMut.mutate({ paused_until: untilIso })}
+          onResume={() => pauseMut.mutate({ paused_until: null })}
+          onPrep={(m) => prepMut.mutate({ prep_minutes: m })}
+          onClose={() => setStateSheet(false)}
+        />
+      )}
+
       {paying && paying.order && (
         <PaymentSheet
           total={paying.order.total}
@@ -337,6 +421,142 @@ function Items({ o, lang }: { o: OnlineOrder; lang: 'ru' | 'he' }) {
         </div>
       ))}
     </div>
+  )
+}
+
+/** Пресеты паузы: минуты или 'eod' — до конца дня (23:59 локального) */
+const PAUSE_PRESETS: { minutes: number | 'eod'; label: TranslationKey }[] = [
+  { minutes: 30, label: 'onlinePause30' },
+  { minutes: 60, label: 'onlinePause1h' },
+  { minutes: 120, label: 'onlinePause2h' },
+  { minutes: 'eod', label: 'onlinePauseEod' },
+]
+
+const PREP_PRESETS = [10, 15, 20, 30, 45, 60]
+
+/**
+ * Управление приёмом (054, Square-стиль): пауза на время (снимается
+ * сама) и время приготовления, которое гость видит при заказе.
+ * Изменения применяются сразу — шит не закрывается, статус в пилюлях
+ * обновляется optimistic-патчем кеша current_location.
+ */
+function OnlineStateSheet({ lang, enabled, pausedUntil, prepMinutes, canPause, busy, onPause, onResume, onPrep, onClose }: {
+  lang: 'ru' | 'he'
+  enabled: boolean
+  pausedUntil: string | null
+  prepMinutes: number
+  canPause: boolean
+  busy: boolean
+  onPause: (untilIso: string) => void
+  onResume: () => void
+  onPrep: (minutes: number) => void
+  onClose: () => void
+}) {
+  function pauseFor(preset: number | 'eod') {
+    const until = new Date()
+    if (preset === 'eod') until.setHours(23, 59, 0, 0)
+    else until.setTime(until.getTime() + preset * 60_000)
+    onPause(until.toISOString())
+  }
+
+  return (
+    <div className="fixed inset-0 z-30 bg-black/40 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="w-full max-w-md bg-white rounded-3xl p-6" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-bold text-gray-900">{t(lang, 'onlineOrders')}</h3>
+          <button onClick={onClose} className="w-11 h-11 rounded-xl bg-gray-100 text-gray-500 font-bold active:scale-[0.94] transition-all">✕</button>
+        </div>
+
+        {!enabled ? (
+          // Выключено тумблером в настройках — пауза не имеет смысла
+          <p className="text-sm text-gray-500 mt-4">{t(lang, 'onlineOffHint')}</p>
+        ) : pausedUntil ? (
+          <div className="mt-4">
+            <div className="rounded-2xl bg-amber-50 text-amber-800 text-sm font-semibold px-4 py-3">
+              {t(lang, 'onlinePausedUntil')} {formatTime(pausedUntil, lang)}
+            </div>
+            <p className="text-sm text-gray-500 mt-2">{t(lang, 'onlinePauseHint')}</p>
+            <button
+              className="btn-primary w-full h-12 mt-3"
+              disabled={!canPause || busy}
+              onClick={onResume}
+            >
+              {t(lang, 'onlineResume')}
+            </button>
+          </div>
+        ) : (
+          <div className="mt-4">
+            <div className="text-sm font-bold text-gray-500">{t(lang, 'onlinePauseTitle')}</div>
+            <p className="text-sm text-gray-500 mt-1">{t(lang, 'onlinePauseHint')}</p>
+            <div className="grid grid-cols-2 gap-2 mt-3">
+              {PAUSE_PRESETS.map((p) => (
+                <button
+                  key={String(p.minutes)}
+                  className="btn-secondary h-12"
+                  disabled={!canPause || busy}
+                  onClick={() => pauseFor(p.minutes)}
+                >
+                  {t(lang, p.label)}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {enabled && (
+          <div className="mt-6 pt-4 border-t border-gray-100">
+            <div className="text-sm font-bold text-gray-500">{t(lang, 'onlinePrepTitle')}</div>
+            <p className="text-sm text-gray-500 mt-1">{t(lang, 'onlinePrepHint')}</p>
+            <div className="flex flex-wrap gap-2 mt-3">
+              <PrepChip active={!prepMinutes} disabled={!canPause || busy} onClick={() => onPrep(0)}>
+                {t(lang, 'onlinePrepOff')}
+              </PrepChip>
+              {PREP_PRESETS.map((m) => (
+                <PrepChip key={m} active={prepMinutes === m} disabled={!canPause || busy} onClick={() => onPrep(m)}>
+                  {m} {t(lang, 'minShort')}
+                </PrepChip>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function PrepChip({ active, disabled, onClick, children }: {
+  active: boolean
+  disabled: boolean
+  onClick: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={`h-11 px-4 rounded-xl text-sm font-semibold tabular-nums transition-all active:scale-[0.96] disabled:opacity-40 ${
+        active ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+      }`}
+    >
+      {children}
+    </button>
+  )
+}
+
+function Chevron() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400 shrink-0" aria-hidden>
+      <path d="M6 9l6 6 6-6" />
+    </svg>
+  )
+}
+
+function ClockIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="text-gray-500 shrink-0" aria-hidden>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3 2" />
+    </svg>
   )
 }
 

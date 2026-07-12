@@ -1,0 +1,93 @@
+# Бронирование столов с сайта (053)
+
+Гость бронирует стол на публичной странице, касса подтверждает. Построено
+по образцу онлайн-заказов (050/051): стейджинг-таблица + Edge Function под
+service_role + realtime-уведомление в сайдбаре + тумблер в настройках.
+
+## Поток
+
+```
+Гость /reserve/<location_id>
+  → форма: дата, время, гости (1–20), имя, телефон, комментарий
+  → POST public-reserve {action:'submit'} → submit_reservation (service_role)
+  → заявка в reservations (status='new'), client_uuid — секрет гостя
+Касса (сайдбар, режим столов)
+  → realtime: звонок playReservationChime + тост + бейдж «Брони»
+  → /reservations: Подтвердить (опционально сразу стол) / Отклонить (причина)
+Гость (поллинг 5с по client_uuid)
+  → confirmed: «Бронь подтверждена» (+ стол) | rejected: причина
+  → может отменить бронь (cancel) — касса получит тост «Гость отменил»
+План зала /hall
+  → стол с confirmed-бронью в окне [now−30мин, now+2ч] — синий + время
+    (вычисляется на клиенте, tables.status не трогаем)
+```
+
+## Ключевые решения
+
+- **Тумблер default = ВЫКЛЮЧЕНО** (`locations.settings->reservations->enabled`,
+  отсутствие ключа = выкл — в отличие от online_orders). Включается:
+  Настройки → Обслуживание → «Бронирование». Enforced на сервере
+  (`submit_reservation` → код `disabled`).
+- **Открытая смена не нужна** ни для заявки, ни для подтверждения — бронь
+  обычно на будущую дату. Вместо «часов приёма» окно времени:
+  `NOW()+30 мин … NOW()+30 дней` (код `invalid_time`).
+- **Статусы только вперёд**: `new → confirmed | rejected | cancelled`;
+  `confirmed → rejected` (касса отменяет по звонку гостя) и
+  `confirmed → cancelled` (гость сам). Статуса `expired` нет — прошедшие
+  скрывает клиент фильтром по `reserved_at` (визит был >2ч назад → история).
+- **Стол опционален**: назначается при подтверждении (пикер с подсказкой о
+  конфликте ±2ч — не блокировка) или позже (`set_reservation_table`).
+- **Анти-спам** в `submit_reservation`: ≤3 заявок с телефона за 15 мин
+  (`rate_limited`), ≤30 необработанных на точку (`busy`).
+- Идемпотентность: `client_uuid` UNIQUE, повторный POST → `duplicate:true`.
+- Гостю наружу уходит только `settings->reservations` (флаг), не весь settings.
+
+## Файлы
+
+| Слой | Путь |
+|------|------|
+| Миграция | `supabase/migrations/053_reservations.sql` |
+| Edge Function | `supabase/functions/public-reserve/index.ts` |
+| Экран кассы `/reservations` | `src/features/reservations/ReservationsPage.tsx` |
+| API кассы + realtime | `src/features/reservations/api.ts` |
+| Гостевая `/reserve/:locId` | `src/features/reservations/PublicReservePage.tsx` |
+| Клиент гостя | `src/features/reservations/publicReserveApi.ts` |
+| Бейдж + звонок | `src/components/AppSidebar.tsx` (+ `src/lib/sound.ts`) |
+| Подсветка зала | `src/features/tables/HallPage.tsx` (`['reservations_today']`) |
+| Настройки | `src/features/settings/sections/ServiceSection.tsx` → `ReservationsBlock` |
+
+## Деплой (строго по порядку!)
+
+1. **Миграция** `053_reservations.sql` — SQL Editor Supabase Dashboard,
+   проект `qgmnxrgtlpyqglwqmsej` (сверить ref с `VITE_SUPABASE_URL`).
+2. **Edge Function**:
+   ```bash
+   npx supabase functions deploy public-reserve --project-ref qgmnxrgtlpyqglwqmsej
+   ```
+   Секреты не нужны — `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY` инжектятся сами.
+3. **Фронтенд** — пуш в `main` (Vercel). Порядок важен: сайдбар в режиме
+   столов читает `reservations` — без миграции его запрос будет падать.
+
+Ссылка для гостей: `https://pos-self-sigma.vercel.app/reserve/<location_id>`.
+QR-флаер печатается из Настройки → Обслуживание → Бронирование.
+
+## Проверка после деплоя
+
+```bash
+FN=https://qgmnxrgtlpyqglwqmsej.supabase.co/functions/v1
+# 1. Инфо точки: accepting=false до включения тумблера
+curl "$FN/public-reserve?loc=<LOC>" -H "apikey: $ANON" -H "Authorization: Bearer $ANON"
+# 2. Заявка (после включения тумблера в настройках)
+curl -X POST "$FN/public-reserve" -H "apikey: $ANON" -H "Authorization: Bearer $ANON" \
+  -H "Content-Type: application/json" \
+  -d '{"action":"submit","loc":"<LOC>","client_uuid":"'$(uuidgen | tr A-Z a-z)'",
+       "name":"Тест","phone":"0501234567","party_size":2,
+       "reserved_at":"'$(date -u -v+2H +%Y-%m-%dT%H:%M:%SZ)'"}'
+# 3. Статус по client_uuid
+curl "$FN/public-reserve?id=<CLIENT_UUID>" -H "apikey: $ANON" -H "Authorization: Bearer $ANON"
+```
+
+Сценарий в двух вкладках: гость `/reserve/<loc>` отправляет форму → на кассе
+звонок и бейдж «Брони» → Подтвердить со столом → у гостя ≤5с «Бронь
+подтверждена · стол N» → в `/hall` стол синий с временем (если визит ≤2ч).
+Отмена гостем → тост «Гость отменил бронь», стол снова зелёный.

@@ -55,8 +55,12 @@ export interface PublicMenu {
     logo_url?: string | null
     currency: string
     is_open: boolean
-    /** false = владелец выключил приём онлайн-заказов (051) */
+    /** false = приём сейчас не идёт: выключен (051) или пауза (054) */
     accepting?: boolean
+    /** Пауза с кассы (054): ISO-время, когда приём возобновится */
+    paused_until?: string | null
+    /** Время приготовления, минуты — «готовим ~N мин» (054) */
+    prep_minutes?: number | null
     /** Баннер-шапка главного экрана; логотип и название — поверх */
     header_url?: string | null
     /** Фон главного экрана; шапка накладывается поверх */
@@ -82,7 +86,7 @@ export class PublicApiError extends Error {
   }
 }
 
-async function parseError(res: Response): Promise<never> {
+export async function parseError(res: Response): Promise<never> {
   let code = 'unknown'
   let detail: string | undefined
   try {

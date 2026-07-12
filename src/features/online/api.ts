@@ -1,4 +1,5 @@
 import { supabase } from '../../lib/supabase'
+import { currentStaffToken } from '../../store/authStore'
 
 /** Строка снапшота заявки (цены на момент заявки — для карточки кассира) */
 export interface OnlineOrderLine {
@@ -99,6 +100,27 @@ export async function fetchOnlineStats(): Promise<OnlineStats> {
     accepted: oo.data.filter((r) => r.status === 'accepted').length,
     revenue: orders.data.reduce((s, o) => s + o.total, 0),
   }
+}
+
+/**
+ * Пауза приёма онлайн-заказов (054, идея из Square): null = возобновить.
+ * Право online_pause (по умолчанию — все) проверяется в БД.
+ */
+export async function setOnlinePause(pausedUntil: string | null): Promise<void> {
+  const { error } = await supabase.rpc('set_online_pause', {
+    p_paused_until: pausedUntil,
+    p_staff_session: currentStaffToken(),
+  })
+  if (error) throw new Error(error.message)
+}
+
+/** Время приготовления в минутах — гость видит его при заказе (054) */
+export async function setOnlinePrepMinutes(minutes: number): Promise<void> {
+  const { error } = await supabase.rpc('set_online_prep_minutes', {
+    p_minutes: minutes,
+    p_staff_session: currentStaffToken(),
+  })
+  if (error) throw new Error(error.message)
 }
 
 /**

@@ -38,6 +38,7 @@ export function useLocationSettings(location: Location | undefined) {
       receipt: patch.receipt ? { ...settings.receipt, ...patch.receipt } : settings.receipt,
       shift: patch.shift ? { ...settings.shift, ...patch.shift } : settings.shift,
       online_orders: patch.online_orders ? { ...settings.online_orders, ...patch.online_orders } : settings.online_orders,
+      reservations: patch.reservations ? { ...settings.reservations, ...patch.reservations } : settings.reservations,
     })
   }
 

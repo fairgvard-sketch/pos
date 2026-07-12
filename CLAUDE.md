@@ -200,6 +200,11 @@ Self-service (051): Настройки → Обслуживание → «Онл
 отдаёт `accepting`), ссылка для гостей + печать QR-флаера на термоленте,
 соцссылки Instagram/Facebook/отзыв Google (`settings.online_orders` →
 `location.links` в `public-menu`) — подвал гостевой страницы.
+Пауза и время приготовления (054, Square-стиль): пилюли в шапке экрана
+«Онлайн» → пауза 30м/1ч/2ч/до конца дня (`paused_until` снимается сама,
+код 'paused' в `submit_online_order`) и «~N мин» гостю; RPC
+`set_online_pause`/`set_online_prep_minutes`, право `online_pause`
+(дефолт — все).
 Сайт Bulochka (bulweb2, Firebase) заказывает через тот же API: чекаут в
 `menu.html`, матчинг корзины по ивритским названиям, WhatsApp — fallback;
 каталог кассы наполнен из Firestore скриптом `scripts/import-site-menu.mjs`.

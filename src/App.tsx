@@ -23,6 +23,9 @@ const MenuPage = lazy(() => import('./features/menu/MenuPage'))
 const OnlineOrdersPage = lazy(() => import('./features/online/OnlineOrdersPage'))
 // Публичная страница заказа для гостей (050) — без auth, ходит в Edge Functions
 const PublicOrderPage = lazy(() => import('./features/online/PublicOrderPage'))
+const ReservationsPage = lazy(() => import('./features/reservations/ReservationsPage'))
+// Публичная страница брони стола (053) — без auth, ходит в Edge Functions
+const PublicReservePage = lazy(() => import('./features/reservations/PublicReservePage'))
 const ShiftPage = lazy(() => import('./features/shift/ShiftPage'))
 const TimesheetPage = lazy(() => import('./features/timesheet/TimesheetPage'))
 const TransactionsPage = lazy(() => import('./features/transactions/TransactionsPage'))
@@ -98,8 +101,10 @@ function RootRedirect() {
 }
 
 export default function App() {
-  // Гостевая страница заказа — без сплэша кассы: гостю нужен сразу контент
-  const showSplash = !window.location.pathname.startsWith('/order/')
+  // Гостевые страницы (заказ, бронь) — без сплэша кассы: гостю нужен сразу контент
+  const showSplash =
+    !window.location.pathname.startsWith('/order/') &&
+    !window.location.pathname.startsWith('/reserve/')
   return (
     <PersistQueryClientProvider
       client={queryClient}
@@ -159,6 +164,18 @@ export default function App() {
 
           {/* Гость сайта: меню и «закажи и забери» (050). Публичный маршрут. */}
           <Route path="/order/:locId" element={<PublicOrderPage />} />
+
+          <Route
+            path="/reservations"
+            element={
+              <ProtectedRoute>
+                <ReservationsPage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Гость сайта: бронь стола (053). Публичный маршрут. */}
+          <Route path="/reserve/:locId" element={<PublicReservePage />} />
 
           <Route
             path="/shift"

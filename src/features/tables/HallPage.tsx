@@ -3,12 +3,13 @@ import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { fetchTables, fetchOpenTableOrders, openTableOrder, setTableStatus, setTableLayout, type TableOccupancy } from './api'
+import { fetchUpcomingTableReservations } from '../reservations/api'
 import { fetchCurrentLocation } from '../auth/api'
 import { fetchCurrentShift } from '../shift/api'
 import { useCartStore } from '../../store/cartStore'
 import { useAuthStore } from '../../store/authStore'
 import { useLangStore } from '../../store/langStore'
-import { t, formatElapsed } from '../../lib/i18n'
+import { t, formatElapsed, formatTime } from '../../lib/i18n'
 import { supabase } from '../../lib/supabase'
 import { OfflineError, withOfflineFallback } from '../../lib/offline/net'
 import { useOutboxStore } from '../../lib/offline/outboxStore'
@@ -35,9 +36,16 @@ export default function HallPage() {
   const { data: location } = useQuery({ queryKey: ['current_location'], queryFn: fetchCurrentLocation })
   const { data: tables = [] } = useQuery({ queryKey: ['tables'], queryFn: fetchTables })
   const { data: open = [] } = useQuery({ queryKey: ['open_table_orders'], queryFn: fetchOpenTableOrders })
+  // Брони «скоро» (053): окно now−30мин..now+2ч вычисляется в queryFn,
+  // поэтому перезапрашиваем раз в минуту — граница окна ползёт со временем
+  const { data: upcomingRes = [] } = useQuery({
+    queryKey: ['reservations_today'],
+    queryFn: fetchUpcomingTableReservations,
+    refetchInterval: 60_000,
+  })
 
   // Тик раз в 30 сек — чтобы «сколько сидят» на карточках обновлялось само
-  const [nowTs, setNowTs] = useState(Date.now())
+  const [nowTs, setNowTs] = useState(() => Date.now())
   useEffect(() => {
     const id = setInterval(() => setNowTs(Date.now()), 30_000)
     return () => clearInterval(id)
@@ -52,6 +60,9 @@ export default function HallPage() {
       )
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tables' }, () =>
         qc.invalidateQueries({ queryKey: ['tables'] })
+      )
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'reservations' }, () =>
+        qc.invalidateQueries({ queryKey: ['reservations_today'] })
       )
       .subscribe()
     return () => { supabase.removeChannel(ch) }
@@ -79,6 +90,16 @@ export default function HallPage() {
     }
     return map
   }, [open, localOrders])
+
+  // Ближайшая confirmed-бронь по столу — синяя подсветка с временем.
+  // Список отсортирован по reserved_at, первый и есть ближайший.
+  const reservationByTable = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const r of upcomingRes) {
+      if (r.table_id && !map.has(r.table_id)) map.set(r.table_id, r.reserved_at)
+    }
+    return map
+  }, [upcomingRes])
 
   // Раскладка на холсте: у неразмещённых столов (pos_x=null) — дефолтная
   // сетка, чтобы их можно было увидеть и растащить. Размещённые — как есть.
@@ -306,7 +327,9 @@ export default function HallPage() {
                 const occ = occupancyByTable.get(tb.id)
                 const busy = !!occ
                 const disabled = !busy && tb.status === 'disabled'
-                const reserved = !busy && tb.status === 'reserved'
+                // Резерв: ручной флаг стола ИЛИ подтверждённая бронь в ближайшие 2ч
+                const upcomingAt = reservationByTable.get(tb.id)
+                const reserved = !busy && (tb.status === 'reserved' || !!upcomingAt)
                 // Возраст счёта красит стол: до 30 мин — жёлтый, дальше — красный
                 const ageMin = occ ? Math.floor((nowTs - new Date(occ.opened_at).getTime()) / 60000) : 0
                 const overdue = ageMin >= TABLE_WARN_MIN
@@ -380,7 +403,10 @@ export default function HallPage() {
                         {t(lang, 'tableBusy')} · {formatElapsed(occ!.opened_at, nowTs, lang)}
                       </span>
                     ) : reserved ? (
-                      <span className="text-[11px] font-semibold text-blue-500">{t(lang, 'tableReserved')}</span>
+                      <span className="text-[11px] font-semibold text-blue-500">
+                        {t(lang, 'tableReserved')}
+                        {upcomingAt && <> · {formatTime(upcomingAt, lang)}</>}
+                      </span>
                     ) : disabled ? (
                       <span className="text-[11px] text-gray-400">{t(lang, 'tableDisabled')}</span>
                     ) : (

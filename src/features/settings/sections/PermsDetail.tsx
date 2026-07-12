@@ -12,6 +12,7 @@ const PERM_ROWS: { key: PermKey; label: TranslationKey; hint: TranslationKey }[]
   { key: 'void_order', label: 'permVoid', hint: 'permVoidHint' },
   { key: 'close_shift', label: 'permCloseShift', hint: 'permCloseShiftHint' },
   { key: 'cash_movement', label: 'permCashMovement', hint: 'permCashMovementHint' },
+  { key: 'online_pause', label: 'permOnlinePause', hint: 'permOnlinePauseHint' },
 ]
 
 /**

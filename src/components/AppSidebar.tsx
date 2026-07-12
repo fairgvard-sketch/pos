@@ -8,15 +8,16 @@ import { useCartStore } from '../store/cartStore'
 import { fetchCurrentLocation } from '../features/auth/api'
 import { voidTableOrder } from '../features/tables/api'
 import { fetchOnlineOrders, subscribeOnlineOrders } from '../features/online/api'
+import { fetchReservations, subscribeReservations } from '../features/reservations/api'
 import { useOutboxStore } from '../lib/offline/outboxStore'
 import { enqueueTableVoid } from '../lib/offline/enqueue'
-import { playNewOrderChime } from '../lib/sound'
+import { playNewOrderChime, playReservationChime } from '../lib/sound'
 import { t } from '../lib/i18n'
 import Icon from './Icon'
 import type { IconName } from './Icon'
 import OfflineBadge from './OfflineBadge'
 
-export type SidebarPage = 'sell' | 'hall' | 'queue' | 'online' | 'transactions' | 'shift' | 'timesheet' | 'menu' | 'analytics' | 'settings'
+export type SidebarPage = 'sell' | 'hall' | 'queue' | 'online' | 'reservations' | 'transactions' | 'shift' | 'timesheet' | 'menu' | 'analytics' | 'settings'
 
 /** Общий сайдбар кассы: навигация, часы, сотрудник */
 export default function AppSidebar({ active }: { active: SidebarPage }) {
@@ -27,6 +28,7 @@ export default function AppSidebar({ active }: { active: SidebarPage }) {
 
   const { data: location } = useQuery({ queryKey: ['current_location'], queryFn: fetchCurrentLocation })
   const qc = useQueryClient()
+  const tablesMode = location?.service_mode === 'tables'
 
   // ── Онлайн-заказы (050): бейдж + звонок. Сайдбар смонтирован на всех
   // рабочих экранах — уведомление о новой заявке глобальное. Realtime
@@ -52,6 +54,53 @@ export default function AppSidebar({ active }: { active: SidebarPage }) {
     }
     knownOnlineIds.current = ids
   }, [onlineOrders, lang])
+
+  // ── Брони (053): бейдж + звонок, только в режиме столов. Отдельный
+  // канал (уникальное имя!) и другой звук — гость мог и отменить бронь.
+  const { data: reservations = [] } = useQuery({
+    queryKey: ['reservations'],
+    queryFn: fetchReservations,
+    refetchInterval: 90_000,
+    enabled: tablesMode,
+  })
+  useEffect(() => {
+    if (!tablesMode) return
+    return subscribeReservations(() => {
+      qc.invalidateQueries({ queryKey: ['reservations'] })
+      qc.invalidateQueries({ queryKey: ['reservations_today'] })
+    })
+  }, [qc, tablesMode])
+  // Незапоздавшие новые заявки — правило секции «Новые» экрана броней.
+  // Порог от момента монтирования: сайдбар пересоздаётся при каждой навигации
+  const [resNowTs] = useState(() => Date.now())
+  const newResCount = reservations.filter(
+    (r) => r.status === 'new' && new Date(r.reserved_at).getTime() > resNowTs - 2 * 3600_000
+  ).length
+  // Звонок при появлении заявки; тост без звонка — когда гость отменил
+  const knownResStatuses = useRef<Map<string, string> | null>(null)
+  useEffect(() => {
+    const statuses = new Map(reservations.map((r) => [r.id, r.status]))
+    if (knownResStatuses.current === null) {
+      knownResStatuses.current = statuses // первый рендер после навигации — не звеним
+      return
+    }
+    const prev = knownResStatuses.current
+    let hasNew = false
+    let hasCancelled = false
+    statuses.forEach((status, id) => {
+      const was = prev.get(id)
+      if (status === 'new' && was === undefined) hasNew = true
+      if (status === 'cancelled' && was !== undefined && was !== 'cancelled') hasCancelled = true
+    })
+    if (hasNew) {
+      playReservationChime()
+      toast(t(lang, 'reservationNewToast'))
+    } else if (hasCancelled) {
+      toast(t(lang, 'reservationCancelledToast'))
+    }
+    knownResStatuses.current = statuses
+  }, [reservations, lang])
+
   const tableCtx = useCartStore((s) => s.tableCtx)
   const lines = useCartStore((s) => s.lines)
   const clearCart = useCartStore((s) => s.clear)
@@ -84,7 +133,6 @@ export default function AppSidebar({ active }: { active: SidebarPage }) {
 
   if (!staff) return null
   const isManager = staff.role === 'owner' || staff.role === 'manager'
-  const tablesMode = location?.service_mode === 'tables'
   const showHall = tablesMode
   // В режиме столов «Продажа» — не точка входа: она открывается только когда
   // выбран стол (есть tableCtx). Без стола пункт скрыт, вход через зал.
@@ -104,6 +152,15 @@ export default function AppSidebar({ active }: { active: SidebarPage }) {
             // Выход в зал сбрасывает контекст стола → «Продажа» снова скрывается,
             // пустой счёт отменяется, черновик дозаказа отбрасывается.
             onClick={goHall}
+          />
+        )}
+        {tablesMode && (
+          <SideLink
+            active={active === 'reservations'}
+            label={t(lang, 'reservationsTitle')}
+            iconName="note"
+            badge={newResCount}
+            onClick={() => navigate('/reservations')}
           />
         )}
         {showSell && (
