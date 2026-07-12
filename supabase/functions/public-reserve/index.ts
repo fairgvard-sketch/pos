@@ -2,9 +2,11 @@
  * public-reserve — бронирование стола с сайта (053).
  *
  * GET ?loc=<location_id>
- *   → { location: { id, name, business_name, logo_url, accepting } }
+ *   → { location: { id, name, business_name, logo_url, accepting,
+ *       address, phone, header_url } }
  *   Инфо точки для формы брони. accepting — тумблер
  *   settings->reservations->enabled (отсутствие = выключено).
+ *   header_url переиспользуется из оформления онлайн-заказов.
  *
  * GET ?id=<client_uuid>
  *   → { status, reject_reason, reserved_at, party_size, table_label }
@@ -62,10 +64,10 @@ Deno.serve(async (req) => {
     const loc = params.get('loc')
     if (loc !== null) {
       if (!UUID_RE.test(loc)) return json({ error: 'invalid_location' }, 400)
-      // Наружу — только флаг брони, НЕ весь settings (там права ролей)
+      // Наружу — только флаг брони и баннер, НЕ весь settings (там права ролей)
       const { data, error } = await supabase
         .from('locations')
-        .select('id, name, receipt_business_name, logo_url, display_name:settings->>display_name, rsv:settings->reservations')
+        .select('id, name, receipt_business_name, receipt_address, receipt_phone, logo_url, display_name:settings->>display_name, rsv:settings->reservations, header_url:settings->online_orders->>header_url')
         .eq('id', loc)
         .maybeSingle()
       if (error || !data) return json({ error: 'invalid_location' }, 404)
@@ -82,6 +84,11 @@ Deno.serve(async (req) => {
             logo_url: data.logo_url ?? null,
             // Тумблер 053: отсутствие ключа = бронирование ВЫКЛЮЧЕНО
             accepting: rsv?.enabled === true,
+            // Адрес и телефон — из реквизитов чека (кнопки «Навигация»/«Телефон»)
+            address: data.receipt_address ?? null,
+            phone: data.receipt_phone ?? null,
+            // Фото-шапка — общая с гостевой страницей заказа (Настройки → Онлайн-заказы)
+            header_url: (data as { header_url?: string | null }).header_url ?? null,
           },
         },
         200,

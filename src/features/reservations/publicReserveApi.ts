@@ -24,6 +24,11 @@ export interface ReserveInfo {
     logo_url?: string | null
     /** false = владелец не включил приём броней (тумблер 053, default off) */
     accepting: boolean
+    /** Адрес и телефон из реквизитов чека — кнопки «Навигация»/«Телефон» */
+    address?: string | null
+    phone?: string | null
+    /** Фото-шапка (общая с гостевой страницей заказа) */
+    header_url?: string | null
   }
 }
 

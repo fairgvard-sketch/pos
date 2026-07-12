@@ -955,6 +955,15 @@ export const translations = {
     rsvErrTime: 'Выберите время минимум за 30 минут и не дальше 30 дней',
     rsvErrPhone: 'Проверьте номер телефона',
     rsvErrUnknown: 'Не удалось отправить заявку. Попробуйте ещё раз.',
+    rsvPageLabel: 'Бронирование стола',
+    rsvNoSlotsToday: 'Обратите внимание: на сегодня бронь уже недоступна',
+    rsvChooseHint: 'Выберите дату, время и число гостей',
+    rsvPhoneBtn: 'Телефон',
+    rsvNavigateBtn: 'Маршрут',
+    rsvBackToSlot: 'Назад к выбору',
+    rsvPickTimeTitle: 'Выберите точное время',
+    rsvDetailsTitle: 'Заполните данные, чтобы завершить бронь',
+    rsvSend: 'Отправить заявку',
   },
   he: {
     // Общее
@@ -1910,6 +1919,15 @@ export const translations = {
     rsvErrTime: 'בחרו זמן לפחות חצי שעה מראש ועד 30 יום',
     rsvErrPhone: 'בדקו את מספר הטלפון',
     rsvErrUnknown: 'לא הצלחנו לשלוח את הבקשה. נסו שוב.',
+    rsvPageLabel: 'הזמנת מקום',
+    rsvNoSlotsToday: 'שימו לב, לא ניתן להזמין מקומות להיום',
+    rsvChooseHint: 'בחרו תאריך, שעה וכמות אורחים',
+    rsvPhoneBtn: 'טלפון',
+    rsvNavigateBtn: 'ניווט',
+    rsvBackToSlot: 'חזרה לחיפוש',
+    rsvPickTimeTitle: 'בחרו שעה מדויקת',
+    rsvDetailsTitle: 'להשלמת ההזמנה יש למלא את הפרטים הבאים',
+    rsvSend: 'שליחת בקשה',
   },
 } as const
 
