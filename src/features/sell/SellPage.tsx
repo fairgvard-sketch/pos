@@ -210,6 +210,9 @@ export default function SellPage() {
   const [editMode, setEditMode] = useState(false)
   const [editorItem, setEditorItem] = useState<MenuItem | 'new' | null>(null)
   const [dragTile, setDragTile] = useState<string | null>(null)
+  // Wiggle-режим (как на iPhone): long-press включает, плитки дрожат и
+  // таскаются без повторного long-press, тап по экрану выключает
+  const [wiggleMode, setWiggleMode] = useState(false)
   // Локальный порядок текущей выборки на время перетаскивания (id плиток)
   const [tileOrder, setTileOrder] = useState<string[] | null>(null)
   const gridRef = useRef<HTMLDivElement>(null)
@@ -230,14 +233,17 @@ export default function SellPage() {
     tileDragStartPt.current = { x: e.clientX, y: e.clientY }
     const el = e.currentTarget as HTMLElement
     const pointerId = e.pointerId
+    // Внутри wiggle-режима плитка поднимается почти сразу (короткая пауза
+    // оставляет шанс быстрому свайпу остаться скроллом); вход — long-press
     tileDragTimer.current = window.setTimeout(() => {
       tileDragTimer.current = null
+      setWiggleMode(true)
       setDragTile(item.id)
       suppressTileClick.current = true
       try { el.setPointerCapture(pointerId) } catch { /* старый WebView */ }
       document.addEventListener('touchmove', preventTouchScroll.current, { passive: false })
       navigator.vibrate?.(15)
-    }, 450)
+    }, wiggleMode ? 120 : 450)
   }
 
   function tileDragMove(item: MenuItem, e: React.PointerEvent) {
@@ -428,9 +434,10 @@ export default function SellPage() {
     return list
   }, [items, activeCat, noCats, search, editMode, tileOrder])
 
-  // Смена контекста (категория/поиск/выход из правки) сбрасывает локальный порядок
+  // Смена контекста (категория/поиск/выход из правки) сбрасывает локальный порядок и wiggle-режим
   useEffect(() => {
     setTileOrder(null)
+    setWiggleMode(false)
   }, [editMode, activeCat, search])
 
   function itemGroups(item: MenuItem): ModifierGroup[] {
@@ -1158,11 +1165,24 @@ export default function SellPage() {
             )}
           </div>
           {editMode && (
-            <p className="text-xs text-gray-500 pb-2 -mt-2">{t(lang, 'menuEditHint')}</p>
+            <p className="text-xs text-gray-500 pb-2 -mt-2">
+              {t(lang, wiggleMode ? 'menuWiggleHint' : 'menuEditHint')}
+            </p>
           )}
         </div>
 
-        <div className="flex-1 overflow-y-auto px-5 pb-5">
+        <div
+          className="flex-1 overflow-y-auto px-5 pb-5"
+          onClickCapture={(e) => {
+            // Wiggle-режим: любой тап по экрану (не перенос) завершает его,
+            // ничего под пальцем не срабатывает — как выход из режима на iOS
+            if (!wiggleMode) return
+            e.preventDefault()
+            e.stopPropagation()
+            if (suppressTileClick.current) { suppressTileClick.current = false; return } // клик-эхо после переноса
+            setWiggleMode(false)
+          }}
+        >
           {showCatGrid ? (
             /* Корень витрины: плитки категорий (+ Избранное первой) */
             <div className="grid grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-3">
@@ -1212,7 +1232,9 @@ export default function SellPage() {
                   className={`relative rounded-2xl border p-3 text-start bg-white transition-all duration-150 ${
                     dragTile === item.id
                       ? 'border-gray-900 shadow-[0_12px_32px_rgba(0,0,0,0.18)] scale-105 z-10'
-                      : 'border-gray-300 hover:border-gray-400 hover:shadow-[0_4px_16px_rgba(0,0,0,0.06)] active:scale-[0.97]'
+                      : wiggleMode
+                        ? 'border-gray-300 animate-[btn-wiggle_0.3s_ease-in-out_infinite]'
+                        : 'border-gray-300 hover:border-gray-400 hover:shadow-[0_4px_16px_rgba(0,0,0,0.06)] active:scale-[0.97]'
                   } ${editMode && !item.is_available ? 'opacity-40' : ''}`}
                 >
                   {editMode ? (
