@@ -1,5 +1,6 @@
 import { supabase } from '../../lib/supabase'
 import { compressImage } from '../../lib/imageCompress'
+import { currentStaffToken } from '../../store/authStore'
 import type { MenuCategory, MenuItem, ModifierGroup, Modifier, Station } from '../../types'
 
 /** org_id/location_id из JWT — обязательны при INSERT (RLS WITH CHECK) */
@@ -42,14 +43,18 @@ export async function deleteCategory(id: string) {
   if (error) throw error
 }
 
-/** Новый порядок категорий: массив id в желаемой последовательности → sort_order = индекс */
+/**
+ * Новый порядок категорий одним атомарным RPC (064, P8): раньше серия
+ * независимых UPDATE (Promise.all) — частичный сбой оставлял смешанный
+ * порядок. Теперь reorder_menu переставляет всё в одной транзакции.
+ */
 export async function reorderCategories(orderedIds: string[]) {
-  const updates = orderedIds.map((id, i) =>
-    supabase.from('menu_categories').update({ sort_order: i }).eq('id', id)
-  )
-  const results = await Promise.all(updates)
-  const failed = results.find((r) => r.error)
-  if (failed?.error) throw failed.error
+  const { error } = await supabase.rpc('reorder_menu', {
+    p_kind: 'category',
+    p_ids: orderedIds,
+    p_staff_session: currentStaffToken(),
+  })
+  if (error) throw error
 }
 
 // ── Товары ───────────────────────────────────────────────
@@ -100,98 +105,64 @@ export async function uploadItemImage(file: File): Promise<string> {
   return supabase.storage.from('menu-images').getPublicUrl(path).data.publicUrl
 }
 
+/** Поля товара для RPC save_menu_item (064). Пустые числа/строки — как есть. */
+function itemPayload(input: ItemInput): Record<string, unknown> {
+  return {
+    name: input.name,
+    description: input.description,
+    category_id: input.category_id,
+    station_id: input.station_id,
+    price: input.price,
+    image_url: input.image_url,
+    is_available: input.is_available,
+    is_favorite: input.is_favorite,
+    ask_modifiers: input.ask_modifiers,
+    cost: input.cost,
+    sku: input.sku,
+    track_inventory: input.track_inventory,
+    stock: input.stock,
+  }
+}
+
+/**
+ * Создать товар транзакционно (064, P8): товар + варианты + привязки групп
+ * одной RPC — частичный сбой откатывает целиком (раньше INSERT товара и
+ * DELETE/INSERT связей были разными запросами → риск битого товара).
+ */
 export async function createItem(input: ItemInput): Promise<string> {
-  const { org_id } = await ctx()
-  const { data, error } = await supabase
-    .from('menu_items')
-    .insert({
-      org_id,
-      name: input.name,
-      description: input.description,
-      category_id: input.category_id,
-      station_id: input.station_id,
-      price: input.price,
-      image_url: input.image_url,
-      is_available: input.is_available,
-      is_favorite: input.is_favorite,
-      ask_modifiers: input.ask_modifiers,
-      cost: input.cost,
-      sku: input.sku,
-      track_inventory: input.track_inventory,
-      stock: input.stock,
-    })
-    .select('id')
-    .single()
+  const { data, error } = await supabase.rpc('save_menu_item', {
+    p_item: itemPayload(input),
+    p_variants: input.variants.map((v) => ({ name: v.name, price: v.price, is_default: v.is_default })),
+    p_group_ids: input.modifier_group_ids,
+    p_item_id: null,
+    p_staff_session: currentStaffToken(),
+  })
   if (error) throw error
-  await syncItemRelations(data.id, input, org_id)
-  return data.id
+  return data as string
 }
 
+/** Обновить товар транзакционно (064, P8) — см. createItem */
 export async function updateItem(id: string, input: ItemInput) {
-  const { org_id } = await ctx()
-  const { error } = await supabase
-    .from('menu_items')
-    .update({
-      name: input.name,
-      description: input.description,
-      category_id: input.category_id,
-      station_id: input.station_id,
-      price: input.price,
-      image_url: input.image_url,
-      is_available: input.is_available,
-      is_favorite: input.is_favorite,
-      ask_modifiers: input.ask_modifiers,
-      cost: input.cost,
-      sku: input.sku,
-      track_inventory: input.track_inventory,
-      stock: input.stock,
-    })
-    .eq('id', id)
+  const { error } = await supabase.rpc('save_menu_item', {
+    p_item: itemPayload(input),
+    p_variants: input.variants.map((v) => ({ name: v.name, price: v.price, is_default: v.is_default })),
+    p_group_ids: input.modifier_group_ids,
+    p_item_id: id,
+    p_staff_session: currentStaffToken(),
+  })
   if (error) throw error
-  await syncItemRelations(id, input, org_id)
 }
 
-/** Варианты и привязки групп: полная пересинхронизация (каталог — не финансовые данные, тут можно) */
-async function syncItemRelations(itemId: string, input: ItemInput, orgId: string) {
-  const { error: delVar } = await supabase.from('item_variants').delete().eq('item_id', itemId)
-  if (delVar) throw delVar
-  if (input.variants.length > 0) {
-    const { error } = await supabase.from('item_variants').insert(
-      input.variants.map((v, i) => ({
-        org_id: orgId,
-        item_id: itemId,
-        name: v.name,
-        price: v.price,
-        is_default: v.is_default,
-        sort_order: i,
-      }))
-    )
-    if (error) throw error
-  }
-
-  const { error: delMg } = await supabase.from('menu_item_modifier_groups').delete().eq('item_id', itemId)
-  if (delMg) throw delMg
-  if (input.modifier_group_ids.length > 0) {
-    const { error } = await supabase.from('menu_item_modifier_groups').insert(
-      input.modifier_group_ids.map((group_id, i) => ({
-        org_id: orgId,
-        item_id: itemId,
-        group_id,
-        sort_order: i,
-      }))
-    )
-    if (error) throw error
-  }
-}
-
-/** Новый порядок товаров: массив id в желаемой последовательности → sort_order = индекс */
+/**
+ * Новый порядок товаров одним атомарным RPC (064, P8) — см. reorderCategories.
+ */
 export async function reorderItems(orderedIds: string[]) {
-  const updates = orderedIds.map((id, i) =>
-    supabase.from('menu_items').update({ sort_order: i }).eq('id', id)
-  )
-  const results = await Promise.all(updates)
-  const failed = results.find((r) => r.error)
-  if (failed?.error) throw failed.error
+  const { error } = await supabase.rpc('reorder_menu', {
+    p_kind: 'item',
+    p_ids: orderedIds,
+    p_staff_session: currentStaffToken(),
+  })
+  if (error) throw error
 }
 
 export async function toggleItemAvailability(id: string, isAvailable: boolean) {

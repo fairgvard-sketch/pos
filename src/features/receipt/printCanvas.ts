@@ -20,6 +20,19 @@ const NAME_MAX = RIGHT - 290 // максимум ширины названия
 
 const FONT = (size: number, bold = false) => `${bold ? '700' : '400'} ${size}px monospace`
 
+/**
+ * Высота чернового холста под чек/тикет. Раньше стояла ФИКСИРОВАННАЯ
+ * (3000/2000px) — длинный чек (много позиций + модификаторы) не влезал,
+ * рисунок обрезался, а `out.height = min(tall.height, y+24)` капал итог по
+ * потолку → хвост чека терялся молча. Теперь считаем от фактического
+ * контента: шапка/подвал (base) + строки с запасом на модификаторы, плюс
+ * потолок как страховка от абсурдных значений (память WebView T2 конечна).
+ */
+const MAX_SCRATCH_HEIGHT = 20000
+function scratchHeight(base: number, rowCount: number, perRow = 70): number {
+  return Math.min(MAX_SCRATCH_HEIGHT, Math.ceil(base + rowCount * perRow))
+}
+
 function fmt(agorot: number): string {
   return (agorot / 100).toFixed(2)
 }
@@ -42,10 +55,15 @@ export function renderReceiptCanvas(
   location: Location | undefined,
   opts: ReceiptRenderOpts = {}
 ): HTMLCanvasElement {
-  // Рисуем на заведомо высоком холсте, затем обрезаем по факту
+  // Рисуем на холсте, высота которого посчитана от контента (иначе длинный
+  // чек обрезался). Строки товаров + их модификаторы (если печатаются).
+  const printModsForHeight = location?.settings?.receipt?.print_modifiers ?? false
+  const modRows = printModsForHeight
+    ? r.lines.reduce((s, l) => s + l.modifiers.length, 0)
+    : 0
   const tall = document.createElement('canvas')
   tall.width = W
-  tall.height = 3000
+  tall.height = scratchHeight(1100, r.lines.length + modRows)
   const ctx = tall.getContext('2d')!
   ctx.fillStyle = '#fff'
   ctx.fillRect(0, 0, W, tall.height)
@@ -243,7 +261,8 @@ export function renderRefundReceiptCanvas(
 ): HTMLCanvasElement {
   const tall = document.createElement('canvas')
   tall.width = W
-  tall.height = 2000
+  // Возврат может перечислять построчно возвращённые позиции — высота от их числа
+  tall.height = scratchHeight(1000, r.items?.length ?? 0)
   const ctx = tall.getContext('2d')!
   ctx.fillStyle = '#fff'
   ctx.fillRect(0, 0, W, tall.height)
@@ -381,7 +400,8 @@ export interface ZReportData {
 export function renderZReportCanvas(z: ZReportData, location: Location | undefined): HTMLCanvasElement {
   const tall = document.createElement('canvas')
   tall.width = W
-  tall.height = 2000
+  // Разбивка по способам оплаты (кошельки) — высота с запасом на их число
+  tall.height = scratchHeight(1600, z.grossWallets?.length ?? 0)
   const ctx = tall.getContext('2d')!
   ctx.fillStyle = '#fff'
   ctx.fillRect(0, 0, W, tall.height)
@@ -565,7 +585,13 @@ export interface KitchenTicketData {
 export function renderKitchenTicketCanvas(d: KitchenTicketData): HTMLCanvasElement {
   const tall = document.createElement('canvas')
   tall.width = W
-  tall.height = 2000
+  // Тикет крупным шрифтом: позиция ~44px + модификаторы ~38px + заметки.
+  // Считаем все рисуемые строки, чтобы длинный заказ не обрезался.
+  const ticketRows = d.lines.reduce(
+    (s, l) => s + 1 + l.modifiers.length + (l.notes ? 1 : 0),
+    0
+  )
+  tall.height = scratchHeight(700, ticketRows, 50)
   const ctx = tall.getContext('2d')!
   ctx.fillStyle = '#fff'
   ctx.fillRect(0, 0, W, tall.height)

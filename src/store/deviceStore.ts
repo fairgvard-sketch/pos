@@ -10,6 +10,13 @@ import type { PayMethodId } from '../lib/payMethods'
 /** Способ печати чека: браузерный диалог / RawBT (встроенный принтер Sunmi) */
 export type PrintMode = 'browser' | 'rawbt'
 
+/** Стартовый экран кассы после PIN (per-device, P5) */
+export type StartScreen = 'sell' | 'hall' | 'queue'
+/** Ориентация интерфейса (per-device): авто/ландшафт/портрет */
+export type Orientation = 'auto' | 'landscape' | 'portrait'
+/** Ширина термоленты, мм (per-device) */
+export type TapeWidth = 58 | 80
+
 /**
  * Способ оплаты (Square: payment types): наличные/карта + кошельки
  * Cibus/Tenbis/Bit (046). В payMethodOrder перечислены ВКЛЮЧЁННЫЕ
@@ -46,6 +53,12 @@ interface DeviceState {
   receiptPrompt: boolean
   /** Печать тикета на кухню/бар при оплате и дозаказе стола */
   printKitchenTicket: boolean
+  /** Стартовый экран после PIN (per-device, P5) */
+  startScreen: StartScreen
+  /** Ориентация интерфейса (per-device, P5) */
+  orientation: Orientation
+  /** Ширина термоленты, мм (per-device, P5) */
+  tapeWidth: TapeWidth
   /**
    * Порядок способов оплаты в окне оплаты (Square: Payment types drag-list).
    * Первый — по умолчанию выбран. Все включённые способы перечислены.
@@ -82,6 +95,9 @@ interface DeviceState {
   setAutoPrintReceipt: (v: boolean) => void
   setReceiptPrompt: (v: boolean) => void
   setPrintKitchenTicket: (v: boolean) => void
+  setStartScreen: (v: StartScreen) => void
+  setOrientation: (v: Orientation) => void
+  setTapeWidth: (v: TapeWidth) => void
   setPayMethodOrder: (o: PayMethod[]) => void
   setActionOrder: (o: string[]) => void
   setQuickAmountsMode: (m: QuickAmountsMode) => void
@@ -109,6 +125,9 @@ export const useDeviceStore = create<DeviceState>()(
       autoPrintReceipt: false,
       receiptPrompt: false,
       printKitchenTicket: false,
+      startScreen: 'sell',
+      orientation: 'auto',
+      tapeWidth: 80,
       payMethodOrder: ['cash', 'card'],
       actionOrder: DEFAULT_ACTION_ORDER,
       quickAmountsMode: 'smart',
@@ -129,6 +148,9 @@ export const useDeviceStore = create<DeviceState>()(
       setAutoPrintReceipt: (autoPrintReceipt) => set({ autoPrintReceipt }),
       setReceiptPrompt: (receiptPrompt) => set({ receiptPrompt }),
       setPrintKitchenTicket: (printKitchenTicket) => set({ printKitchenTicket }),
+      setStartScreen: (startScreen) => set({ startScreen }),
+      setOrientation: (orientation) => set({ orientation }),
+      setTapeWidth: (tapeWidth) => set({ tapeWidth }),
       setPayMethodOrder: (payMethodOrder) => set({ payMethodOrder }),
       setActionOrder: (actionOrder) => set({ actionOrder }),
       setQuickAmountsMode: (quickAmountsMode) => set({ quickAmountsMode }),

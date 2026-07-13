@@ -23,6 +23,31 @@ android {
     kotlinOptions {
         jvmTarget = '17'
     }
+
+    // Подпись релиза — из переменных окружения (секреты GitHub Actions).
+    // Keystore НЕ коммитим; локальная сборка без env использует debug-подпись.
+    signingConfigs {
+        release {
+            def ksPath = System.getenv('KEYSTORE_PATH')
+            if (ksPath) {
+                storeFile file(ksPath)
+                storePassword System.getenv('KEYSTORE_PASSWORD')
+                keyAlias System.getenv('KEY_ALIAS')
+                keyPassword System.getenv('KEY_PASSWORD')
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            // Подписываем релиз только если задан keystore (иначе APK unsigned —
+            // не выдаём debug за релиз). minify выключен: WebView-обёртка тонкая.
+            if (System.getenv('KEYSTORE_PATH')) {
+                signingConfig signingConfigs.release
+            }
+            minifyEnabled false
+        }
+    }
 }
 
 dependencies {

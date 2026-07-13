@@ -23,6 +23,11 @@ android/.gradle
 android/build
 android/app/build
 android/local.properties
+# Ключи подписи и keystore — НИКОГДА не коммитим (только через секреты CI)
+android/*.keystore
+android/*.jks
+# gradle-wrapper.jar скачивается в CI под закреплённую версию (см. workflow)
+android/gradle/wrapper/gradle-wrapper.jar
 
 # Editor directories and files
 .vscode/*

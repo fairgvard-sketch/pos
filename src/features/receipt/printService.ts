@@ -1,12 +1,17 @@
 import { fetchReceipt, fetchRefundReceipt, type Receipt } from './api'
 import { renderReceiptCanvas, renderRefundReceiptCanvas, renderKitchenTicketCanvas, type KitchenTicketData } from './printCanvas'
-import { printCanvasSilently } from '../../lib/escpos'
+import { printCanvasSilently, printCanvasWithResult } from '../../lib/escpos'
+import { notifyPrintFailure } from './printFailure'
 import type { Location } from '../../types'
 
 /**
  * Автопечать чека после оплаты (fire-and-forget из finishPaid).
  * Только тихие пути (мост APK / RawBT) — браузерный диалог из
  * автопечати не открываем, чтобы не мешать потоку продажи.
+ *
+ * Ждём результат моста (P6): при ошибке печати — ненавязчивый тост с кнопкой
+ * «повторить», а не тихая потеря. Второй экземпляр (*העתק*) печатаем ТОЛЬКО
+ * если первый напечатался (иначе гость получил бы копию без оригинала).
  */
 export async function autoPrintReceipt(
   orderId: string,
@@ -16,15 +21,21 @@ export async function autoPrintReceipt(
   try {
     // Номер чека присвоен внутри pay_order — можно читать сразу
     const receipt = await fetchReceipt(orderId)
-    const ok = printCanvasSilently(renderReceiptCanvas(receipt, location), allowRawbt)
+    const first = await printCanvasWithResult(renderReceiptCanvas(receipt, location), allowRawbt)
+    if (!first.ok) {
+      notifyPrintFailure(first.status, () =>
+        void printCanvasWithResult(renderReceiptCanvas(receipt, location), allowRawbt)
+      )
+      return false
+    }
     // Второй экземпляр (настройка точки) — как *העתק*; RawBT принимает
-    // по одной ссылке за раз, поэтому с паузой
-    if (ok && (location?.settings?.receipt?.copies ?? 1) === 2) {
+    // по одной ссылке за раз, поэтому с паузой. Только после успеха первого.
+    if ((location?.settings?.receipt?.copies ?? 1) === 2) {
       setTimeout(() => {
-        printCanvasSilently(renderReceiptCanvas(receipt, location, { copy: true }), allowRawbt)
+        void printCanvasWithResult(renderReceiptCanvas(receipt, location, { copy: true }), allowRawbt)
       }, 3000)
     }
-    return ok
+    return true
   } catch {
     return false
   }
@@ -40,7 +51,15 @@ export function autoPrintLocalReceipt(
   allowRawbt: boolean,
 ): boolean {
   try {
-    return printCanvasSilently(renderReceiptCanvas(receipt, location), allowRawbt)
+    // Результат-aware путь: офлайн-чек тоже уведомляет об ошибке печати (P6)
+    void printCanvasWithResult(renderReceiptCanvas(receipt, location), allowRawbt).then((r) => {
+      if (!r.ok) {
+        notifyPrintFailure(r.status, () =>
+          void printCanvasWithResult(renderReceiptCanvas(receipt, location), allowRawbt)
+        )
+      }
+    })
+    return true
   } catch {
     return false
   }

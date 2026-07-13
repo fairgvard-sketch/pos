@@ -102,10 +102,25 @@ export default function OfflineOpsSheet({ onClose }: { onClose: () => void }) {
           {ops.map((op) => {
             const amount = opAmount(op)
             const failed = op.status === 'failed'
+            const quarantined = op.status === 'quarantined'
+            const waitingPin = op.status === 'blocked_auth'
+            const needsAttention = failed || quarantined
+            const rowStyle = needsAttention
+              ? 'border-red-200 bg-red-50'
+              : waitingPin
+                ? 'border-blue-200 bg-blue-50'
+                : 'border-gray-100 bg-gray-50'
+            const statusLabel = quarantined
+              ? t(lang, 'offlineQuarantined')
+              : failed
+                ? t(lang, 'offlineFailedLabel')
+                : waitingPin
+                  ? t(lang, 'offlineWaitingPin')
+                  : t(lang, 'offlinePendingLabel')
             return (
               <div
                 key={op.id}
-                className={`rounded-2xl border p-3 ${failed ? 'border-red-200 bg-red-50' : 'border-gray-100 bg-gray-50'}`}
+                className={`rounded-2xl border p-3 ${rowStyle}`}
               >
                 <div className="flex items-center gap-2">
                   <div className="min-w-0 flex-1">
@@ -116,7 +131,7 @@ export default function OfflineOpsSheet({ onClose }: { onClose: () => void }) {
                     <div className="text-xs text-gray-500 mt-0.5">
                       {new Date(op.createdAt).toLocaleTimeString(isRtl ? 'he-IL' : 'ru-RU', { hour: '2-digit', minute: '2-digit' })}
                       {' · '}
-                      {failed ? t(lang, 'offlineFailedLabel') : t(lang, 'offlinePendingLabel')}
+                      <span className={waitingPin ? 'text-blue-700 font-medium' : undefined}>{statusLabel}</span>
                       {failed && op.lastError && <span className="text-red-600"> — {op.lastError}</span>}
                     </div>
                   </div>
@@ -124,17 +139,21 @@ export default function OfflineOpsSheet({ onClose }: { onClose: () => void }) {
                     <span className="text-sm font-bold text-gray-900 tabular-nums shrink-0">{formatMoney(amount, lang)}</span>
                   )}
                 </div>
-                {failed && (
+                {needsAttention && (
                   <div className="flex gap-2 mt-2">
-                    <button
-                      onClick={() => {
-                        retryFailed(op.id)
-                        void kickDrain()
-                      }}
-                      className="btn-primary !py-2 !px-4 !text-sm !rounded-xl"
-                    >
-                      {t(lang, 'offlineRetry')}
-                    </button>
+                    {/* Карантин (чужой scope) не ретраится — только удаление;
+                        доменный сбой можно повторить после устранения причины */}
+                    {failed && (
+                      <button
+                        onClick={() => {
+                          retryFailed(op.id)
+                          void kickDrain()
+                        }}
+                        className="btn-primary !py-2 !px-4 !text-sm !rounded-xl"
+                      >
+                        {t(lang, 'offlineRetry')}
+                      </button>
+                    )}
                     <button onClick={() => handleDiscard(op)} className="btn-danger !py-2 !px-4 !text-sm !rounded-xl">
                       {t(lang, 'offlineDiscard')}
                     </button>

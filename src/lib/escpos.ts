@@ -8,6 +8,8 @@
  * отрисовано на canvas.
  */
 
+import { newPrintJobId, awaitPrintResult, type PrintOutcome } from './printJobs'
+
 /** ESC/POS байты картинки в base64 — для моста APK (KassaAndroid) и RawBT */
 export function canvasToEscposBase64(canvas: HTMLCanvasElement): string {
   const bytes = canvasToEscposRaster(canvas)
@@ -30,17 +32,43 @@ export function canvasToRawbtUrl(canvas: HTMLCanvasElement): string {
  * нет — НЕ открываем браузерный диалог, просто возвращаем false.
  * allowRawbt — только когда способ печати кассы = 'rawbt' (иначе на
  * устройствах без RawBT дёргали бы несуществующую схему).
+ *
+ * Возвращает, ПРИНЯТО ли задание (для моста APK — accepted, не итог печати).
+ * Реальный итог узнаётся через printCanvasWithResult (P6).
  */
 export function printCanvasSilently(canvas: HTMLCanvasElement, allowRawbt: boolean): boolean {
   const bridge = window.KassaAndroid
   if (bridge?.isAvailable()) {
-    return bridge.printBase64(canvasToEscposBase64(canvas))
+    return bridge.printBase64(canvasToEscposBase64(canvas), newPrintJobId())
   }
   if (allowRawbt) {
     window.location.href = canvasToRawbtUrl(canvas)
     return true
   }
   return false
+}
+
+/**
+ * Тихая печать с ОЖИДАНИЕМ результата принтера (P6): мост APK рапортует
+ * успех/нет-бумаги/ошибку колбэком. RawBT/отсутствие моста результат не
+ * дают — считаем принятое задание успешным (accepted==напечатано, прежнее
+ * поведение). accepted=false → сразу ошибка.
+ */
+export async function printCanvasWithResult(
+  canvas: HTMLCanvasElement,
+  allowRawbt: boolean,
+): Promise<PrintOutcome> {
+  const bridge = window.KassaAndroid
+  if (bridge?.isAvailable()) {
+    const jobId = newPrintJobId()
+    const accepted = bridge.printBase64(canvasToEscposBase64(canvas), jobId)
+    return awaitPrintResult(jobId, accepted)
+  }
+  if (allowRawbt) {
+    window.location.href = canvasToRawbtUrl(canvas)
+    return { ok: true, status: 'success', message: 'rawbt' }
+  }
+  return { ok: false, status: 'error', message: 'no-silent-path' }
 }
 
 /** Canvas → ESC/POS: init, растр GS v 0 (1 бит/пиксель), прогон, отрез */

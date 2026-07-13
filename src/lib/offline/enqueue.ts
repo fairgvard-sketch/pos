@@ -3,6 +3,7 @@ import type { PaymentInput } from '../../features/sell/api'
 import type { Receipt } from '../../features/receipt/api'
 import { useOutboxStore } from './outboxStore'
 import { kickDrain } from './drain'
+import { currentScopeKey } from './scope'
 import type { LocalOrder, OutboxOp } from './types'
 
 /**
@@ -23,6 +24,8 @@ function opBase(orderKey: string | null, orderId: string | null) {
     lastError: null,
     orderKey,
     orderId,
+    // Штамп scope: операция уйдёт только под той же сессией (P3, scope.ts)
+    scope: currentScopeKey(),
   }
 }
 

@@ -124,15 +124,43 @@ export default function QueuePage() {
   // Realtime: любое изменение заказов/позиций → перезапрос очереди
   useEffect(() => subscribeQueue(() => qc.invalidateQueries({ queryKey: ['queue'] })), [qc])
 
-  const readyItem = useMutation({
-    mutationFn: ({ id, ready }: { id: string; ready: boolean }) => markItemReady(id, ready),
+  // Оптимистичные мутации (P7): 1 тап = визуально готово БЕЗ ожидания refetch.
+  // onMutate правит кэш очереди сразу, при ошибке откатываем снапшот.
+  const readyItem = useMutation<void, Error, { id: string; ready: boolean; orderId: string }, { prev: QueueOrder[] | undefined }>({
+    mutationFn: ({ id, ready }) => markItemReady(id, ready),
+    onMutate: async ({ id, ready }) => {
+      await qc.cancelQueries({ queryKey: ['queue'] })
+      const prev = qc.getQueryData<QueueOrder[]>(['queue'])
+      qc.setQueryData<QueueOrder[]>(['queue'], (old) =>
+        old?.map((o) => ({
+          ...o,
+          order_items: o.order_items.map((i) =>
+            i.id === id ? { ...i, prep_status: ready ? 'ready' : 'pending' } : i
+          ),
+        }))
+      )
+      return { prev }
+    },
+    onError: (e, _vars, ctx) => {
+      if (ctx?.prev) qc.setQueryData(['queue'], ctx.prev)
+      toast.error((e as Error).message)
+    },
     onSettled: () => qc.invalidateQueries({ queryKey: ['queue'] }),
-    onError: (e) => toast.error((e as Error).message),
   })
-  const readyOrder = useMutation({
-    mutationFn: (orderId: string) => markOrderReady(orderId),
+  const readyOrder = useMutation<void, Error, string, { prev: QueueOrder[] | undefined }>({
+    mutationFn: (orderId) => markOrderReady(orderId),
+    onMutate: async (orderId) => {
+      await qc.cancelQueries({ queryKey: ['queue'] })
+      const prev = qc.getQueryData<QueueOrder[]>(['queue'])
+      // «Всё готово» убирает заказ из очереди сразу (как и офлайн-ветка)
+      qc.setQueryData<QueueOrder[]>(['queue'], (old) => old?.filter((o) => o.id !== orderId))
+      return { prev }
+    },
+    onError: (e, _vars, ctx) => {
+      if (ctx?.prev) qc.setQueryData(['queue'], ctx.prev)
+      toast.error((e as Error).message)
+    },
     onSettled: () => qc.invalidateQueries({ queryKey: ['queue'] }),
-    onError: (e) => toast.error((e as Error).message),
   })
 
   // Готовность позиции: эхо — локальная отметка; серверный заказ офлайн —
@@ -158,7 +186,7 @@ export default function QueuePage() {
       )
       return
     }
-    readyItem.mutate({ id: itemId, ready })
+    readyItem.mutate({ id: itemId, ready, orderId: order.id })
   }
 
   function handleAllReady(order: MergedQueueOrder) {

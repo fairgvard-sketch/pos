@@ -13,9 +13,11 @@ import { markItemReady, markOrderReady } from '../../features/queue/api'
 import { supabase } from '../supabase'
 import { t } from '../i18n'
 import { useLangStore } from '../../store/langStore'
+import { currentStaffToken, useAuthStore } from '../../store/authStore'
 import { isNetworkishError, isOnline, kickProbe, markOffline, useNetStore } from './net'
 import { useOutboxStore } from './outboxStore'
-import type { OutboxOp } from './types'
+import { opInCurrentScope, refreshScope } from './scope'
+import type { OpKind, OutboxOp } from './types'
 
 /**
  * Движок replay офлайн-очереди. Строгий FIFO: обрабатывается всегда
@@ -35,6 +37,30 @@ const SAFETY_TICK_MS = 30000
 let qc: QueryClient | null = null
 let draining = false
 let retryTimer: ReturnType<typeof setTimeout> | null = null
+
+/**
+ * Операции, которым нужна staff-сессия (сервер требует p_staff_session,
+ * право проверяется require_staff_perm). Их нельзя реплеить без PIN:
+ * в строгом режиме (045) сервер ответит «staff session required», в мягком
+ * (044) операция прошла бы с NULL-авторизацией — обе ветки нежелательны,
+ * ждём реальную сессию. Остальные (place/pay/open/append/queue) сессию не
+ * требуют (компромисс AGENTS.md) и не блокируются.
+ */
+const OPS_NEED_STAFF_TOKEN: ReadonlySet<OpKind> = new Set<OpKind>([
+  'table.void',
+  'table.discount',
+  'table.void_item',
+])
+
+function needsStaffToken(op: OutboxOp): boolean {
+  return OPS_NEED_STAFF_TOKEN.has(op.kind)
+}
+
+/** Ошибка сервера про отсутствующую/протухшую staff-сессию (не доменная) */
+function isAuthSessionError(e: unknown): boolean {
+  const msg = e instanceof Error ? e.message : String(e)
+  return /staff session (required|invalid)/i.test(msg)
+}
 
 function invalidateAfterSync() {
   if (!qc) return
@@ -169,11 +195,33 @@ export async function kickDrain(): Promise<void> {
     const { data } = await supabase.auth.getSession()
     if (!data.session) return
 
+    // Актуализируем scope текущей сессии перед сверкой с операциями (P3)
+    await refreshScope()
+
     for (;;) {
       if (!isOnline()) break
       const op = useOutboxStore.getState().ops[0]
       if (!op) break
       if (op.status === 'failed') break // очередь стоит до ручного разбора
+      if (op.status === 'quarantined') break // чужой scope, ручной разбор
+      if (op.status === 'blocked_auth') break // ждём PIN (см. подписку в initDrain)
+
+      // Чужой scope (P3): операция поставлена под другим аккаунтом устройства/
+      // организации. Отправить её под текущей сессией нельзя (чужой org_id в
+      // JWT) — в карантин, очередь стоит до ручного разбора.
+      if (!opInCurrentScope(op.scope)) {
+        useOutboxStore.getState().markQuarantined(op.id)
+        break
+      }
+
+      // Привилегированная операция без PIN-сессии: не доменная ошибка —
+      // ставим на паузу до ввода PIN, очередь продолжится сама (unblockAuth).
+      // Иначе сервер (045 строгий) ответил бы «staff session required» и
+      // операция ушла бы в failed, застопорив весь FIFO.
+      if (needsStaffToken(op) && !currentStaffToken()) {
+        useOutboxStore.getState().markBlockedAuth(op.id)
+        break
+      }
 
       useOutboxStore.getState().markInflight(op.id)
       try {
@@ -187,6 +235,10 @@ export async function kickDrain(): Promise<void> {
           markOffline()
           void kickProbe()
           scheduleRetry(op.attempts + 1)
+        } else if (isAuthSessionError(e)) {
+          // Токен был, но протух/отозван между проверкой и вызовом — тоже
+          // ждём свежий PIN, не считаем доменным сбоем (без красного бейджа).
+          useOutboxStore.getState().markBlockedAuth(op.id)
         } else {
           useOutboxStore.getState().markFailed(op.id, msg)
           const lang = useLangStore.getState().lang
@@ -223,6 +275,15 @@ export function initDrain(client: QueryClient): void {
   // Переход офлайн → онлайн будит дренаж
   useNetStore.subscribe((s, prev) => {
     if (s.online && !prev.online) void kickDrain()
+  })
+  // PIN-вход (появилась staff-сессия) снимает блокировку blocked_auth и
+  // продолжает очередь: привилегированные офлайн-операции (void/скидка/
+  // void-item), отложенные из-за отсутствия сессии, реплеятся под новым PIN.
+  useAuthStore.subscribe((s, prev) => {
+    if (s.staff?.session_token && !prev.staff?.session_token) {
+      useOutboxStore.getState().unblockAuth()
+      void kickDrain()
+    }
   })
   setInterval(() => void kickDrain(), SAFETY_TICK_MS)
   // Хвост с прошлой сессии

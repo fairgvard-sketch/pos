@@ -83,9 +83,26 @@ export async function updateReceiptDetails(details: ReceiptDetails): Promise<voi
  * Сохранить мелкие настройки точки (locations.settings, 036).
  * Пишем ЦЕЛИКОМ смерженный объект: вызывающий берёт текущие settings
  * из кеша current_location и накладывает свой раздел (perms/receipt/shift).
+ * @deprecated склонно к lost update при параллельных мутациях — используйте
+ * patchLocationSettings (серверный deep-merge, 064).
  */
 export async function updateLocationSettings(settings: LocationSettings): Promise<void> {
   await updateLocationConfig({ settings })
+}
+
+/**
+ * Патч настроек точки с СЕРВЕРНЫМ deep-merge (064): шлём только изменённый
+ * раздел, сервер мержит в locations.settings под блокировкой строки —
+ * параллельная правка соседних ключей их не затирает (P8).
+ * Возвращает актуальные settings после merge.
+ */
+export async function patchLocationSettings(patch: LocationSettings): Promise<LocationSettings> {
+  const { data, error } = await supabase.rpc('patch_location_settings', {
+    p_patch: patch,
+    p_staff_session: currentStaffToken(),
+  })
+  if (error) throw new Error(error.message)
+  return (data ?? {}) as LocationSettings
 }
 
 /** Сменить ставку НДС точки. Снапшот в заказ делает сервер (place_order) —
@@ -141,6 +158,40 @@ export async function verifyStaffPin(pin: string): Promise<StaffSession> {
 
 export async function signOutDevice() {
   await supabase.auth.signOut()
+}
+
+// ── Per-device настройки в БД (065, P5) ──────────────────────
+
+/** Идемпотентная регистрация/обновление этой кассы (register_device, 065) */
+export async function registerDevice(args: {
+  deviceUuid: string
+  name?: string | null
+  settings?: Record<string, unknown> | null
+  appVersion?: string | null
+  webviewVersion?: string | null
+  printerCapabilities?: Record<string, unknown> | null
+}): Promise<void> {
+  const { error } = await supabase.rpc('register_device', {
+    p_device_uuid: args.deviceUuid,
+    p_name: args.name ?? null,
+    p_settings: args.settings ?? null,
+    p_app_version: args.appVersion ?? null,
+    p_webview_version: args.webviewVersion ?? null,
+    p_printer_capabilities: args.printerCapabilities ?? null,
+  })
+  if (error) throw new Error(error.message)
+}
+
+/** Сохранить настройки этой кассы (merge на сервере, update_device_settings) */
+export async function updateDeviceSettings(
+  deviceUuid: string,
+  patch: Record<string, unknown>,
+): Promise<void> {
+  const { error } = await supabase.rpc('update_device_settings', {
+    p_device_uuid: deviceUuid,
+    p_patch: patch,
+  })
+  if (error) throw new Error(error.message)
 }
 
 /**

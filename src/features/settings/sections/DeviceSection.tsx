@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { signOutDevice } from '../../auth/api'
+import { safeUnlinkDevice, pendingOutboxCount } from '../../auth/unlink'
 import { useLangStore } from '../../../store/langStore'
 import { useDeviceStore } from '../../../store/deviceStore'
 import { renderTestPrintCanvas } from '../../receipt/printCanvas'
@@ -48,6 +49,13 @@ export default function DeviceSection({ location }: { location: Location | undef
   const lockAfterSale = useDeviceStore((s) => s.lockAfterSale)
   const setAutoLockSec = useDeviceStore((s) => s.setAutoLockSec)
   const setLockAfterSale = useDeviceStore((s) => s.setLockAfterSale)
+  // Per-device интерфейс/лента (P5)
+  const startScreen = useDeviceStore((s) => s.startScreen)
+  const setStartScreen = useDeviceStore((s) => s.setStartScreen)
+  const orientation = useDeviceStore((s) => s.orientation)
+  const setOrientation = useDeviceStore((s) => s.setOrientation)
+  const tapeWidth = useDeviceStore((s) => s.tapeWidth)
+  const setTapeWidth = useDeviceStore((s) => s.setTapeWidth)
 
   const [name, setName] = useState(deviceName)
   // Ресинк драфта имени при внешней смене deviceName (сравнение с прошлым
@@ -58,7 +66,10 @@ export default function DeviceSection({ location }: { location: Location | undef
     setName(deviceName)
   }
 
+  const queryClient = useQueryClient()
   const [confirmUnlink, setConfirmUnlink] = useState(false)
+  // Число неотправленных операций фиксируем в момент открытия диалога
+  const [pendingOnConfirm, setPendingOnConfirm] = useState(0)
 
   const engine = chromeMajor()
   const bridgeReady = typeof window !== 'undefined' && !!window.KassaAndroid?.isAvailable()
@@ -84,8 +95,19 @@ export default function DeviceSection({ location }: { location: Location | undef
     toast(t(lang, 'testPrintNoSilent'))
   }
 
+  function openUnlink() {
+    setPendingOnConfirm(pendingOutboxCount())
+    setConfirmUnlink(true)
+  }
+
   async function unlink() {
-    await signOutDevice()
+    // force=true: непустая очередь уже показана пользователю в диалоге,
+    // он подтвердил осознанно (операции карантинятся по scope, не теряются молча)
+    const res = await safeUnlinkDevice(queryClient, { force: true })
+    if (!res.ok) {
+      toast.error(t(lang, 'error'))
+      return
+    }
     navigate('/setup', { replace: true })
   }
 
@@ -105,6 +127,45 @@ export default function DeviceSection({ location }: { location: Location | undef
         <InputRow label={t(lang, 'interfaceLanguage')} device>
           <LangToggle />
         </InputRow>
+      </Group>
+
+      {/* Интерфейс/лента per-device (P5) */}
+      <Group title={t(lang, 'deviceInterfaceGroup')}>
+        <SegmentRow<'sell' | 'hall' | 'queue'>
+          label={t(lang, 'startScreen')}
+          hint={t(lang, 'startScreenHint')}
+          device
+          options={[
+            { value: 'sell', label: t(lang, 'sell') },
+            { value: 'hall', label: t(lang, 'hall') },
+            { value: 'queue', label: t(lang, 'queue') },
+          ]}
+          value={startScreen}
+          onChange={setStartScreen}
+        />
+        <SegmentRow<'auto' | 'landscape' | 'portrait'>
+          label={t(lang, 'orientation')}
+          hint={t(lang, 'orientationHint')}
+          device
+          options={[
+            { value: 'auto', label: t(lang, 'orientationAuto') },
+            { value: 'landscape', label: t(lang, 'orientationLandscape') },
+            { value: 'portrait', label: t(lang, 'orientationPortrait') },
+          ]}
+          value={orientation}
+          onChange={setOrientation}
+        />
+        <SegmentRow<58 | 80>
+          label={t(lang, 'tapeWidth')}
+          hint={t(lang, 'tapeWidthHint')}
+          device
+          options={[
+            { value: 80, label: '80 mm' },
+            { value: 58, label: '58 mm' },
+          ]}
+          value={tapeWidth}
+          onChange={setTapeWidth}
+        />
       </Group>
 
       <Group title={t(lang, 'catSecurity')}>
@@ -147,7 +208,7 @@ export default function DeviceSection({ location }: { location: Location | undef
       </Group>
 
       <button
-        onClick={() => setConfirmUnlink(true)}
+        onClick={openUnlink}
         className="btn-danger !rounded-2xl w-full"
       >
         {t(lang, 'signOutDevice')}
@@ -157,8 +218,13 @@ export default function DeviceSection({ location }: { location: Location | undef
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 animate-[rise-in_0.2s_ease-out]">
             <h2 className="text-lg font-black text-gray-900 mb-2">{t(lang, 'signOutDevice')}</h2>
-            <p className="text-sm text-gray-500 mb-5">{t(lang, 'unlinkConfirm')}</p>
-            <div className="flex gap-2">
+            <p className="text-sm text-gray-500 mb-3">{t(lang, 'unlinkConfirm')}</p>
+            {pendingOnConfirm > 0 && (
+              <p className="text-sm font-semibold text-red-700 bg-red-50 border border-red-200 rounded-xl p-3 mb-3">
+                {t(lang, 'unlinkOutboxWarn').replace('{n}', String(pendingOnConfirm))}
+              </p>
+            )}
+            <div className="flex gap-2 mt-2">
               <button onClick={unlink} className="btn-danger flex-1 !rounded-2xl">
                 {t(lang, 'signOutDevice')}
               </button>

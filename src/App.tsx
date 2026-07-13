@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient } from '@tanstack/react-query'
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client'
@@ -7,6 +7,8 @@ import { Toaster } from 'react-hot-toast'
 import { supabase } from './lib/supabase'
 import { initNet, OfflineError } from './lib/offline/net'
 import { initDrain } from './lib/offline/drain'
+import { initScope } from './lib/offline/scope'
+import { initDeviceSync } from './lib/deviceSync'
 import DeviceSetupPage from './features/auth/DeviceSetupPage'
 import PinLoginPage from './features/auth/PinLoginPage'
 import ProtectedRoute from './features/auth/ProtectedRoute'
@@ -15,24 +17,30 @@ import QueuePage from './features/queue/QueuePage'
 import HallPage from './features/tables/HallPage'
 import AutoLock from './components/AutoLock'
 import BrandSplash from './components/ui/BrandSplash'
+import RouteErrorBoundary from './components/RouteErrorBoundary'
+import SuspenseFallback from './components/ui/SuspenseFallback'
+import { lazyWithRetry } from './lib/lazyWithRetry'
 
 // Горячий путь кассира (PIN → продажа/зал/очередь) — статика, в стартовом чанке.
 // Менеджерские экраны — lazy: не тормозят парсинг на слабом CPU терминала,
 // подгружаются при первом заходе (и кэшируются SW наравне с основным бандлом).
-const MenuPage = lazy(() => import('./features/menu/MenuPage'))
-const OnlineOrdersPage = lazy(() => import('./features/online/OnlineOrdersPage'))
+// lazyWithRetry: после деплоя хеш чанка меняется, старая вкладка просит
+// несуществующий файл → Vercel отдаёт index.html → import() падает белым
+// экраном. Обёртка делает один reload за свежим index.html.
+const MenuPage = lazyWithRetry(() => import('./features/menu/MenuPage'), 'MenuPage')
+const OnlineOrdersPage = lazyWithRetry(() => import('./features/online/OnlineOrdersPage'), 'OnlineOrdersPage')
 // Публичная страница заказа для гостей (050) — без auth, ходит в Edge Functions
-const PublicOrderPage = lazy(() => import('./features/online/PublicOrderPage'))
-const ReservationsPage = lazy(() => import('./features/reservations/ReservationsPage'))
+const PublicOrderPage = lazyWithRetry(() => import('./features/online/PublicOrderPage'), 'PublicOrderPage')
+const ReservationsPage = lazyWithRetry(() => import('./features/reservations/ReservationsPage'), 'ReservationsPage')
 // Публичная страница брони стола (053) — без auth, ходит в Edge Functions
-const PublicReservePage = lazy(() => import('./features/reservations/PublicReservePage'))
-const ShiftPage = lazy(() => import('./features/shift/ShiftPage'))
-const TimesheetPage = lazy(() => import('./features/timesheet/TimesheetPage'))
-const TransactionsPage = lazy(() => import('./features/transactions/TransactionsPage'))
-const SettingsPage = lazy(() => import('./features/settings/SettingsPage'))
-const ReportsPage = lazy(() => import('./features/reports/ReportsPage'))
-const InventoryPage = lazy(() => import('./features/inventory/InventoryPage'))
-const DashboardPage = lazy(() => import('./features/dashboard/DashboardPage'))
+const PublicReservePage = lazyWithRetry(() => import('./features/reservations/PublicReservePage'), 'PublicReservePage')
+const ShiftPage = lazyWithRetry(() => import('./features/shift/ShiftPage'), 'ShiftPage')
+const TimesheetPage = lazyWithRetry(() => import('./features/timesheet/TimesheetPage'), 'TimesheetPage')
+const TransactionsPage = lazyWithRetry(() => import('./features/transactions/TransactionsPage'), 'TransactionsPage')
+const SettingsPage = lazyWithRetry(() => import('./features/settings/SettingsPage'), 'SettingsPage')
+const ReportsPage = lazyWithRetry(() => import('./features/reports/ReportsPage'), 'ReportsPage')
+const InventoryPage = lazyWithRetry(() => import('./features/inventory/InventoryPage'), 'InventoryPage')
+const DashboardPage = lazyWithRetry(() => import('./features/dashboard/DashboardPage'), 'DashboardPage')
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -78,8 +86,10 @@ const persister = createSyncStoragePersister({
   throttleTime: 2000,
 })
 
+void initScope()   // изоляция локального состояния по scope (P3)
 initNet()          // детекция сети (события браузера + проба Supabase)
 initDrain(queryClient)  // движок replay офлайн-очереди
+void initDeviceSync()   // per-device настройки: регистрация + фоновый синк (P5)
 
 /** "/" → куда нужно: нет сессии устройства → /setup, есть → /pin */
 function RootRedirect() {
@@ -120,8 +130,12 @@ export default function App() {
     >
       <BrowserRouter>
         <AutoLock />
-        {/* fallback null: чанк приходит из SW-кэша за миллисекунды, спиннер только мигал бы */}
-        <Suspense fallback={null}>
+        {/* ErrorBoundary ловит краш lazy-роута (устаревший чанк после деплоя,
+            runtime-краш страницы) — иначе всё дерево срывается в белый экран */}
+        <RouteErrorBoundary>
+        {/* Быстрый кэш-хит не мигает (спиннер только после 400мс), но по
+            медленной 4G терминала пустой экран не висит бесконечно */}
+        <Suspense fallback={<SuspenseFallback />}>
         <Routes>
           <Route path="/" element={<RootRedirect />} />
           <Route path="/setup" element={<DeviceSetupPage />} />
@@ -256,6 +270,7 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         </Suspense>
+        </RouteErrorBoundary>
       </BrowserRouter>
 
       {showSplash && <BrandSplash />}

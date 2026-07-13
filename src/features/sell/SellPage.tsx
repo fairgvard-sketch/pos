@@ -173,10 +173,23 @@ export default function SellPage() {
   const [stopCandidate, setStopCandidate] = useState<MenuItem | null>(null)
   const [showStopList, setShowStopList] = useState(false)
   const stoppedItems = useMemo(() => items.filter((i) => !i.is_available), [items])
-  const stopItemMut = useMutation({
-    mutationFn: (v: { id: string; available: boolean }) => toggleItemAvailability(v.id, v.available),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['menu_items'] }),
-    onError: (e) => toast.error(e.message),
+  // Стоп-лист (P7): переключение доступности сразу отражается на витрине,
+  // откат при ошибке. Товар мгновенно уходит/возвращается без ожидания refetch.
+  const stopItemMut = useMutation<void, Error, { id: string; available: boolean }, { prev: MenuItem[] | undefined }>({
+    mutationFn: (v) => toggleItemAvailability(v.id, v.available),
+    onMutate: async (v) => {
+      await qc.cancelQueries({ queryKey: ['menu_items'] })
+      const prev = qc.getQueryData<MenuItem[]>(['menu_items'])
+      qc.setQueryData<MenuItem[]>(['menu_items'], (old) =>
+        old?.map((i) => (i.id === v.id ? { ...i, is_available: v.available } : i))
+      )
+      return { prev }
+    },
+    onError: (e, _v, ctx) => {
+      if (ctx?.prev) qc.setQueryData(['menu_items'], ctx.prev)
+      toast.error(e.message)
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ['menu_items'] }),
   })
   // Long-press по плитке товара (порог движения — чтобы не мешать скроллу)
   const tileTimer = useRef<number | null>(null)

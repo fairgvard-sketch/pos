@@ -8,8 +8,21 @@ import type { Receipt } from '../../features/receipt/api'
  * (миграция 042): replay после сбоя не дублирует деньги и строки.
  */
 
-/** pending → inflight → (удалена при успехе) | failed. На rehydrate inflight → pending. */
-export type OpStatus = 'pending' | 'inflight' | 'failed'
+/**
+ * pending → inflight → (удалена при успехе) | failed. На rehydrate inflight → pending.
+ *
+ * blocked_auth — привилегированная операция (void/скидка/void-item) ждёт
+ * PIN-вход: у сотрудника нет staff-сессии (закрыл браузер → sessionStorage
+ * очищен, outbox в localStorage сохранился). Это НЕ доменная ошибка — очередь
+ * стоит без красного бейджа и сама продолжается после ввода PIN
+ * (см. authStore-подписку в drain.ts). Отличается от failed тем, что не
+ * требует ручного разбора.
+ *
+ * quarantined — операция другого scope (её поставили под другим аккаунтом
+ * устройства/организации, P3). Её НЕЛЬЗЯ отправлять под текущей сессией
+ * (чужой org_id в JWT) — держим в карантине для ручного разбора/удаления.
+ */
+export type OpStatus = 'pending' | 'inflight' | 'failed' | 'blocked_auth' | 'quarantined'
 
 export interface PlacePayload {
   staffId: string
@@ -72,6 +85,12 @@ interface OpBase {
   orderKey: string | null
   /** Server order_id, если известен уже при постановке (заказ создан онлайн) */
   orderId: string | null
+  /**
+   * Scope (org:location:user), в котором операция поставлена (P3). Дренаж не
+   * отправит её под другой сессией — карантин по несовпадению (scope.ts).
+   * null — операция до внедрения scope (хвост очереди): не караним, шлём как есть.
+   */
+  scope?: string | null
 }
 
 export type OutboxOp = OpBase &

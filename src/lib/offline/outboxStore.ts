@@ -36,6 +36,12 @@ interface OutboxState {
   markPending: (id: string, err: string) => void
   /** Доменная ошибка сервера: остановить очередь до ручного разбора */
   markFailed: (id: string, err: string) => void
+  /** Нужен PIN: операция ждёт staff-сессию, очередь стоит без ручного разбора */
+  markBlockedAuth: (id: string) => void
+  /** PIN введён: вернуть все blocked_auth в pending и разбудить дренаж */
+  unblockAuth: () => void
+  /** Чужой scope (P3): операция другого аккаунта — в карантин, не отправлять */
+  markQuarantined: (id: string) => void
   retryFailed: (id: string) => void
   /** Успех: убрать операцию; place/open — записать idMap */
   removeOp: (id: string, serverOrderId?: string) => void
@@ -89,6 +95,33 @@ export const useOutboxStore = create<OutboxState>()(
             ops: s.ops.map((o) =>
               o.id === id ? { ...o, status: 'failed' as const, attempts: o.attempts + 1, lastError: err } : o
             ),
+            localOrders: orders,
+          }
+        }),
+
+      markBlockedAuth: (id) =>
+        set((s) => ({
+          ops: s.ops.map((o) =>
+            o.id === id ? { ...o, status: 'blocked_auth' as const } : o
+          ),
+        })),
+
+      unblockAuth: () =>
+        set((s) => ({
+          ops: s.ops.map((o) =>
+            o.status === 'blocked_auth' ? { ...o, status: 'pending' as const } : o
+          ),
+        })),
+
+      markQuarantined: (id) =>
+        set((s) => {
+          const op = s.ops.find((o) => o.id === id)
+          const orders = { ...s.localOrders }
+          if (op?.orderKey && orders[op.orderKey]) {
+            orders[op.orderKey] = { ...orders[op.orderKey], status: 'failed' }
+          }
+          return {
+            ops: s.ops.map((o) => (o.id === id ? { ...o, status: 'quarantined' as const } : o)),
             localOrders: orders,
           }
         }),
@@ -188,12 +221,20 @@ export const useOutboxStore = create<OutboxState>()(
   )
 )
 
-/** Операций ждёт отправки (для бейджа) */
+/** Операций ждёт отправки (для бейджа). blocked_auth — тоже в очереди (ждёт PIN) */
 export function pendingOpsCount(s: { ops: OutboxOp[] }): number {
-  return s.ops.filter((o) => o.status === 'pending' || o.status === 'inflight').length
+  return s.ops.filter(
+    (o) => o.status === 'pending' || o.status === 'inflight' || o.status === 'blocked_auth'
+  ).length
 }
 
-/** Есть операция, требующая ручного разбора */
+/** Есть операция, требующая ручного разбора: доменный сбой или чужой scope
+ *  (blocked_auth сюда НЕ входит — решается PIN-ом, не разбором) */
 export function hasFailedOps(s: { ops: OutboxOp[] }): boolean {
-  return s.ops.some((o) => o.status === 'failed')
+  return s.ops.some((o) => o.status === 'failed' || o.status === 'quarantined')
+}
+
+/** Очередь стоит и ждёт PIN-вход (голова — привилегированная операция без сессии) */
+export function hasBlockedAuthOps(s: { ops: OutboxOp[] }): boolean {
+  return s.ops.some((o) => o.status === 'blocked_auth')
 }
