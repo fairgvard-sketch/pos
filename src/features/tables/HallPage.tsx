@@ -133,8 +133,15 @@ export default function HallPage() {
 
   // ── Drag столов по плану (только в режиме редактирования) ──
   const canvasRef = useRef<HTMLDivElement | null>(null)
-  // Локальный оверрайд позиции таскаемого стола (%), чтобы не ждать сеть
-  const [dragPos, setDragPos] = useState<{ id: string; x: number; y: number } | null>(null)
+  // DOM-узлы столов — двигаем их style напрямую во время жеста (без React-
+  // рендера на каждый pointermove: на T2/Chrome52 это давало рывки).
+  const tableEls = useRef(new Map<string, HTMLButtonElement>())
+  // Активный drag: id + последняя позиция (%). Живёт в ref, НЕ в state —
+  // pointermove пишет только в DOM; React рендерит стол один раз на старте
+  // (dragId для стилей z/shadow) и один раз на отпускании (сохранение).
+  const dragRef = useRef<{ id: string; x: number; y: number } | null>(null)
+  // Только для стилей таскаемого стола (тень/поверх) — меняется 1 раз за жест
+  const [dragId, setDragId] = useState<string | null>(null)
   const dragMoved = useRef(false)
   // Локальный оверрайд размера (%) при ресайзе. axis: обе оси / ширина / высота
   const [resize, setResize] = useState<
@@ -156,23 +163,30 @@ export default function HallPage() {
     e.stopPropagation()
     dragMoved.current = false
     ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
-    setDragPos({ id: tb.id, x, y })
+    dragRef.current = { id: tb.id, x, y }
+    setDragId(tb.id) // единственный рендер на старте — применить z/shadow
   }
   function onDragMove(e: React.PointerEvent) {
     if (resize && canvasRef.current) { onResizeMove(e); return }
-    if (!dragPos || !canvasRef.current) return
+    const drag = dragRef.current
+    if (!drag || !canvasRef.current) return
     const r = canvasRef.current.getBoundingClientRect()
     const x = Math.max(0, Math.min(100, ((e.clientX - r.left) / r.width) * 100))
     const y = Math.max(0, Math.min(100, ((e.clientY - r.top) / r.height) * 100))
     dragMoved.current = true
-    setDragPos({ id: dragPos.id, x, y })
+    dragRef.current = { id: drag.id, x, y }
+    // Двигаем DOM напрямую — без setState, без ре-рендера холста.
+    const el = tableEls.current.get(drag.id)
+    if (el) { el.style.left = `${x}%`; el.style.top = `${y}%` }
   }
   function endDrag() {
     if (resize) { endResize(); return }
-    if (dragPos && dragMoved.current) {
-      layoutMut.mutate({ id: dragPos.id, x: dragPos.x, y: dragPos.y })
+    const drag = dragRef.current
+    if (drag && dragMoved.current) {
+      layoutMut.mutate({ id: drag.id, x: drag.x, y: drag.y })
     }
-    setDragPos(null)
+    dragRef.current = null
+    setDragId(null)
   }
 
   // Ресайз: размер = 2 × расстояние от курсора до центра (в % холста).
@@ -325,9 +339,11 @@ export default function HallPage() {
               }`}
             >
               {layout.map(({ table: tb, x: baseX, y: baseY }) => {
-                const dp = dragPos?.id === tb.id ? dragPos : null
-                const x = dp ? dp.x : baseX
-                const y = dp ? dp.y : baseY
+                // Позицию во время drag держит DOM (см. onDragMove), не React —
+                // поэтому здесь всегда базовая позиция из раскладки.
+                const x = baseX
+                const y = baseY
+                const dragging = dragId === tb.id
                 const rz = resize?.id === tb.id ? resize : null
                 const w = rz ? rz.width : tb.width
                 const h = rz ? rz.height : tb.height
@@ -350,6 +366,10 @@ export default function HallPage() {
                 return (
                   <button
                     key={tb.id}
+                    ref={(el) => {
+                      if (el) tableEls.current.set(tb.id, el)
+                      else tableEls.current.delete(tb.id)
+                    }}
                     onClick={() => {
                       if (dragMoved.current) return  // это был drag, не клик
                       if (editMode) { setEditTable(tb); return }
@@ -369,9 +389,17 @@ export default function HallPage() {
                       height: `${h}%`,
                       transform: 'translate(-50%, -50%)',
                     }}
-                    className={`absolute border-2 bg-white p-2 flex flex-col items-center justify-center gap-0.5 transition-shadow select-none text-gray-900 ${
-                      tb.shape === 'circle' ? 'rounded-full' : 'rounded-2xl'
-                    } ${editMode ? `border-dashed ${dp || rz ? 'shadow-lg z-10' : 'cursor-grab'} border-gray-400` : `${border} active:scale-[0.97]`}`}
+                    // touch-action:none — гасим прокрутку/жесты браузера под пальцем,
+                    // иначе на тач-терминале drag «спорит» со скроллом (рывки).
+                    // transition-shadow только вне жеста: во время drag лишняя
+                    // работа компоновщика на слабом GPU T2.
+                    className={`absolute border-2 bg-white p-2 flex flex-col items-center justify-center gap-0.5 select-none touch-none text-gray-900 ${
+                      dragging || rz ? '' : 'transition-shadow'
+                    } ${tb.shape === 'circle' ? 'rounded-full' : 'rounded-2xl'} ${
+                      editMode
+                        ? `border-dashed ${dragging || rz ? 'shadow-lg z-10' : 'cursor-grab'} border-gray-400`
+                        : `${border} active:scale-[0.97]`
+                    }`}
                   >
                     {editMode && (
                       <>
