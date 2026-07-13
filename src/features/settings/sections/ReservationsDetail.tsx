@@ -8,6 +8,7 @@ import { printCanvasSilently } from '../../../lib/escpos'
 import { renderQrFlyerCanvas } from '../../receipt/printCanvas'
 import { useLocationSettings } from '../useLocationSettings'
 import { Group, ToggleRow } from '../ui'
+import { ImageField, TextField, LinkField } from './OnlineOrdersDetail'
 import { formatMoney, parseMoney } from '../../../lib/money'
 import type { Location, LocationSettings } from '../../../types'
 
@@ -126,6 +127,7 @@ export default function ReservationsDetail({ location }: { location: Location | 
       )}
       {enabled && <InstantBlock rsv={rsv} update={update} />}
       {enabled && <ReserveAddressBlock rsv={rsv} update={update} />}
+      {enabled && <ReservePageBlock rsv={rsv} update={update} location={location} />}
       {enabled && (
         <div className="px-4 py-3 border-t border-gray-100">
           <div className="text-sm font-semibold text-gray-900">{t(lang, 'reserveLinkTitle')}</div>
@@ -331,5 +333,69 @@ function ReserveAddressBlock({ rsv, update }: {
       />
       <p className="text-xs text-gray-500 mt-1.5">{t(lang, 'resGeoHint')}</p>
     </div>
+  )
+}
+
+/**
+ * Оформление публичной страницы брони (066): своя фото-шапка (если не
+ * задана — гость видит шапку онлайн-заказа, затем логотип), часы работы
+ * (свободный текст в подвале) и соцссылки. Соцссылки живут в
+ * settings.reservations, не переиспользуют online_orders — страницы
+ * могут вести на разные аккаунты.
+ */
+function ReservePageBlock({ rsv, update, location }: {
+  rsv: NonNullable<LocationSettings['reservations']>
+  update: (patch: LocationSettings) => void
+  location: Location | undefined
+}) {
+  const lang = useLangStore((s) => s.lang)
+  // Шапка онлайн-заказа как плейсхолдер-подсказка (её увидит гость, если тут пусто)
+  const fallbackHeader = location?.settings?.online_orders?.header_url ?? null
+  return (
+    <>
+      <div className="px-4 py-3 border-t border-gray-100">
+        <div className="text-sm font-semibold text-gray-900">{t(lang, 'rsvPageDesignTitle')}</div>
+        <p className="text-xs text-gray-500 mt-0.5">{t(lang, 'rsvPageDesignHint')}</p>
+        <div className="space-y-3 mt-3">
+          <ImageField
+            label={t(lang, 'onlineImgHeader')}
+            hint={fallbackHeader ? t(lang, 'rsvHeaderFallbackHint') : t(lang, 'onlineImgHeaderHint')}
+            url={rsv.header_url ?? null}
+            onChange={(v) => update({ reservations: { header_url: v } })}
+          />
+          <TextField
+            label={t(lang, 'rsvHoursLabel')}
+            hint={t(lang, 'rsvHoursSettingHint')}
+            placeholder={t(lang, 'rsvHoursPlaceholder')}
+            value={rsv.hours ?? ''}
+            onSave={(v) => update({ reservations: { hours: v || null } })}
+          />
+        </div>
+      </div>
+      <div className="px-4 py-3 border-t border-gray-100">
+        <div className="text-sm font-semibold text-gray-900">{t(lang, 'onlineSocialTitle')}</div>
+        <p className="text-xs text-gray-500 mt-0.5">{t(lang, 'rsvSocialHint')}</p>
+        <div className="space-y-3 mt-3">
+          <LinkField
+            label="Instagram"
+            placeholder="https://instagram.com/..."
+            value={rsv.instagram ?? ''}
+            onSave={(v) => update({ reservations: { instagram: v || null } })}
+          />
+          <LinkField
+            label="Facebook"
+            placeholder="https://facebook.com/..."
+            value={rsv.facebook ?? ''}
+            onSave={(v) => update({ reservations: { facebook: v || null } })}
+          />
+          <LinkField
+            label={t(lang, 'googleReviewLabel')}
+            placeholder="https://g.page/r/..."
+            value={rsv.google_review ?? ''}
+            onSave={(v) => update({ reservations: { google_review: v || null } })}
+          />
+        </div>
+      </div>
+    </>
   )
 }

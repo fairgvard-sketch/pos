@@ -3,10 +3,11 @@
  *
  * GET ?loc=<location_id>
  *   → { location: { id, name, business_name, logo_url, accepting,
- *       address, phone, header_url } }
+ *       address, phone, header_url, hours, links } }
  *   Инфо точки для формы брони. accepting — тумблер
  *   settings->reservations->enabled (отсутствие = выключено).
- *   header_url переиспользуется из оформления онлайн-заказов.
+ *   header_url — своя шапка брони, иначе fallback на шапку онлайн-заказа;
+ *   hours (часы работы) и links (соцсети) — подвал страницы (066).
  *
  * GET ?id=<client_uuid>
  *   → { status, reject_reason, reserved_at, party_size, table_label }
@@ -92,7 +93,7 @@ Deno.serve(async (req) => {
       // Наружу — только флаг брони и баннер, НЕ весь settings (там права ролей)
       const { data, error } = await supabase
         .from('locations')
-        .select('id, name, receipt_business_name, receipt_address, receipt_phone, logo_url, display_name:settings->>display_name, rsv:settings->reservations, header_url:settings->online_orders->>header_url')
+        .select('id, name, receipt_business_name, receipt_address, receipt_phone, logo_url, display_name:settings->>display_name, rsv:settings->reservations, oo_header_url:settings->online_orders->>header_url')
         .eq('id', loc)
         .maybeSingle()
       if (error || !data) return json({ error: 'invalid_location' }, 404)
@@ -100,7 +101,15 @@ Deno.serve(async (req) => {
         enabled?: boolean; instant?: boolean; open?: string | null; close?: string | null
         slot_min?: number | null; max_party?: number | null
         address?: string | null; lat?: number | null; lng?: number | null
+        header_url?: string | null; hours?: string | null
+        instagram?: string | null; facebook?: string | null; google_review?: string | null
       } }).rsv
+      // Соцссылки подвала (066): показываем только заполненные (пусто → нет кнопки)
+      const links = {
+        instagram: rsv?.instagram || null,
+        facebook: rsv?.facebook || null,
+        google_review: rsv?.google_review || null,
+      }
       return json(
         {
           location: {
@@ -128,8 +137,13 @@ Deno.serve(async (req) => {
             lat: rsv?.lat ?? null,
             lng: rsv?.lng ?? null,
             phone: data.receipt_phone ?? null,
-            // Фото-шапка — общая с гостевой страницей заказа (Настройки → Онлайн-заказы)
-            header_url: (data as { header_url?: string | null }).header_url ?? null,
+            // Фото-шапка страницы брони (066): своя (settings.reservations.header_url),
+            // иначе fallback на шапку онлайн-заказа (Настройки → Онлайн-заказы)
+            header_url: rsv?.header_url || (data as { oo_header_url?: string | null }).oo_header_url || null,
+            // Часы работы — свободный текст в подвале (066); пусто = не показывать
+            hours: rsv?.hours || null,
+            // Соцссылки подвала (066)
+            links,
           },
         },
         200,

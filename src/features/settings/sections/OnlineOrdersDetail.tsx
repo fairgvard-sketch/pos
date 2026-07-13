@@ -193,7 +193,7 @@ export default function OnlineOrdersDetail({ location }: { location: Location | 
  * (тот же бакет и компрессия, что у фото товаров) + удаление.
  * Удаление не трогает файл в Storage — только ссылку в настройках.
  */
-function ImageField({ label, hint, url, onChange }: {
+export function ImageField({ label, hint, url, onChange }: {
   label: string
   hint: string
   url: string | null
@@ -247,7 +247,7 @@ function ImageField({ label, hint, url, onChange }: {
 }
 
 /** Текстовое поле с сохранением на blur (без URL-логики) */
-function TextField({ label, hint, placeholder, value, onSave }: {
+export function TextField({ label, hint, placeholder, value, onSave }: {
   label: string
   hint?: string
   placeholder?: string
@@ -280,7 +280,7 @@ function TextField({ label, hint, placeholder, value, onSave }: {
 }
 
 /** URL-поле с сохранением на blur; голый домен дополняется https:// */
-function LinkField({ label, placeholder, value, onSave }: {
+export function LinkField({ label, placeholder, value, onSave }: {
   label: string
   placeholder: string
   value: string

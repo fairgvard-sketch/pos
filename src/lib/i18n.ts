@@ -1032,6 +1032,14 @@ export const translations = {
     resGeoLabel: 'Координаты (необязательно)',
     resGeoHint: 'Скопируйте из Google Maps: правый клик по точке → координаты. Тогда «Навигация» ведёт точно к пину.',
     resGeoInvalid: 'Введите координаты как «широта, долгота»',
+    // Оформление публичной страницы брони (066)
+    rsvPageDesignTitle: 'Оформление страницы',
+    rsvPageDesignHint: 'Что гость видит на странице бронирования.',
+    rsvHeaderFallbackHint: 'Пусто — покажется шапка страницы онлайн-заказа',
+    rsvHoursLabel: 'Часы работы',
+    rsvHoursSettingHint: 'Текст в подвале страницы. Можно в несколько строк.',
+    rsvHoursPlaceholder: 'Вс–Чт 8:00–22:00, Пт 8:00–14:00',
+    rsvSocialHint: 'Кнопки в подвале страницы брони. Пустое поле — кнопки нет.',
     rsvErrHours: 'Выберите время в часы приёма',
     // Ручная бронь на кассе (060) — телефонный звонок
     resNewBooking: 'Новая бронь',
@@ -1090,6 +1098,8 @@ export const translations = {
     rsvInstantConfirmedHint: 'Стол закреплён за вами. Если планы изменятся — отмените бронь.',
     rsvDepositNote: 'Для этой брони требуется депозит — детали уточнит заведение.',
     rsvCheckingSlots: 'Проверяем свободные места…',
+    // Подвал страницы брони (066)
+    rsvHoursTitle: 'Часы работы',
   },
   he: {
     // Общее
@@ -2121,6 +2131,14 @@ export const translations = {
     resGeoLabel: 'קואורדינטות (לא חובה)',
     resGeoHint: 'העתיקו מ־Google Maps: קליק ימני על הנקודה → קואורדינטות. אז «ניווט» מוביל בדיוק לנקודה.',
     resGeoInvalid: 'הזינו קואורדינטות בצורה «רוחב, אורך»',
+    // עיצוב דף ההזמנה הציבורי (066)
+    rsvPageDesignTitle: 'עיצוב הדף',
+    rsvPageDesignHint: 'מה שהאורח רואה בדף הזמנת השולחן.',
+    rsvHeaderFallbackHint: 'ריק — תוצג הכותרת של דף ההזמנה אונליין',
+    rsvHoursLabel: 'שעות פעילות',
+    rsvHoursSettingHint: 'טקסט בתחתית הדף. אפשר בכמה שורות.',
+    rsvHoursPlaceholder: 'א׳–ה׳ 8:00–22:00, ו׳ 8:00–14:00',
+    rsvSocialHint: 'כפתורים בתחתית דף ההזמנה. שדה ריק — אין כפתור.',
     rsvErrHours: 'בחרו שעה בתוך שעות הקבלה',
     // הזמנה ידנית בקופה (060) — שיחת טלפון
     resNewBooking: 'הזמנה חדשה',
@@ -2179,6 +2197,8 @@ export const translations = {
     rsvInstantConfirmedHint: 'השולחן שמור עבורכם. אם התוכניות משתנות — בטלו את ההזמנה.',
     rsvDepositNote: 'להזמנה זו נדרש פיקדון — הפרטים יימסרו על ידי בית העסק.',
     rsvCheckingSlots: 'בודקים מקומות פנויים…',
+    // תחתית דף ההזמנה (066)
+    rsvHoursTitle: 'שעות פעילות',
   },
 } as const
 

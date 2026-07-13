@@ -41,8 +41,16 @@ export interface ReserveInfo {
     lat?: number | null
     lng?: number | null
     phone?: string | null
-    /** Фото-шапка (общая с гостевой страницей заказа) */
+    /** Фото-шапка страницы брони (066): своя, иначе шапка онлайн-заказа */
     header_url?: string | null
+    /** Часы работы — свободный текст в подвале (066); пусто = не показывать */
+    hours?: string | null
+    /** Соцссылки подвала (066); пустые поля = кнопки нет */
+    links?: {
+      instagram?: string | null
+      facebook?: string | null
+      google_review?: string | null
+    }
   }
 }
 

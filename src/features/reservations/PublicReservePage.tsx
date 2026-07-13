@@ -318,8 +318,68 @@ function Shell({ isRtl, info, lang, hero, children }: {
           {loc?.address && <p className="text-sm text-gray-500 mt-1">{loc.address}</p>}
         </header>
         <div className="flex-1 flex flex-col">{children}</div>
+        {/* Подвал (066): часы работы + соцсети — только на экране-лендинге */}
+        {hero && loc && <ReserveFooter loc={loc} lang={lang} />}
       </div>
     </div>
+  )
+}
+
+/**
+ * Подвал страницы брони (066): часы работы (свободный текст) и соцкнопки
+ * (Instagram/Facebook/Google-отзыв). Пустые поля → блок/кнопка не рендерится;
+ * если всё пусто — подвала нет. Тёмная плашка со скруглённым верхом и
+ * hairline-чертой отделяет подвал от контента (как на гостевой странице заказа).
+ */
+function ReserveFooter({ loc, lang }: { loc: NonNullable<ReserveInfo['location']>; lang: Lang }) {
+  const links = loc.links
+  const hasSocial = !!(links?.instagram || links?.facebook || links?.google_review)
+  const hasHours = !!loc.hours
+  if (!hasSocial && !hasHours) return null
+  const iconBtn =
+    'w-12 h-12 rounded-full bg-white/10 text-white flex items-center justify-center active:scale-[0.94] transition-all'
+  return (
+    <footer className="mt-8 px-4 pt-8 pb-8 flex flex-col items-center gap-5 bg-black/85 border-t border-white/10">
+      {hasHours && (
+        <div className="text-center">
+          <div className="text-xs font-semibold text-white/50 uppercase tracking-wide">{t(lang, 'rsvHoursTitle')}</div>
+          <p className="text-sm text-white mt-1 whitespace-pre-line">{loc.hours}</p>
+        </div>
+      )}
+      {(links?.instagram || links?.facebook) && (
+        <div className="flex items-center gap-3">
+          {links?.instagram && (
+            <a href={links.instagram} target="_blank" rel="noopener noreferrer" aria-label="Instagram" className={iconBtn}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+                <rect x="3" y="3" width="18" height="18" rx="5" />
+                <circle cx="12" cy="12" r="4" />
+                <circle cx="17.2" cy="6.8" r="1.2" fill="currentColor" stroke="none" />
+              </svg>
+            </a>
+          )}
+          {links?.facebook && (
+            <a href={links.facebook} target="_blank" rel="noopener noreferrer" aria-label="Facebook" className={iconBtn}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" aria-hidden>
+                <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z" />
+              </svg>
+            </a>
+          )}
+        </div>
+      )}
+      {links?.google_review && (
+        <a
+          href={links.google_review}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="h-11 px-5 rounded-full bg-white/10 text-sm font-semibold text-white flex items-center gap-2 active:scale-[0.96] transition-all"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z" />
+          </svg>
+          {t(lang, 'pubReviewGoogle')}
+        </a>
+      )}
+    </footer>
   )
 }
 
