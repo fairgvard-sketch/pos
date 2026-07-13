@@ -163,25 +163,28 @@ export default function PublicOrderPage() {
       )}
 
       {view === 'menu' && !activeCat && (
-        // Главный экран: плитки категорий растягиваются на всю высоту
-        // (auto-rows-fr + flex-1 — пустого «хвоста» не остаётся), внизу подвал
+        // Главный экран: сетка плиток фикс. пропорции (aspect-4/3 — ряды ровные),
+        // распорка flex-1 толкает подвал к низу экрана при коротком меню
         <>
-          <div className="px-4 mt-4 flex-1 grid grid-cols-2 auto-rows-fr gap-3">
+          <div className="px-4 mt-4 grid grid-cols-2 gap-3">
             {menu.categories.map((cat) => {
               const cover = cat.items.find((i) => i.image_url)?.image_url
               return (
                 <button
                   key={cat.id}
                   onClick={() => setActiveCat(cat.id)}
-                  className="relative min-h-28 rounded-2xl overflow-hidden bg-gray-200 active:scale-[0.98] transition-all text-start"
+                  className="relative aspect-[4/3] rounded-2xl overflow-hidden bg-gray-200 active:scale-[0.98] transition-all text-start"
                 >
                   {cover && <img src={cover} alt="" loading="lazy" className="absolute inset-0 w-full h-full object-cover" />}
-                  <span className="absolute inset-0 bg-black/15" />
-                  <span className="absolute inset-0 flex items-center justify-center px-3 text-center text-white text-lg font-bold leading-tight [text-shadow:0_1px_6px_rgba(0,0,0,0.55)]">{cat.name}</span>
+                  {/* Градиент снизу (стиль Wolt): фото видно целиком, подпись
+                      всегда лежит на тёмном — читаема на любой картинке товара */}
+                  <span className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
+                  <span className="absolute inset-x-0 bottom-0 p-3 text-white text-lg font-bold leading-tight [text-shadow:0_1px_4px_rgba(0,0,0,0.5)]">{cat.name}</span>
                 </button>
               )
             })}
           </div>
+          <div className="flex-1" />
           <SocialFooter links={menu.location.links} lang={lang} padForCart={cartCount > 0} />
         </>
       )}
@@ -239,10 +242,14 @@ export default function PublicOrderPage() {
       {view === 'menu' && (
         <>
           {cartCount > 0 && (
-            <div className="fixed bottom-0 inset-x-0 p-4 bg-gradient-to-t from-white via-white to-transparent">
+            // Панель прижата к низу колонки (max-w-lg, не на всю ширину экрана);
+            // лёгкий градиент-подложка только под самим pill, без сплошной белой
+            // полосы поверх фона-фото
+            <div className="fixed bottom-0 inset-x-0 pointer-events-none">
+              <div className="max-w-lg mx-auto p-4 bg-gradient-to-t from-black/25 to-transparent">
               <button
                 onClick={() => setView('checkout')}
-                className="w-full h-16 rounded-full bg-gray-900 text-white ps-2 pe-6 flex items-center gap-4 active:scale-[0.98] transition-all"
+                className="pointer-events-auto w-full h-16 rounded-full bg-gray-900 text-white ps-2 pe-6 flex items-center gap-4 active:scale-[0.98] transition-all shadow-xl shadow-black/20"
               >
                 <span className="w-11 h-11 shrink-0 rounded-full bg-white text-gray-900 font-bold text-lg flex items-center justify-center tabular-nums">
                   {cartCount}
@@ -256,6 +263,7 @@ export default function PublicOrderPage() {
                   })}
                 </span>
               </button>
+              </div>
             </div>
           )}
         </>
@@ -325,7 +333,9 @@ function Shell({ isRtl, title, logo, hero, headerImg, bgImg, children }: {
         <div className="fixed inset-0 pointer-events-none" aria-hidden>
           <div className="max-w-lg mx-auto h-full relative overflow-hidden">
             <img src={bgImg!} alt="" className="absolute inset-0 w-full h-full object-cover" />
-            <span className="absolute inset-0 bg-black/30" />
+            {/* Плотнее затемняем фон-фото витрины: на светлых участках плитки
+                иначе сливаются с подложкой (правило 60-30-10 — фон должен быть тихим) */}
+            <span className="absolute inset-0 bg-black/50" />
           </div>
         </div>
       )}
@@ -345,7 +355,13 @@ function Shell({ isRtl, title, logo, hero, headerImg, bgImg, children }: {
             </header>
           ) : (
           <header className="relative px-8 pt-8 pb-2 text-center">
-            <h1 className={`font-display text-[64px] font-bold leading-tight mt-8 ${
+            {/* Тёмный градиент сверху (зеркалит градиент на плитках): на фоне-
+                фото витрины название лежит на затемнении и отделяется от сетки.
+                На белой странице подложка не нужна — название и так контрастно. */}
+            {hasBg && (
+              <span className="absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-black/70 via-black/30 to-transparent pointer-events-none" aria-hidden />
+            )}
+            <h1 className={`relative font-display text-[64px] font-bold leading-tight ${
               hasBg ? 'text-white [text-shadow:0_1px_8px_rgba(0,0,0,0.45)]' : 'text-gray-900'
             }`}>
               {title ?? ''}
@@ -372,6 +388,12 @@ function Shell({ isRtl, title, logo, hero, headerImg, bgImg, children }: {
  * Ссылки настраиваются в кассе (Настройки → Обслуживание → Онлайн-заказы);
  * пустая ссылка = кнопки нет. padForCart — просвет под фиксированной
  * кнопкой корзины.
+ *
+ * Тёмная полупрозрачная плашка со скруглённым верхом и hairline-чертой:
+ * явно отделяет подвал от сетки плиток (гештальт-близость) и читается в
+ * обоих контекстах — поверх фона-фото витрины единой тёмной зоной, на
+ * белой странице — деликатным тёмным footer. Светлые иконки на тёмном →
+ * контраст гарантирован везде.
  */
 function SocialFooter({ links, lang, padForCart }: {
   links?: PublicMenu['location']['links']
@@ -379,11 +401,15 @@ function SocialFooter({ links, lang, padForCart }: {
   padForCart: boolean
 }) {
   const iconBtn =
-    'w-12 h-12 rounded-full bg-gray-100 text-gray-700 flex items-center justify-center active:scale-[0.94] transition-all'
+    'w-12 h-12 rounded-full bg-white/10 text-white flex items-center justify-center active:scale-[0.94] transition-all'
   const hasAny = !!(links?.instagram || links?.facebook || links?.google_review)
   if (!hasAny) return padForCart ? <div className="pb-24" /> : null
   return (
-    <footer className={`px-4 pt-10 flex flex-col items-center gap-4 ${padForCart ? 'pb-28' : 'pb-8'}`}>
+    <footer
+      className={`mt-8 px-4 pt-8 flex flex-col items-center gap-4 bg-black/85 border-t border-white/10 ${
+        padForCart ? 'pb-28' : 'pb-8'
+      }`}
+    >
       {(links?.instagram || links?.facebook) && (
         <div className="flex items-center gap-3">
           {links?.instagram && (
@@ -409,7 +435,7 @@ function SocialFooter({ links, lang, padForCart }: {
           href={links.google_review}
           target="_blank"
           rel="noopener noreferrer"
-          className="h-11 px-5 rounded-full bg-gray-100 text-sm font-semibold text-gray-700 flex items-center gap-2 active:scale-[0.96] transition-all"
+          className="h-11 px-5 rounded-full bg-white/10 text-sm font-semibold text-white flex items-center gap-2 active:scale-[0.96] transition-all"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
             <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z" />
