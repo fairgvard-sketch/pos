@@ -93,6 +93,22 @@ export interface LocationSettings {
      *  (query=lat,lng), а не текстовый поиск. */
     lat?: number | null
     lng?: number | null
+    /** Мгновенное подтверждение (063, Ontopo-стиль): гость видит live-
+     *  доступность, бронь сразу confirmed с подобранным столом. Иначе —
+     *  заявка new→касса подтверждает вручную. Дефолт off. */
+    instant?: boolean
+    /** Разрешить объединять combinable-столы под большие компании (063). */
+    combine?: boolean
+    /** Длительность визита по умолчанию, мин (063; дефолт 90) — окно занятости. */
+    duration_min?: number
+    /** Буфер между бронями на столе, мин (063; дефолт 0) — уборка/подготовка. */
+    buffer_min?: number
+    /** Требовать депозит (063, ПЛЕЙСХОЛДЕР — без реальной оплаты пока). */
+    deposit_required?: boolean
+    /** Сумма депозита, агороты (063, плейсхолдер). */
+    deposit_amount?: number
+    /** Депозит требуется от N гостей (063; дефолт 1 = со всех). */
+    deposit_from_party?: number
   }
 }
 
@@ -166,6 +182,10 @@ export interface Table {
   zone: string | null
   sort_order: number
   is_active: boolean
+  /** Вместимость стола, гостей (063; дефолт 2) — движок брони */
+  seats: number
+  /** Можно ли складывать с соседними (063; дефолт false) */
+  combinable: boolean
   status: TableStatus
   pos_x: number | null   // 0..100, % от ширины холста; null = не размещён
   pos_y: number | null   // 0..100, % от высоты холста

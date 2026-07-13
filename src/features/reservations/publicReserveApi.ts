@@ -24,6 +24,9 @@ export interface ReserveInfo {
     logo_url?: string | null
     /** false = владелец не включил приём броней (тумблер 053, default off) */
     accepting: boolean
+    /** instant-режим (063): гость видит live-доступность и бронь
+     *  подтверждается сразу. false → прежний флоу заявка→касса. */
+    instant?: boolean
     /** Часы приёма (059): обе заданы → слоты ограничены окном. 'HH:MM' */
     open?: string | null
     close?: string | null
@@ -62,6 +65,36 @@ export interface ReservePayload {
 export interface ReserveResult {
   reservation_id: string
   duplicate: boolean
+  /** instant-режим (063): бронь сразу confirmed; иначе 'new' (заявка) */
+  status?: 'new' | 'confirmed'
+  deposit_status?: 'none' | 'required' | 'paid' | 'refunded' | 'forfeited'
+  deposit_amount?: number
+}
+
+/** Слот дня с признаком доступности (063, instant-режим) */
+export interface AvailSlot {
+  time: string // 'HH:MM'
+  free: boolean
+}
+
+export interface AvailabilityResult {
+  date: string
+  slot_min: number
+  slots: AvailSlot[]
+}
+
+/**
+ * Live-доступность слотов на дату под размер компании (063).
+ * Возвращается только если у точки включён instant-режим — иначе
+ * гостевая страница показывает слоты как раньше (все «свободны»).
+ */
+export async function fetchAvailability(
+  locId: string, date: string, party: number,
+): Promise<AvailabilityResult> {
+  const qs = new URLSearchParams({ loc: locId, date, party: String(party) })
+  const res = await fetch(`${FN_BASE}/public-reserve?${qs}`, { headers })
+  if (!res.ok) await parseError(res)
+  return res.json()
 }
 
 export async function submitPublicReservation(payload: ReservePayload): Promise<ReserveResult> {

@@ -11,7 +11,7 @@ import { fetchCurrentLocation } from '../auth/api'
 import AppSidebar from '../../components/AppSidebar'
 import {
   fetchReservations, acceptReservation, rejectReservation, setReservationTable, seatReservation,
-  createReservation, type CreateReservationInput,
+  createReservation, fetchGuestHistory, type CreateReservationInput,
   type Reservation,
 } from './api'
 import type { Table } from '../../types'
@@ -62,7 +62,10 @@ export default function ReservationsPage() {
       toast.success(t(lang, 'resAcceptedToast'))
       invalidateAll()
     },
-    onError: (e) => toast.error((e as Error).message),
+    onError: (e) => {
+      const m = (e as Error).message
+      toast.error(m.includes('table_busy') ? t(lang, 'resSeatBusy') : m)
+    },
   })
   const changeTable = useMutation({
     mutationFn: ({ r, tableId }: { r: Reservation; tableId: string | null }) =>
@@ -434,6 +437,7 @@ function ReservationHead({ r, lang, nowTs, showDay }: {
         <span className="font-bold text-gray-900 truncate">{r.customer_name}</span>
         <span className="badge-gray tabular-nums shrink-0">{r.party_size} {t(lang, 'resGuestsShort')}</span>
         {r.table && <span className="badge-blue shrink-0">{t(lang, 'tableLabel')} {r.table.label}</span>}
+        {r.auto && <span className="badge-gray shrink-0">{t(lang, 'resAutoBadge')}</span>}
       </div>
       <div className="text-sm text-gray-500 mt-1">
         <a href={`tel:${r.customer_phone}`} dir="ltr" className="tabular-nums underline decoration-gray-300">
@@ -441,7 +445,43 @@ function ReservationHead({ r, lang, nowTs, showDay }: {
         </a>
         {' '}· {agoText(r.created_at, nowTs, lang)}
       </div>
+      <GuestBadge phone={r.customer_phone} currentId={r.id} lang={lang} />
       {r.note && <div className="text-sm text-gray-700 mt-1">«{r.note}»</div>}
+    </div>
+  )
+}
+
+/**
+ * CRM-подсказка о госте (063): подтягивает историю по телефону. Показывает
+ * «постоянный гость · N визитов», при отменах — «×N отмен». Тихо молчит,
+ * если истории нет или это первый визит (не засоряет карточку).
+ */
+function GuestBadge({ phone, currentId, lang }: { phone: string; currentId: string; lang: Lang }) {
+  const { data } = useQuery({
+    queryKey: ['guest_history', phone],
+    queryFn: () => fetchGuestHistory(phone),
+    enabled: phone.replace(/\D/g, '').length >= 6,
+    staleTime: 60_000,
+  })
+  if (!data) return null
+  // Прошлые визиты = подтверждённые брони помимо текущей. Текущая может уже
+  // быть confirmed и попасть в счётчик — вычитаем её, показываем только «до».
+  const priorVisits = Math.max(0, data.visits - (currentId ? 1 : 0))
+  const returning = priorVisits >= 1
+  const hasCancels = data.cancelled >= 1
+  if (!returning && !hasCancels) return null
+  return (
+    <div className="flex items-center gap-2 mt-1 text-xs">
+      {returning && (
+        <span className="inline-flex items-center gap-1 rounded-full bg-green-50 text-green-700 px-2 py-0.5 font-semibold">
+          {t(lang, 'resGuestReturning')} · {priorVisits} {t(lang, 'resGuestVisits')}
+        </span>
+      )}
+      {hasCancels && (
+        <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 text-amber-700 px-2 py-0.5 font-semibold tabular-nums">
+          ×{data.cancelled} {t(lang, 'resGuestCancels')}
+        </span>
+      )}
     </div>
   )
 }

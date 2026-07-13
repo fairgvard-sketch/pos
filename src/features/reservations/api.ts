@@ -20,6 +20,35 @@ export interface Reservation {
   order_id: string | null
   /** Назначенный стол (метка для карточки/чипа) */
   table: { id: string; label: string } | null
+  /** Бронь пришла мгновенной (063, instant-режим) — без ручного подтверждения */
+  auto: boolean
+  /** Длительность визита, мин (063) */
+  duration_min: number
+  /** Доп. столы объединённой брони (063) — кроме основного table_id */
+  hold_table_ids: string[]
+  /** Депозит (063, плейсхолдер) */
+  deposit_amount: number
+  deposit_status: 'none' | 'required' | 'paid' | 'refunded' | 'forfeited'
+}
+
+/** CRM-история гостя по телефону (063): визиты, отмены, заметки */
+export interface GuestHistory {
+  visits: number
+  cancelled: number
+  total: number
+  last_at: string | null
+  name: string | null
+  notes: string[]
+}
+
+/**
+ * История гостя по телефону (063) — для карточки брони на кассе.
+ * Агрегат по всем броням org с этим номером. Пустой телефон → нули.
+ */
+export async function fetchGuestHistory(phone: string): Promise<GuestHistory> {
+  const { data, error } = await supabase.rpc('guest_history', { p_phone: phone })
+  if (error) throw new Error(error.message)
+  return data as GuestHistory
 }
 
 /**

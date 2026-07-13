@@ -5,7 +5,8 @@ import { t, formatTime, type Lang } from '../../lib/i18n'
 import { PublicApiError } from '../online/publicApi'
 import {
   fetchReserveInfo, submitPublicReservation, fetchPublicReservationStatus,
-  cancelPublicReservation, type ReserveInfo, type ReserveStatus,
+  cancelPublicReservation, fetchAvailability,
+  type ReserveInfo, type ReserveStatus,
 } from './publicReserveApi'
 import BrandSplash from '../../components/ui/BrandSplash'
 
@@ -143,6 +144,20 @@ export default function PublicReservePage() {
     [date, slotCtx, slotParams]
   )
 
+  // Live-доступность (063): только в instant-режиме. Множество СВОБОДНЫХ
+  // времён на выбранную дату+число гостей; занятые в UI дизейблятся.
+  const instant = info?.location.instant === true
+  const { data: avail } = useQuery({
+    queryKey: ['reserve_avail', locId, date, guests],
+    queryFn: () => fetchAvailability(locId, date, guests),
+    enabled: instant && !!info?.location.accepting,
+    staleTime: 20_000,
+  })
+  const freeTimes = useMemo(() => {
+    if (!instant || !avail) return null // null = доступность не применяется (все свободны)
+    return new Set(avail.slots.filter((s) => s.free).map((s) => s.time))
+  }, [instant, avail])
+
   // Сверки во время рендера (реком. React вместо эффекта):
   // 1) Сегодня без слотов (часы приёма подгрузились и окно на сегодня пусто) —
   //    сдвигаем выбор на следующий день.
@@ -227,6 +242,8 @@ export default function PublicReservePage() {
             guests={guests}
             maxParty={maxParty}
             timeSlots={timeSlots}
+            instant={instant}
+            freeTimes={freeTimes}
             onDate={pickDate}
             onTime={setTime}
             onGuests={setGuests}
@@ -240,6 +257,7 @@ export default function PublicReservePage() {
             time={time}
             guests={guests}
             timeSlots={timeSlots}
+            freeTimes={freeTimes}
             todayStr={slotCtx.todayStr}
             onBack={() => setStep('slot')}
             onPick={(v) => {
@@ -255,6 +273,7 @@ export default function PublicReservePage() {
             date={date}
             time={time}
             guests={guests}
+            instant={instant}
             todayStr={slotCtx.todayStr}
             onBack={() => setStep('times')}
             onSubmitted={(uuid) => {
@@ -328,7 +347,7 @@ function SlotCell({ label, children }: { label: string; children: React.ReactNod
 
 const SELECT_CLS = 'absolute inset-0 w-full h-full opacity-0 cursor-pointer text-base'
 
-function SlotScreen({ lang, info, days, todayStr, todayHasSlots, date, time, guests, maxParty, timeSlots, onDate, onTime, onGuests, onNext }: {
+function SlotScreen({ lang, info, days, todayStr, todayHasSlots, date, time, guests, maxParty, timeSlots, instant, freeTimes, onDate, onTime, onGuests, onNext }: {
   lang: Lang
   info: ReserveInfo
   days: string[]
@@ -339,11 +358,19 @@ function SlotScreen({ lang, info, days, todayStr, todayHasSlots, date, time, gue
   guests: number
   maxParty: number
   timeSlots: string[]
+  /** instant-режим (063): показываем live-доступность и «Забронировать сейчас» */
+  instant: boolean
+  /** Свободные времена (Set) или null, если доступность не применяется */
+  freeTimes: Set<string> | null
   onDate: (v: string) => void
   onTime: (v: string) => void
   onGuests: (v: number) => void
   onNext: () => void
 }) {
+  // В instant-режиме день целиком занят, если сетка загружена и пуста на free
+  const dayFull = instant && freeTimes !== null && freeTimes.size === 0 && timeSlots.length > 0
+  // Выбранное время недоступно — не даём идти дальше
+  const timeTaken = instant && freeTimes !== null && !freeTimes.has(time)
   const loc = info.location
   // Навигация (062): координаты → точный пин; иначе текстовый поиск по адресу.
   // query=lat,lng открывает Google Maps на точке (на телефоне — с выбором
@@ -384,19 +411,30 @@ function SlotScreen({ lang, info, days, todayStr, todayHasSlots, date, time, gue
         </SlotCell>
         <SlotCell label={time}>
           <select className={SELECT_CLS} value={time} onChange={(e) => onTime(e.target.value)} aria-label={t(lang, 'rsvTime')}>
-            {timeSlots.map((s) => (
-              <option key={s} value={s}>{s}</option>
-            ))}
+            {timeSlots.map((s) => {
+              const full = freeTimes !== null && !freeTimes.has(s)
+              return (
+                <option key={s} value={s} disabled={full}>
+                  {s}{full ? ` · ${t(lang, 'rsvSlotFull')}` : ''}
+                </option>
+              )
+            })}
           </select>
         </SlotCell>
       </div>
 
+      {dayFull && (
+        <div className="w-full mt-4 rounded-2xl bg-amber-50 text-amber-800 text-sm font-semibold px-4 py-3 text-center">
+          {t(lang, 'rsvNoFreeSlots')}
+        </div>
+      )}
+
       <button
         onClick={onNext}
-        disabled={timeSlots.length === 0}
+        disabled={timeSlots.length === 0 || dayFull || timeTaken}
         className="w-full h-14 mt-4 rounded-2xl bg-gray-900 text-white font-bold disabled:opacity-40 active:scale-[0.98] transition-all"
       >
-        {t(lang, 'rsvSubmit')}
+        {instant ? t(lang, 'rsvBookNow') : t(lang, 'rsvSubmit')}
       </button>
 
       <p className="text-sm text-gray-500 mt-4 text-center">{t(lang, 'rsvChooseHint')}</p>
@@ -434,12 +472,14 @@ function SlotScreen({ lang, info, days, todayStr, todayHasSlots, date, time, gue
  * 15 минут (окно сдвигается у краёв дня). Запрошенное — в жирной рамке;
  * тап по любому чипу ведёт к контактам с этим временем.
  */
-function TimesScreen({ lang, date, time, guests, timeSlots, todayStr, onBack, onPick }: {
+function TimesScreen({ lang, date, time, guests, timeSlots, freeTimes, todayStr, onBack, onPick }: {
   lang: Lang
   date: string
   time: string
   guests: number
   timeSlots: string[]
+  /** Свободные времена (instant-режим) или null */
+  freeTimes: Set<string> | null
   todayStr: string
   onBack: () => void
   onPick: (v: string) => void
@@ -468,12 +508,18 @@ function TimesScreen({ lang, date, time, guests, timeSlots, todayStr, onBack, on
       <div className="grid grid-cols-5 gap-2 mt-4">
         {chips.map((s) => {
           const current = s === time
+          const full = freeTimes !== null && !freeTimes.has(s)
           return (
             <button
               key={s}
-              onClick={() => onPick(s)}
-              className={`h-14 rounded-xl bg-white text-base font-bold tabular-nums text-gray-900 active:scale-[0.96] transition-all ${
-                current ? 'border-2 border-gray-900' : 'border border-gray-200 hover:border-gray-400'
+              onClick={() => !full && onPick(s)}
+              disabled={full}
+              className={`h-14 rounded-xl text-base font-bold tabular-nums active:scale-[0.96] transition-all ${
+                full
+                  ? 'bg-gray-50 text-gray-300 line-through border border-gray-100 cursor-not-allowed active:scale-100'
+                  : current
+                    ? 'bg-white text-gray-900 border-2 border-gray-900'
+                    : 'bg-white text-gray-900 border border-gray-200 hover:border-gray-400'
               }`}
             >
               {s}
@@ -493,16 +539,19 @@ function reserveErrorText(lang: Lang, code: string): string {
     case 'invalid_time': return t(lang, 'rsvErrTime')
     case 'outside_hours': return t(lang, 'rsvErrHours')
     case 'invalid_phone': return t(lang, 'rsvErrPhone')
+    case 'full_slot': return t(lang, 'rsvErrFull')
     default: return t(lang, 'rsvErrUnknown')
   }
 }
 
-function DetailsScreen({ lang, locId, date, time, guests, todayStr, onBack, onSubmitted }: {
+function DetailsScreen({ lang, locId, date, time, guests, instant, todayStr, onBack, onSubmitted }: {
   lang: Lang
   locId: string
   date: string
   time: string
   guests: number
+  /** instant-режим (063): CTA — «Подтвердить бронь», не «Отправить заявку» */
+  instant: boolean
   todayStr: string
   onBack: () => void
   onSubmitted: (clientUuid: string) => void
@@ -612,7 +661,7 @@ function DetailsScreen({ lang, locId, date, time, guests, todayStr, onBack, onSu
         onClick={submit}
         className="w-full h-14 mt-4 rounded-2xl bg-gray-900 text-white font-bold disabled:opacity-40 active:scale-[0.98] transition-all"
       >
-        {busy ? t(lang, 'pubSubmitting') : t(lang, 'rsvSend')}
+        {busy ? t(lang, 'pubSubmitting') : instant ? t(lang, 'rsvSendInstant') : t(lang, 'rsvSend')}
       </button>
     </div>
   )

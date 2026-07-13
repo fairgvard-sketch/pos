@@ -16,21 +16,30 @@ export async function fetchTables(): Promise<Table[]> {
   return data as Table[]
 }
 
-export async function createTable(label: string, zone: string | null, sortOrder: number): Promise<void> {
+export async function createTable(
+  label: string, zone: string | null, sortOrder: number,
+  seats = 2, combinable = false,
+): Promise<void> {
   const ctx = await getDeviceContext()
   if (!ctx?.orgId || !ctx?.locationId) throw new Error('Device not bootstrapped')
   const { error } = await supabase
     .from('tables')
-    .insert({ org_id: ctx.orgId, location_id: ctx.locationId, label, zone: zone || null, sort_order: sortOrder })
+    .insert({ org_id: ctx.orgId, location_id: ctx.locationId, label, zone: zone || null,
+              sort_order: sortOrder, seats, combinable })
   if (error) throw new Error(error.message)
 }
 
-/** Переименовать стол / сменить зону */
-export async function updateTable(id: string, label: string, zone: string | null): Promise<void> {
-  const { error } = await supabase
-    .from('tables')
-    .update({ label, zone: zone || null })
-    .eq('id', id)
+/** Переименовать стол / сменить зону / вместимость (063) */
+export async function updateTable(
+  id: string, label: string, zone: string | null,
+  seats?: number, combinable?: boolean,
+): Promise<void> {
+  const patch: { label: string; zone: string | null; seats?: number; combinable?: boolean } = {
+    label, zone: zone || null,
+  }
+  if (seats !== undefined) patch.seats = seats
+  if (combinable !== undefined) patch.combinable = combinable
+  const { error } = await supabase.from('tables').update(patch).eq('id', id)
   if (error) throw new Error(error.message)
 }
 

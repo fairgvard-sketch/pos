@@ -91,3 +91,56 @@ curl "$FN/public-reserve?id=<CLIENT_UUID>" -H "apikey: $ANON" -H "Authorization:
 звонок и бейдж «Брони» → Подтвердить со столом → у гостя ≤5с «Бронь
 подтверждена · стол N» → в `/hall` стол синий с временем (если визит ≤2ч).
 Отмена гостем → тост «Гость отменил бронь», стол снова зелёный.
+
+---
+
+## Мгновенная бронь + вместимость (063, «Ontopo»)
+
+Платформенная надстройка: гость видит **live-доступность** и бронь
+подтверждается **мгновенно** без хостес (как Ontopo). Всё за флагами
+`settings.reservations`, дефолты консервативны — каждое кафе включает нужное.
+
+### Что добавилось
+
+| Слой | Изменения |
+|------|-----------|
+| Миграция `063_reservation_availability.sql` | `tables.seats`/`combinable`; поля брони `duration_min`/`auto`/`hold_table_ids`/`deposit_*`/`occupancy`; EXCLUDE `reservations_no_overlap`; RPC `reservation_availability`, `guest_history`, `_pick_tables`/`_table_free`; `submit_reservation`/`accept_reservation` v2 |
+| Edge `public-reserve` | GET `?loc&date&party` → сетка `{time,free}`; info отдаёт `instant`; ошибка `full_slot` |
+| Гость `PublicReservePage` | занятые слоты дизейбл/зачёркнуты, «Забронировать сейчас», мгновенное подтверждение |
+| Касса `TableEditSheet` | поле «мест» + тумблер «можно объединять» |
+| Касса `ReservationsPage` | CRM-бейдж гостя (постоянный/отмены) + бейдж «Авто» |
+| Настройки `ReservationsDetail` → `InstantBlock` | тумблеры instant/combine, длительность/буфер, депозит-плейсхолдер |
+
+### Модель доступности
+
+`reservation_availability` идёт по слотам дня [open..close] шага slot_min и для
+каждого зовёт `_pick_tables`: наименьший свободный стол с `seats>=party`, а при
+`combine=true` — жадно набирает `combinable`-столы до суммарной вместимости.
+Свободен = нет живой (new/confirmed) брони, чьё окно занятости
+`[reserved_at, +duration_min)` (± `buffer_min`) пересекает слот. Гонку двух
+инстант-гостей на один стол ловит EXCLUDE-констрейнт → `full_slot`.
+
+### Флаги `settings.reservations` (все опциональны)
+
+`instant` (мгновенное подтверждение, деф off) · `combine` (объединение столов) ·
+`duration_min` (деф 90) · `buffer_min` (деф 0) · `deposit_required`/
+`deposit_amount`(агороты)/`deposit_from_party` (ПЛЕЙСХОЛДЕР, без оплаты).
+
+### Деплой 063 (строго по порядку)
+
+1. **Миграция** `063_reservation_availability.sql` — SQL Editor (проект
+   `qgmnxrgtlpyqglwqmsej`). ✅ применена 2026-07-13.
+2. **Edge Function**: `npx supabase functions deploy public-reserve
+   --project-ref qgmnxrgtlpyqglwqmsej` (нужен новый availability-эндпоинт).
+3. **Фронтенд** — пуш в `main` (Vercel).
+
+Включение у кафе: Настройки → Обслуживание → Бронирование → «Мгновенное
+подтверждение». Обязательно проставить **число мест** у столов (иначе движок
+считает по дефолту 2) в редакторе стола на плане зала.
+
+### Известные ограничения
+
+Оплата депозита — плейсхолдер (ждёт Cardcom Low Profile). SMS нет.
+Объединённые столы хранятся (`hold_table_ids`), но план зала их визуально не
+группирует. `set_reservation_table` при ручном переносе на занятый слот отдаёт
+сырую ошибку exclusion (accept/submit — дружелюбный `table_busy`/`full_slot`).

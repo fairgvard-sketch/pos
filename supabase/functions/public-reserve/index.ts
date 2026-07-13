@@ -42,6 +42,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const KNOWN_ERRORS = [
   'disabled', 'rate_limited', 'busy', 'invalid_location', 'invalid_name',
   'invalid_phone', 'invalid_party', 'invalid_time', 'outside_hours', 'not_found',
+  'full_slot', // 063: instant-режим, на слот не осталось свободного стола
 ]
 
 function errorCode(message: string): string {
@@ -60,6 +61,30 @@ Deno.serve(async (req) => {
   if (req.method === 'GET') {
     const params = new URL(req.url).searchParams
 
+    // Live-доступность слотов (063): ?loc=&date=YYYY-MM-DD&party=N.
+    // Требует instant-режима у точки (RPC сама вернёт 'disabled', если приём выкл).
+    const availDate = params.get('date')
+    const availParty = params.get('party')
+    if (availDate !== null && availParty !== null) {
+      const aLoc = params.get('loc') ?? ''
+      if (!UUID_RE.test(aLoc)) return json({ error: 'invalid_location' }, 400)
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(availDate)) return json({ error: 'bad_request' }, 400)
+      const party = Math.floor(Number(availParty))
+      if (!Number.isFinite(party) || party < 1 || party > 200) {
+        return json({ error: 'invalid_party' }, 400)
+      }
+      const { data, error } = await supabase.rpc('reservation_availability', {
+        p_location_id: aLoc,
+        p_date: availDate,
+        p_party: party,
+      })
+      if (error) {
+        const code = errorCode(error.message)
+        return json({ error: code }, code === 'unknown' ? 500 : 400)
+      }
+      return json(data, 200, { 'Cache-Control': 'no-store' })
+    }
+
     // Инфо точки для формы брони
     const loc = params.get('loc')
     if (loc !== null) {
@@ -72,7 +97,7 @@ Deno.serve(async (req) => {
         .maybeSingle()
       if (error || !data) return json({ error: 'invalid_location' }, 404)
       const rsv = (data as { rsv?: {
-        enabled?: boolean; open?: string | null; close?: string | null
+        enabled?: boolean; instant?: boolean; open?: string | null; close?: string | null
         slot_min?: number | null; max_party?: number | null
         address?: string | null; lat?: number | null; lng?: number | null
       } }).rsv
@@ -88,6 +113,8 @@ Deno.serve(async (req) => {
             logo_url: data.logo_url ?? null,
             // Тумблер 053: отсутствие ключа = бронирование ВЫКЛЮЧЕНО
             accepting: rsv?.enabled === true,
+            // instant-режим (063): гость видит live-доступность, бронь сразу confirmed
+            instant: rsv?.instant === true,
             // Часы приёма (059): гостевая страница ограничивает слоты этим окном
             open: rsv?.open ?? null,
             close: rsv?.close ?? null,

@@ -8,6 +8,7 @@ import { printCanvasSilently } from '../../../lib/escpos'
 import { renderQrFlyerCanvas } from '../../receipt/printCanvas'
 import { useLocationSettings } from '../useLocationSettings'
 import { Group, ToggleRow } from '../ui'
+import { formatMoney, parseMoney } from '../../../lib/money'
 import type { Location, LocationSettings } from '../../../types'
 
 /** Подпись на QR-флаере брони — для гостей, поэтому всегда иврит */
@@ -123,6 +124,7 @@ export default function ReservationsDetail({ location }: { location: Location | 
           </div>
         </div>
       )}
+      {enabled && <InstantBlock rsv={rsv} update={update} />}
       {enabled && <ReserveAddressBlock rsv={rsv} update={update} />}
       {enabled && (
         <div className="px-4 py-3 border-t border-gray-100">
@@ -152,6 +154,119 @@ export default function ReservationsDetail({ location }: { location: Location | 
         </div>
       )}
     </Group>
+  )
+}
+
+/**
+ * Мгновенная бронь + вместимость (063). Instant-режим включает
+ * live-доступность на гостевой странице и авто-подбор стола. Под ним —
+ * объединение столов, длительность визита, буфер и депозит-плейсхолдер.
+ * Все ключи опциональны, сервер применяет дефолты.
+ */
+function InstantBlock({ rsv, update }: {
+  rsv: NonNullable<LocationSettings['reservations']>
+  update: (patch: LocationSettings) => void
+}) {
+  const lang = useLangStore((s) => s.lang)
+  const instant = rsv.instant === true
+  const depositOn = rsv.deposit_required === true
+  // Черновик суммы депозита (₪), коммит на blur → агороты
+  const [depDraft, setDepDraft] = useState(
+    rsv.deposit_amount ? formatMoney(rsv.deposit_amount, lang) : ''
+  )
+
+  function commitDeposit() {
+    const s = depDraft.trim()
+    if (s === '') { update({ reservations: { deposit_amount: 0 } }); return }
+    const agorot = parseMoney(s)
+    if (agorot == null || agorot < 0) {
+      setDepDraft(rsv.deposit_amount ? formatMoney(rsv.deposit_amount, lang) : '')
+      return
+    }
+    update({ reservations: { deposit_amount: agorot } })
+    setDepDraft(formatMoney(agorot, lang))
+  }
+
+  return (
+    <>
+      <div className="border-t border-gray-100">
+        <ToggleRow
+          label={t(lang, 'resInstantTitle')}
+          hint={t(lang, 'resInstantHint')}
+          checked={instant}
+          onChange={(v) => update({ reservations: { instant: v } })}
+        />
+      </div>
+
+      {instant && (
+        <>
+          <div className="border-t border-gray-100">
+            <ToggleRow
+              label={t(lang, 'resCombineTitle')}
+              hint={t(lang, 'resCombineHint')}
+              checked={rsv.combine === true}
+              onChange={(v) => update({ reservations: { combine: v } })}
+            />
+          </div>
+          <div className="px-4 py-3 border-t border-gray-100 grid grid-cols-2 gap-3">
+            <label className="block">
+              <span className="block text-xs font-semibold text-gray-500 mb-1.5">{t(lang, 'resDurationTitle')}</span>
+              <select
+                className="input"
+                value={rsv.duration_min ?? 90}
+                onChange={(e) => update({ reservations: { duration_min: Number(e.target.value) } })}
+              >
+                {[30, 45, 60, 90, 120, 150, 180].map((d) => <option key={d} value={d}>{d}</option>)}
+              </select>
+            </label>
+            <label className="block">
+              <span className="block text-xs font-semibold text-gray-500 mb-1.5">{t(lang, 'resBufferTitle')}</span>
+              <select
+                className="input"
+                value={rsv.buffer_min ?? 0}
+                onChange={(e) => update({ reservations: { buffer_min: Number(e.target.value) } })}
+              >
+                {[0, 5, 10, 15, 30].map((d) => <option key={d} value={d}>{d}</option>)}
+              </select>
+            </label>
+          </div>
+        </>
+      )}
+
+      <div className="border-t border-gray-100">
+        <ToggleRow
+          label={t(lang, 'resDepositTitle')}
+          hint={t(lang, 'resDepositHint')}
+          checked={depositOn}
+          onChange={(v) => update({ reservations: { deposit_required: v } })}
+        />
+      </div>
+      {depositOn && (
+        <div className="px-4 py-3 border-t border-gray-100 grid grid-cols-2 gap-3">
+          <label className="block">
+            <span className="block text-xs font-semibold text-gray-500 mb-1.5">{t(lang, 'resDepositAmount')}</span>
+            <input
+              className="input"
+              inputMode="decimal"
+              placeholder="0"
+              value={depDraft}
+              onChange={(e) => setDepDraft(e.target.value)}
+              onBlur={commitDeposit}
+            />
+          </label>
+          <label className="block">
+            <span className="block text-xs font-semibold text-gray-500 mb-1.5">{t(lang, 'resDepositFrom')}</span>
+            <select
+              className="input"
+              value={rsv.deposit_from_party ?? 1}
+              onChange={(e) => update({ reservations: { deposit_from_party: Number(e.target.value) } })}
+            >
+              {[1, 2, 4, 6, 8, 10, 12].map((n) => <option key={n} value={n}>{n}</option>)}
+            </select>
+          </label>
+        </div>
+      )}
+    </>
   )
 }
 

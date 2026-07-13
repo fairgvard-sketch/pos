@@ -41,19 +41,22 @@ export default function TableEditSheet({ target, nextSortOrder, onClose }: Props
   const [zone, setZone] = useState(existing ? (target.zone ?? '') : (target.zone ?? ''))
   const [shape, setShape] = useState<TableShape>(existing ? target.shape : 'square')
   const [size, setSize] = useState<'sm' | 'md' | 'lg'>(existing ? widthToSize(target.width) : 'md')
+  // Вместимость и объединяемость (063) — движок брони
+  const [seats, setSeats] = useState(existing ? (target.seats ?? 2) : 2)
+  const [combinable, setCombinable] = useState(existing ? (target.combinable ?? false) : false)
 
   const refresh = () => { qc.invalidateQueries({ queryKey: ['tables'] }); onClose() }
 
   const save = useMutation({
     mutationFn: async () => {
       if (existing) {
-        await updateTable(target.id, label.trim(), zone.trim() || null)
+        await updateTable(target.id, label.trim(), zone.trim() || null, seats, combinable)
         // Форма/размер сохраняются раскладкой, позицию оставляем текущей
         // (у неразмещённого стола pos=null → ставим 50/50, чтобы он «прилип»)
         const width = SIZES.find((s) => s.key === size)!.width
         await setTableLayout(target.id, target.pos_x ?? 50, target.pos_y ?? 50, width, shape)
       } else {
-        await createTable(label.trim(), zone.trim() || null, nextSortOrder)
+        await createTable(label.trim(), zone.trim() || null, nextSortOrder, seats, combinable)
       }
     },
     onSuccess: refresh,
@@ -99,6 +102,41 @@ export default function TableEditSheet({ target, nextSortOrder, onClose }: Props
           onChange={(e) => setZone(e.target.value)}
           placeholder={t(lang, 'tableZonePlaceholder')}
         />
+
+        {/* Вместимость (063): движок брони подбирает стол по числу мест */}
+        <label className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-1">
+          {t(lang, 'tableSeatsField')}
+        </label>
+        <div className="flex items-center gap-3 mb-4">
+          <button
+            type="button"
+            onClick={() => setSeats((n) => Math.max(1, n - 1))}
+            className="h-11 w-11 shrink-0 rounded-xl bg-gray-100 text-xl font-bold text-gray-700 active:scale-95 transition-all"
+            aria-label="−"
+          >−</button>
+          <div className="flex-1 text-center text-xl font-black text-gray-900 tabular-nums">{seats}</div>
+          <button
+            type="button"
+            onClick={() => setSeats((n) => Math.min(100, n + 1))}
+            className="h-11 w-11 shrink-0 rounded-xl bg-gray-100 text-xl font-bold text-gray-700 active:scale-95 transition-all"
+            aria-label="+"
+          >+</button>
+        </div>
+
+        {/* Объединяемость (063): при instant+combine стол складывается с другими */}
+        <button
+          type="button"
+          onClick={() => setCombinable((v) => !v)}
+          className="w-full flex items-center justify-between gap-3 mb-4 text-start active:scale-[0.99] transition-all"
+        >
+          <span className="min-w-0">
+            <span className="block text-sm font-semibold text-gray-900">{t(lang, 'tableCombinable')}</span>
+            <span className="block text-xs text-gray-500">{t(lang, 'tableCombinableHint')}</span>
+          </span>
+          <span className={`shrink-0 h-6 w-11 rounded-full transition-colors relative ${combinable ? 'bg-gray-900' : 'bg-gray-200'}`}>
+            <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${combinable ? 'start-[22px]' : 'start-0.5'}`} />
+          </span>
+        </button>
 
         {existing && (
           <>
