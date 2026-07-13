@@ -1,11 +1,11 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { updateServiceMode } from '../../auth/api'
 import { fetchTables } from '../../tables/api'
 import { useLangStore } from '../../../store/langStore'
 import { t, type TranslationKey } from '../../../lib/i18n'
 import { Group, NavRow } from '../ui'
-import type { DetailId } from '../registry'
 import type { Location, ServiceMode } from '../../../types'
 
 interface ModeOption {
@@ -21,10 +21,9 @@ const MODES: ModeOption[] = [
 ]
 
 /** Деталь «Режим обслуживания»: режим точки + столы (в режиме столов) */
-export default function ServiceModeDetail({
-  location, openDetail,
-}: { location: Location | undefined; openDetail: (id: DetailId) => void }) {
+export default function ServiceModeDetail({ location }: { location: Location | undefined }) {
   const lang = useLangStore((s) => s.lang)
+  const navigate = useNavigate()
   const qc = useQueryClient()
 
   const current = location?.service_mode
@@ -84,9 +83,10 @@ export default function ServiceModeDetail({
       {current === 'tables' && (
         <Group>
           <NavRow
-            label={t(lang, 'tablesManage')}
+            label={t(lang, 'floorPlanTitle')}
+            hint={t(lang, 'floorPlanSettingsHint')}
             value={String(tables.length)}
-            onClick={() => openDetail('tables')}
+            onClick={() => navigate('/settings/floor-plan')}
           />
         </Group>
       )}

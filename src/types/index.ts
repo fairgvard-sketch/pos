@@ -190,12 +190,24 @@ export interface StaffSession {
 export type TableStatus = 'free' | 'reserved' | 'disabled'
 export type TableShape = 'square' | 'circle'
 
+export interface TableZone {
+  id: string
+  org_id: string
+  location_id: string
+  name: string
+  sort_order: number
+  is_active: boolean
+  created_at: string
+}
+
 export interface Table {
   id: string
   org_id: string
   location_id: string
   label: string
   zone: string | null
+  /** Нормализованная зона плана; zone остаётся текстовым снимком для совместимости */
+  zone_id: string | null
   sort_order: number
   is_active: boolean
   /** Вместимость стола, гостей (063; дефолт 2) — движок брони */

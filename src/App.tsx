@@ -26,6 +26,7 @@ import { lazyWithRetry } from './lib/lazyWithRetry'
 // несуществующий файл → Vercel отдаёт index.html → import() падает белым
 // экраном. Обёртка делает один reload за свежим index.html.
 const HallPage = lazyWithRetry(() => import('./features/tables/HallPage'), 'HallPage')
+const FloorPlanEditorPage = lazyWithRetry(() => import('./features/tables/FloorPlanEditorPage'), 'FloorPlanEditorPage')
 const QueuePage = lazyWithRetry(() => import('./features/queue/QueuePage'), 'QueuePage')
 const MenuPage = lazyWithRetry(() => import('./features/menu/MenuPage'), 'MenuPage')
 const OnlineOrdersPage = lazyWithRetry(() => import('./features/online/OnlineOrdersPage'), 'OnlineOrdersPage')
@@ -70,7 +71,7 @@ const queryClient = new QueryClient({
 // gcTime 7 дней: эти ключи переживают перезагрузку через localStorage-кэш
 // (см. PERSIST_KEYS) — холодный старт офлайн получает каталог/смену/столы.
 const STATIC_5MIN = { staleTime: 5 * 60_000, gcTime: 7 * 24 * 3600_000 }
-for (const key of ['menu_categories', 'menu_items', 'modifier_groups', 'current_location', 'current_shift', 'tables']) {
+for (const key of ['menu_categories', 'menu_items', 'modifier_groups', 'current_location', 'current_shift', 'tables', 'table_zones']) {
   queryClient.setQueryDefaults([key], STATIC_5MIN)
 }
 
@@ -78,7 +79,7 @@ for (const key of ['menu_categories', 'menu_items', 'modifier_groups', 'current_
 // Данные для работы без сети: каталог, точка (НДС/реквизиты чека),
 // последняя смена, столы. Остальные ключи (заказы, отчёты) не персистятся —
 // они либо realtime, либо не нужны офлайн.
-const PERSIST_KEYS = new Set(['menu_categories', 'menu_items', 'modifier_groups', 'current_location', 'current_shift', 'tables'])
+const PERSIST_KEYS = new Set(['menu_categories', 'menu_items', 'modifier_groups', 'current_location', 'current_shift', 'tables', 'table_zones'])
 const persister = createSyncStoragePersister({
   storage: window.localStorage,
   key: 'kassa-query-cache',
@@ -254,6 +255,15 @@ export default function App() {
             element={
               <ProtectedRoute allowedRoles={['owner', 'manager']}>
                 <SettingsPage />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/settings/floor-plan"
+            element={
+              <ProtectedRoute allowedRoles={['owner', 'manager']}>
+                <FloorPlanEditorPage />
               </ProtectedRoute>
             }
           />

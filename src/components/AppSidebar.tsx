@@ -135,16 +135,16 @@ export default function AppSidebar({ active }: { active: SidebarPage }) {
   if (!staff) return null
   const isManager = staff.role === 'owner' || staff.role === 'manager'
   const showHall = tablesMode
-  // В режиме столов «Продажа» — не точка входа: она открывается только когда
-  // выбран стол (есть tableCtx). Без стола пункт скрыт, вход через зал.
-  const showSell = !tablesMode || !!tableCtx
+  // В режиме столов «Продажа» — внутренний экран выбранного стола,
+  // а не самостоятельный пункт навигации. Вход остаётся через «Зал».
+  const showSell = !tablesMode
 
   return (
-    <aside className="w-52 shrink-0 bg-white rounded-3xl flex flex-col p-4">
-      <div className="pt-1 pb-5" />
+    <aside className="w-28 shrink-0 bg-white rounded-3xl flex flex-col p-2">
+      <div className="h-2 shrink-0" />
 
       <nav className="space-y-1">
-        {/* Режим столов: вход через зал, «Продажа» появляется только с выбранным столом */}
+        {/* Режим столов: вход и возврат всегда через «Зал» */}
         {showHall && (
           <SideLink
             active={active === 'hall'}
@@ -184,7 +184,7 @@ export default function AppSidebar({ active }: { active: SidebarPage }) {
         {/* Менеджерский блок отделён. Редкие экраны из сайдбара убраны:
             Табель — со страницы Смены, Меню — правка витрины на экране продажи
             (полная админка в Настройках → Бизнес), Дашборд — тоже там. */}
-        {isManager && <div className="my-3 border-t border-gray-100" />}
+        {isManager && <div className="my-2 border-t border-gray-100" />}
         {isManager && (
           <SideLink active={active === 'analytics'} label={t(lang, 'reports')} iconName="analytics" onClick={() => navigate('/reports')} />
         )}
@@ -193,24 +193,24 @@ export default function AppSidebar({ active }: { active: SidebarPage }) {
         )}
       </nav>
 
-      <div className="mt-auto space-y-4">
+      <div className="mt-auto space-y-2 pt-2">
         <OfflineBadge />
         <Clock lang={lang} />
-        <div className="flex items-center gap-2.5 px-2">
-          <div className="w-9 h-9 rounded-full bg-gray-900 text-white flex items-center justify-center text-sm font-bold shrink-0">
+        <div className="rounded-2xl bg-gray-50 p-2 text-center">
+          <div className="w-9 h-9 mx-auto rounded-full bg-gray-900 text-white flex items-center justify-center text-sm font-bold">
             {staff.name.slice(0, 1).toUpperCase()}
           </div>
-          <div className="min-w-0 flex-1">
-            <div className="text-sm font-bold text-gray-900 truncate">{staff.name}</div>
-            <div className="text-[11px] text-gray-400">{t(lang, staff.role)}</div>
+          <div className="min-w-0 mt-1.5">
+            <div className="text-xs font-bold text-gray-900 truncate">{staff.name}</div>
+            <div className="text-[10px] text-gray-500 truncate">{t(lang, staff.role)}</div>
           </div>
           {/* Блокировка — действие, не страница: живёт у профиля, не в навигации */}
           <button
             onClick={() => { lock(); navigate('/pin', { replace: true }) }}
             aria-label={t(lang, 'lock')}
             title={t(lang, 'lock')}
-            className="shrink-0 w-11 h-11 -me-2 flex items-center justify-center rounded-xl text-gray-400
-                       hover:text-gray-900 hover:bg-gray-50 transition-colors active:scale-[0.94]"
+            className="w-full h-11 mt-1 flex items-center justify-center rounded-xl text-gray-500
+                       hover:text-gray-900 hover:bg-white transition-colors active:scale-[0.94]"
           >
             <svg width="19" height="19" viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <rect x="5" y="10.5" width="14" height="9.5" rx="2.5" stroke="currentColor" strokeWidth="1.8" />
@@ -227,14 +227,17 @@ function SideLink({ label, iconName, active, badge = 0, onClick }: { label: stri
   return (
     <button
       onClick={onClick}
-      className={`w-full flex items-center gap-3 px-3 h-11 rounded-xl text-sm font-semibold transition-all ${
+      title={label}
+      aria-current={active ? 'page' : undefined}
+      className={`relative w-full h-14 px-1 rounded-xl flex flex-col items-center justify-center gap-1
+                  text-[11px] leading-none font-semibold transition-all ${
         active ? 'bg-gray-200 text-gray-900' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
       }`}
     >
-      <Icon name={iconName} isActive={active} size={20} />
-      <span className="flex-1 text-start truncate">{label}</span>
+      <Icon name={iconName} isActive={active} size={19} />
+      <span className="w-full text-center truncate">{label}</span>
       {badge > 0 && (
-        <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-gray-900 text-white text-[11px] font-bold flex items-center justify-center tabular-nums">
+        <span className="absolute top-1.5 end-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-gray-900 text-white text-[10px] font-bold flex items-center justify-center tabular-nums">
           {badge}
         </span>
       )}
@@ -250,11 +253,11 @@ function Clock({ lang }: { lang: 'ru' | 'he' }) {
   }, [])
   const locale = lang === 'he' ? 'he-IL' : 'ru-RU'
   return (
-    <div className="px-2">
-      <div className="text-xl font-black text-gray-900 tabular-nums">
+    <div className="text-center px-1">
+      <div className="text-lg font-black text-gray-900 tabular-nums">
         {now.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}
       </div>
-      <div className="text-[11px] text-gray-400">
+      <div className="text-[10px] leading-tight text-gray-500">
         {now.toLocaleDateString(locale, { day: 'numeric', month: 'long', weekday: 'short' })}
       </div>
     </div>

@@ -2,7 +2,7 @@ import { supabase } from '../../lib/supabase'
 import { getDeviceContext } from '../auth/api'
 import { currentStaffToken } from '../../store/authStore'
 import type { CartLine } from '../../store/cartStore'
-import type { Table, TableStatus, TableShape } from '../../types'
+import type { Table, TableStatus, TableShape, TableZone } from '../../types'
 
 // ── Справочник столов ────────────────────────────────────
 
@@ -16,29 +16,82 @@ export async function fetchTables(): Promise<Table[]> {
   return data as Table[]
 }
 
+export async function fetchTableZones(): Promise<TableZone[]> {
+  const { data, error } = await supabase
+    .from('table_zones')
+    .select('*')
+    .eq('is_active', true)
+    .order('sort_order', { ascending: true })
+  if (error) throw new Error(error.message)
+  return data as TableZone[]
+}
+
+export async function createTableZoneWithTables(
+  zoneId: string,
+  name: string,
+  sortOrder: number,
+  tableCount: number,
+  tablePrefix: string,
+  tableSortOrder: number,
+): Promise<TableZone> {
+  const { data, error } = await supabase
+    .rpc('create_table_zone_with_tables', {
+      p_zone_id: zoneId,
+      p_name: name.trim(),
+      p_sort_order: sortOrder,
+      p_table_count: tableCount,
+      p_table_prefix: tablePrefix.trim(),
+      p_table_sort_order: tableSortOrder,
+    })
+    .single()
+  if (error) throw new Error(error.message)
+  return data as TableZone
+}
+
+/** Переименование зоны синхронизирует текстовый снимок в столах. */
+export async function renameTableZone(zone: TableZone, name: string): Promise<void> {
+  const { error } = await supabase.rpc('rename_table_zone', { p_zone_id: zone.id, p_name: name.trim() })
+  if (error) throw new Error(error.message)
+}
+
+/** Мягко удаляем зону; её столы остаются и переходят в «без зоны». */
+export async function deleteTableZone(id: string): Promise<void> {
+  const { error } = await supabase.rpc('delete_table_zone', { p_zone_id: id })
+  if (error) throw new Error(error.message)
+}
+
+export async function reorderTableZones(zoneIds: string[]): Promise<void> {
+  const { error } = await supabase.rpc('reorder_table_zones', { p_zone_ids: zoneIds })
+  if (error) throw new Error(error.message)
+}
+
 export async function createTable(
   label: string, zone: string | null, sortOrder: number,
-  seats = 2, combinable = false,
-): Promise<void> {
+  seats = 2, combinable = false, zoneId: string | null = null,
+): Promise<Table> {
   const ctx = await getDeviceContext()
   if (!ctx?.orgId || !ctx?.locationId) throw new Error('Device not bootstrapped')
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('tables')
     .insert({ org_id: ctx.orgId, location_id: ctx.locationId, label, zone: zone || null,
-              sort_order: sortOrder, seats, combinable })
+              zone_id: zoneId, sort_order: sortOrder, seats, combinable })
+    .select('*')
+    .single()
   if (error) throw new Error(error.message)
+  return data as Table
 }
 
 /** Переименовать стол / сменить зону / вместимость (063) */
 export async function updateTable(
   id: string, label: string, zone: string | null,
-  seats?: number, combinable?: boolean,
+  seats?: number, combinable?: boolean, zoneId?: string | null,
 ): Promise<void> {
-  const patch: { label: string; zone: string | null; seats?: number; combinable?: boolean } = {
+  const patch: { label: string; zone: string | null; seats?: number; combinable?: boolean; zone_id?: string | null } = {
     label, zone: zone || null,
   }
   if (seats !== undefined) patch.seats = seats
   if (combinable !== undefined) patch.combinable = combinable
+  if (zoneId !== undefined) patch.zone_id = zoneId
   const { error } = await supabase.from('tables').update(patch).eq('id', id)
   if (error) throw new Error(error.message)
 }

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { fetchCurrentLocation } from '../auth/api'
 import { useAuthStore } from '../../store/authStore'
@@ -17,7 +18,6 @@ import ServiceSection from './sections/ServiceSection'
 import ServiceModeDetail from './sections/ServiceModeDetail'
 import OnlineOrdersDetail from './sections/OnlineOrdersDetail'
 import ReservationsDetail from './sections/ReservationsDetail'
-import TablesDetail from './sections/TablesDetail'
 import ShiftSection from './sections/ShiftSection'
 import LoyaltySection from './sections/LoyaltySection'
 import GuestsDetail from './sections/GuestsDetail'
@@ -43,7 +43,6 @@ const DETAIL_TITLES: Record<DetailId, TranslationKey> = {
   'service-mode': 'serviceModeTitle',
   'online-orders': 'onlineOrders',
   reservations: 'reservationsTitle',
-  tables: 'tablesManage',
   loyalty: 'loyaltyTitle',
   guests: 'guestsTitle',
   perms: 'permsTitle',
@@ -59,6 +58,7 @@ const DETAIL_TITLES: Record<DetailId, TranslationKey> = {
 export default function SettingsPage() {
   const lang = useLangStore((s) => s.lang)
   const isRtl = lang === 'he'
+  const navigate = useNavigate()
   const staff = useAuthStore((s) => s.staff)
   const deviceName = useDeviceStore((s) => s.deviceName)
 
@@ -175,7 +175,7 @@ export default function SettingsPage() {
                         label={t(lang, r.label)}
                         hint={r.hint ? t(lang, r.hint) : undefined}
                         value={t(lang, CATEGORIES.find((c) => c.id === r.cat)!.label)}
-                        onClick={() => go(r.cat, r.detail ?? null)}
+                        onClick={() => r.path ? navigate(r.path) : go(r.cat, r.detail ?? null)}
                       />
                     ))}
                   </Group>
@@ -188,10 +188,9 @@ export default function SettingsPage() {
                 {detail === 'tipping' && <TippingDetail />}
                 {detail === 'quick-amounts' && <QuickAmountsDetail />}
                 {detail === 'pay-methods' && <PayMethodsDetail />}
-                {detail === 'service-mode' && <ServiceModeDetail location={location} openDetail={openDetail} />}
+                {detail === 'service-mode' && <ServiceModeDetail location={location} />}
                 {detail === 'online-orders' && <OnlineOrdersDetail location={location} />}
                 {detail === 'reservations' && <ReservationsDetail location={location} />}
-                {detail === 'tables' && <TablesDetail />}
                 {detail === 'loyalty' && <LoyaltySection location={location} openDetail={openDetail} />}
                 {detail === 'guests' && <GuestsDetail location={location} />}
                 {detail === 'perms' && <PermsDetail location={location} />}

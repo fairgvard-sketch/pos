@@ -125,7 +125,7 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
 
   /* ── Buttons ─────────────────────────────────────────── */
   .btn {
-    @apply inline-flex items-center justify-center rounded-xl font-semibold
+    @apply inline-flex min-h-11 items-center justify-center rounded-xl font-semibold
            transition-all duration-150 active:scale-[0.97]
            disabled:opacity-40 disabled:cursor-not-allowed select-none;
   }
@@ -162,7 +162,7 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
 
   /* ── Input ───────────────────────────────────────────── */
   .input {
-    @apply w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5
+    @apply w-full min-h-11 rounded-xl border border-gray-200 bg-white px-4 py-2.5
            text-sm text-gray-900 placeholder-gray-400
            focus:outline-none focus:ring-2 focus:ring-gray-900/10 focus:border-gray-400
            transition-all duration-150;

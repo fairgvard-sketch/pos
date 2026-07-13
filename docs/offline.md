@@ -37,7 +37,8 @@ React Query сохраняет только данные, необходимые
 - `modifier_groups`;
 - `current_location`;
 - `current_shift`;
-- `tables`.
+- `tables`;
+- `table_zones`.
 
 Кэш хранится до семи дней, сбрасывается при изменении версии приложения и при
 смене device scope. Заказы, отчёты и realtime-очереди целиком не персистятся.

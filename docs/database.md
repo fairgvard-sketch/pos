@@ -83,7 +83,8 @@ supabase test db
 ### Операционная работа
 
 - `shifts`, `cash_movements`, `z_counters` — смены и касса;
-- `tables` — план зала, статус, вместимость и объединяемость;
+- `table_zones` — зоны плана зала и их порядок;
+- `tables` — столы, ссылка на зону, координаты, статус, вместимость и объединяемость;
 - `time_entries` — табель;
 - `guests`, `loyalty_events` — клиентская база и лояльность;
 - `stock_movements`, `supply_items`, `waste_entries` — склад;

@@ -248,7 +248,7 @@ export default function OnlineOrdersPage() {
               <p className="text-sm text-gray-500 mt-1">{t(lang, 'onlineEmptyHint')}</p>
             </div>
           ) : (
-            <div className="max-w-3xl mx-auto space-y-8">
+            <div className="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-6 items-start">
               {fresh.length > 0 && (
                 <Section title={t(lang, 'onlineNew')}>
                   {fresh.map((o) => (

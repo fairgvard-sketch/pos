@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { fetchTables, fetchOpenTableOrders, openTableOrder, setTableStatus, setTableLayout, type TableOccupancy } from './api'
+import { fetchTables, fetchTableZones, fetchOpenTableOrders, openTableOrder, setTableStatus, type TableOccupancy } from './api'
 import { fetchUpcomingTableReservations } from '../reservations/api'
 import { fetchCurrentLocation } from '../auth/api'
 import { fetchCurrentShift } from '../shift/api'
@@ -16,13 +16,12 @@ import { useOutboxStore } from '../../lib/offline/outboxStore'
 import { enqueueTableOpen } from '../../lib/offline/enqueue'
 import type { Table, TableStatus } from '../../types'
 import AppSidebar from '../../components/AppSidebar'
-import Icon from '../../components/Icon'
 import ShiftGate from '../shift/ShiftGate'
 import TableActionSheet from './TableActionSheet'
-import TableEditSheet from './TableEditSheet'
 
 /** Порог «стол сидит долго» (мин): до него жёлтая рамка, после — красная */
 const TABLE_WARN_MIN = 30
+const UNASSIGNED_ZONE = '__unassigned__'
 
 /** Счётчик для уникального имени realtime-канала (см. useEffect ниже) */
 let hallChannelSeq = 0
@@ -37,6 +36,7 @@ export default function HallPage() {
 
   const { data: shift, isLoading: shiftLoading } = useQuery({ queryKey: ['current_shift'], queryFn: fetchCurrentShift })
   const { data: location } = useQuery({ queryKey: ['current_location'], queryFn: fetchCurrentLocation })
+  const { data: zones = [] } = useQuery({ queryKey: ['table_zones'], queryFn: fetchTableZones })
   const { data: tables = [] } = useQuery({ queryKey: ['tables'], queryFn: fetchTables })
   const { data: open = [] } = useQuery({ queryKey: ['open_table_orders'], queryFn: fetchOpenTableOrders })
   // Брони «скоро» (053): окно now−30мин..now+2ч вычисляется в queryFn,
@@ -67,6 +67,9 @@ export default function HallPage() {
       )
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tables' }, () =>
         qc.invalidateQueries({ queryKey: ['tables'] })
+      )
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'table_zones' }, () =>
+        qc.invalidateQueries({ queryKey: ['table_zones'] })
       )
       .on('postgres_changes', { event: '*', schema: 'public', table: 'reservations' }, () =>
         qc.invalidateQueries({ queryKey: ['reservations_today'] })
@@ -108,18 +111,29 @@ export default function HallPage() {
     return map
   }, [upcomingRes])
 
+  // Зоны работают как вкладки Square: на плане одновременно виден только
+  // выбранный участок (зал / терраса / бар). Старые данные без зон не теряем.
+  const [requestedZoneId, setRequestedZoneId] = useState('')
+  const unassignedCount = tables.filter((table) => !table.zone_id).length
+  const requestedZoneIsValid = zones.some((zone) => zone.id === requestedZoneId)
+    || (requestedZoneId === UNASSIGNED_ZONE && unassignedCount > 0)
+  const activeZoneId = requestedZoneIsValid
+    ? requestedZoneId
+    : zones[0]?.id ?? (unassignedCount > 0 ? UNASSIGNED_ZONE : '')
+  const visibleTables = activeZoneId === UNASSIGNED_ZONE
+    ? tables.filter((table) => !table.zone_id)
+    : activeZoneId
+      ? tables.filter((table) => table.zone_id === activeZoneId)
+      : tables
+
   // Раскладка на холсте: у неразмещённых столов (pos_x=null) — дефолтная
   // сетка, чтобы их можно было увидеть и растащить. Размещённые — как есть.
-  const layout = useMemo(() => tablesWithLayout(tables), [tables])
+  const layout = useMemo(() => tablesWithLayout(visibleTables), [visibleTables])
 
   // Занятый стол, по которому открыто меню действий (долгий тап)
   const [actionTable, setActionTable] = useState<{ table: Table; occ: TableOccupancy } | null>(null)
   // Незанятый стол, по которому открыто управление статусом (долгий тап)
   const [statusTable, setStatusTable] = useState<Table | null>(null)
-  // Режим редактирования зала (manager+): создание/переименование/удаление столов
-  const [editMode, setEditMode] = useState(false)
-  // Открытый редактор стола: существующий Table или { zone } для нового
-  const [editTable, setEditTable] = useState<Table | { zone: string | null } | null>(null)
   const isManager = staff?.role === 'owner' || staff?.role === 'manager'
   // Долгий тап: таймер + флаг, чтобы подавить click после срабатывания
   const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -130,96 +144,6 @@ export default function HallPage() {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['tables'] }); setStatusTable(null) },
     onError: (e) => toast.error(e.message),
   })
-
-  // ── Drag столов по плану (только в режиме редактирования) ──
-  const canvasRef = useRef<HTMLDivElement | null>(null)
-  // DOM-узлы столов — двигаем их style напрямую во время жеста (без React-
-  // рендера на каждый pointermove: на T2/Chrome52 это давало рывки).
-  const tableEls = useRef(new Map<string, HTMLButtonElement>())
-  // Активный drag: id + последняя позиция (%). Живёт в ref, НЕ в state —
-  // pointermove пишет только в DOM; React рендерит стол один раз на старте
-  // (dragId для стилей z/shadow) и один раз на отпускании (сохранение).
-  const dragRef = useRef<{ id: string; x: number; y: number } | null>(null)
-  // Только для стилей таскаемого стола (тень/поверх) — меняется 1 раз за жест
-  const [dragId, setDragId] = useState<string | null>(null)
-  const dragMoved = useRef(false)
-  // Локальный оверрайд размера (%) при ресайзе. axis: обе оси / ширина / высота
-  const [resize, setResize] = useState<
-    { id: string; width: number; height: number; cx: number; cy: number; axis: 'both' | 'x' | 'y' } | null
-  >(null)
-
-  const MIN_W = 5, MAX_W = 30   // ширина стола, % холста
-  const MIN_H = 5, MAX_H = 40   // высота стола, % холста
-
-  const layoutMut = useMutation({
-    mutationFn: ({ id, x, y, width, height }: { id: string; x: number; y: number; width?: number; height?: number }) =>
-      setTableLayout(id, x, y, width, undefined, height),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['tables'] }),
-    onError: (e) => toast.error(e.message),
-  })
-
-  function startDrag(e: React.PointerEvent, tb: Table, x: number, y: number) {
-    if (!editMode) return
-    e.stopPropagation()
-    dragMoved.current = false
-    ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
-    dragRef.current = { id: tb.id, x, y }
-    setDragId(tb.id) // единственный рендер на старте — применить z/shadow
-  }
-  function onDragMove(e: React.PointerEvent) {
-    if (resize && canvasRef.current) { onResizeMove(e); return }
-    const drag = dragRef.current
-    if (!drag || !canvasRef.current) return
-    const r = canvasRef.current.getBoundingClientRect()
-    const x = Math.max(0, Math.min(100, ((e.clientX - r.left) / r.width) * 100))
-    const y = Math.max(0, Math.min(100, ((e.clientY - r.top) / r.height) * 100))
-    dragMoved.current = true
-    dragRef.current = { id: drag.id, x, y }
-    // Двигаем DOM напрямую — без setState, без ре-рендера холста.
-    const el = tableEls.current.get(drag.id)
-    if (el) { el.style.left = `${x}%`; el.style.top = `${y}%` }
-  }
-  function endDrag() {
-    if (resize) { endResize(); return }
-    const drag = dragRef.current
-    if (drag && dragMoved.current) {
-      layoutMut.mutate({ id: drag.id, x: drag.x, y: drag.y })
-    }
-    dragRef.current = null
-    setDragId(null)
-  }
-
-  // Ресайз: размер = 2 × расстояние от курсора до центра (в % холста).
-  // axis 'both' — угол (обе оси), 'x' — правый край, 'y' — нижний край.
-  function startResize(e: React.PointerEvent, tb: Table, cx: number, cy: number, axis: 'both' | 'x' | 'y') {
-    e.stopPropagation()
-    dragMoved.current = false
-    ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
-    setResize({ id: tb.id, width: tb.width, height: tb.height, cx, cy, axis })
-  }
-  function onResizeMove(e: React.PointerEvent) {
-    if (!resize || !canvasRef.current) return
-    const r = canvasRef.current.getBoundingClientRect()
-    const px = ((e.clientX - r.left) / r.width) * 100
-    const py = ((e.clientY - r.top) / r.height) * 100
-    const nextW = Math.max(MIN_W, Math.min(MAX_W, Math.abs(px - resize.cx) * 2))
-    const nextH = Math.max(MIN_H, Math.min(MAX_H, Math.abs(py - resize.cy) * 2))
-    dragMoved.current = true  // подавить клик по столу после ресайза
-    setResize({
-      ...resize,
-      width: resize.axis === 'y' ? resize.width : nextW,
-      height: resize.axis === 'x' ? resize.height : nextH,
-    })
-  }
-  function endResize() {
-    if (resize) {
-      const tb = tables.find((t) => t.id === resize.id)
-      const x = tb?.pos_x ?? layout.find((l) => l.table.id === resize.id)?.x ?? 50
-      const y = tb?.pos_y ?? layout.find((l) => l.table.id === resize.id)?.y ?? 50
-      layoutMut.mutate({ id: resize.id, x, y, width: resize.width, height: resize.height })
-    }
-    setResize(null)
-  }
 
   function startHold(tb: Table) {
     holdFired.current = false
@@ -296,57 +220,71 @@ export default function HallPage() {
           <h1 className="text-2xl font-black text-gray-900">{t(lang, 'hall')}</h1>
           {modeOk && isManager && (
             <button
-              onClick={() => setEditMode((v) => !v)}
-              className={editMode ? 'btn-primary !py-2 !px-4' : 'btn-secondary !py-2 !px-4'}
+              onClick={() => navigate('/settings/floor-plan')}
+              className="btn-secondary !py-2 !px-4"
             >
-              {editMode ? t(lang, 'done') : t(lang, 'edit')}
+              {t(lang, 'editFloorPlan')}
             </button>
           )}
         </div>
 
+        {modeOk && (zones.length > 1 || unassignedCount > 0) && (
+          <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-1">
+            {zones.map((zone) => (
+              <button
+                key={zone.id}
+                onClick={() => setRequestedZoneId(zone.id)}
+                className={`h-11 px-4 rounded-xl text-sm font-bold whitespace-nowrap transition-colors active:scale-[0.97] ${
+                  activeZoneId === zone.id ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                {zone.name}
+              </button>
+            ))}
+            {unassignedCount > 0 && (
+              <button
+                onClick={() => setRequestedZoneId(UNASSIGNED_ZONE)}
+                className={`h-11 px-4 rounded-xl text-sm font-bold whitespace-nowrap transition-colors active:scale-[0.97] ${
+                  activeZoneId === UNASSIGNED_ZONE ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                {t(lang, 'unassignedZone')}
+              </button>
+            )}
+          </div>
+        )}
+
         {!modeOk ? (
           <p className="text-gray-500 text-sm">{t(lang, 'serviceModeHint')}</p>
-        ) : tables.length === 0 && !editMode ? (
+        ) : tables.length === 0 ? (
           <div className="text-center pt-24">
             <p className="font-bold text-gray-900">{t(lang, 'hallEmpty')}</p>
             <p className="text-sm text-gray-500 mt-1">
               {isManager ? t(lang, 'hallEmptyHintEdit') : t(lang, 'hallEmptyHint')}
             </p>
             {isManager && (
-              <button onClick={() => setEditMode(true)} className="btn-primary !py-2 !px-5 mt-4">
-                {t(lang, 'edit')}
+              <button onClick={() => navigate('/settings/floor-plan')} className="btn-primary !py-2 !px-5 mt-4">
+                {t(lang, 'openFloorPlanEditor')}
+              </button>
+            )}
+          </div>
+        ) : visibleTables.length === 0 ? (
+          <div className="text-center pt-24">
+            <p className="font-bold text-gray-900">{t(lang, 'zoneEmpty')}</p>
+            <p className="text-sm text-gray-500 mt-1">{t(lang, 'zoneEmptyHint')}</p>
+            {isManager && (
+              <button onClick={() => navigate('/settings/floor-plan')} className="btn-primary !py-2 !px-5 mt-4">
+                {t(lang, 'openFloorPlanEditor')}
               </button>
             )}
           </div>
         ) : (
           <>
-            {editMode && (
-              <div className="flex items-center gap-3 mb-3">
-                <button onClick={() => setEditTable({ zone: null })} className="btn-secondary !py-2 !px-4">
-                  {t(lang, 'addTable')}
-                </button>
-                <span className="text-xs text-gray-400">{t(lang, 'hallEditHint')}</span>
-              </div>
-            )}
-
             {/* Холст плана: столы позиционируются в % от его размера */}
-            <div
-              ref={canvasRef}
-              onPointerMove={editMode ? onDragMove : undefined}
-              onPointerUp={editMode ? endDrag : undefined}
-              className={`relative w-full aspect-[16/10] rounded-2xl ${
-                editMode ? 'bg-gray-50 ring-1 ring-inset ring-gray-200' : ''
-              }`}
-            >
+            <div className="relative w-full aspect-[16/10] rounded-2xl">
               {layout.map(({ table: tb, x: baseX, y: baseY }) => {
-                // Позицию во время drag держит DOM (см. onDragMove), не React —
-                // поэтому здесь всегда базовая позиция из раскладки.
                 const x = baseX
                 const y = baseY
-                const dragging = dragId === tb.id
-                const rz = resize?.id === tb.id ? resize : null
-                const w = rz ? rz.width : tb.width
-                const h = rz ? rz.height : tb.height
                 const occ = occupancyByTable.get(tb.id)
                 const busy = !!occ
                 const disabled = !busy && tb.status === 'disabled'
@@ -366,74 +304,27 @@ export default function HallPage() {
                 return (
                   <button
                     key={tb.id}
-                    ref={(el) => {
-                      if (el) tableEls.current.set(tb.id, el)
-                      else tableEls.current.delete(tb.id)
-                    }}
                     onClick={() => {
-                      if (dragMoved.current) return  // это был drag, не клик
-                      if (editMode) { setEditTable(tb); return }
                       if (!disabled) openTable(tb.id, tb.label)
                     }}
-                    onPointerDown={(e) => {
-                      if (editMode) startDrag(e, tb, baseX, baseY)
-                      else startHold(tb)
-                    }}
+                    onPointerDown={() => startHold(tb)}
                     onPointerUp={cancelHold}
                     onPointerLeave={cancelHold}
                     onContextMenu={(e) => e.preventDefault()}
                     style={{
                       left: `${x}%`,
                       top: `${y}%`,
-                      width: `${w}%`,
-                      height: `${h}%`,
+                      width: `${tb.width}%`,
+                      height: `${tb.height}%`,
                       transform: 'translate(-50%, -50%)',
                     }}
-                    // touch-action:none — гасим прокрутку/жесты браузера под пальцем,
-                    // иначе на тач-терминале drag «спорит» со скроллом (рывки).
-                    // transition-shadow только вне жеста: во время drag лишняя
-                    // работа компоновщика на слабом GPU T2.
-                    className={`absolute border-2 bg-white p-2 flex flex-col items-center justify-center gap-0.5 select-none touch-none text-gray-900 ${
-                      dragging || rz ? '' : 'transition-shadow'
-                    } ${tb.shape === 'circle' ? 'rounded-full' : 'rounded-2xl'} ${
-                      editMode
-                        ? `border-dashed ${dragging || rz ? 'shadow-lg z-10' : 'cursor-grab'} border-gray-400`
-                        : `${border} active:scale-[0.97]`
-                    }`}
+                    className={`absolute border-2 bg-white p-2 flex flex-col items-center justify-center gap-0.5 select-none touch-none text-gray-900 transition-shadow ${
+                      tb.shape === 'circle' ? 'rounded-full' : 'rounded-2xl'
+                    } ${border} active:scale-[0.97]`}
                   >
-                    {editMode && (
-                      <>
-                        {/* Правый край — ширина */}
-                        <span
-                          onPointerDown={(e) => startResize(e, tb, x, y, 'x')}
-                          onPointerMove={onResizeMove}
-                          onPointerUp={endResize}
-                          className="absolute top-1/2 -end-1.5 -translate-y-1/2 w-3 h-6 rounded-full bg-white border-2 border-gray-400 cursor-ew-resize z-20"
-                        />
-                        {/* Нижний край — высота */}
-                        <span
-                          onPointerDown={(e) => startResize(e, tb, x, y, 'y')}
-                          onPointerMove={onResizeMove}
-                          onPointerUp={endResize}
-                          className="absolute -bottom-1.5 start-1/2 -translate-x-1/2 w-6 h-3 rounded-full bg-white border-2 border-gray-400 cursor-ns-resize z-20"
-                        />
-                        {/* Угол — обе оси */}
-                        <span
-                          onPointerDown={(e) => startResize(e, tb, x, y, 'both')}
-                          onPointerMove={onResizeMove}
-                          onPointerUp={endResize}
-                          className="absolute -bottom-1.5 -end-1.5 w-4 h-4 rounded-full bg-white border-2 border-gray-500 cursor-nwse-resize z-20"
-                        />
-                      </>
-                    )}
-                    {editMode && (
-                      <span className="absolute top-1.5 end-1.5 text-gray-400">
-                        <Icon name="settings" size={13} />
-                      </span>
-                    )}
                     <span className="text-xl font-black tabular-nums leading-none">{tb.label}</span>
                     {/* Карточка чистая: только статус, детали — в окне стола (долгий тап) */}
-                    {editMode ? null : busy ? (
+                    {busy ? (
                       <span className={`text-[11px] font-semibold ${overdue ? 'text-red-500' : 'text-amber-600'}`}>
                         {t(lang, 'tableBusy')} · {formatElapsed(occ!.opened_at, nowTs, lang)}
                       </span>
@@ -502,13 +393,6 @@ export default function HallPage() {
         </div>
       )}
 
-      {editTable && (
-        <TableEditSheet
-          target={editTable}
-          nextSortOrder={tables.reduce((m, tb) => Math.max(m, tb.sort_order), 0) + 1}
-          onClose={() => setEditTable(null)}
-        />
-      )}
     </div>
   )
 }

@@ -155,7 +155,7 @@ export default function ReservationsPage() {
               <p className="text-sm text-gray-500 mt-1">{t(lang, 'resEmptyHint')}</p>
             </div>
           ) : (
-            <div className="max-w-3xl mx-auto space-y-8">
+            <div className="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-6 items-start">
               {fresh.length > 0 && (
                 <Section title={t(lang, 'resSectionNew')}>
                   {fresh.map((r) => (
@@ -224,11 +224,11 @@ export default function ReservationsPage() {
               {history.length > 0 && (
                 <section>
                   <button
-                    className="text-sm font-bold text-gray-500 uppercase tracking-wide mb-3 flex items-center gap-2"
+                    className="min-h-11 text-sm font-bold text-gray-500 uppercase tracking-wide mb-3 flex items-center gap-2"
                     onClick={() => setShowHistory((v) => !v)}
                   >
                     {t(lang, 'resSectionHistory')} · {history.length}
-                    <span className="text-gray-400">{showHistory ? '▴' : '▾'}</span>
+                    <span className="text-gray-500">{showHistory ? '▴' : '▾'}</span>
                   </button>
                   {showHistory && (
                     <div className="space-y-3">

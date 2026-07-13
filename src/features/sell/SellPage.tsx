@@ -155,9 +155,9 @@ export default function SellPage() {
 
   const cart = useCartStore()
 
-  const hasFavorites = useMemo(() => items.some((i) => i.is_favorite && i.is_available), [items])
-  // null = корневой уровень витрины (плитки категорий)
-  const [activeCat, setActiveCat] = useState<string | 'fav' | null>(null)
+  // null = все товары. Категории всегда остаются на экране, поэтому товар
+  // доступен первым тапом без отдельного «корня» витрины.
+  const [activeCat, setActiveCat] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [picker, setPicker] = useState<{ item: MenuItem; line: CartLine | null } | null>(null)
   const [showDiscount, setShowDiscount] = useState(false)
@@ -413,21 +413,9 @@ export default function SellPage() {
   // Режим столов: после финальной части цепочки сплита вернуться в зал
   const returnToHall = useRef(false)
 
-  // Витрина двухуровневая: корень — плитки категорий, тап — товары категории.
-  // Поиск работает с любого уровня по всему каталогу.
+  // Одноуровневая витрина: товары видны сразу, категории — постоянный фильтр.
+  // Поиск работает по всему каталогу независимо от выбранной категории.
   const activeCats = useMemo(() => categories.filter((c) => c.is_active), [categories])
-  // Категорий нет вовсе — уровень категорий пропускаем, сразу все товары
-  const noCats = activeCats.length === 0
-  const showCatGrid = !search.trim() && activeCat === null && !noCats
-
-  // Фото плитки категории — первое фото среди её доступных товаров
-  const catImages = useMemo(() => {
-    const m = new Map<string, string>()
-    for (const i of items) {
-      if (i.is_available && i.image_url && !m.has(i.category_id)) m.set(i.category_id, i.image_url)
-    }
-    return m
-  }, [items])
 
   // Смена контекста (категория/поиск/выход из правки) сбрасывает локальный
   // порядок и wiggle-режим. Сброс по смене ключа прямо в рендере (не setState
@@ -448,16 +436,14 @@ export default function SellPage() {
       const q = search.trim().toLowerCase()
       return list.filter((i) => i.name.toLowerCase().includes(q))
     }
-    if (activeCat === 'fav') list = list.filter((i) => i.is_favorite)
-    else if (activeCat) list = list.filter((i) => i.category_id === activeCat)
-    else if (!noCats) return [] // корень: вместо товаров рисуются плитки категорий
+    if (activeCat) list = list.filter((i) => i.category_id === activeCat)
     if (tileOrder) {
       // Перетаскивание: локальный порядок поверх серверного (до инвалидации)
       const pos = new Map(tileOrder.map((id, i) => [id, i]))
       list = list.slice().sort((a, b) => (pos.get(a.id) ?? Infinity) - (pos.get(b.id) ?? Infinity))
     }
     return list
-  }, [items, activeCat, noCats, search, editMode, tileOrder])
+  }, [items, activeCat, search, editMode, tileOrder])
 
   function itemGroups(item: MenuItem): ModifierGroup[] {
     const links = (item.menu_item_modifier_groups ?? []).slice().sort((a, b) => a.sort_order - b.sort_order)
@@ -1120,17 +1106,17 @@ export default function SellPage() {
 
   return (
     <div dir={isRtl ? 'rtl' : 'ltr'} className="h-screen bg-[#eceef1] flex gap-3 p-3 overflow-hidden">
-      <AppSidebar active="sell" />
+      <AppSidebar active={location?.service_mode === 'tables' && tableCtx ? 'hall' : 'sell'} />
 
       {/* ── Каталог ─────────────────────────────────── */}
       <main className="flex-1 min-w-0 bg-white rounded-3xl flex flex-col overflow-hidden">
         <div className="p-5 pb-0 shrink-0">
-          {/* Поиск + категории в одну строку: поиск ФИЗИЧЕСКИ слева в обоих направлениях.
+          {/* Поиск и действия: поиск ФИЗИЧЕСКИ слева в обоих направлениях.
               В LTR обычный порядок кладёт input влево; в RTL зеркалит вправо —
               поэтому для RTL разворачиваем строку обратно (input снова у левого края). */}
           <div className="flex items-center gap-3 py-4 short:py-2 rtl:flex-row-reverse">
             <input
-              className="w-44 shrink-0 rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm
+              className="w-64 max-w-[40%] shrink-0 h-11 rounded-2xl border border-gray-100 bg-gray-50 px-4 text-sm
                          placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900/10
                          focus:bg-white transition-all"
               placeholder={t(lang, 'searchPlaceholder')}
@@ -1172,29 +1158,30 @@ export default function SellPage() {
                 </span>
               )}
             </div>
-            {/* Назад к категориям: стрелка и название — одна кнопка на правом краю
-                строки (в RTL это начало чтения — естественное место возврата) */}
-            {!search.trim() && activeCat !== null && (
-              <button
-                onClick={() => setActiveCat(null)}
-                aria-label={t(lang, 'back')}
-                className="min-w-0 h-11 ps-3 pe-4 rounded-2xl border border-gray-100 bg-gray-50
-                           hover:bg-gray-100 flex items-center gap-2
-                           transition-all active:scale-[0.97]"
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true" className="shrink-0 text-gray-500 rtl:rotate-180">
-                  <path d="M15 5l-7 7 7 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-                <span className="font-semibold text-gray-900 truncate">
-                  {activeCat === 'fav'
-                    ? `★ ${t(lang, 'favorites')}`
-                    : activeCats.find((c) => c.id === activeCat)?.name}
-                </span>
-              </button>
-            )}
           </div>
+          {/* Категории не открывают отдельный уровень: это постоянный быстрый
+              фильтр над товарами. «Избранного» здесь намеренно нет. */}
+          {activeCats.length > 0 && (
+            <div className="flex items-center gap-2 overflow-x-auto pb-3 select-none">
+              <Chip
+                active={activeCat === null}
+                onClick={() => { setActiveCat(null); setSearch('') }}
+              >
+                {t(lang, 'allItems')}
+              </Chip>
+              {activeCats.map((category) => (
+                <Chip
+                  key={category.id}
+                  active={activeCat === category.id}
+                  onClick={() => { setActiveCat(category.id); setSearch('') }}
+                >
+                  {category.name}
+                </Chip>
+              ))}
+            </div>
+          )}
           {editMode && (
-            <p className="text-xs text-gray-500 pb-2 -mt-2">
+            <p className="text-xs text-gray-500 pb-2">
               {t(lang, wiggleMode ? 'menuWiggleHint' : 'menuEditHint')}
             </p>
           )}
@@ -1212,29 +1199,8 @@ export default function SellPage() {
             setWiggleMode(false)
           }}
         >
-          {showCatGrid ? (
-            /* Корень витрины: плитки категорий (+ Избранное первой) */
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-3">
-              {hasFavorites && (
-                <CatTile
-                  icon={<span className="text-amber-400">★</span>}
-                  name={t(lang, 'favorites')}
-                  image={items.find((i) => i.is_available && i.is_favorite && i.image_url)?.image_url ?? null}
-                  onClick={() => setActiveCat('fav')}
-                />
-              )}
-              {activeCats.map((c) => (
-                <CatTile
-                  key={c.id}
-                  icon={c.icon}
-                  name={c.name}
-                  image={catImages.get(c.id) ?? null}
-                  onClick={() => setActiveCat(c.id)}
-                />
-              ))}
-            </div>
-          ) : visibleItems.length === 0 && !editMode ? (
-            <p className="text-gray-300 text-sm text-center pt-20">{t(lang, 'nothingFound')}</p>
+          {visibleItems.length === 0 && !editMode ? (
+            <p className="text-gray-500 text-sm text-center pt-20">{t(lang, 'nothingFound')}</p>
           ) : (
             <div ref={gridRef} className="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-3">
               {visibleItems.map((item) => (
@@ -1408,14 +1374,14 @@ export default function SellPage() {
       </main>
 
       {/* ── Заказ ───────────────────────────────────── */}
-      <aside className="w-[clamp(320px,28vw,400px)] shrink-0 bg-white rounded-3xl flex flex-col overflow-hidden">
+      <aside className="w-[clamp(300px,25vw,360px)] shrink-0 bg-white rounded-3xl flex flex-col overflow-hidden">
         <div className="p-4 pb-3 shrink-0">
           {tableCtx ? (
             /* Режим столов: работаем со счётом конкретного стола */
             <div className="flex items-baseline justify-between mb-3">
               <h2 className="text-lg font-bold text-gray-900">
                 {t(lang, 'tableLabel')} {tableCtx.tableLabel}
-                <span className="text-gray-400 font-semibold"> · {t(lang, 'openBill')}</span>
+                <span className="text-gray-500 font-semibold"> · {t(lang, 'openBill')}</span>
               </h2>
               {tableCtx.existingTotal > 0 && (
                 <span className="text-sm font-bold text-gray-500 tabular-nums">
@@ -1435,7 +1401,7 @@ export default function SellPage() {
               {showTable && (
                 <button
                   onClick={() => setShowTableSheet(true)}
-                  className={`input !py-2 w-full text-start ${cart.tableLabel ? 'text-gray-900 font-semibold' : 'text-gray-400'}`}
+                  className={`input w-full text-start ${cart.tableLabel ? 'text-gray-900 font-semibold' : 'text-gray-500'}`}
                 >
                   {cart.tableLabel ? `${t(lang, 'tableLabel')} ${cart.tableLabel}` : t(lang, 'tablePlaceholder')}
                 </button>
@@ -1448,7 +1414,7 @@ export default function SellPage() {
           {/* Режим стола: уже заказанные позиции. Свайп влево → снять с счёта (void). */}
           {tableCtx && existingLines.length > 0 && (
             <div className="rounded-2xl bg-gray-50 border border-gray-100 p-3 space-y-1.5">
-              <div className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-1">{t(lang, 'alreadyInBill')}</div>
+              <div className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">{t(lang, 'alreadyInBill')}</div>
               {existingLines.map((l) => (
                 <ExistingBillRow
                   key={l.id}
@@ -1472,9 +1438,23 @@ export default function SellPage() {
           )}
 
           {cart.lines.length === 0 && (!tableCtx || existingLines.length === 0) && (
-            <p className="text-gray-300 text-sm text-center pt-16">
-              {t(lang, tableCtx ? 'addToBill' : 'cartEmptyHint')}
-            </p>
+            <div className="min-h-[240px] h-full flex flex-col items-center justify-center text-center px-6 pb-8">
+              <div className="w-12 h-12 rounded-2xl bg-gray-100 text-gray-600 flex items-center justify-center mb-3">
+                <Icon name="orders" size={22} />
+              </div>
+              <p className="font-bold text-gray-900">
+                {t(lang, tableCtx ? 'addToBill' : 'newOrderTitle')}
+              </p>
+              <p className="text-sm text-gray-500 mt-1">{t(lang, 'cartEmptyHint')}</p>
+              {tableCtx && (
+                <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-gray-100 px-3 h-9 text-xs font-semibold text-gray-700">
+                  <span className="w-6 h-6 rounded-full bg-gray-900 text-white flex items-center justify-center font-bold">
+                    {staff.name.slice(0, 1).toUpperCase()}
+                  </span>
+                  <span className="max-w-[160px] truncate">{staff.name}</span>
+                </div>
+              )}
+            </div>
           )}
           {cart.lines.map((l) => {
             const item = items.find((i) => i.id === l.itemId)
@@ -1829,7 +1809,7 @@ export default function SellPage() {
             <ItemEditor
               key={editorItem === 'new' ? 'new' : editorItem.id}
               item={editorItem === 'new' ? null : editorItem}
-              defaultCategoryId={activeCat && activeCat !== 'fav' ? activeCat : (activeCats[0]?.id ?? '')}
+              defaultCategoryId={activeCat ?? (activeCats[0]?.id ?? '')}
               onSaved={() => setEditorItem(null)}
               onDeleted={() => setEditorItem(null)}
               onBack={() => setEditorItem(null)}
@@ -1881,7 +1861,7 @@ export default function SellPage() {
                     <span className="flex-1 min-w-0 truncate font-semibold text-gray-900">
                       {i.name}
                       {i.track_inventory && i.stock != null && (
-                        <span className="font-normal text-gray-400 text-sm tabular-nums"> · {t(lang, 'stockLeft')}: {i.stock}</span>
+                        <span className="font-normal text-gray-500 text-sm tabular-nums"> · {t(lang, 'stockLeft')}: {i.stock}</span>
                       )}
                     </span>
                     <button
@@ -2075,7 +2055,7 @@ function CartLineRow({
                   Тап по нему открывает панель −/+; stopPropagation → не onOpen. */}
               <span
                 onClick={(e) => { e.stopPropagation(); onQty() }}
-                className="text-gray-400 font-medium tabular-nums ms-1.5"
+                className="text-gray-500 font-medium tabular-nums ms-1.5"
               >
                 × {l.qty}
               </span>
@@ -2182,12 +2162,12 @@ function ExistingBillRow({
       >
         <div className="min-w-0">
           <span className="font-semibold text-gray-700">
-            {l.qty > 1 && <span className="text-gray-400">{l.qty}× </span>}
+            {l.qty > 1 && <span className="text-gray-500">{l.qty}× </span>}
             {l.name}
             {l.variant_name && <span className="text-gray-500 font-medium"> · {l.variant_name}</span>}
           </span>
           {l.modifiers.length > 0 && (
-            <span className="block text-xs text-gray-400 leading-snug">{l.modifiers.join(' · ')}</span>
+            <span className="block text-xs text-gray-500 leading-snug">{l.modifiers.join(' · ')}</span>
           )}
         </div>
         <span className="font-bold text-gray-600 tabular-nums shrink-0">{formatMoney(l.line_total, lang)}</span>
@@ -2349,28 +2329,6 @@ function ActionButton({
   )
 }
 
-/** Плитка категории на корневом уровне витрины */
-function CatTile({ icon, name, image, onClick }: { icon?: React.ReactNode; name: string; image: string | null; onClick: () => void }) {
-  return (
-    <button
-      onClick={onClick}
-      className="relative overflow-hidden rounded-2xl border border-gray-300 bg-white
-                 flex flex-col transition-all duration-150
-                 hover:border-gray-400 hover:shadow-[0_4px_16px_rgba(0,0,0,0.06)] active:scale-[0.97]"
-    >
-      {/* Фото — первое из товаров категории; без фото — иконка категории или буква */}
-      {!image && icon ? (
-        <span className="w-full aspect-[4/3] rounded-t-2xl bg-gray-50 flex items-center justify-center text-4xl leading-none select-none">
-          {icon}
-        </span>
-      ) : (
-        <ItemImage item={{ name, image_url: image }} size="tile" />
-      )}
-      <span className="p-3 w-full text-center font-semibold text-gray-900 text-sm leading-tight">{name}</span>
-    </button>
-  )
-}
-
 function Chip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
     <button
@@ -2383,4 +2341,3 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
     </button>
   )
 }
-

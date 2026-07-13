@@ -15,7 +15,7 @@ export type CategoryId =
   | 'business'
   | 'device'
 
-export type DetailId = 'tipping' | 'service-mode' | 'online-orders' | 'reservations' | 'tables' | 'loyalty' | 'guests' | 'perms' | 'receipt-details' | 'quick-amounts' | 'pay-methods' | 'profile'
+export type DetailId = 'tipping' | 'service-mode' | 'online-orders' | 'reservations' | 'loyalty' | 'guests' | 'perms' | 'receipt-details' | 'quick-amounts' | 'pay-methods' | 'profile'
 
 export const CATEGORIES: { id: CategoryId; label: TranslationKey }[] = [
   { id: 'payments', label: 'catPayments' },
@@ -30,6 +30,7 @@ export const CATEGORIES: { id: CategoryId; label: TranslationKey }[] = [
 export interface SearchEntry {
   cat: CategoryId
   detail?: DetailId
+  path?: string
   label: TranslationKey
   hint?: TranslationKey
 }
@@ -54,7 +55,7 @@ export const SEARCH_INDEX: SearchEntry[] = [
   { cat: 'receipts', label: 'printModifiersTitle', hint: 'printModifiersHint' },
   { cat: 'receipts', label: 'receiptCopiesTitle', hint: 'receiptCopiesHint' },
   { cat: 'service', detail: 'service-mode', label: 'serviceModeTitle', hint: 'serviceModeHint' },
-  { cat: 'service', detail: 'tables', label: 'tablesManage' },
+  { cat: 'service', path: '/settings/floor-plan', label: 'floorPlanTitle', hint: 'floorPlanSettingsHint' },
   { cat: 'service', detail: 'online-orders', label: 'onlineOrders', hint: 'onlineSettingsToggleHint' },
   { cat: 'service', detail: 'online-orders', label: 'onlineLinkTitle', hint: 'onlineLinkHint' },
   { cat: 'service', detail: 'reservations', label: 'reservationsTitle', hint: 'reservationsToggleHint' },

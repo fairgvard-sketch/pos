@@ -1,4 +1,5 @@
 import { useLangStore } from '../../../store/langStore'
+import { useNavigate } from 'react-router-dom'
 import { t, type TranslationKey } from '../../../lib/i18n'
 import { useLocationSettings } from '../useLocationSettings'
 import { Group, NavRow } from '../ui'
@@ -19,6 +20,7 @@ export default function ServiceSection({
   location, openDetail,
 }: { location: Location | undefined; openDetail: (id: DetailId) => void }) {
   const lang = useLangStore((s) => s.lang)
+  const navigate = useNavigate()
   const { settings } = useLocationSettings(location)
   const onlineOn = settings.online_orders?.enabled !== false
   // Отсутствие ключа = ВЫКЛЮЧЕНО (в отличие от online_orders)
@@ -40,12 +42,19 @@ export default function ServiceSection({
         onClick={() => openDetail('online-orders')}
       />
       {tablesMode && (
-        <NavRow
-          label={t(lang, 'reservationsTitle')}
-          hint={t(lang, 'reservationsToggleHint')}
-          value={t(lang, reserveOn ? 'settingOn' : 'settingOff')}
-          onClick={() => openDetail('reservations')}
-        />
+        <>
+          <NavRow
+            label={t(lang, 'floorPlanTitle')}
+            hint={t(lang, 'floorPlanSettingsHint')}
+            onClick={() => navigate('/settings/floor-plan')}
+          />
+          <NavRow
+            label={t(lang, 'reservationsTitle')}
+            hint={t(lang, 'reservationsToggleHint')}
+            value={t(lang, reserveOn ? 'settingOn' : 'settingOff')}
+            onClick={() => openDetail('reservations')}
+          />
+        </>
       )}
     </Group>
   )
