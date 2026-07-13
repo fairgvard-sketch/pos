@@ -13,12 +13,14 @@
 @import '@fontsource/inter/cyrillic-800.css';
 /* Archivo Black — только для словограммы ANGLE (сплэш, экраны входа) */
 @import '@fontsource/archivo-black/latin-400.css';
-/* Крупные названия заведения на гостевой странице (061). Rubik —
-   геометричный гротеск, латиница + иврит из одной гарнитуры (гости
-   he-first, название бренда латиницей). Кириллицы нет — русские названия
-   падают на Inter (fallback в стеке). */
-@import '@fontsource/rubik/latin-500.css';
-@import '@fontsource/rubik/latin-700.css';
+/* Крупные названия заведения на гостевой странице (061).
+   Латиница (название бренда) — Space Grotesk: характерный гротеск с
+   «инженерным» акцентом. Иврит в Space Grotesk отсутствует, поэтому
+   ивритские заголовки (категории) идут Rubik — браузер сам выбирает
+   гарнитуру по глифу через каскад в .font-display. Кириллица падает на
+   Inter (fallback в стеке). */
+@import '@fontsource/space-grotesk/latin-500.css';
+@import '@fontsource/space-grotesk/latin-700.css';
 @import '@fontsource/rubik/hebrew-500.css';
 @import '@fontsource/rubik/hebrew-700.css';
 
@@ -53,8 +55,10 @@
   /* Крупные названия заведения на гостевой странице (061). Rubik —
      геометричный гротеск, латиница + иврит; кириллица — Inter. */
   .font-display {
-    font-family: 'Rubik', 'Inter', system-ui, sans-serif;
-    letter-spacing: -0.01em;
+    /* Space Grotesk (латиница, Cash-Sans-подобный гротеск) → Rubik (иврит) →
+       Inter (кириллица). Браузер выбирает гарнитуру по глифу. */
+    font-family: 'Space Grotesk', 'Rubik', 'Inter', system-ui, sans-serif;
+    letter-spacing: -0.02em;
   }
 
   /* ── Buttons ─────────────────────────────────────────── */

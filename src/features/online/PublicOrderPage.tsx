@@ -148,6 +148,13 @@ export default function PublicOrderPage() {
       hero={view === 'menu' && !activeCat}
       headerImg={menu.location.header_url}
       bgImg={menu.location.background_url}
+      // Возврат в шапке: из чекаута → к меню, из категории → к плиткам
+      onBack={
+        view === 'checkout' ? () => setView('menu')
+        : activeCat ? () => setActiveCat(null)
+        : undefined
+      }
+      backLabel={t(lang, 'back')}
     >
       {menu.location.accepting === false ? (
         <div className="mx-4 mt-4 rounded-2xl bg-amber-50 text-amber-800 text-sm font-semibold px-4 py-3">
@@ -173,7 +180,7 @@ export default function PublicOrderPage() {
                 <button
                   key={cat.id}
                   onClick={() => setActiveCat(cat.id)}
-                  className="relative aspect-[4/3] rounded-2xl overflow-hidden bg-gray-200 active:scale-[0.98] transition-all text-start"
+                  className="relative aspect-[4/3] rounded-2xl overflow-hidden bg-gray-200 ring-1 ring-black/10 shadow-sm active:scale-[0.98] transition-all text-start"
                 >
                   {cover && <img src={cover} alt="" loading="lazy" className="absolute inset-0 w-full h-full object-cover" />}
                   {/* Градиент снизу (стиль Wolt): фото видно целиком, подпись
@@ -194,17 +201,8 @@ export default function PublicOrderPage() {
         if (!cat) return null
         return (
           <>
-            {/* Чипы: возврат к плиткам + быстрый переход между категориями */}
+            {/* Чипы быстрого перехода между категориями (возврат к плиткам — стрелка в шапке) */}
             <nav className="sticky top-14 z-10 bg-white/95 backdrop-blur border-b border-gray-100 px-4 py-2 flex gap-2 overflow-x-auto">
-              <button
-                onClick={() => setActiveCat(null)}
-                aria-label={t(lang, 'back')}
-                className="h-10 w-10 rounded-full bg-gray-100 text-gray-600 shrink-0 flex items-center justify-center active:scale-[0.96] transition-all"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="rtl:-scale-x-100">
-                  <path d="M19 12H5M12 19l-7-7 7-7" />
-                </svg>
-              </button>
               {menu.categories.map((c) => (
                 <button
                   key={c.id}
@@ -280,7 +278,6 @@ export default function PublicOrderPage() {
           cart={cart}
           total={cartTotal}
           onQty={updateQty}
-          onBack={() => setView('menu')}
           onSubmitted={(clientUuid) => {
             localStorage.setItem(ACTIVE_KEY, JSON.stringify({ clientUuid, locId }))
             setActiveUuid(clientUuid)
@@ -316,13 +313,16 @@ export default function PublicOrderPage() {
  * белой hero-шапки; bgImg — фон главного экрана (fixed-подложка),
  * шапка и плитки накладываются поверх, текст шапки — белый.
  */
-function Shell({ isRtl, title, logo, hero, headerImg, bgImg, children }: {
+function Shell({ isRtl, title, logo, hero, headerImg, bgImg, onBack, backLabel, children }: {
   isRtl: boolean
   title?: string
   logo?: string | null
   hero?: boolean
   headerImg?: string | null
   bgImg?: string | null
+  /** Стрелка возврата в компактной шапке (не hero); заменяет in-body «Назад» */
+  onBack?: () => void
+  backLabel?: string
   children: React.ReactNode
 }) {
   const hasBg = !!(hero && bgImg)
@@ -346,23 +346,25 @@ function Shell({ isRtl, title, logo, hero, headerImg, bgImg, children }: {
             <header className="relative h-32 shrink-0">
               <img src={headerImg} alt="" className="absolute inset-0 w-full h-full object-cover" />
               <span className="absolute inset-0 bg-black/35" />
-              {/* Логотип на баннере не дублируем — сам баннер уже брендирован */}
+              {/* Логотип на баннере не дублируем — сам баннер уже брендирован.
+                  Название — чистой типографикой поверх скрима + акцентная черта. */}
               <div className="absolute inset-0 flex flex-col items-center justify-center px-4 pointer-events-none">
-                <h1 className="font-display text-[64px] font-bold text-white leading-tight text-center [text-shadow:0_1px_8px_rgba(0,0,0,0.45)]">
+                <h1 className="font-display text-[52px] font-extrabold text-white leading-[0.95] tracking-tight text-center [text-shadow:0_2px_12px_rgba(0,0,0,0.5),0_1px_2px_rgba(0,0,0,0.5)]">
                   {title ?? ''}
                 </h1>
               </div>
             </header>
           ) : (
-          <header className="relative px-8 pt-8 pb-2 text-center">
-            {/* Тёмный градиент сверху (зеркалит градиент на плитках): на фоне-
-                фото витрины название лежит на затемнении и отделяется от сетки.
-                На белой странице подложка не нужна — название и так контрастно. */}
+          <header className="relative px-6 pt-9 pb-5 text-center">
+            {/* На фоне-фото: мягкий градиент сверху вытягивает название из картинки
+                и отделяет его от сетки плиток — без коробки, чистая типографика. */}
             {hasBg && (
-              <span className="absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-black/70 via-black/30 to-transparent pointer-events-none" aria-hidden />
+              <span className="absolute inset-x-0 top-0 h-44 bg-gradient-to-b from-black/60 via-black/25 to-transparent pointer-events-none" aria-hidden />
             )}
-            <h1 className={`relative font-display text-[64px] font-bold leading-tight ${
-              hasBg ? 'text-white [text-shadow:0_1px_8px_rgba(0,0,0,0.45)]' : 'text-gray-900'
+            <h1 className={`relative font-display text-[52px] font-extrabold leading-[0.95] tracking-tight ${
+              hasBg
+                ? 'text-white [text-shadow:0_2px_12px_rgba(0,0,0,0.5),0_1px_2px_rgba(0,0,0,0.5)]'
+                : 'text-gray-900'
             }`}>
               {title ?? ''}
             </h1>
@@ -370,8 +372,22 @@ function Shell({ isRtl, title, logo, hero, headerImg, bgImg, children }: {
           )
         ) : (
           <header className="sticky top-0 z-10 bg-white border-b border-gray-100 px-4 h-14 flex items-center justify-center relative">
-            {/* Логотип у начала строки; название — по центру */}
-            {logo && <img src={logo} alt="" className="absolute start-4 w-9 h-9 rounded-full object-cover" />}
+            {/* У начала строки: стрелка возврата (если есть) либо логотип; название — по центру */}
+            {onBack ? (
+              <button
+                onClick={onBack}
+                aria-label={backLabel}
+                className="absolute left-2 h-10 px-4 rounded-full bg-gray-900 text-white shadow-md shadow-black/15 flex items-center gap-1.5 text-sm font-bold active:scale-[0.96] transition-all"
+              >
+                {/* Пилюля возврата всегда слева (левый край экрана), стрелка смотрит влево */}
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M19 12H5M12 19l-7-7 7-7" />
+                </svg>
+                <span>{backLabel}</span>
+              </button>
+            ) : (
+              logo && <img src={logo} alt="" className="absolute start-4 w-9 h-9 rounded-full object-cover" />
+            )}
             <span className="font-display px-14 text-center font-bold text-xl text-gray-900 truncate">
               {title ?? ''}
             </span>
@@ -459,7 +475,7 @@ function ItemRow({ item, lang, onTap }: { item: PublicItem; lang: Lang; onTap: (
   return (
     <button
       onClick={onTap}
-      className="w-full rounded-2xl bg-gray-50 hover:bg-gray-100 active:scale-[0.99] transition-all flex items-center gap-3 p-3 text-start"
+      className="w-full rounded-2xl bg-white border border-gray-200 shadow-sm hover:bg-gray-50 active:scale-[0.99] transition-all flex items-center gap-3 p-3 text-start"
     >
       {item.image_url ? (
         <img src={item.image_url} alt="" loading="lazy" className="w-16 h-16 rounded-xl object-cover shrink-0 bg-white" />
@@ -638,7 +654,7 @@ function ItemConfigSheet({ item, lang, isRtl, onClose, onAdd }: {
 }
 
 /** Корзина + форма контактов + отправка заявки */
-function CheckoutScreen({ lang, locId, isOpen, prepMin, prepMax, orderTypes, cart, total, onQty, onBack, onSubmitted }: {
+function CheckoutScreen({ lang, locId, isOpen, prepMin, prepMax, orderTypes, cart, total, onQty, onSubmitted }: {
   lang: Lang
   locId: string
   isOpen: boolean
@@ -649,7 +665,6 @@ function CheckoutScreen({ lang, locId, isOpen, prepMin, prepMax, orderTypes, car
   cart: CartLine[]
   total: number
   onQty: (key: string, qty: number) => void
-  onBack: () => void
   onSubmitted: (clientUuid: string) => void
 }) {
   const [name, setName] = useState('')
@@ -711,15 +726,10 @@ function CheckoutScreen({ lang, locId, isOpen, prepMin, prepMax, orderTypes, car
   }
 
   return (
-    <div className="px-4 pb-8">
-      <button onClick={onBack} className="mt-4 h-11 px-4 rounded-xl bg-gray-100 text-sm font-semibold text-gray-700 active:scale-[0.96] transition-all">
-        ← {t(lang, 'back')}
-      </button>
-
-      <h2 className="text-lg font-bold text-gray-900 mt-4 mb-3">{t(lang, 'pubCart')}</h2>
+    <div className="px-4 pb-8 pt-4">
       <div className="space-y-2">
         {cart.map((l) => (
-          <div key={l.key} className="flex items-center gap-3 rounded-2xl bg-gray-50 px-4 py-3">
+          <div key={l.key} className="flex items-center gap-3 rounded-2xl bg-white border border-gray-200 shadow-sm px-4 py-3">
             <div className="flex-1 min-w-0">
               <div className="font-semibold text-gray-900 text-sm">{l.name}</div>
               {(l.variantName || l.modNames.length > 0) && (

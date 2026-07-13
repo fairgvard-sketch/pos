@@ -27,7 +27,6 @@ export default function OnlineOrdersDetail({ location }: { location: Location | 
   const { settings, update } = useLocationSettings(location)
   const enabled = settings.online_orders?.enabled !== false
   const url = location ? `${window.location.origin}/order/${location.id}` : ''
-  const [showPreview, setShowPreview] = useState(false)
 
   // Типы заказа для гостя (055). Отсутствие ключа = дефолт here+takeaway.
   const orderTypes = settings.online_orders?.order_types ?? ['here', 'takeaway']
@@ -134,17 +133,6 @@ export default function OnlineOrdersDetail({ location }: { location: Location | 
               {t(lang, 'printQrAction')}
             </button>
           </div>
-        </div>
-        {/* Живое превью страницы гостя (идея из Square: Site Preview) */}
-        <div className="mt-4">
-          <button className="btn-ghost h-11 px-4" onClick={() => setShowPreview((v) => !v)}>
-            {showPreview ? t(lang, 'previewHide') : t(lang, 'previewShow')}
-          </button>
-          {showPreview && (
-            <div className="mt-3 mx-auto w-[280px] h-[500px] rounded-[28px] border-4 border-gray-900 overflow-hidden shadow-lg">
-              <iframe title="preview" src={url} className="w-full h-full border-0" />
-            </div>
-          )}
         </div>
       </div>
       <div className="px-4 py-3 border-t border-gray-100">
