@@ -2,6 +2,7 @@ import { supabase } from '../../lib/supabase'
 import type { CartDiscount, CartLine, CartRedeem, OrderType } from '../../store/cartStore'
 import type { PayMethodId } from '../../lib/payMethods'
 import { applyLoyalty } from '../loyalty/api'
+import { assertStandardCashLimitForPayments } from '../../lib/israelCompliance'
 
 export interface PlaceOrderResult {
   order_id: string
@@ -116,6 +117,7 @@ export async function payOrder(
   paymentUuid: string | null = null,
   paidAt: string | null = null
 ): Promise<PayOrderResult> {
+  assertStandardCashLimitForPayments(payments)
   // Один round-trip: фискальный номер присваивает сам pay_order (041) —
   // отдельный вызов assign_receipt_number больше не нужен.
   // Опциональные параметры шлём только заданными: до применения 042 в БД

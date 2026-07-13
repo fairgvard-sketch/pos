@@ -4,6 +4,10 @@ import { useDeviceStore } from '../../store/deviceStore'
 import { t } from '../../lib/i18n'
 import { payMethodIcon, payMethodLabel, type PayMethodId } from '../../lib/payMethods'
 import { formatMoney, splitEvenly } from '../../lib/money'
+import {
+  maxStandardCashPayment,
+  remainingStandardCashAllowance,
+} from '../../lib/israelCompliance'
 import type { PaymentInput } from './api'
 import Icon from '../../components/Icon'
 
@@ -42,8 +46,13 @@ export default function EqualSplitSheet({ total, onBack, onCancel, onPay, busy }
   const current = paid.length            // индекс текущего гостя (0-based)
   const done = current >= guests
   const currentShare = done ? 0 : shares[current]
+  const maxCash = maxStandardCashPayment(total)
+  const cashRemaining = remainingStandardCashAllowance(total, paid)
+  const cashRestricted = maxCash < total
+  const cashLimitExceeded = method === 'cash' && currentShare > cashRemaining
 
   function payCurrent() {
+    if (cashLimitExceeded) return
     const share = shares[current]
     const next = [...paid, { method, amount: share }]
     setPaid(next)
@@ -188,9 +197,22 @@ export default function EqualSplitSheet({ total, onBack, onCancel, onPay, busy }
                   </button>
                 ))}
               </div>
+              {cashRestricted && method === 'cash' && (
+                <div className={`rounded-xl border px-4 py-3 mb-3 text-sm ${
+                  cashLimitExceeded
+                    ? 'border-red-200 bg-red-50 text-red-800'
+                    : 'border-gray-200 bg-gray-50 text-gray-700'
+                }`}>
+                  <div className="font-semibold">{t(lang, 'cashLimitTitle')}</div>
+                  <div className="mt-1">
+                    {cashLimitExceeded ? t(lang, 'cashLimitError') : t(lang, 'cashLimitHint')}{' '}
+                    <span className="font-bold tabular-nums">{formatMoney(cashRemaining, lang)}</span>
+                  </div>
+                </div>
+              )}
               <button
                 onClick={payCurrent}
-                disabled={busy}
+                disabled={busy || cashLimitExceeded}
                 className="btn-primary w-full !py-3.5 !rounded-2xl"
               >
                 {busy ? '…' : `${t(lang, 'splitConfirmShare')} · ${formatMoney(currentShare, lang)}`}

@@ -1,6 +1,7 @@
 import type { CartDiscount, CartLine, OrderType } from '../../store/cartStore'
 import type { PaymentInput } from '../../features/sell/api'
 import type { Receipt } from '../../features/receipt/api'
+import { assertStandardCashLimitForPayments } from '../israelCompliance'
 import { useOutboxStore } from './outboxStore'
 import { kickDrain } from './drain'
 import { requireCurrentScopeKey } from './scope'
@@ -48,6 +49,7 @@ export function enqueueOfflineSale(args: {
   /** Временный чек строится после присвоения K-n (номер печатается в чеке) */
   buildReceipt: (provisionalNumber: string) => Receipt
 }): { provisionalNumber: string } {
+  assertStandardCashLimitForPayments(args.payments)
   const ob = useOutboxStore.getState()
   const provisionalNumber = ob.nextProvisionalNumber()
   const key = args.clientUuid
@@ -120,6 +122,7 @@ export function enqueueOfflinePayment(args: {
    */
   paymentUuid?: string
 }): { key: string } {
+  assertStandardCashLimitForPayments(args.payments)
   const ob = useOutboxStore.getState()
   const key = crypto.randomUUID()
 
@@ -256,6 +259,7 @@ export function enqueueTablePayment(args: {
   /** UUID уже предпринятой попытки pay_order (см. enqueueOfflinePayment) */
   paymentUuid?: string
 }): void {
+  assertStandardCashLimitForPayments(args.payments)
   const ob = useOutboxStore.getState()
   const payOp: OutboxOp = {
     ...opBase(args.orderKey, args.orderId),

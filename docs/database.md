@@ -15,7 +15,7 @@
 ## Миграции
 
 Схема хранится в `supabase/migrations/` и на текущем baseline состоит из
-`001_foundation.sql` … `065_device_settings.sql`.
+`001_foundation.sql` … `068_israel_cash_limit.sql`.
 
 Правила:
 
@@ -79,6 +79,12 @@ supabase test db
 
 Платёжные способы: `cash`, `card`, `cibus`, `tenbis`, `bit`. Карта и кошельки
 сейчас являются учётными каналами; Cardcom ещё не проводит транзакцию из кассы.
+
+Начиная с `068`, публичный `pay_order` валидирует стандартный израильский лимит
+наличной части и точное равенство суммы payment rows сумме к оплате. Прежняя
+реализация переименована в `pay_order_unchecked`, её `EXECUTE` отозван у
+клиентских ролей. Трактовки и внешние release-gates описаны в
+[israel-compliance.md](israel-compliance.md).
 
 ### Операционная работа
 

@@ -3,6 +3,11 @@ import { useLangStore } from '../../store/langStore'
 import { useDeviceStore } from '../../store/deviceStore'
 import { t } from '../../lib/i18n'
 import { formatMoney, parseMoney } from '../../lib/money'
+import {
+  cashPaymentTotal,
+  maxStandardCashPayment,
+  remainingStandardCashAllowance,
+} from '../../lib/israelCompliance'
 import { payMethodIcon, payMethodLabel, type PayMethodId } from '../../lib/payMethods'
 import type { PaymentInput } from './api'
 import Icon from '../../components/Icon'
@@ -70,6 +75,7 @@ export default function PaymentSheet({ total, tip = 0, startMode = 'choose', onC
   const [method, setMethod] = useState<Method>(startMode === 'cash' ? 'cash' : firstPayMethod)
   const [tenderedStr, setTenderedStr] = useState('')
   const [cardStr, setCardStr] = useState('')
+  const [cashLimitError, setCashLimitError] = useState(false)
 
   // Чек на компанию (048): реквизиты собираются ДО оплаты, применяются
   // сразу после pay_order — автопечать выходит уже с блоком לכבוד
@@ -85,9 +91,16 @@ export default function PaymentSheet({ total, tip = 0, startMode = 'choose', onC
   const paidSoFar = parts.reduce((s, p) => s + p.amount, 0)
   const remaining = total - paidSoFar
 
+  const maxCash = maxStandardCashPayment(total)
+  const cashUsed = cashPaymentTotal(parts)
+  const cashRemaining = remainingStandardCashAllowance(total, parts)
+  const cashRestricted = maxCash < total
+
   const quick = useMemo(
-    () => quickCashOptions(remaining, quickAmountsMode, quickAmountsManual),
-    [remaining, quickAmountsMode, quickAmountsManual]
+    () => cashRemaining < remaining
+      ? (cashRemaining > 0 ? [cashRemaining] : [])
+      : quickCashOptions(remaining, quickAmountsMode, quickAmountsManual),
+    [cashRemaining, remaining, quickAmountsMode, quickAmountsManual]
   )
   const tendered = tenderedStr ? parseMoney(tenderedStr) : null
   const change = tendered !== null && tendered >= remaining ? tendered - remaining : null
@@ -101,6 +114,12 @@ export default function PaymentSheet({ total, tip = 0, startMode = 'choose', onC
 
   /** Наличные: полная оплата остатка (со сдачей) или частичная → добор безналом */
   function confirmCash(tenderedAmount: number) {
+    const acceptedCash = Math.min(tenderedAmount, remaining)
+    if (acceptedCash > cashRemaining) {
+      setCashLimitError(true)
+      return
+    }
+    setCashLimitError(false)
     if (tenderedAmount >= remaining) {
       onPay(
         [...parts, { method: 'cash', amount: remaining, tendered: tenderedAmount, change_due: tenderedAmount - remaining }],
@@ -116,6 +135,7 @@ export default function PaymentSheet({ total, tip = 0, startMode = 'choose', onC
   /** Безнал (карта/кошелёк): полный остаток или частично → добор наличными */
   function confirmNonCash() {
     if (cardAmount <= 0) return
+    setCashLimitError(false)
     if (cardAmount >= remaining) {
       onPay([...parts, { method, amount: remaining }], buyer)
     } else {
@@ -128,6 +148,7 @@ export default function PaymentSheet({ total, tip = 0, startMode = 'choose', onC
   /** Убрать зафиксированную часть (передумали до подтверждения) */
   function removePart(idx: number) {
     setParts(parts.filter((_, i) => i !== idx))
+    setCashLimitError(false)
   }
 
   const methods: { id: Method; icon: 'card' | 'cash'; label: string }[] =
@@ -187,7 +208,10 @@ export default function PaymentSheet({ total, tip = 0, startMode = 'choose', onC
               return (
                 <button
                   key={m.id}
-                  onClick={() => setMethod(m.id)}
+                  onClick={() => {
+                    setMethod(m.id)
+                    setCashLimitError(false)
+                  }}
                   disabled={busy}
                   className={`flex-1 sm:flex-none h-14 px-4 rounded-2xl flex items-center gap-3 font-semibold text-sm
                               transition-all active:scale-[0.97] ${
@@ -336,10 +360,33 @@ export default function PaymentSheet({ total, tip = 0, startMode = 'choose', onC
                         className="h-11 rounded-xl border border-gray-200 hover:border-gray-900 font-bold text-sm
                                    text-gray-900 tabular-nums transition-all active:scale-[0.96]"
                       >
-                        {amt === remaining ? t(lang, 'exactAmount') : formatMoney(amt, lang)}
+                        {amt === remaining
+                          ? t(lang, 'exactAmount')
+                          : cashRestricted && amt === cashRemaining
+                            ? `${t(lang, 'cashLimitMax')} ${formatMoney(amt, lang)}`
+                            : formatMoney(amt, lang)}
                       </button>
                     ))}
                   </div>
+
+                  {cashRestricted && (
+                    <div className={`rounded-xl border px-4 py-3 text-sm ${
+                      cashLimitError
+                        ? 'border-red-200 bg-red-50 text-red-800'
+                        : 'border-gray-200 bg-gray-50 text-gray-700'
+                    }`}>
+                      <div className="font-semibold">{t(lang, 'cashLimitTitle')}</div>
+                      <div className="mt-1">
+                        {cashLimitError ? t(lang, 'cashLimitError') : t(lang, 'cashLimitHint')}{' '}
+                        <span className="font-bold tabular-nums">{formatMoney(cashRemaining, lang)}</span>
+                        {cashUsed > 0 && (
+                          <span className="text-gray-500">
+                            {' '}· {t(lang, 'paidSoFar')} {formatMoney(cashUsed, lang)}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Получено (набирается нумпадом) */}
                   <div className="flex items-baseline justify-between px-1">
@@ -349,7 +396,10 @@ export default function PaymentSheet({ total, tip = 0, startMode = 'choose', onC
                     </span>
                   </div>
 
-                  <NumPad value={tenderedStr} onChange={setTenderedStr} />
+                  <NumPad value={tenderedStr} onChange={(value) => {
+                    setTenderedStr(value)
+                    setCashLimitError(false)
+                  }} />
 
                   {/* Сдача / добор картой — строка всегда на месте, чтобы вёрстка не прыгала */}
                   <div className="flex items-baseline justify-between px-1">

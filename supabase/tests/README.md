@@ -18,6 +18,8 @@ supabase test db               # прогнать pgTAP из supabase/tests/*.sq
 
 - `idempotency.test.sql` — дважды вызывает настоящий `pay_order` с одним
   `p_payment_uuid` и проверяет один payment, один номер чека и один op_log.
+- `cash_limit.test.sql` — проверяет границу 6 000 ₪, разрешённые 10%, запрет
+  обхода через private RPC и отсутствие финансовых строк при отказе.
 - `rls_scope.test.sql` — под ролью `authenticated` и JWT org A проверяет
   cross-org SELECT, запрет UPDATE чужого устройства и UPDATE собственной строки.
 
