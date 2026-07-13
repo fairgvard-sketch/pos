@@ -19,13 +19,15 @@ function tileTone(name: string): string {
 const SIZES = {
   // Иконка чуть меньше плитки: занимает ~64% ширины, по центру
   card: 'w-[64%] mx-auto aspect-square rounded-xl text-3xl',
+  // Полноширинное фото плитки товара: от края до края, cover, скруглены только верхние углы
+  tile: 'w-full aspect-[4/3] rounded-t-2xl text-4xl',
   line: 'w-10 h-10 rounded-lg text-base',
   mini: 'w-8 h-8 rounded-lg text-sm',
   hero: 'w-full aspect-square rounded-2xl text-5xl',
 } as const
 
-// Крупные превью (карточка/герой) — фото целиком (contain); мелкие — заполняют (cover)
-const FIT = { card: 'object-contain', hero: 'object-contain', line: 'object-cover', mini: 'object-cover' } as const
+// Крупные превью (карточка/герой) — фото целиком (contain); плитка и мелкие — заполняют (cover)
+const FIT = { card: 'object-contain', hero: 'object-contain', tile: 'object-cover', line: 'object-cover', mini: 'object-cover' } as const
 
 export default function ItemImage({ item, size }: { item: Pick<MenuItem, 'name' | 'image_url'>; size: keyof typeof SIZES }) {
   const cls = SIZES[size]

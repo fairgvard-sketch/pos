@@ -1245,7 +1245,7 @@ export default function SellPage() {
                   onPointerCancel={() => (editMode ? tileDragEnd() : tilePressCancel())}
                   onPointerMove={(e) => (editMode ? tileDragMove(item, e) : tilePressMove(e))}
                   onContextMenu={(e) => e.preventDefault()}
-                  className={`relative rounded-2xl border p-3 text-start bg-white transition-all duration-150 ${
+                  className={`relative overflow-hidden rounded-2xl border text-start bg-white transition-all duration-150 ${
                     dragTile === item.id
                       ? 'border-gray-900 shadow-[0_12px_32px_rgba(0,0,0,0.18)] scale-105 z-10'
                       : wiggleMode
@@ -1254,36 +1254,38 @@ export default function SellPage() {
                   } ${editMode && !item.is_available ? 'opacity-40' : ''}`}
                 >
                   {editMode ? (
-                    <span className="absolute top-2 end-2 w-6 h-6 rounded-full bg-gray-900 text-white flex items-center justify-center shadow-sm">
+                    <span className="absolute top-2 end-2 z-10 w-6 h-6 rounded-full bg-gray-900 text-white flex items-center justify-center shadow-sm">
                       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                         <path d="M4 20l1-4L16.5 4.5a2.1 2.1 0 0 1 3 3L8 19l-4 1z" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
                       </svg>
                     </span>
                   ) : item.is_favorite && (
-                    <span className="absolute top-2.5 end-2.5 text-amber-400 text-sm drop-shadow-sm">★</span>
+                    <span className="absolute top-2.5 end-2.5 z-10 text-amber-400 text-sm drop-shadow-sm">★</span>
                   )}
-                  <ItemImage item={item} size="card" />
-                  <div className="mt-2.5 font-semibold text-gray-900 text-sm leading-tight">{item.name}</div>
-                  {(() => {
-                    const priceLabel =
-                      item.item_variants && item.item_variants.length > 0
-                        ? formatMoneyList(
-                            item.item_variants
-                              .slice()
-                              .sort((a, b) => a.sort_order - b.sort_order)
-                              .map((v) => v.price),
-                            lang
-                          )
-                        : formatMoney(item.price, lang)
-                    return (
-                      <div
-                        className="mt-1 text-sm font-bold text-gray-500 tabular-nums truncate"
-                        title={priceLabel}
-                      >
-                        {priceLabel}
-                      </div>
-                    )
-                  })()}
+                  <ItemImage item={item} size="tile" />
+                  <div className="p-3">
+                    <div className="font-semibold text-gray-900 text-sm leading-tight">{item.name}</div>
+                    {(() => {
+                      const priceLabel =
+                        item.item_variants && item.item_variants.length > 0
+                          ? formatMoneyList(
+                              item.item_variants
+                                .slice()
+                                .sort((a, b) => a.sort_order - b.sort_order)
+                                .map((v) => v.price),
+                              lang
+                            )
+                          : formatMoney(item.price, lang)
+                      return (
+                        <div
+                          className="mt-1 text-sm font-bold text-gray-500 tabular-nums truncate"
+                          title={priceLabel}
+                        >
+                          {priceLabel}
+                        </div>
+                      )
+                    })()}
+                  </div>
                 </button>
               ))}
               {/* Режим правки: плитка «+ Товар» в конце сетки */}
@@ -2339,19 +2341,19 @@ function CatTile({ icon, name, image, onClick }: { icon?: React.ReactNode; name:
   return (
     <button
       onClick={onClick}
-      className="rounded-2xl border border-gray-300 bg-white p-3 min-h-[140px]
-                 flex flex-col justify-center transition-all duration-150
+      className="relative overflow-hidden rounded-2xl border border-gray-300 bg-white
+                 flex flex-col transition-all duration-150
                  hover:border-gray-400 hover:shadow-[0_4px_16px_rgba(0,0,0,0.06)] active:scale-[0.97]"
     >
       {/* Фото — первое из товаров категории; без фото — иконка категории или буква */}
       {!image && icon ? (
-        <span className="w-[64%] mx-auto aspect-square rounded-xl bg-gray-50 flex items-center justify-center text-3xl leading-none select-none">
+        <span className="w-full aspect-[4/3] rounded-t-2xl bg-gray-50 flex items-center justify-center text-4xl leading-none select-none">
           {icon}
         </span>
       ) : (
-        <ItemImage item={{ name, image_url: image }} size="card" />
+        <ItemImage item={{ name, image_url: image }} size="tile" />
       )}
-      <span className="mt-2.5 w-full text-center font-semibold text-gray-900 text-sm leading-tight">{name}</span>
+      <span className="p-3 w-full text-center font-semibold text-gray-900 text-sm leading-tight">{name}</span>
     </button>
   )
 }
