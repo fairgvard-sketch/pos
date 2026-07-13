@@ -138,6 +138,7 @@ async function runOp(op: OutboxOp): Promise<string | undefined> {
               status: 'pending',
               attempts: 0,
               lastError: null,
+              scope: op.scope,
             })
           }
         }

@@ -2,11 +2,9 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { PayMethodId } from '../lib/payMethods'
 
-/**
- * Настройки КОНКРЕТНОЙ кассы (per-device) — localStorage, не БД:
- * у каждой кассы своё поведение (Square хранит так же). Синхронизация
- * per-device настроек через devices-таблицу — позже, вместе с принтером.
- */
+/** Настройки конкретной кассы: localStorage — быстрый offline-first источник
+ * для UI, devices.settings — серверная копия для восстановления (065). */
+export const DEVICE_SETTINGS_STORAGE_KEY = 'kassa-device-settings'
 /** Способ печати чека: браузерный диалог / RawBT (встроенный принтер Sunmi) */
 export type PrintMode = 'browser' | 'rawbt'
 
@@ -37,7 +35,7 @@ export type QuickAmountsMode = 'smart' | 'manual' | 'off'
 /** Порядок кнопок ряда действий на экране продажи (перестановка long-press'ом) */
 export const DEFAULT_ACTION_ORDER = ['customItem', 'discount', 'loyalty', 'refund', 'tip']
 
-interface DeviceState {
+export interface DevicePreferences {
   /** Имя этой кассы (для отчётов/шапки настроек). Пусто = не задано */
   deviceName: string
   /** Автоблокировка: секунд бездействия до экрана PIN. 0 = выключена */
@@ -88,6 +86,9 @@ interface DeviceState {
   tipSmartThreshold: number
   /** Фиксированные суммы умного режима, агороты */
   tipSmartFixed: number[]
+}
+
+interface DeviceState extends DevicePreferences {
   setAutoLockSec: (sec: number) => void
   setLockAfterSale: (v: boolean) => void
   setPaymentSound: (v: boolean) => void
@@ -114,33 +115,39 @@ interface DeviceState {
   setDeviceName: (v: string) => void
 }
 
+/** Дефолты отдельно от store: deviceSync сбрасывает старый in-memory scope и
+ * валидирует серверный snapshot, не копируя action-функции. */
+export const DEFAULT_DEVICE_PREFERENCES: DevicePreferences = {
+  deviceName: '',
+  autoLockSec: 0,
+  lockAfterSale: false,
+  paymentSound: true,
+  printMode: 'browser',
+  autoPrintReceipt: false,
+  receiptPrompt: false,
+  printKitchenTicket: false,
+  startScreen: 'sell',
+  orientation: 'auto',
+  tapeWidth: 80,
+  payMethodOrder: ['cash', 'card'],
+  actionOrder: DEFAULT_ACTION_ORDER,
+  quickAmountsMode: 'smart',
+  quickAmountsManual: [2000, 5000, 10000],
+  collectTips: false,
+  tipAskBeforePayment: true,
+  tipPresets: [10, 12, 15],
+  tipAllowCustom: true,
+  tipBeforeTax: false,
+  tipRoundUp: true,
+  tipSmartAmounts: false,
+  tipSmartThreshold: 5000,
+  tipSmartFixed: [200, 300, 500],
+}
+
 export const useDeviceStore = create<DeviceState>()(
   persist(
     (set) => ({
-      deviceName: '',
-      autoLockSec: 0,
-      lockAfterSale: false,
-      paymentSound: true,
-      printMode: 'browser',
-      autoPrintReceipt: false,
-      receiptPrompt: false,
-      printKitchenTicket: false,
-      startScreen: 'sell',
-      orientation: 'auto',
-      tapeWidth: 80,
-      payMethodOrder: ['cash', 'card'],
-      actionOrder: DEFAULT_ACTION_ORDER,
-      quickAmountsMode: 'smart',
-      quickAmountsManual: [2000, 5000, 10000],  // 20/50/100 ₪
-      collectTips: false,
-      tipAskBeforePayment: true,
-      tipPresets: [10, 12, 15],
-      tipAllowCustom: true,
-      tipBeforeTax: false,
-      tipRoundUp: true,
-      tipSmartAmounts: false,
-      tipSmartThreshold: 5000,   // до 50 ₪
-      tipSmartFixed: [200, 300, 500],  // 2/3/5 ₪
+      ...DEFAULT_DEVICE_PREFERENCES,
       setAutoLockSec: (autoLockSec) => set({ autoLockSec }),
       setLockAfterSale: (lockAfterSale) => set({ lockAfterSale }),
       setPaymentSound: (paymentSound) => set({ paymentSound }),
@@ -166,6 +173,6 @@ export const useDeviceStore = create<DeviceState>()(
       setTipSmartFixed: (tipSmartFixed) => set({ tipSmartFixed }),
       setDeviceName: (deviceName) => set({ deviceName }),
     }),
-    { name: 'kassa-device-settings' }
+    { name: DEVICE_SETTINGS_STORAGE_KEY }
   )
 )

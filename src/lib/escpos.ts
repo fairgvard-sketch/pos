@@ -8,7 +8,13 @@
  * отрисовано на canvas.
  */
 
-import { newPrintJobId, awaitPrintResult, type PrintOutcome } from './printJobs'
+import {
+  newPrintJobId,
+  awaitPrintResult,
+  bridgeSupportsPrintResults,
+  installPrintResultReceiver,
+  type PrintOutcome,
+} from './printJobs'
 
 /** ESC/POS байты картинки в base64 — для моста APK (KassaAndroid) и RawBT */
 export function canvasToEscposBase64(canvas: HTMLCanvasElement): string {
@@ -26,26 +32,9 @@ export function canvasToRawbtUrl(canvas: HTMLCanvasElement): string {
   return 'rawbt:base64,' + canvasToEscposBase64(canvas)
 }
 
-/**
- * Тихая печать canvas (без диалогов): мост APK → RawBT (если разрешён) → false.
- * Для автопечати (чек после оплаты, тикет на кухню): если тихого пути
- * нет — НЕ открываем браузерный диалог, просто возвращаем false.
- * allowRawbt — только когда способ печати кассы = 'rawbt' (иначе на
- * устройствах без RawBT дёргали бы несуществующую схему).
- *
- * Возвращает, ПРИНЯТО ли задание (для моста APK — accepted, не итог печати).
- * Реальный итог узнаётся через printCanvasWithResult (P6).
- */
-export function printCanvasSilently(canvas: HTMLCanvasElement, allowRawbt: boolean): boolean {
-  const bridge = window.KassaAndroid
-  if (bridge?.isAvailable()) {
-    return bridge.printBase64(canvasToEscposBase64(canvas), newPrintJobId())
-  }
-  if (allowRawbt) {
-    window.location.href = canvasToRawbtUrl(canvas)
-    return true
-  }
-  return false
+/** Есть тихий путь, который не откроет системный browser print dialog. */
+export function hasSilentPrintPath(allowRawbt: boolean): boolean {
+  return !!window.KassaAndroid?.isAvailable() || allowRawbt
 }
 
 /**
@@ -61,8 +50,22 @@ export async function printCanvasWithResult(
   const bridge = window.KassaAndroid
   if (bridge?.isAvailable()) {
     const jobId = newPrintJobId()
-    const accepted = bridge.printBase64(canvasToEscposBase64(canvas), jobId)
-    return awaitPrintResult(jobId, accepted)
+    // Promise регистрируем ДО синхронного JavascriptInterface-вызова: одного
+    // receiver недостаточно — быстрый callback должен уже найти jobId в Map.
+    installPrintResultReceiver()
+    const resultAware = bridgeSupportsPrintResults(bridge)
+    const result = awaitPrintResult(jobId, true, resultAware)
+    try {
+      const accepted = bridge.printBase64(canvasToEscposBase64(canvas), jobId)
+      if (!accepted) window.__kassaPrintResult?.(jobId, 'error', 'not-accepted')
+    } catch (e) {
+      window.__kassaPrintResult?.(
+        jobId,
+        'error',
+        e instanceof Error ? e.message : 'bridge-call-failed',
+      )
+    }
+    return result
   }
   if (allowRawbt) {
     window.location.href = canvasToRawbtUrl(canvas)

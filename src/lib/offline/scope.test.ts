@@ -35,7 +35,7 @@ vi.mock('./scope', () => ({
   refreshScope: vi.fn(async () => mockScope),
   currentScopeKey: () => mockScope,
   opInCurrentScope: (opScope: string | null | undefined) =>
-    opScope == null ? true : opScope === mockScope,
+    opScope != null && mockScope != null && opScope === mockScope,
 }))
 
 import { kickDrain, initDrain } from './drain'
@@ -83,10 +83,11 @@ describe('scope-карантин дренажа', () => {
     expect(useOutboxStore.getState().ops).toHaveLength(0)
   })
 
-  it('немаркированная (scope=null) операция не карантинится (хвост до P3)', async () => {
+  it('немаркированная (scope=null) legacy-операция карантинится', async () => {
     useOutboxStore.getState().enqueue(voidOp(null))
     await kickDrain()
-    expect(voidTableOrder).toHaveBeenCalledTimes(1)
+    expect(useOutboxStore.getState().ops[0].status).toBe('quarantined')
+    expect(voidTableOrder).not.toHaveBeenCalled()
   })
 
   it('quarantined считается требующим внимания, но не failed по типу', async () => {

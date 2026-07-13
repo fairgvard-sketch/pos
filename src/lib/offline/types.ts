@@ -88,9 +88,9 @@ interface OpBase {
   /**
    * Scope (org:location:user), в котором операция поставлена (P3). Дренаж не
    * отправит её под другой сессией — карантин по несовпадению (scope.ts).
-   * null — операция до внедрения scope (хвост очереди): не караним, шлём как есть.
+   * null существует только у старых persisted-записей и всегда карантинится.
    */
-  scope?: string | null
+  scope: string | null
 }
 
 export type OutboxOp = OpBase &

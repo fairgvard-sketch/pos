@@ -209,13 +209,29 @@ export const useOutboxStore = create<OutboxState>()(
       name: 'kassa-outbox',
       // Краш между markInflight и ответом сервера: операция могла и долететь,
       // и нет. Возвращаем в pending — replay безопасен (идемпотентность 042).
+      // Legacy-операции без scope не пытаемся угадать: сразу карантин.
       onRehydrateStorage: () => (state) => {
         if (!state) return
-        if (state.ops.some((o) => o.status === 'inflight')) {
-          useOutboxStore.setState({
-            ops: state.ops.map((o) => (o.status === 'inflight' ? { ...o, status: 'pending' as const } : o)),
-          })
+        const quarantinedOrderKeys = new Set(
+          state.ops.filter((o) => !o.scope).map((o) => o.orderKey).filter((key): key is string => Boolean(key))
+        )
+        const localOrders = { ...state.localOrders }
+        for (const key of quarantinedOrderKeys) {
+          if (localOrders[key]) localOrders[key] = { ...localOrders[key], status: 'failed' }
         }
+        useOutboxStore.setState({
+          ops: state.ops.map((o) => {
+            if (!o.scope) {
+              return {
+                ...o,
+                status: 'quarantined' as const,
+                lastError: 'legacy operation without device scope',
+              }
+            }
+            return o.status === 'inflight' ? { ...o, status: 'pending' as const } : o
+          }),
+          localOrders,
+        })
       },
     }
   )

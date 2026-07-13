@@ -11,7 +11,7 @@
  * задание успешным по факту приёма (деградация без регресса).
  */
 
-export type PrintStatus = 'success' | 'error' | 'no-paper' | 'disconnected'
+export type PrintStatus = 'success' | 'error' | 'no-paper' | 'disconnected' | 'timeout'
 
 export interface PrintOutcome {
   ok: boolean
@@ -31,7 +31,7 @@ let installed = false
 const RESULT_TIMEOUT_MS = 15000
 
 /** Установить глобальный приёмник результатов от моста (идемпотентно) */
-function ensureInstalled(): void {
+export function installPrintResultReceiver(): void {
   if (installed) return
   installed = true
   window.__kassaPrintResult = (jobId, status, message) => {
@@ -45,6 +45,15 @@ function ensureInstalled(): void {
   }
 }
 
+/** Только v2+ обещает финальный callback. Старый APK имеет лишь accepted bool. */
+export function bridgeSupportsPrintResults(bridge: KassaAndroidBridge | undefined): boolean {
+  try {
+    return typeof bridge?.bridgeVersion === 'function' && bridge.bridgeVersion() >= 2
+  } catch {
+    return false
+  }
+}
+
 /** Сгенерировать id задания печати */
 export function newPrintJobId(): string {
   return crypto.randomUUID()
@@ -55,17 +64,23 @@ export function newPrintJobId(): string {
  * промис отвалится по таймауту в success (accepted==напечатано, как раньше).
  * accepted=false (мост сразу отказал) → мгновенный error.
  */
-export function awaitPrintResult(jobId: string, accepted: boolean): Promise<PrintOutcome> {
+export function awaitPrintResult(
+  jobId: string,
+  accepted: boolean,
+  resultAware = true,
+): Promise<PrintOutcome> {
   if (!accepted) {
     return Promise.resolve({ ok: false, status: 'error', message: 'not-accepted' })
   }
-  ensureInstalled()
+  installPrintResultReceiver()
   return new Promise<PrintOutcome>((resolve) => {
     const timer = setTimeout(() => {
       pending.delete(jobId)
-      // Нет колбэка вовремя: старый мост или молчащий принтер — не блокируем
-      // кассу ошибкой, считаем принятое задание успешным (прежнее поведение).
-      resolve({ ok: true, status: 'success', message: 'no-callback' })
+      // v2+ обещает callback: его отсутствие — ошибка, а не доказательство
+      // физической печати. Для старого APK сохраняем accepted-only fallback.
+      resolve(resultAware
+        ? { ok: false, status: 'timeout', message: 'callback-timeout' }
+        : { ok: true, status: 'success', message: 'legacy-no-callback' })
     }, RESULT_TIMEOUT_MS)
     pending.set(jobId, { resolve, timer })
   })

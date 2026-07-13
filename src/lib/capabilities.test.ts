@@ -18,15 +18,27 @@ describe('checkCapabilities', () => {
     const r = checkCapabilities()
     expect(r.ok).toBe(true)
     expect(r.missing).toHaveLength(0)
+    expect(r.warnings).toHaveLength(0)
   })
 
-  it('без CSS Grid/flex-gap/переменных — не ok, фичи в missing', () => {
+  it('без CSS Grid/переменных — не ok, flex-gap уходит в fallback warning', () => {
     vi.stubGlobal('CSS', { supports: () => false })
     const r = checkCapabilities()
     expect(r.ok).toBe(false)
     expect(r.missing).toContain('CSS Grid')
-    expect(r.missing).toContain('flex gap')
     expect(r.missing).toContain('CSS variables')
+    expect(r.warnings).toContain('flex gap fallback')
+    expect(r.missing).not.toContain('flex gap')
+  })
+
+  it('Chrome 60 проходит критичный gate и включает flex-gap fallback', () => {
+    vi.stubGlobal('CSS', { supports: () => true })
+    vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue(
+      'Mozilla/5.0 (Linux; Android 7.1) Chrome/60.0.3112.107 Mobile Safari/537.36',
+    )
+    const r = checkCapabilities()
+    expect(r.ok).toBe(true)
+    expect(r.warnings).toContain('flex gap fallback')
   })
 
   it('chromeMajor парсит версию из UA', () => {

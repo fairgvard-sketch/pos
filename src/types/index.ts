@@ -153,6 +153,12 @@ export interface Device {
   org_id: string
   location_id: string
   name: string
+  device_uuid: string | null
+  auth_user_id: string | null
+  settings: Record<string, unknown>
+  app_version: string | null
+  webview_version: string | null
+  printer_capabilities: Record<string, unknown> | null
   registered_at: string
   last_seen_at: string | null
 }

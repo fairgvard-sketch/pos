@@ -13,6 +13,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "check:bundle": "node scripts/check-bundle-size.mjs",
     "lint": "eslint src scripts",
     "test": "vitest",
     "test:run": "vitest run",

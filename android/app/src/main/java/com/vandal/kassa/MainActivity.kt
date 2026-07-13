@@ -71,6 +71,10 @@ class MainActivity : Activity() {
 
     /** Мост для веб-страницы: window.KassaAndroid */
     inner class Bridge {
+        /** v2: printBase64(jobId) гарантирует финальный callback результата. */
+        @JavascriptInterface
+        fun bridgeVersion(): Int = 2
+
         /** Есть ли связь со встроенным принтером (и мы на доверенной странице) */
         @JavascriptInterface
         fun isAvailable(): Boolean = onAllowedPage() && printer != null
@@ -91,7 +95,7 @@ class MainActivity : Activity() {
             }
             val p = printer
             if (p == null) {
-                emitPrintResult(jobId, "error", "disconnected")
+                emitPrintResult(jobId, "disconnected", "printer-disconnected")
                 return false
             }
             val bytes = try {
@@ -101,9 +105,10 @@ class MainActivity : Activity() {
                 return false
             }
             return try {
-                // Binder имеет лимит на размер транзакции — длинные чеки шлём
-                // кусками. Итог задания рапортует колбэк последнего чанка.
-                sendChunked(p, bytes, jobId)
+                // Только transaction printing даёт реальный onPrintResult.
+                // ESC/POS payload внутри буфера всё равно шлём кусками из-за
+                // лимита Binder; commit выполняется один раз после всех chunks.
+                sendTransaction(p, bytes, jobId)
                 emitPrintResult(jobId, "queued", null)
                 true
             } catch (e: Exception) {
@@ -121,25 +126,35 @@ class MainActivity : Activity() {
     private val CHUNK_SIZE = 100 * 1024
 
     /**
-     * Отправка байтов принтеру кусками. Колбэк вешаем на ПОСЛЕДНИЙ чанк —
-     * он и рапортует итог задания в JS. Промежуточные чанки без колбэка.
+     * Transaction printing: enter → chunked RAW data → commit с callback.
+     * Обычный callback sendRAWData подтверждает выполнение RPC, но не факт
+     * физической печати; реальный итог приходит в onPrintResult commit-а.
      */
-    private fun sendChunked(p: SunmiPrinterService, bytes: ByteArray, jobId: String) {
-        var offset = 0
-        while (offset < bytes.size) {
-            val end = minOf(offset + CHUNK_SIZE, bytes.size)
-            val chunk = bytes.copyOfRange(offset, end)
-            val isLast = end >= bytes.size
-            val cb = if (isLast) resultCallbackFor(jobId) else null
-            p.sendRAWData(chunk, cb)
-            offset = end
+    private fun sendTransaction(p: SunmiPrinterService, bytes: ByteArray, jobId: String) {
+        p.enterPrinterBuffer(true)
+        try {
+            var offset = 0
+            while (offset < bytes.size) {
+                val end = minOf(offset + CHUNK_SIZE, bytes.size)
+                val chunk = bytes.copyOfRange(offset, end)
+                p.sendRAWData(chunk, null)
+                offset = end
+            }
+            p.exitPrinterBufferWithCallback(true, resultCallbackFor(jobId))
+        } catch (e: Exception) {
+            // Не оставляем сервис в transaction mode после ошибки чанка.
+            try { p.exitPrinterBuffer(false) } catch (_: Exception) { /* best effort */ }
+            throw e
         }
     }
 
     /** Колбэк принтера → результат задания в JS */
     private fun resultCallbackFor(jobId: String) = object : InnerResultCallback() {
         override fun onRunResult(isSuccess: Boolean) {
-            emitPrintResult(jobId, if (isSuccess) "success" else "error", if (isSuccess) null else "run-failed")
+            // Это результат выполнения binder-команды, не физической печати.
+            // Успех подтверждаем только в onPrintResult; явный отказ можно
+            // сообщить сразу, не дожидаясь timeout web-части.
+            if (!isSuccess) emitPrintResult(jobId, "error", "run-failed")
         }
         override fun onReturnString(result: String?) { /* не используем */ }
         override fun onRaiseException(code: Int, msg: String?) {
@@ -150,7 +165,14 @@ class MainActivity : Activity() {
             }
             emitPrintResult(jobId, status, msg ?: "exception-$code")
         }
-        override fun onPrintResult(code: Int, msg: String?) { /* итог даёт onRunResult */ }
+        override fun onPrintResult(code: Int, msg: String?) {
+            val status = when {
+                code == 0 -> "success"
+                msg?.contains("paper", ignoreCase = true) == true -> "no-paper"
+                else -> "error"
+            }
+            emitPrintResult(jobId, status, msg ?: if (code == 0) null else "print-result-$code")
+        }
     }
 
     /** Позвать window.__kassaPrintResult(jobId, status, message) на UI-потоке */

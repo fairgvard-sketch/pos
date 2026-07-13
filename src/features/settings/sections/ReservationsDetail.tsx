@@ -4,7 +4,8 @@ import QRCode from 'qrcode'
 import { useLangStore } from '../../../store/langStore'
 import { useDeviceStore } from '../../../store/deviceStore'
 import { t } from '../../../lib/i18n'
-import { printCanvasSilently } from '../../../lib/escpos'
+import { hasSilentPrintPath } from '../../../lib/escpos'
+import { printCanvasWithRetry } from '../../receipt/printFailure'
 import { renderQrFlyerCanvas } from '../../receipt/printCanvas'
 import { useLocationSettings } from '../useLocationSettings'
 import { Group, ToggleRow } from '../ui'
@@ -59,12 +60,14 @@ export default function ReservationsDetail({ location }: { location: Location | 
     if (!location) return
     const qr = document.createElement('canvas')
     await QRCode.toCanvas(qr, url, { width: 400, margin: 2 })
-    const flyer = renderQrFlyerCanvas(location.receipt_business_name || location.name, qr, QR_RESERVE_CAPTION)
-    const ok = printCanvasSilently(flyer, printMode === 'rawbt')
-    if (ok) {
-      toast.success(t(lang, 'qrPrintSent'))
+    const makeFlyer = () => renderQrFlyerCanvas(location.receipt_business_name || location.name, qr, QR_RESERVE_CAPTION)
+    const allowRawbt = printMode === 'rawbt'
+    if (hasSilentPrintPath(allowRawbt)) {
+      const ok = await printCanvasWithRetry(makeFlyer, allowRawbt)
+      if (ok) toast.success(t(lang, 'qrPrintSent'))
       return
     }
+    const flyer = makeFlyer()
     const win = window.open('', '_blank', 'width=420,height=640')
     if (!win) return
     win.document.write(`<img src="${flyer.toDataURL('image/png')}" style="width:100%" onload="window.print()">`)

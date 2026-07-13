@@ -1,21 +1,14 @@
--- pgTAP: RLS-скоуп устройств (065) + существование новых RPC.
--- Запуск: supabase test db (локальный стек, см. supabase/tests/README.md).
---
--- Полный cross-org тест требует подмены JWT-клеймов (auth_org_id() читает
--- app_metadata), что делается через set_config('request.jwt.claims', …).
--- Здесь проверяем структурные инварианты, которые ловят регресс миграций
--- 064/065 без поднятия auth-контекста.
+-- pgTAP: фактическая RLS-изоляция устройств + контракт RPC 064/065.
+-- JWT-клеймы подменяются только внутри локальной транзакции теста.
 
 BEGIN;
-SELECT plan(9);
+SELECT plan(13);
 
--- 065: новые колонки devices
 SELECT has_column('devices', 'device_uuid');
 SELECT has_column('devices', 'auth_user_id');
 SELECT has_column('devices', 'settings');
 SELECT has_column('devices', 'app_version');
 
--- 065: RLS включён, старая org-wide политика заменена на self-owned
 SELECT is(
   (SELECT relrowsecurity FROM pg_class WHERE relname = 'devices'),
   true,
@@ -24,13 +17,97 @@ SELECT is(
 SELECT isnt(
   (SELECT count(*) FROM pg_policies WHERE tablename = 'devices' AND policyname = 'devices_update_own'),
   0::bigint,
-  'политика devices_update_own существует (правка только своей строки)'
+  'политика devices_update_own существует'
 );
 
--- 064/065: новые RPC заведены
 SELECT has_function('patch_location_settings');
 SELECT has_function('save_menu_item');
 SELECT has_function('register_device');
+SELECT ok(
+  has_function_privilege(
+    'authenticated',
+    'register_device(uuid,text,jsonb,text,text,jsonb)',
+    'EXECUTE'
+  ),
+  'authenticated может вызвать register_device'
+);
 
+INSERT INTO orgs (id, name) VALUES
+  ('20000000-0000-4000-8000-000000000001', 'Org A'),
+  ('20000000-0000-4000-8000-000000000002', 'Org B');
+
+INSERT INTO locations (id, org_id, name) VALUES
+  ('21000000-0000-4000-8000-000000000001', '20000000-0000-4000-8000-000000000001', 'Loc A'),
+  ('21000000-0000-4000-8000-000000000002', '20000000-0000-4000-8000-000000000002', 'Loc B');
+
+INSERT INTO devices (
+  id, org_id, location_id, name, device_uuid, auth_user_id, settings
+) VALUES
+  (
+    '22000000-0000-4000-8000-000000000001',
+    '20000000-0000-4000-8000-000000000001',
+    '21000000-0000-4000-8000-000000000001',
+    'A own',
+    '23000000-0000-4000-8000-000000000001',
+    '24000000-0000-4000-8000-000000000001',
+    '{}'
+  ),
+  (
+    '22000000-0000-4000-8000-000000000002',
+    '20000000-0000-4000-8000-000000000001',
+    '21000000-0000-4000-8000-000000000001',
+    'A other',
+    '23000000-0000-4000-8000-000000000002',
+    '24000000-0000-4000-8000-000000000002',
+    '{}'
+  ),
+  (
+    '22000000-0000-4000-8000-000000000003',
+    '20000000-0000-4000-8000-000000000002',
+    '21000000-0000-4000-8000-000000000002',
+    'B hidden',
+    '23000000-0000-4000-8000-000000000003',
+    '24000000-0000-4000-8000-000000000003',
+    '{}'
+  );
+
+SET LOCAL ROLE authenticated;
+SELECT set_config(
+  'request.jwt.claims',
+  '{"sub":"24000000-0000-4000-8000-000000000001","role":"authenticated","app_metadata":{"org_id":"20000000-0000-4000-8000-000000000001","location_id":"21000000-0000-4000-8000-000000000001"}}',
+  true
+);
+
+SELECT results_eq(
+  $$ SELECT name FROM devices ORDER BY name $$,
+  $$ VALUES ('A other'::text), ('A own'::text) $$,
+  'устройство видит свою организацию и не видит Org B'
+);
+
+SELECT is(
+  (
+    WITH changed AS (
+      UPDATE devices SET name = 'hacked'
+      WHERE device_uuid = '23000000-0000-4000-8000-000000000002'
+      RETURNING 1
+    ) SELECT count(*) FROM changed
+  ),
+  0::bigint,
+  'устройство не меняет строку другого auth_user той же организации'
+);
+
+SELECT is(
+  (
+    WITH changed AS (
+      UPDATE devices SET name = 'A own updated'
+      WHERE device_uuid = '23000000-0000-4000-8000-000000000001'
+      RETURNING 1
+    ) SELECT count(*) FROM changed
+  ),
+  1::bigint,
+  'устройство меняет собственную строку'
+);
+
+RESET ROLE;
 SELECT * FROM finish();
 ROLLBACK;

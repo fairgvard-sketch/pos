@@ -1,6 +1,6 @@
 import { supabase } from '../../lib/supabase'
 import { currentStaffToken } from '../../store/authStore'
-import type { Location, LocationSettings, ServiceMode, StaffSession } from '../../types'
+import type { Device, Location, LocationSettings, ServiceMode, StaffSession } from '../../types'
 
 export interface DeviceContext {
   orgId: string | null
@@ -170,8 +170,8 @@ export async function registerDevice(args: {
   appVersion?: string | null
   webviewVersion?: string | null
   printerCapabilities?: Record<string, unknown> | null
-}): Promise<void> {
-  const { error } = await supabase.rpc('register_device', {
+}): Promise<Device> {
+  const { data, error } = await supabase.rpc('register_device', {
     p_device_uuid: args.deviceUuid,
     p_name: args.name ?? null,
     p_settings: args.settings ?? null,
@@ -180,18 +180,22 @@ export async function registerDevice(args: {
     p_printer_capabilities: args.printerCapabilities ?? null,
   })
   if (error) throw new Error(error.message)
+  const row = Array.isArray(data) ? data[0] : data
+  if (!row) throw new Error('device registration returned no row')
+  return row as Device
 }
 
 /** Сохранить настройки этой кассы (merge на сервере, update_device_settings) */
 export async function updateDeviceSettings(
   deviceUuid: string,
   patch: Record<string, unknown>,
-): Promise<void> {
-  const { error } = await supabase.rpc('update_device_settings', {
+): Promise<Record<string, unknown>> {
+  const { data, error } = await supabase.rpc('update_device_settings', {
     p_device_uuid: deviceUuid,
     p_patch: patch,
   })
   if (error) throw new Error(error.message)
+  return (data ?? {}) as Record<string, unknown>
 }
 
 /**

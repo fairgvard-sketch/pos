@@ -6,7 +6,9 @@ import { safeUnlinkDevice, pendingOutboxCount } from '../../auth/unlink'
 import { useLangStore } from '../../../store/langStore'
 import { useDeviceStore } from '../../../store/deviceStore'
 import { renderTestPrintCanvas } from '../../receipt/printCanvas'
-import { canvasToRawbtUrl, canvasToEscposBase64 } from '../../../lib/escpos'
+import { hasSilentPrintPath } from '../../../lib/escpos'
+import { printCanvasWithRetry } from '../../receipt/printFailure'
+import { syncDeviceNow, useDeviceSyncStore } from '../../../lib/deviceSync'
 import { t } from '../../../lib/i18n'
 import { Group, InputRow, NavRow, SegmentRow, ToggleRow } from '../ui'
 import LangToggle from '../../../components/ui/LangToggle'
@@ -56,6 +58,8 @@ export default function DeviceSection({ location }: { location: Location | undef
   const setOrientation = useDeviceStore((s) => s.setOrientation)
   const tapeWidth = useDeviceStore((s) => s.tapeWidth)
   const setTapeWidth = useDeviceStore((s) => s.setTapeWidth)
+  const deviceSyncStatus = useDeviceSyncStore((s) => s.status)
+  const deviceSyncError = useDeviceSyncStore((s) => s.lastError)
 
   const [name, setName] = useState(deviceName)
   // Ресинк драфта имени при внешней смене deviceName (сравнение с прошлым
@@ -78,17 +82,23 @@ export default function DeviceSection({ location }: { location: Location | undef
     : printMode === 'rawbt'
       ? t(lang, 'printModeRawbt')
       : t(lang, 'printModeBrowser')
+  const syncLabel = {
+    idle: t(lang, 'deviceSyncIdle'),
+    pending: t(lang, 'deviceSyncPending'),
+    syncing: t(lang, 'deviceSyncing'),
+    synced: t(lang, 'deviceSynced'),
+    error: t(lang, 'deviceSyncError'),
+  }[deviceSyncStatus]
 
   /** Тестовый оттиск: мост APK → RawBT → браузер; иначе подсказка */
-  function testPrint() {
-    const canvas = renderTestPrintCanvas(location?.receipt_business_name || location?.name || '', deviceName)
-    if (bridgeReady) {
-      window.KassaAndroid!.printBase64(canvasToEscposBase64(canvas))
-      toast.success(t(lang, 'testPrintSent'))
-      return
-    }
-    if (printMode === 'rawbt') {
-      window.location.href = canvasToRawbtUrl(canvas)
+  async function testPrint() {
+    const allowRawbt = printMode === 'rawbt'
+    if (hasSilentPrintPath(allowRawbt)) {
+      const ok = await printCanvasWithRetry(
+        () => renderTestPrintCanvas(location?.receipt_business_name || location?.name || '', deviceName),
+        allowRawbt,
+      )
+      if (ok) toast.success(t(lang, 'testPrintSent'))
       return
     }
     // Браузерный режим не умеет тихую печать — честно предупреждаем
@@ -126,6 +136,25 @@ export default function DeviceSection({ location }: { location: Location | undef
         </InputRow>
         <InputRow label={t(lang, 'interfaceLanguage')} device>
           <LangToggle />
+        </InputRow>
+        <InputRow
+          label={t(lang, 'deviceSyncStatus')}
+          hint={deviceSyncError ?? undefined}
+          device
+        >
+          <button
+            type="button"
+            onClick={() => void syncDeviceNow()}
+            className={`min-h-11 px-3 rounded-xl text-sm font-semibold active:scale-[0.97] ${
+              deviceSyncStatus === 'error'
+                ? 'bg-red-50 text-red-700'
+                : deviceSyncStatus === 'pending'
+                  ? 'bg-amber-50 text-amber-700'
+                  : 'bg-gray-100 text-gray-700'
+            }`}
+          >
+            {syncLabel}
+          </button>
         </InputRow>
       </Group>
 

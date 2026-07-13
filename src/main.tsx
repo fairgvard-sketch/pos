@@ -8,10 +8,13 @@ import { checkCapabilities, renderCapabilityScreen } from './lib/capabilities'
 
 const rootEl = document.getElementById('root')!
 
-// Ранний гейт совместимости (P2): на слишком старом WebView (Chrome < ~57
-// без Grid/flex-gap/Proxy) показываем диагностический экран вместо сломанного
-// POS. Проверка до монтирования React — он мог бы и не подняться.
+// Ранний гейт совместимости (P2): на слишком старом WebView без Grid/Proxy
+// показываем диагностический экран вместо сломанного POS. Для flex-gap есть
+// CSS fallback. Проверка до монтирования React — он мог бы и не подняться.
 const caps = checkCapabilities()
+if (caps.warnings.includes('flex gap fallback')) {
+  document.documentElement.classList.add('no-flex-gap')
+}
 if (!caps.ok) {
   renderCapabilityScreen(rootEl, caps)
 } else {

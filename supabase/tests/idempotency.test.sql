@@ -1,41 +1,97 @@
--- pgTAP: идемпотентность повторного pay_order (op_log, 042).
--- Запуск: supabase test db  (нужен локальный стек, см. supabase/tests/README.md).
---
--- Проверяем механизм op_log напрямую: повтор операции с тем же op_uuid
--- возвращает ПЕРВЫЙ сохранённый результат и НЕ создаёт вторую запись —
--- это гарантия того, что replay pay_order не тратит второй номер чека.
+-- pgTAP: реальный replay pay_order с одним p_payment_uuid.
+-- Запуск: supabase test db (локальный стек, production не затрагивается).
 
 BEGIN;
-SELECT plan(4);
+SELECT plan(7);
 
--- op_log существует и имеет ожидаемую форму (миграция 042)
 SELECT has_table('op_log');
 SELECT has_column('op_log', 'op_uuid');
 SELECT has_column('op_log', 'result');
 
--- Симуляция дедупа: первая запись результата сохраняется, повтор с тем же
--- op_uuid не создаёт второй строки (PRIMARY KEY op_uuid). Проверяем, что
--- сохранённый result читается обратно без изменений — так pay_order при
--- replay вернёт первый ответ (включая receipt_number).
-DO $$
-DECLARE
-  v_org UUID := gen_random_uuid();
-  v_uuid UUID := gen_random_uuid();
-  v_first JSONB := '{"receipt_number": 117}'::jsonb;
-BEGIN
-  INSERT INTO op_log (op_uuid, org_id, result) VALUES (v_uuid, v_org, v_first);
-  -- Повторная вставка того же op_uuid игнорируется (дедуп)
-  INSERT INTO op_log (op_uuid, org_id, result)
-  VALUES (v_uuid, v_org, '{"receipt_number": 999}'::jsonb)
-  ON CONFLICT (op_uuid) DO NOTHING;
-END $$;
+-- Минимальная рабочая продажа: организация, точка, сотрудник, открытая смена,
+-- open-заказ. RPC вызывается дважды с одним payment UUID.
+INSERT INTO orgs (id, name)
+VALUES ('10000000-0000-4000-8000-000000000001', 'pgTAP org');
 
--- Результат остался ПЕРВЫМ (117), не перезаписан вторым вызовом (999)
-SELECT results_eq(
-  $$ SELECT (result ->> 'receipt_number')::int FROM op_log
-     WHERE result ->> 'receipt_number' IN ('117','999') $$,
-  $$ VALUES (117) $$,
-  'повтор op_uuid не перезаписывает первый результат'
+INSERT INTO locations (id, org_id, name)
+VALUES (
+  '11000000-0000-4000-8000-000000000001',
+  '10000000-0000-4000-8000-000000000001',
+  'pgTAP location'
+);
+
+INSERT INTO staff (id, org_id, location_id, name, role, pin_hash)
+VALUES (
+  '12000000-0000-4000-8000-000000000001',
+  '10000000-0000-4000-8000-000000000001',
+  '11000000-0000-4000-8000-000000000001',
+  'pgTAP owner', 'owner', 'unused-in-test'
+);
+
+INSERT INTO shifts (id, org_id, location_id, opened_by, status, opening_float)
+VALUES (
+  '13000000-0000-4000-8000-000000000001',
+  '10000000-0000-4000-8000-000000000001',
+  '11000000-0000-4000-8000-000000000001',
+  '12000000-0000-4000-8000-000000000001',
+  'open', 0
+);
+
+INSERT INTO orders (
+  id, org_id, location_id, staff_id, client_uuid, daily_number,
+  order_type, status, subtotal, vat_rate, vat_amount, total
+) VALUES (
+  '14000000-0000-4000-8000-000000000001',
+  '10000000-0000-4000-8000-000000000001',
+  '11000000-0000-4000-8000-000000000001',
+  '12000000-0000-4000-8000-000000000001',
+  '15000000-0000-4000-8000-000000000001',
+  1, 'here', 'open', 1000, 18, 153, 1000
+);
+
+SELECT set_config(
+  'request.jwt.claims',
+  '{"sub":"16000000-0000-4000-8000-000000000001","role":"authenticated","app_metadata":{"org_id":"10000000-0000-4000-8000-000000000001","location_id":"11000000-0000-4000-8000-000000000001"}}',
+  true
+);
+
+CREATE TEMP TABLE first_pay AS
+SELECT pay_order(
+  '14000000-0000-4000-8000-000000000001',
+  '[{"method":"cash","amount":1000,"tendered":1000,"change_due":0}]'::jsonb,
+  0,
+  '17000000-0000-4000-8000-000000000001',
+  NOW()
+)::jsonb AS result;
+
+CREATE TEMP TABLE replay_pay AS
+SELECT pay_order(
+  '14000000-0000-4000-8000-000000000001',
+  '[{"method":"cash","amount":1000,"tendered":1000,"change_due":0}]'::jsonb,
+  0,
+  '17000000-0000-4000-8000-000000000001',
+  NOW()
+)::jsonb AS result;
+
+SELECT is(
+  (SELECT result FROM replay_pay),
+  (SELECT result FROM first_pay),
+  'replay возвращает тот же результат и receipt_number'
+);
+SELECT is(
+  (SELECT count(*) FROM payments WHERE order_id = '14000000-0000-4000-8000-000000000001'),
+  1::bigint,
+  'replay не создаёт второй платёж'
+);
+SELECT is(
+  (SELECT counter FROM receipt_counters WHERE location_id = '11000000-0000-4000-8000-000000000001'),
+  1,
+  'replay не тратит второй номер чека'
+);
+SELECT is(
+  (SELECT count(*) FROM op_log WHERE op_uuid = '17000000-0000-4000-8000-000000000001'),
+  1::bigint,
+  'idempotency log содержит одну операцию'
 );
 
 SELECT * FROM finish();

@@ -8,7 +8,8 @@ import { fetchCurrentLocation } from '../auth/api'
 import { landingRoute } from '../auth/landing'
 import { useCloseReminder } from './reminder'
 import { renderZReportCanvas, type ZReportData } from '../receipt/printCanvas'
-import { canvasToRawbtUrl, canvasToEscposBase64, printCanvasSilently } from '../../lib/escpos'
+import { hasSilentPrintPath } from '../../lib/escpos'
+import { printCanvasWithRetry } from '../receipt/printFailure'
 import { useAuthStore } from '../../store/authStore'
 import { useLangStore } from '../../store/langStore'
 import { useDeviceStore } from '../../store/deviceStore'
@@ -130,7 +131,10 @@ export default function ShiftPage() {
       setConfirmOpen(false)
       // דו"ח Z печатается при закрытии автоматически (тихие пути:
       // мост APK / RawBT); в браузерном режиме — кнопкой на экране итога
-      printCanvasSilently(renderZReportCanvas(z, location), printMode === 'rawbt')
+      const allowRawbt = printMode === 'rawbt'
+      if (hasSilentPrintPath(allowRawbt)) {
+        void printCanvasWithRetry(() => renderZReportCanvas(z, location), allowRawbt)
+      }
       qc.invalidateQueries({ queryKey: ['current_shift'] })
       qc.invalidateQueries({ queryKey: ['timesheet'] })
     },
@@ -149,15 +153,11 @@ export default function ShiftPage() {
   if (!staff) return null
 
   // Печать דו"ח Z с экрана итога: мост APK → RawBT → браузерный диалог
-  function printZ() {
+  async function printZ() {
     if (!zData) return
-    const bridge = window.KassaAndroid
-    if (bridge?.isAvailable()) {
-      bridge.printBase64(canvasToEscposBase64(renderZReportCanvas(zData, location)))
-      return
-    }
-    if (printMode === 'rawbt') {
-      window.location.href = canvasToRawbtUrl(renderZReportCanvas(zData, location))
+    const allowRawbt = printMode === 'rawbt'
+    if (hasSilentPrintPath(allowRawbt)) {
+      await printCanvasWithRetry(() => renderZReportCanvas(zData, location), allowRawbt)
       return
     }
     window.print()

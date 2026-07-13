@@ -13,20 +13,20 @@ import DeviceSetupPage from './features/auth/DeviceSetupPage'
 import PinLoginPage from './features/auth/PinLoginPage'
 import ProtectedRoute from './features/auth/ProtectedRoute'
 import SellPage from './features/sell/SellPage'
-import QueuePage from './features/queue/QueuePage'
-import HallPage from './features/tables/HallPage'
 import AutoLock from './components/AutoLock'
 import BrandSplash from './components/ui/BrandSplash'
 import RouteErrorBoundary from './components/RouteErrorBoundary'
 import SuspenseFallback from './components/ui/SuspenseFallback'
 import { lazyWithRetry } from './lib/lazyWithRetry'
 
-// Горячий путь кассира (PIN → продажа/зал/очередь) — статика, в стартовом чанке.
-// Менеджерские экраны — lazy: не тормозят парсинг на слабом CPU терминала,
-// подгружаются при первом заходе (и кэшируются SW наравне с основным бандлом).
+// Самый частый горячий путь (PIN → продажа) остаётся в стартовом чанке.
+// Зал, очередь и менеджерские экраны — lazy: не тормозят холодный запуск
+// на слабом CPU терминала и кэшируются после первого открытия.
 // lazyWithRetry: после деплоя хеш чанка меняется, старая вкладка просит
 // несуществующий файл → Vercel отдаёт index.html → import() падает белым
 // экраном. Обёртка делает один reload за свежим index.html.
+const HallPage = lazyWithRetry(() => import('./features/tables/HallPage'), 'HallPage')
+const QueuePage = lazyWithRetry(() => import('./features/queue/QueuePage'), 'QueuePage')
 const MenuPage = lazyWithRetry(() => import('./features/menu/MenuPage'), 'MenuPage')
 const OnlineOrdersPage = lazyWithRetry(() => import('./features/online/OnlineOrdersPage'), 'OnlineOrdersPage')
 // Публичная страница заказа для гостей (050) — без auth, ходит в Edge Functions
@@ -86,10 +86,11 @@ const persister = createSyncStoragePersister({
   throttleTime: 2000,
 })
 
-void initScope()   // изоляция локального состояния по scope (P3)
+// Device sync стартует ПОСЛЕ scope: при смене аккаунта scope очищает старые
+// настройки из storage, затем sync безопасно восстанавливает snapshot сервера.
+void initScope().then(() => initDeviceSync())
 initNet()          // детекция сети (события браузера + проба Supabase)
 initDrain(queryClient)  // движок replay офлайн-очереди
-void initDeviceSync()   // per-device настройки: регистрация + фоновый синк (P5)
 
 /** "/" → куда нужно: нет сессии устройства → /setup, есть → /pin */
 function RootRedirect() {

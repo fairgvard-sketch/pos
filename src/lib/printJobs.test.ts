@@ -41,13 +41,24 @@ describe('awaitPrintResult', () => {
     expect(r.ok).toBe(true)
   })
 
-  it('нет колбэка → таймаут резолвит в success (старый мост)', async () => {
+  it('v2 без колбэка → timeout, не ложный success', async () => {
     vi.useFakeTimers()
     const p = awaitPrintResult(newPrintJobId(), true)
     vi.advanceTimersByTime(15000)
     const r = await p
+    expect(r.ok).toBe(false)
+    expect(r.status).toBe('timeout')
+    expect(r.message).toBe('callback-timeout')
+    vi.useRealTimers()
+  })
+
+  it('старый мост без callback сохраняет accepted-only fallback', async () => {
+    vi.useFakeTimers()
+    const p = awaitPrintResult(newPrintJobId(), true, false)
+    vi.advanceTimersByTime(15000)
+    const r = await p
     expect(r.ok).toBe(true)
-    expect(r.message).toBe('no-callback')
+    expect(r.message).toBe('legacy-no-callback')
     vi.useRealTimers()
   })
 })

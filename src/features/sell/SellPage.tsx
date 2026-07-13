@@ -550,7 +550,7 @@ export default function SellPage() {
     // Тикет печатается один раз на заказ: при сплите остаток его не дублирует
     // (корзина к тому моменту уже пуста).
     if (kitchenTicketOn && cart.lines.length > 0) {
-      printKitchenTicket(
+      void printKitchenTicket(
         {
           dailyNumber: num,
           orderType: cart.orderType,
@@ -565,7 +565,7 @@ export default function SellPage() {
     // «Как выдать чек?» заменяет автопечать: печать — только по выбору кассира.
     // Офлайн: временный чек уже собран на кассе — печатаем без fetchReceipt.
     if (!receiptPromptOn && autoPrintOn) {
-      if (localReceipt) autoPrintLocalReceipt(localReceipt, location, printMode === 'rawbt')
+      if (localReceipt) void autoPrintLocalReceipt(localReceipt, location, printMode === 'rawbt')
       else void autoPrintReceipt(orderId, location, printMode === 'rawbt')
     }
     setPayingOrder(null)
@@ -937,7 +937,7 @@ export default function SellPage() {
       toast.success(t(lang, 'billSaved'))
       // Тикет на кухню для дозаказа: только новые позиции, без номера
       if (kitchenTicketOn && cart.lines.length > 0) {
-        printKitchenTicket(
+        void printKitchenTicket(
           {
             dailyNumber: null,
             orderType: 'here',
@@ -2383,5 +2383,4 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
     </button>
   )
 }
-
 

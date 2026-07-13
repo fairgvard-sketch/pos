@@ -64,7 +64,7 @@ export default function ReceiptChoiceSheet({ orderId, location, receipt: localRe
   async function choosePaper() {
     setBusy(true)
     const ok = localReceipt
-      ? autoPrintLocalReceipt(localReceipt, location, printMode === 'rawbt')
+      ? await autoPrintLocalReceipt(localReceipt, location, printMode === 'rawbt')
       : await autoPrintReceipt(orderId, location, printMode === 'rawbt')
     setBusy(false)
     if (ok) onDone()

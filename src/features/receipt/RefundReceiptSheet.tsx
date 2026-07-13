@@ -4,7 +4,8 @@ import { renderRefundReceiptCanvas } from './printCanvas'
 import { fetchCurrentLocation } from '../auth/api'
 import { useLangStore } from '../../store/langStore'
 import { useDeviceStore } from '../../store/deviceStore'
-import { canvasToRawbtUrl, canvasToEscposBase64 } from '../../lib/escpos'
+import { hasSilentPrintPath } from '../../lib/escpos'
+import { printCanvasWithRetry } from './printFailure'
 import { t } from '../../lib/i18n'
 import type { Location } from '../../types'
 
@@ -29,17 +30,14 @@ export default function RefundReceiptSheet({ refundId, reprint = false, onClose 
   })
   const { data: location } = useQuery({ queryKey: ['current_location'], queryFn: fetchCurrentLocation })
 
-  function handlePrint() {
+  async function handlePrint() {
     if (!receipt) return
-    const bridge = window.KassaAndroid
-    if (bridge?.isAvailable()) {
-      const canvas = renderRefundReceiptCanvas(receipt, location, { copy: reprint })
-      bridge.printBase64(canvasToEscposBase64(canvas))
-      return
-    }
-    if (printMode === 'rawbt') {
-      const canvas = renderRefundReceiptCanvas(receipt, location, { copy: reprint })
-      window.location.href = canvasToRawbtUrl(canvas)
+    const allowRawbt = printMode === 'rawbt'
+    if (hasSilentPrintPath(allowRawbt)) {
+      await printCanvasWithRetry(
+        () => renderRefundReceiptCanvas(receipt, location, { copy: reprint }),
+        allowRawbt,
+      )
       return
     }
     window.print()

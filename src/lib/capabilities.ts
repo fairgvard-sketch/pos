@@ -3,7 +3,7 @@
  *
  * @vitejs/plugin-legacy транспилирует только JS-синтаксис и добавляет core-js
  * полифиллы встроенных объектов. Он НЕ полифиллит:
- *   • CSS (Grid, flex gap, logical properties) — их поддержка зависит от
+ *   • CSS (Grid и logical properties) — их поддержка зависит от
  *     версии WebView, а не от бандла;
  *   • платформенные Web API (Proxy, IntersectionObserver и пр.).
  * На очень старом WebView (Chrome < ~57) POS может «поехать» вёрсткой или
@@ -20,6 +20,8 @@
 export interface CapabilityReport {
   ok: boolean
   missing: string[]
+  /** Некритичные деградации, для которых в CSS есть fallback. */
+  warnings: string[]
   chromeMajor: number | null
 }
 
@@ -39,17 +41,23 @@ function cssSupports(prop: string, value: string): boolean {
 
 /**
  * Проверить критичные для горячего кассового потока возможности.
- * Критичные (блокируют запуск): Grid, flex-gap, CSS-переменные, Proxy, Promise.
+ * Критичные (блокируют запуск): Grid, CSS-переменные, Proxy, Promise.
+ * Flex-gap не блокирует запуск: index.css эмулирует его отступами для старых
+ * Chromium. Это не попиксельная замена, поэтому оставляем warning.
  * Логические свойства НЕ критичны — под них есть CSS-фолбэк (см. index.css),
  * но их отсутствие фиксируем в отчёте для диагностики.
  */
 export function checkCapabilities(): CapabilityReport {
   const missing: string[] = []
+  const warnings: string[] = []
+  const major = chromeMajor()
 
   // ── CSS ──
   if (!cssSupports('display', 'grid')) missing.push('CSS Grid')
-  // flex gap (Chrome 84+) — критичен: почти вся раскладка POS на gap
-  if (!cssSupports('gap', '1px') && !cssSupports('column-gap', '1px')) missing.push('flex gap')
+  // CSS.supports('gap') на Chrome 57–83 может означать только Grid gap,
+  // поэтому для Chromium используем известную границу flex-gap (84).
+  const flexGap = major !== null ? major >= 84 : cssSupports('gap', '1px')
+  if (!flexGap) warnings.push('flex gap fallback')
   if (!cssSupports('--x', '0')) missing.push('CSS variables')
 
   // ── Runtime API (то, что core-js не полифиллит гарантированно) ──
@@ -58,7 +66,7 @@ export function checkCapabilities(): CapabilityReport {
   if (typeof Map === 'undefined' || typeof Set === 'undefined') missing.push('Map/Set')
   if (typeof fetch === 'undefined') missing.push('fetch')
 
-  return { ok: missing.length === 0, missing, chromeMajor: chromeMajor() }
+  return { ok: missing.length === 0, missing, warnings, chromeMajor: major }
 }
 
 /**

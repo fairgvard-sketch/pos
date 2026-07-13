@@ -25,8 +25,7 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      # Скачиваем gradle-wrapper.jar под закреплённую версию, если его нет в репо
-      # (бинарник не коммитим). Даёт рабочий ./gradlew без глобального gradle.
+      # Бинарник wrapper не коммитим, но проверяем опубликованный Gradle SHA-256.
       - name: Ensure gradle wrapper jar
         working-directory: android
         run: |
@@ -35,6 +34,7 @@ jobs:
             curl -fsSL -o gradle/wrapper/gradle-wrapper.jar \
               "https://raw.githubusercontent.com/gradle/gradle/v${VER}.0/gradle/wrapper/gradle-wrapper.jar"
           fi
+          echo "cb0da6751c2b753a16ac168bb354870ebb1e162e9083f116729cec9c781156b8  gradle/wrapper/gradle-wrapper.jar" | sha256sum -c -
 
       - name: Build debug APK
         working-directory: android
@@ -66,6 +66,7 @@ jobs:
             curl -fsSL -o gradle/wrapper/gradle-wrapper.jar \
               "https://raw.githubusercontent.com/gradle/gradle/v${VER}.0/gradle/wrapper/gradle-wrapper.jar"
           fi
+          echo "cb0da6751c2b753a16ac168bb354870ebb1e162e9083f116729cec9c781156b8  gradle/wrapper/gradle-wrapper.jar" | sha256sum -c -
 
       # Ключ подписи — из секретов (base64). Никогда не коммитим keystore.
       - name: Decode keystore

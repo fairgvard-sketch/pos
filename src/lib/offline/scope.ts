@@ -42,6 +42,18 @@ export function currentScopeKey(): string | null {
   return cachedScope
 }
 
+/**
+ * Новые финансовые операции нельзя ставить в persistent-очередь до того,
+ * как устройство получило org/location scope из JWT. Иначе после смены
+ * аккаунта невозможно доказать, какой организации принадлежит операция.
+ */
+export function requireCurrentScopeKey(): string {
+  if (!cachedScope) {
+    throw new Error('device scope unavailable')
+  }
+  return cachedScope
+}
+
 /** Перечитать scope из активной сессии Supabase (async) */
 export async function refreshScope(): Promise<string | null> {
   const { data } = await supabase.auth.getSession()
@@ -49,10 +61,12 @@ export async function refreshScope(): Promise<string | null> {
   return cachedScope
 }
 
-/** Операция принадлежит текущему scope? Немаркированные (до P3) считаем «своими». */
+/**
+ * Операция принадлежит текущему scope? Старые немаркированные записи нельзя
+ * безопасно атрибутировать, поэтому они тоже отправляются в карантин.
+ */
 export function opInCurrentScope(opScope: string | null | undefined): boolean {
-  if (opScope == null) return true // хвост очереди до внедрения скоупа — не караним
-  return opScope === cachedScope
+  return opScope != null && cachedScope != null && opScope === cachedScope
 }
 
 /**

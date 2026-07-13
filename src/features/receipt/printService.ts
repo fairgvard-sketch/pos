@@ -1,7 +1,7 @@
 import { fetchReceipt, fetchRefundReceipt, type Receipt } from './api'
 import { renderReceiptCanvas, renderRefundReceiptCanvas, renderKitchenTicketCanvas, type KitchenTicketData } from './printCanvas'
-import { printCanvasSilently, printCanvasWithResult } from '../../lib/escpos'
-import { notifyPrintFailure } from './printFailure'
+import { hasSilentPrintPath } from '../../lib/escpos'
+import { printCanvasWithRetry } from './printFailure'
 import type { Location } from '../../types'
 
 /**
@@ -21,18 +21,20 @@ export async function autoPrintReceipt(
   try {
     // Номер чека присвоен внутри pay_order — можно читать сразу
     const receipt = await fetchReceipt(orderId)
-    const first = await printCanvasWithResult(renderReceiptCanvas(receipt, location), allowRawbt)
-    if (!first.ok) {
-      notifyPrintFailure(first.status, () =>
-        void printCanvasWithResult(renderReceiptCanvas(receipt, location), allowRawbt)
-      )
-      return false
-    }
+    if (!hasSilentPrintPath(allowRawbt)) return false
+    const firstOk = await printCanvasWithRetry(
+      () => renderReceiptCanvas(receipt, location),
+      allowRawbt,
+    )
+    if (!firstOk) return false
     // Второй экземпляр (настройка точки) — как *העתק*; RawBT принимает
     // по одной ссылке за раз, поэтому с паузой. Только после успеха первого.
     if ((location?.settings?.receipt?.copies ?? 1) === 2) {
       setTimeout(() => {
-        void printCanvasWithResult(renderReceiptCanvas(receipt, location, { copy: true }), allowRawbt)
+        void printCanvasWithRetry(
+          () => renderReceiptCanvas(receipt, location, { copy: true }),
+          allowRawbt,
+        )
       }, 3000)
     }
     return true
@@ -45,21 +47,14 @@ export async function autoPrintReceipt(
  * Автопечать ВРЕМЕННОГО чека офлайн-продажи (фаза 7): чек уже собран
  * на кассе (buildLocalReceipt), сети нет — печатаем без fetchReceipt.
  */
-export function autoPrintLocalReceipt(
+export async function autoPrintLocalReceipt(
   receipt: Receipt,
   location: Location | undefined,
   allowRawbt: boolean,
-): boolean {
+): Promise<boolean> {
   try {
-    // Результат-aware путь: офлайн-чек тоже уведомляет об ошибке печати (P6)
-    void printCanvasWithResult(renderReceiptCanvas(receipt, location), allowRawbt).then((r) => {
-      if (!r.ok) {
-        notifyPrintFailure(r.status, () =>
-          void printCanvasWithResult(renderReceiptCanvas(receipt, location), allowRawbt)
-        )
-      }
-    })
-    return true
+    if (!hasSilentPrintPath(allowRawbt)) return false
+    return await printCanvasWithRetry(() => renderReceiptCanvas(receipt, location), allowRawbt)
   } catch {
     return false
   }
@@ -73,16 +68,21 @@ export async function autoPrintRefundReceipt(
 ): Promise<boolean> {
   try {
     const receipt = await fetchRefundReceipt(refundId)
-    return printCanvasSilently(renderRefundReceiptCanvas(receipt, location), allowRawbt)
+    if (!hasSilentPrintPath(allowRawbt)) return false
+    return await printCanvasWithRetry(
+      () => renderRefundReceiptCanvas(receipt, location),
+      allowRawbt,
+    )
   } catch {
     return false
   }
 }
 
 /** Печать тикета на кухню/бар (данные из корзины — с заметками) */
-export function printKitchenTicket(data: KitchenTicketData, allowRawbt: boolean): boolean {
+export async function printKitchenTicket(data: KitchenTicketData, allowRawbt: boolean): Promise<boolean> {
   try {
-    return printCanvasSilently(renderKitchenTicketCanvas(data), allowRawbt)
+    if (!hasSilentPrintPath(allowRawbt)) return false
+    return await printCanvasWithRetry(() => renderKitchenTicketCanvas(data), allowRawbt)
   } catch {
     return false
   }

@@ -6,7 +6,8 @@ import { renderReceiptCanvas } from './printCanvas'
 import { fetchCurrentLocation } from '../auth/api'
 import { useLangStore } from '../../store/langStore'
 import { useDeviceStore } from '../../store/deviceStore'
-import { canvasToRawbtUrl, canvasToEscposBase64 } from '../../lib/escpos'
+import { hasSilentPrintPath } from '../../lib/escpos'
+import { printCanvasWithRetry } from './printFailure'
 import { receiptMethodLabel } from '../../lib/payMethods'
 import { t } from '../../lib/i18n'
 import type { Location } from '../../types'
@@ -65,25 +66,25 @@ export default function ReceiptSheet({ orderId, receipt: localReceipt, reprint =
    *  2. rawbt: картинка → ESC/POS растр → приложение RawBT (Sunmi без APK).
    *  3. browser: системный диалог печати (обычный принтер / PDF).
    */
-  function handlePrint() {
+  async function handlePrint() {
     if (!receipt) return
     // Второй экземпляр (настройка точки) печатается как *העתק*;
     // перепечатка (reprint) — копией с первого же экземпляра
     const copies = location?.settings?.receipt?.copies ?? 1
-    const bridge = window.KassaAndroid
-    if (bridge?.isAvailable()) {
-      bridge.printBase64(canvasToEscposBase64(renderReceiptCanvas(receipt, location, { copy: reprint })))
-      if (copies === 2 && !reprint) {
-        bridge.printBase64(canvasToEscposBase64(renderReceiptCanvas(receipt, location, { copy: true })))
-      }
-      return
-    }
-    if (printMode === 'rawbt') {
-      window.location.href = canvasToRawbtUrl(renderReceiptCanvas(receipt, location, { copy: reprint }))
-      if (copies === 2 && !reprint) {
-        // RawBT принимает по одной ссылке за раз — копию отправляем с паузой
+    const allowRawbt = printMode === 'rawbt'
+    if (hasSilentPrintPath(allowRawbt)) {
+      const firstOk = await printCanvasWithRetry(
+        () => renderReceiptCanvas(receipt, location, { copy: reprint }),
+        allowRawbt,
+      )
+      if (firstOk && copies === 2 && !reprint) {
+        // Второй экземпляр только после подтверждённого первого. RawBT не
+        // возвращает физический callback, поэтому сохраняем паузу очереди.
         setTimeout(() => {
-          window.location.href = canvasToRawbtUrl(renderReceiptCanvas(receipt, location, { copy: true }))
+          void printCanvasWithRetry(
+            () => renderReceiptCanvas(receipt, location, { copy: true }),
+            allowRawbt,
+          )
         }, 3000)
       }
       return

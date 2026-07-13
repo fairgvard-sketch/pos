@@ -15,6 +15,7 @@ interface LangState {
  */
 function applyDocLang(lang: Lang) {
   document.documentElement.lang = lang
+  document.documentElement.dir = lang === 'he' ? 'rtl' : 'ltr'
 }
 
 export const useLangStore = create<LangState>()(

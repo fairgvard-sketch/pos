@@ -35,6 +35,12 @@ vi.mock('./net', () => ({
   useNetStore: { subscribe: vi.fn() },
 }))
 
+vi.mock('./scope', () => ({
+  refreshScope: vi.fn(async () => 'orgA:loc1:userA'),
+  currentScopeKey: () => 'orgA:loc1:userA',
+  opInCurrentScope: (scope: string | null | undefined) => scope === 'orgA:loc1:userA',
+}))
+
 vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() } }))
 
 import { kickDrain, initDrain } from './drain'
@@ -53,6 +59,7 @@ function voidOp(): OutboxOp {
     status: 'pending',
     attempts: 0,
     lastError: null,
+    scope: 'orgA:loc1:userA',
   }
 }
 

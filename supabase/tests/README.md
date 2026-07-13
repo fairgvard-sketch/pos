@@ -16,15 +16,16 @@ supabase test db               # прогнать pgTAP из supabase/tests/*.sq
 
 ## Что покрыто
 
-- `idempotency.test.sql` — повтор `pay_order` с тем же `p_payment_uuid`
-  возвращает ПЕРВЫЙ результат и НЕ тратит второй номер чека (op_log, 042).
-- `rls_scope.test.sql` — устройство org A не видит и не меняет строки org B
-  (RLS по `auth_org_id()`); device видит только свою строку (065).
+- `idempotency.test.sql` — дважды вызывает настоящий `pay_order` с одним
+  `p_payment_uuid` и проверяет один payment, один номер чека и один op_log.
+- `rls_scope.test.sql` — под ролью `authenticated` и JWT org A проверяет
+  cross-org SELECT, запрет UPDATE чужого устройства и UPDATE собственной строки.
 
-## Почему не в общем `npm test`
+## CI
 
-pgTAP требует запущенного Postgres (Docker), поэтому не входит во фронтенд-CI
-(`npm run test:run`). Гоняется отдельно локально/в отдельном джобе с сервисом
-Postgres. Фронтенд-инварианты (округления денег, офлайн-идемпотентность,
+pgTAP требует локальный Supabase и Docker, поэтому не входит в `npm test`.
+Workflow `.github/workflows/ci.yml` поднимает отдельный локальный стек,
+применяет миграции с нуля и запускает эти тесты на каждый push/PR. Удалённый
+проект при этом не затрагивается. Фронтенд-инварианты (округления денег, офлайн-идемпотентность,
 scope-карантин, drain waiting_auth, длинный чек, optimistic rollback) покрыты
 vitest-тестами в `src/`.

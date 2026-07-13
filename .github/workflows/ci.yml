@@ -1,4 +1,4 @@
-# Фронтенд CI: линт, типы/сборка и тесты на каждый push/PR.
+# CI: фронтенд, размер стартового бандла и SQL-инварианты на каждый push/PR.
 name: CI
 
 on:
@@ -33,3 +33,28 @@ jobs:
           # реальные значения не требуются (tsc + бандл, без обращения к Supabase).
           VITE_SUPABASE_URL: https://placeholder.supabase.co
           VITE_SUPABASE_ANON_KEY: placeholder-anon-key
+
+      - name: Bundle budget
+        run: npm run check:bundle
+
+  database:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Start local Supabase and apply migrations
+        run: supabase start
+
+      - name: Rebuild database from migrations
+        run: supabase db reset
+
+      - name: Test RLS and financial idempotency
+        run: supabase test db
+
+      - name: Stop local Supabase
+        if: always()
+        run: supabase stop --no-backup
