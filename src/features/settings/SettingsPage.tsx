@@ -26,6 +26,7 @@ import PermsDetail from './sections/PermsDetail'
 import OfflineBanner from '../../components/OfflineBanner'
 import BusinessSection from './sections/BusinessSection'
 import ReceiptDetailsDetail from './sections/ReceiptDetailsDetail'
+import InterfaceSection from './sections/InterfaceSection'
 import DeviceSection from './sections/DeviceSection'
 import ProfileDetail from './sections/ProfileDetail'
 
@@ -209,6 +210,7 @@ export default function SettingsPage() {
                 {cat === 'shift' && <ShiftSection location={location} />}
                 {cat === 'staff' && <StaffSection openDetail={openDetail} />}
                 {cat === 'business' && <BusinessSection location={location} openDetail={openDetail} />}
+                {cat === 'interface' && <InterfaceSection location={location} />}
                 {cat === 'device' && <DeviceSection location={location} />}
               </div>
             )}

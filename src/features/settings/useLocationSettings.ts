@@ -19,7 +19,7 @@ export function useLocationSettings(location: Location | undefined) {
   /** Локальный deep-merge (1 уровень) для оптимистичного кеша */
   function mergeLocal(base: LocationSettings, patch: LocationSettings): LocationSettings {
     const out: LocationSettings = { ...base, ...patch }
-    for (const key of ['perms', 'receipt', 'shift', 'online_orders', 'reservations', 'tips', 'pay_methods', 'quick_amounts'] as const) {
+    for (const key of ['perms', 'receipt', 'shift', 'online_orders', 'reservations', 'tips', 'pay_methods', 'quick_amounts', 'interface'] as const) {
       const p = (patch as Record<string, unknown>)[key]
       const b = (base as Record<string, unknown>)[key]
       if (p && typeof p === 'object' && b && typeof b === 'object') {

@@ -13,6 +13,7 @@ export type CategoryId =
   | 'shift'
   | 'staff'
   | 'business'
+  | 'interface'
   | 'device'
 
 export type DetailId = 'tipping' | 'service-mode' | 'online-orders' | 'reservations' | 'loyalty' | 'guests' | 'perms' | 'receipt-details' | 'quick-amounts' | 'pay-methods' | 'profile'
@@ -24,6 +25,7 @@ export const CATEGORIES: { id: CategoryId; label: TranslationKey }[] = [
   { id: 'shift', label: 'catShift' },
   { id: 'staff', label: 'catStaff' },
   { id: 'business', label: 'catBusiness' },
+  { id: 'interface', label: 'catInterface' },
   { id: 'device', label: 'catDevice' },
 ]
 
@@ -71,6 +73,7 @@ export const SEARCH_INDEX: SearchEntry[] = [
   { cat: 'business', detail: 'receipt-details', label: 'receiptDetailsTitle', hint: 'receiptDetailsHint' },
   { cat: 'business', label: 'menu', hint: 'menuAdminHint' },
   { cat: 'business', label: 'dashboard', hint: 'dashboardHint' },
+  { cat: 'interface', label: 'allItemsTabTitle', hint: 'allItemsTabHint' },
   { cat: 'device', label: 'deviceName', hint: 'deviceNameHint' },
   { cat: 'device', label: 'printBridgeStatus' },
   { cat: 'device', label: 'testPrint' },

@@ -160,7 +160,9 @@ RLS — защита, а не вспомогательный UI-фильтр. Л
 
 ### Настройки и каталог
 
-- `patch_location_settings` — server-side JSONB merge;
+- `patch_location_settings` — server-side JSONB merge; известные
+  разделы-объекты (в т.ч. `interface`, 069) мержатся поключево, прочие
+  верхнеуровневые ключи присваиваются целиком;
 - `save_menu_item` — атомарное сохранение товара;
 - `reorder_menu` — атомарная сортировка;
 - `register_device`, `update_device_settings` — per-device конфигурация.

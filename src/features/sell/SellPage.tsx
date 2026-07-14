@@ -417,6 +417,14 @@ export default function SellPage() {
   // Поиск работает по всему каталогу независимо от выбранной категории.
   const activeCats = useMemo(() => categories.filter((c) => c.is_active), [categories])
 
+  // Чип «Все товары» скрываем настройкой точки (069, settings.interface).
+  // Без него витрина всегда в конкретной категории: как только категории
+  // загрузились, выбираем первую (setState в рендере — паттерн tileCtxKey ниже).
+  const showAllTab = location?.settings.interface?.show_all_items_tab !== false
+  if (!showAllTab && activeCat === null && activeCats.length > 0) {
+    setActiveCat(activeCats[0].id)
+  }
+
   // Смена контекста (категория/поиск/выход из правки) сбрасывает локальный
   // порядок и wiggle-режим. Сброс по смене ключа прямо в рендере (не setState
   // в эффекте): React перерисует с обнулёнными значениями до отрисовки. Стоит
@@ -1163,12 +1171,14 @@ export default function SellPage() {
               фильтр над товарами. «Избранного» здесь намеренно нет. */}
           {activeCats.length > 0 && (
             <div className="flex items-center gap-2 overflow-x-auto pb-3 select-none">
-              <Chip
-                active={activeCat === null}
-                onClick={() => { setActiveCat(null); setSearch('') }}
-              >
-                {t(lang, 'allItems')}
-              </Chip>
+              {showAllTab && (
+                <Chip
+                  active={activeCat === null}
+                  onClick={() => { setActiveCat(null); setSearch('') }}
+                >
+                  {t(lang, 'allItems')}
+                </Chip>
+              )}
               {activeCats.map((category) => (
                 <Chip
                   key={category.id}
