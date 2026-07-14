@@ -84,27 +84,23 @@ SELECT results_eq(
   'устройство видит свою организацию и не видит Org B'
 );
 
+-- Data-modifying CTE запрещён внутри скалярного подзапроса (top-level only),
+-- поэтому UPDATE выполняется отдельно, а инвариант проверяется по состоянию.
+UPDATE devices SET name = 'hacked'
+WHERE device_uuid = '23000000-0000-4000-8000-000000000002';
+
 SELECT is(
-  (
-    WITH changed AS (
-      UPDATE devices SET name = 'hacked'
-      WHERE device_uuid = '23000000-0000-4000-8000-000000000002'
-      RETURNING 1
-    ) SELECT count(*) FROM changed
-  ),
-  0::bigint,
+  (SELECT name FROM devices WHERE device_uuid = '23000000-0000-4000-8000-000000000002'),
+  'A other',
   'устройство не меняет строку другого auth_user той же организации'
 );
 
+UPDATE devices SET name = 'A own updated'
+WHERE device_uuid = '23000000-0000-4000-8000-000000000001';
+
 SELECT is(
-  (
-    WITH changed AS (
-      UPDATE devices SET name = 'A own updated'
-      WHERE device_uuid = '23000000-0000-4000-8000-000000000001'
-      RETURNING 1
-    ) SELECT count(*) FROM changed
-  ),
-  1::bigint,
+  (SELECT name FROM devices WHERE device_uuid = '23000000-0000-4000-8000-000000000001'),
+  'A own updated',
   'устройство меняет собственную строку'
 );
 

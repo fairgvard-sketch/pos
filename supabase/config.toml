@@ -15,6 +15,11 @@ major_version = 15
 [studio]
 enabled = false
 
+# Логовый стек (vector/logflare) не нужен для db reset/test и несовместим
+# с colima (mount docker.sock). Отключён и локально, и в CI.
+[analytics]
+enabled = false
+
 [inbucket]
 enabled = false
 
