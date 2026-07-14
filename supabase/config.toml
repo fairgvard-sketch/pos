@@ -10,7 +10,9 @@ max_rows = 1000
 [db]
 port = 54322
 shadow_port = 54320
-major_version = 15
+# 17 — как в production (17.6). На 15 падает GRANT ... MAINTAIN из 071:
+# привилегия MAINTAIN существует только с PostgreSQL 17.
+major_version = 17
 
 [studio]
 enabled = false
