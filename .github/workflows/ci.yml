@@ -46,14 +46,32 @@ jobs:
         with:
           version: latest
 
+      # При падении шага хвост лога публикуется error-аннотацией: логи джоба
+      # приватны, а аннотации у публичного репо читаются без авторизации —
+      # так причина видна сразу из API/чата без входа в Actions.
       - name: Start local Supabase and apply migrations
-        run: supabase start
+        run: |
+          if ! supabase start > start.log 2>&1; then
+            msg=$(tail -c 3000 start.log); msg="${msg//$'\n'/%0A}"
+            echo "::error title=supabase start failed::${msg}"
+            exit 1
+          fi
 
       - name: Rebuild database from migrations
-        run: supabase db reset
+        run: |
+          if ! supabase db reset > reset.log 2>&1; then
+            msg=$(tail -c 3000 reset.log); msg="${msg//$'\n'/%0A}"
+            echo "::error title=supabase db reset failed::${msg}"
+            exit 1
+          fi
 
       - name: Test RLS and financial idempotency
-        run: supabase test db
+        run: |
+          if ! supabase test db > test.log 2>&1; then
+            msg=$(tail -c 3000 test.log); msg="${msg//$'\n'/%0A}"
+            echo "::error title=supabase test db failed::${msg}"
+            exit 1
+          fi
 
       - name: Stop local Supabase
         if: always()
