@@ -42,3 +42,4 @@ android/gradle/wrapper/gradle-wrapper.jar
 
 # Supabase CLI artifacts
 supabase/.temp/
+supabase/.branches/
