@@ -9,6 +9,8 @@ export interface ReceiptLine {
   unit_price: number
   line_total: number
   modifiers: { name: string; price_delta: number }[]
+  /** Заметка позиции — на чеке не печатается, нужна перепечатке кухонного тикета */
+  notes: string | null
 }
 
 export interface ReceiptPayment {
@@ -140,6 +142,7 @@ interface OrderRow {
     qty: number
     unit_price: number
     line_total: number
+    notes: string | null
     voided_at: string | null
     order_item_modifiers: { name: string; price_delta: number }[]
   }[]
@@ -171,7 +174,7 @@ export async function fetchReceipt(orderId: string): Promise<Receipt> {
       subtotal, discount_type, discount_value, discount_amount, loyalty_discount, vat_rate, vat_amount, total, tip_amount,
       paid_at, created_at,
       staff:staff!orders_staff_id_fkey(name),
-      order_items(name, variant_name, qty, unit_price, line_total, voided_at, order_item_modifiers(name, price_delta)),
+      order_items(name, variant_name, qty, unit_price, line_total, notes, voided_at, order_item_modifiers(name, price_delta)),
       payments(method, amount, tendered, change_due)
     `)
     .eq('id', orderId)
@@ -211,6 +214,7 @@ export async function fetchReceipt(orderId: string): Promise<Receipt> {
         unit_price: i.unit_price,
         line_total: i.line_total,
         modifiers: (i.order_item_modifiers ?? []).map((m) => ({ name: m.name, price_delta: m.price_delta })),
+        notes: i.notes,
       })),
     payments: (o.payments ?? []).map((p) => ({
       method: p.method,

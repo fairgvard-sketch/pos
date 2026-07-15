@@ -4,7 +4,9 @@ import toast from 'react-hot-toast'
 import { fetchTransactions, fetchRefunds, refundedTotal, type Transaction } from './api'
 import { fetchReceipt, type Receipt } from '../receipt/api'
 import { fetchCurrentLocation } from '../auth/api'
-import { autoPrintRefundReceipt } from '../receipt/printService'
+import { autoPrintRefundReceipt, printKitchenTicket } from '../receipt/printService'
+import { receiptToKitchenTicket } from '../receipt/kitchenTicket'
+import { hasSilentPrintPath } from '../../lib/escpos'
 import ReceiptSheet from '../receipt/ReceiptSheet'
 import RefundReceiptSheet from '../receipt/RefundReceiptSheet'
 import RefundSheet from './RefundSheet'
@@ -57,6 +59,8 @@ export default function TransactionsPage() {
 
   const autoPrintOn = useDeviceStore((s) => s.autoPrintReceipt)
   const printMode = useDeviceStore((s) => s.printMode)
+  const kitchenTicketOn = useDeviceStore((s) => s.printKitchenTicket)
+  const deviceName = useDeviceStore((s) => s.deviceName)
   const { data: location } = useQuery({ queryKey: ['current_location'], queryFn: fetchCurrentLocation })
   const canRefund = can(staff?.role, 'refund', location?.settings)
 
@@ -101,6 +105,18 @@ export default function TransactionsPage() {
 
   const refunded = selected ? refundedTotal(selected) : 0
   const remaining = selected ? selected.total - refunded : 0
+
+  // Перепечатка кухонного тикета из снапшота заказа: чисто локальная печать,
+  // без пометки «повтор» и без каких-либо записей (на экран бариста не попадает)
+  function reprintTicket() {
+    if (!receipt) return
+    const allowRawbt = printMode === 'rawbt'
+    if (!hasSilentPrintPath(allowRawbt)) {
+      toast.error(t(lang, 'testPrintNoSilent'))
+      return
+    }
+    void printKitchenTicket(receiptToKitchenTicket(receipt, deviceName), allowRawbt)
+  }
 
   if (!staff) return null
 
@@ -238,6 +254,15 @@ export default function TransactionsPage() {
               <button onClick={() => setShowReceipt(true)} className="btn-secondary !py-3.5 !rounded-2xl">
                 {t(lang, 'receipt')}
               </button>
+              {kitchenTicketOn && (
+                <button
+                  onClick={reprintTicket}
+                  disabled={!receipt}
+                  className="btn-secondary !py-3.5 !rounded-2xl col-span-2 disabled:opacity-40"
+                >
+                  {t(lang, 'kitchenTicketTitle')}
+                </button>
+              )}
             </div>
 
             {/* История возвратов: сумма, причина; тап = перепечатка зикуя */}

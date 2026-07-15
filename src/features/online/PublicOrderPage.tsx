@@ -465,7 +465,7 @@ function SocialFooter({ links, lang, padForCart }: {
 
 /**
  * Карточка товара — классический вид меню доставки: фото, название,
- * цена, кнопка «+». Без фото — плейсхолдер с первой буквой названия,
+ * цена. Без фото — плейсхолдер с первой буквой названия,
  * чтобы список не «прыгал» по выравниванию.
  */
 function ItemRow({ item, lang, onTap }: { item: PublicItem; lang: Lang; onTap: () => void }) {
@@ -494,11 +494,6 @@ function ItemRow({ item, lang, onTap }: { item: PublicItem; lang: Lang; onTap: (
           {/* dir=ltr: цена не пляшет в bidi-контексте ивритских названий */}
           <span dir="ltr">{formatMoney(minPrice, lang)}</span>
         </span>
-      </span>
-      <span className="w-9 h-9 rounded-full bg-gray-900 text-white shrink-0 flex items-center justify-center" aria-hidden>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-          <path d="M12 5v14M5 12h14" />
-        </svg>
       </span>
     </button>
   )

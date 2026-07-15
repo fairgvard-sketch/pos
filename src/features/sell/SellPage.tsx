@@ -839,6 +839,7 @@ export default function SellPage() {
       qty: l.qty,
       line_total: lineUnitPrice(l) * l.qty,
       modifiers: l.mods.map((m) => m.name),
+      notes: l.notes.trim() || null,
     }))
     return [...fetchedLines, ...echoLines]
   }, [fetchedLines, tableEcho])

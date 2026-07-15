@@ -3,6 +3,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { moveTableOrder, mergeTableOrders, voidTableOrder, fetchOrderLines, type TableOccupancy } from './api'
 import { fetchCurrentLocation } from '../auth/api'
+import { printKitchenTicket } from '../receipt/printService'
+import { billToKitchenTicket } from '../receipt/kitchenTicket'
+import { hasSilentPrintPath } from '../../lib/escpos'
+import { useDeviceStore } from '../../store/deviceStore'
 import { useAuthStore } from '../../store/authStore'
 import { useLangStore } from '../../store/langStore'
 import { t, formatTime, formatElapsed } from '../../lib/i18n'
@@ -59,6 +63,44 @@ export default function TableActionSheet({ table, occ, tables, occupancy, onOpen
     onError: (e) => toast.error(e.message),
   })
 
+  // Перепечатка кухонного тикета по открытому счёту (потеряли бумажку):
+  // весь текущий счёт одним тикетом, без пометки «повтор». Чисто локальная
+  // печать — заказ не мутирует, на экране бариста ничего не появляется.
+  const kitchenTicketOn = useDeviceStore((s) => s.printKitchenTicket)
+  const deviceName = useDeviceStore((s) => s.deviceName)
+  const printMode = useDeviceStore((s) => s.printMode)
+  const [printingTicket, setPrintingTicket] = useState(false)
+
+  async function reprintTicket() {
+    const allowRawbt = printMode === 'rawbt'
+    if (!hasSilentPrintPath(allowRawbt)) {
+      toast.error(t(lang, 'testPrintNoSilent'))
+      return
+    }
+    setPrintingTicket(true)
+    try {
+      const lines = await qc.fetchQuery({
+        queryKey: ['order_lines', occ.order_id],
+        queryFn: () => fetchOrderLines(occ.order_id),
+      })
+      void printKitchenTicket(
+        billToKitchenTicket({
+          dailyNumber: occ.daily_number,
+          tableLabel: table.label,
+          staffName: occ.staff_name ?? '',
+          deviceName,
+          lines,
+        }),
+        allowRawbt
+      )
+      onClose()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : String(e))
+    } finally {
+      setPrintingTicket(false)
+    }
+  }
+
   // Свободные столы (для переноса) и другие занятые (для объединения)
   const freeTables = tables.filter((tb) => tb.id !== table.id && !occupancy.has(tb.id))
   const busyTables = tables.filter((tb) => tb.id !== table.id && occupancy.has(tb.id))
@@ -86,6 +128,14 @@ export default function TableActionSheet({ table, occ, tables, occupancy, onOpen
           <div className="space-y-2">
             <ActionRow icon="orders" label={t(lang, 'openTableBill')} onClick={onOpenBill} />
             <ActionRow icon="note" label={t(lang, 'tableInfo')} onClick={() => setScreen('view')} />
+            {kitchenTicketOn && (
+              <ActionRow
+                icon="queue"
+                label={t(lang, 'kitchenTicketTitle')}
+                disabled={printingTicket}
+                onClick={() => void reprintTicket()}
+              />
+            )}
             <ActionRow
               icon="customers"
               label={t(lang, 'moveTable')}

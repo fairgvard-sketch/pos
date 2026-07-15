@@ -221,23 +221,26 @@ export interface BillLine {
   qty: number
   line_total: number
   modifiers: string[]
+  /** Заметка позиции — для перепечатки кухонного тикета по открытому счёту */
+  notes: string | null
 }
 
 /** Активные позиции открытого счёта (voided исключены) */
 export async function fetchOrderLines(orderId: string): Promise<BillLine[]> {
   const { data, error } = await supabase
     .from('order_items')
-    .select('id, name, variant_name, qty, line_total, order_item_modifiers(name)')
+    .select('id, name, variant_name, qty, line_total, notes, order_item_modifiers(name)')
     .eq('order_id', orderId)
     .is('voided_at', null)
   if (error) throw new Error(error.message)
-  return (data as { id: string; name: string; variant_name: string | null; qty: number; line_total: number; order_item_modifiers: { name: string }[] }[]).map((r) => ({
+  return (data as { id: string; name: string; variant_name: string | null; qty: number; line_total: number; notes: string | null; order_item_modifiers: { name: string }[] }[]).map((r) => ({
     id: r.id,
     name: r.name,
     variant_name: r.variant_name,
     qty: r.qty,
     line_total: r.line_total,
     modifiers: (r.order_item_modifiers ?? []).map((m) => m.name),
+    notes: r.notes,
   }))
 }
 

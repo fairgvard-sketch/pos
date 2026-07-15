@@ -30,6 +30,8 @@ function cartLineToReceiptLine(l: CartLine): ReceiptLine {
     unit_price: lineUnitPrice(l),
     line_total: lineUnitPrice(l) * l.qty,
     modifiers: l.mods.map((m) => ({ name: m.name, price_delta: m.priceDelta })),
+    // Зеркало серверного NULLIF(TRIM(notes), '')
+    notes: l.notes.trim() || null,
   }
 }
 
@@ -42,6 +44,7 @@ export function billLineToReceiptLine(l: BillLine): ReceiptLine {
     unit_price: l.qty > 0 ? Math.round(l.line_total / l.qty) : l.line_total,
     line_total: l.line_total,
     modifiers: l.modifiers.map((name) => ({ name, price_delta: 0 })),
+    notes: l.notes,
   }
 }
 
