@@ -471,15 +471,21 @@ function SlotScreen({ lang, info, days, todayStr, todayHasSlots, date, time, gue
   // Выбранное время недоступно — не даём идти дальше
   const timeTaken = instant && freeTimes !== null && !freeTimes.has(time)
   const loc = info.location
-  // Навигация (062): координаты → точный пин; иначе текстовый поиск по адресу.
-  // query=lat,lng открывает Google Maps на точке (на телефоне — с выбором
-  // приложения, включая Waze/Apple Maps через геосхему ОС).
-  const mapsUrl =
-    loc.lat != null && loc.lng != null
-      ? `https://www.google.com/maps/search/?api=1&query=${loc.lat},${loc.lng}`
-      : loc.address
-        ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(loc.address)}`
-        : null
+  // Навигация (062/067): координаты → точный пин; иначе текстовый поиск по адресу.
+  // По тапу гость выбирает приложение — Google Maps или Waze (bottom-sheet).
+  const hasCoords = loc.lat != null && loc.lng != null
+  const googleMapsUrl = hasCoords
+    ? `https://www.google.com/maps/search/?api=1&query=${loc.lat},${loc.lng}`
+    : loc.address
+      ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(loc.address)}`
+      : null
+  const wazeUrl = hasCoords
+    ? `https://waze.com/ul?ll=${loc.lat},${loc.lng}&navigate=yes`
+    : loc.address
+      ? `https://waze.com/ul?q=${encodeURIComponent(loc.address)}&navigate=yes`
+      : null
+  const mapsUrl = googleMapsUrl // есть ли вообще куда навигировать
+  const [navOpen, setNavOpen] = useState(false)
   return (
     <div className="px-4 pb-8 flex flex-col items-center">
       {!todayHasSlots && (
@@ -568,20 +574,90 @@ function SlotScreen({ lang, info, days, todayStr, todayHasSlots, date, time, gue
                 </a>
               )}
               {mapsUrl && (
-                <a
-                  href={mapsUrl}
-                  target="_blank"
-                  rel="noreferrer"
+                <button
+                  type="button"
+                  onClick={() => setNavOpen(true)}
                   className="w-20 h-20 rounded-2xl border border-gray-300 flex flex-col items-center justify-center gap-1 text-gray-900 active:scale-[0.96] transition-all"
                 >
                   <PinIcon />
                   <span className="text-xs font-semibold">{t(lang, 'rsvNavigateBtn')}</span>
-                </a>
+                </button>
               )}
             </div>
           )}
         </div>
       )}
+
+      {navOpen && (
+        <NavChooserSheet
+          lang={lang}
+          googleMapsUrl={googleMapsUrl}
+          wazeUrl={wazeUrl}
+          onClose={() => setNavOpen(false)}
+        />
+      )}
+    </div>
+  )
+}
+
+/** Bottom-sheet выбора навигационного приложения (067): Google Maps / Waze.
+ *  Ссылки открываются в новой вкладке; на телефоне ОС передаёт их
+ *  соответствующему приложению. Без backdrop-blur (POS-overlay). */
+function NavChooserSheet({ lang, googleMapsUrl, wazeUrl, onClose }: {
+  lang: Lang
+  googleMapsUrl: string | null
+  wazeUrl: string | null
+  onClose: () => void
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+    >
+      <div
+        className="w-full max-w-lg rounded-t-3xl bg-white px-4 pt-3 pb-6 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-gray-200" aria-hidden="true" />
+        <div className="px-1 pb-3 text-center text-sm font-semibold text-gray-500">
+          {t(lang, 'rsvNavSheetTitle')}
+        </div>
+        <div className="flex flex-col gap-2">
+          {googleMapsUrl && (
+            <a
+              href={googleMapsUrl}
+              target="_blank"
+              rel="noreferrer"
+              onClick={onClose}
+              className="flex h-14 items-center gap-3 rounded-2xl border border-gray-200 px-4 text-gray-900 active:scale-[0.99] transition-all"
+            >
+              <GoogleMapsIcon />
+              <span className="font-semibold">{t(lang, 'rsvNavGoogleMaps')}</span>
+            </a>
+          )}
+          {wazeUrl && (
+            <a
+              href={wazeUrl}
+              target="_blank"
+              rel="noreferrer"
+              onClick={onClose}
+              className="flex h-14 items-center gap-3 rounded-2xl border border-gray-200 px-4 text-gray-900 active:scale-[0.99] transition-all"
+            >
+              <WazeIcon />
+              <span className="font-semibold">{t(lang, 'rsvNavWaze')}</span>
+            </a>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="mt-3 h-12 w-full rounded-2xl text-sm font-semibold text-gray-500 active:scale-[0.99] transition-all"
+        >
+          {t(lang, 'rsvNavCancel')}
+        </button>
+      </div>
     </div>
   )
 }
@@ -1107,6 +1183,30 @@ function PinIcon() {
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <path d="M12 21s7-6.1 7-11a7 7 0 1 0-14 0c0 4.9 7 11 7 11Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
       <circle cx="12" cy="10" r="2.5" stroke="currentColor" strokeWidth="1.8" />
+    </svg>
+  )
+}
+
+/** Пин-маркер Google Maps в фирменных цветах */
+function GoogleMapsIcon() {
+  return (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M12 22s7-6.7 7-12a7 7 0 1 0-14 0c0 5.3 7 12 7 12Z" fill="#34A853" />
+      <path d="M12 3a7 7 0 0 0-6.3 4l6.3 6L18.6 8.6A7 7 0 0 0 12 3Z" fill="#4285F4" />
+      <path d="M5.7 7A7 7 0 0 0 5 10c0 2.3 1.3 4.6 2.8 6.5L12 13 5.7 7Z" fill="#FBBC04" />
+      <circle cx="12" cy="10" r="2.5" fill="#fff" />
+    </svg>
+  )
+}
+
+/** Логотип-маска Waze (упрощённая), в фирменном голубом */
+function WazeIcon() {
+  return (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M12 3a8 8 0 0 1 8 8c0 2.7-.8 4.1-.8 5.3 0 .9.5 1.4.5 2.1 0 .8-.7 1.3-1.5 1.3-1.2 0-1.9-1-3-1a15 15 0 0 1-3.2.3A8 8 0 0 1 12 3Z" fill="#33CCFF" />
+      <circle cx="9.5" cy="10.5" r="1.1" fill="#0a1b2a" />
+      <circle cx="14.5" cy="10.5" r="1.1" fill="#0a1b2a" />
+      <path d="M9 14c.7 1 2 1.6 3 1.6s2.3-.6 3-1.6" stroke="#0a1b2a" strokeWidth="1.3" strokeLinecap="round" />
     </svg>
   )
 }

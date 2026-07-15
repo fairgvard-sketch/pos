@@ -196,6 +196,8 @@ curl "$FN/public-reserve?id=<CLIENT_UUID>" -H "apikey: $ANON" -H "Authorization:
   «`<день> · <время>`») — на первом экране часы стоят в зоне 50/50 с кнопками
   телефона/навигации: часы слева двумя выровненными колонками (день под днём,
   время под временем; `HoursRows` бьёт строку по первому « · »), кнопки справа;
+  тап по кнопке навигации открывает bottom-sheet выбора приложения — Google
+  Maps или Waze (при координатах — точный пин, иначе поиск по адресу);
 - ссылки Instagram, Facebook и Google Review — в подвале страницы.
 
 Поля хранятся в `locations.settings.reservations` (JSONB), а `public-reserve`
