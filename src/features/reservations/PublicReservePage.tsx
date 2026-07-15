@@ -417,6 +417,35 @@ function SlotCell({ label, children }: { label: string; children: React.ReactNod
 
 const SELECT_CLS = 'absolute inset-0 w-full h-full opacity-0 cursor-pointer text-base'
 
+/**
+ * Часы работы (066) выводятся двумя выровненными колонками: день слева,
+ * интервал справа — чтобы дни были под днями, а время под временем. Формат
+ * ввода — «<день> · <время>» построчно (как в плейсхолдере настроек). Первый
+ * « · » делит строку; строка без разделителя показывается днём на всю ширину.
+ */
+function HoursRows({ text }: { text: string }) {
+  const rows = text
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const i = line.indexOf('·')
+      return i === -1
+        ? { day: line, time: null as string | null }
+        : { day: line.slice(0, i).trim(), time: line.slice(i + 1).trim() || null }
+    })
+  return (
+    <div className="mt-1.5 space-y-1 text-sm text-gray-900">
+      {rows.map((r, i) => (
+        <div key={i} className="flex items-baseline justify-between gap-3">
+          <span className="font-semibold">{r.day}</span>
+          {r.time && <span className="text-gray-600 tabular-nums" dir="ltr">{r.time}</span>}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function SlotScreen({ lang, info, days, todayStr, todayHasSlots, date, time, guests, maxParty, timeSlots, instant, freeTimes, onDate, onTime, onGuests, onNext }: {
   lang: Lang
   info: ReserveInfo
@@ -512,16 +541,23 @@ function SlotScreen({ lang, info, days, todayStr, todayHasSlots, date, time, gue
       {/* Зона «часы работы · контакт» (066): часы слева построчно, кнопки
           телефон/навигация справа. Разделитель между колонками — только когда
           есть обе стороны. Пустые части не рендерятся. */}
+      {/* Зона «часы работы · навигация» (066): ровно 50/50. Часы слева
+          двумя колонками (день/время выровнены), кнопки телефона/навигации
+          справа по центру. Если одна из сторон пуста — вторая занимает всё. */}
       {(loc.hours || loc.phone || mapsUrl) && (
-        <div className="w-full mt-6 rounded-2xl border border-gray-200 flex items-stretch divide-x divide-gray-100 rtl:divide-x-reverse overflow-hidden">
+        <div className={`w-full mt-6 rounded-2xl border border-gray-200 overflow-hidden ${
+          loc.hours && (loc.phone || mapsUrl)
+            ? 'grid grid-cols-2 divide-x divide-gray-100 rtl:divide-x-reverse'
+            : ''
+        }`}>
           {loc.hours && (
-            <div className="flex-1 min-w-0 px-4 py-4">
+            <div className="min-w-0 px-4 py-4">
               <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{t(lang, 'rsvHoursTitle')}</div>
-              <p className="text-sm text-gray-900 mt-1.5 whitespace-pre-line leading-relaxed">{loc.hours}</p>
+              <HoursRows text={loc.hours} />
             </div>
           )}
           {(loc.phone || mapsUrl) && (
-            <div className="shrink-0 flex items-center gap-2 px-4 py-4">
+            <div className="flex items-center justify-center gap-3 px-4 py-4">
               {loc.phone && (
                 <a
                   href={`tel:${loc.phone}`}
