@@ -7,6 +7,7 @@ import {
   createModifierGroup,
   type ItemInput,
 } from './api'
+import { fetchCurrentLocation } from '../auth/api'
 import { useLangStore } from '../../store/langStore'
 import { t } from '../../lib/i18n'
 import { parseMoney } from '../../lib/money'
@@ -38,6 +39,10 @@ export default function ItemEditor({ item, defaultCategoryId, onSaved, onDeleted
   const { data: categories = [] } = useQuery({ queryKey: ['menu_categories'], queryFn: fetchCategories })
   const { data: groups = [] } = useQuery({ queryKey: ['modifier_groups'], queryFn: fetchModifierGroups })
   const { data: stations = [] } = useQuery({ queryKey: ['stations'], queryFn: fetchStations })
+  const { data: location } = useQuery({ queryKey: ['current_location'], queryFn: fetchCurrentLocation })
+  // Учёт остатков выключен тумблером точки — секцию «Склад» не показываем,
+  // уже сохранённые track_inventory/cost/sku при этом не трогаем
+  const inventoryEnabled = location?.settings?.interface?.inventory_enabled !== false
 
   const [name, setName] = useState(item?.name ?? '')
   const [description, setDescription] = useState(item?.description ?? '')
@@ -395,6 +400,7 @@ export default function ItemEditor({ item, defaultCategoryId, onSaved, onDeleted
           </section>
 
           {/* ── Склад ── */}
+          {inventoryEnabled && (
           <section>
             <div className="flex items-center gap-3 mb-3">
               <SectionTitle noMargin>{t(lang, 'inventory')}</SectionTitle>
@@ -426,6 +432,7 @@ export default function ItemEditor({ item, defaultCategoryId, onSaved, onDeleted
               </div>
             )}
           </section>
+          )}
         </div>
 
         {/* Футер */}

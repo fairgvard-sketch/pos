@@ -115,7 +115,7 @@ export default function ReceiveSheet({ onClose }: { onClose: () => void }) {
       <div key={row.key} className="border-b border-gray-100">
         <div className="flex items-center gap-2 min-h-[48px] px-1">
           <span className={`flex-1 min-w-0 truncate text-sm ${qty > 0 ? 'font-bold' : ''} text-gray-900`}>
-            {row.name}
+            <bdi>{row.name}</bdi>
             {row.tracked && row.stock != null && (
               <span className="font-normal text-gray-400 tabular-nums"> · {row.stock}{row.unit ? ` ${row.unit}` : ''}</span>
             )}

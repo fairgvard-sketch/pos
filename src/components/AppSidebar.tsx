@@ -177,8 +177,10 @@ export default function AppSidebar({ active }: { active: SidebarPage }) {
         />
         <SideLink active={active === 'transactions'} label={t(lang, 'transactions')} iconName="card" onClick={() => navigate('/transactions')} />
         <SideLink active={active === 'shift'} label={t(lang, 'shift')} iconName="shift" onClick={() => navigate('/shift')} />
-        {/* Склад (055): виден тем, кому доступен приход (право точки) */}
-        {can(staff.role, 'stock_receive', location?.settings) && (
+        {/* Склад (055): виден тем, кому доступен приход (право точки),
+            и только если учёт остатков не выключен тумблером точки */}
+        {location?.settings?.interface?.inventory_enabled !== false &&
+          can(staff.role, 'stock_receive', location?.settings) && (
           <SideLink active={active === 'inventory'} label={t(lang, 'inventory')} iconName="note" onClick={() => navigate('/inventory')} />
         )}
         {/* Менеджерский блок отделён. Редкие экраны из сайдбара убраны:

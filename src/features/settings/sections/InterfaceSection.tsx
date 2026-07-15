@@ -15,6 +15,7 @@ export default function InterfaceSection({ location }: { location: Location | un
   const { settings, update } = useLocationSettings(location)
   // Отсутствие ключа = показывать (обратная совместимость)
   const allItemsTab = settings.interface?.show_all_items_tab !== false
+  const inventoryEnabled = settings.interface?.inventory_enabled !== false
 
   return (
     <Group>
@@ -23,6 +24,12 @@ export default function InterfaceSection({ location }: { location: Location | un
         hint={t(lang, 'allItemsTabHint')}
         checked={allItemsTab}
         onChange={(v) => update({ interface: { show_all_items_tab: v } })}
+      />
+      <ToggleRow
+        label={t(lang, 'invEnabledTitle')}
+        hint={t(lang, 'invEnabledHint')}
+        checked={inventoryEnabled}
+        onChange={(v) => update({ interface: { inventory_enabled: v } })}
       />
     </Group>
   )

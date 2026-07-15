@@ -317,16 +317,19 @@ export default function ShiftPage() {
               </button>
             </div>
 
-            {/* Списание дня (047): сколько выбросили — остатки и отчёт потерь */}
-            <button
-              onClick={() => {
-                if (!online) { toast.error(t(lang, 'offlineBlockedHint')); return }
-                setShowWaste(true)
-              }}
-              className={`btn-secondary w-full !rounded-2xl mt-2 ${online ? '' : '!opacity-40'}`}
-            >
-              {t(lang, 'wasteDayBtn')}
-            </button>
+            {/* Списание дня (047): сколько выбросили — остатки и отчёт потерь.
+                Скрыто, если учёт остатков выключен тумблером точки */}
+            {location?.settings?.interface?.inventory_enabled !== false && (
+              <button
+                onClick={() => {
+                  if (!online) { toast.error(t(lang, 'offlineBlockedHint')); return }
+                  setShowWaste(true)
+                }}
+                className={`btn-secondary w-full !rounded-2xl mt-2 ${online ? '' : '!opacity-40'}`}
+              >
+                {t(lang, 'wasteDayBtn')}
+              </button>
+            )}
 
             {movements.length > 0 && (
               <div className="mt-3 space-y-1.5">

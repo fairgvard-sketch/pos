@@ -1,9 +1,11 @@
 import { useMemo, useState } from 'react'
+import { Navigate } from 'react-router-dom'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import AppSidebar from '../../components/AppSidebar'
 import { fetchItems } from '../menu/api'
 import { fetchCurrentLocation } from '../auth/api'
+import { landingRoute } from '../auth/landing'
 import {
   fetchStockMovements, fetchStockReport, fetchSupplyItems, setSupplyItemActive, upsertSupplyItem,
   MOVEMENTS_PAGE, type StockMovement, type MovementType, type SupplyItem,
@@ -26,6 +28,15 @@ const PRESETS: { key: Preset; label: TranslationKey }[] = [
   { key: '30d', label: 'period30d' },
   { key: 'custom', label: 'periodCustom' },
 ]
+
+/** Порог «заканчивается»: 1..LOW_STOCK штук — жёлтая подсветка остатка */
+const LOW_STOCK = 2
+
+const TAB_HINTS: Record<Tab, TranslationKey> = {
+  stock: 'invStockHint',
+  journal: 'invJournalHint',
+  report: 'invReportHint',
+}
 
 const MOV_LABELS: Record<MovementType, TranslationKey> = {
   sale: 'movSale',
@@ -85,6 +96,9 @@ export default function InventoryPage() {
   const canTake = can(staff?.role, 'stock_take', location?.settings)
 
   const tracked = useMemo(() => items.filter((i) => i.track_inventory), [items])
+  // Сколько позиций меню живёт без учёта — иначе короткий список читается
+  // как «весь склад», хотя это лишь подключённые товары
+  const untrackedCount = items.length - tracked.length
 
   // ── Журнал: страницы по 50, свежие сверху ──────────────────
   const journal = useInfiniteQuery({
@@ -165,6 +179,12 @@ export default function InventoryPage() {
     return `${d.toLocaleDateString(locale, { day: 'numeric', month: 'short' })} ${formatTime(iso, lang)}`
   }
 
+  // Склад выключен тумблером точки (Настройки → Интерфейс) — уводим на
+  // стартовый экран. Ждём загрузку location, чтобы не дёргать редирект зря.
+  if (location && location.settings?.interface?.inventory_enabled === false) {
+    return <Navigate to={landingRoute(location.service_mode)} replace />
+  }
+
   return (
     <div dir={isRtl ? 'rtl' : 'ltr'} className="h-screen bg-[#eceef1] flex gap-3 p-3 overflow-hidden">
       <AppSidebar active="inventory" />
@@ -191,7 +211,7 @@ export default function InventoryPage() {
           </div>
 
           {/* Табы */}
-          <div className="inline-flex bg-gray-100 rounded-xl p-1 mb-6">
+          <div className="inline-flex bg-gray-100 rounded-xl p-1 mb-3">
             {(['stock', 'journal', 'report'] as Tab[]).map((k) => (
               <button
                 key={k}
@@ -204,6 +224,9 @@ export default function InventoryPage() {
               </button>
             ))}
           </div>
+
+          {/* Одна строка «что это» — склад читает и не-товаровед */}
+          <p className="text-sm text-gray-500 mb-6 max-w-2xl">{t(lang, TAB_HINTS[tab])}</p>
 
           {/* ── Остатки ── */}
           {tab === 'stock' && (
@@ -218,28 +241,34 @@ export default function InventoryPage() {
                   <div>
                     <div className="flex items-center gap-3 pb-2 border-b border-gray-200 text-xs font-bold text-gray-400 uppercase tracking-wide">
                       <span className="flex-1">{t(lang, 'items')}</span>
-                      <span className="w-24 text-end">{t(lang, 'costLabel')}</span>
+                      <span className="w-24 text-end" title={t(lang, 'invCostColHint')}>{t(lang, 'invCostCol')}</span>
                       <span className="w-16 text-end">{t(lang, 'stockLabel')}</span>
                     </div>
-                    {tracked.map((i) => (
-                      <div key={i.id} className="flex items-center gap-3 min-h-[48px] border-b border-gray-100">
-                        <span className="flex-1 min-w-0 truncate text-sm text-gray-900">
-                          {i.name}
-                          {i.sku && <span className="text-gray-400"> · {i.sku}</span>}
-                          {!i.is_available && <span className="badge-gray ms-2">{t(lang, 'stopListTitle')}</span>}
-                        </span>
-                        <span className="w-24 text-end text-sm text-gray-500 tabular-nums">
-                          {i.cost != null ? formatMoney(i.cost, lang) : ''}
-                        </span>
-                        <span
-                          className={`w-16 text-end font-bold tabular-nums ${
-                            (i.stock ?? 0) < 0 ? 'text-red-600' : 'text-gray-900'
-                          }`}
-                        >
-                          {i.stock ?? 0}
-                        </span>
-                      </div>
-                    ))}
+                    {tracked.map((i) => {
+                      const stock = i.stock ?? 0
+                      return (
+                        <div key={i.id} className="flex items-center gap-3 min-h-[48px] border-b border-gray-100">
+                          <span className="flex-1 min-w-0 truncate text-sm text-gray-900">
+                            <bdi>{i.name}</bdi>
+                            {i.sku && <span className="text-gray-400"> · {i.sku}</span>}
+                            {!i.is_available && <span className="badge-gray ms-2">{t(lang, 'stopListTitle')}</span>}
+                            {i.is_available && stock > 0 && stock <= LOW_STOCK && (
+                              <span className="badge-yellow ms-2">{t(lang, 'lowStockBadge')}</span>
+                            )}
+                          </span>
+                          <span className="w-24 text-end text-sm text-gray-500 tabular-nums">
+                            {i.cost != null ? formatMoney(i.cost, lang) : <span className="text-gray-300">—</span>}
+                          </span>
+                          <span
+                            className={`w-16 text-end font-bold tabular-nums ${
+                              stock <= 0 ? 'text-red-600' : stock <= LOW_STOCK ? 'text-amber-600' : 'text-gray-900'
+                            }`}
+                          >
+                            {stock}
+                          </span>
+                        </div>
+                      )
+                    })}
                   </div>
                 )}
 
@@ -248,7 +277,7 @@ export default function InventoryPage() {
                   <div>
                     <div className="flex items-center gap-3 pb-2 border-b border-gray-200 text-xs font-bold text-gray-400 uppercase tracking-wide">
                       <span className="flex-1">{t(lang, 'suppliesTitle')}</span>
-                      <span className="w-24 text-end">{t(lang, 'costLabel')}</span>
+                      <span className="w-24 text-end" title={t(lang, 'invCostColHint')}>{t(lang, 'invCostCol')}</span>
                       <span className="w-16 text-end">{t(lang, 'stockLabel')}</span>
                       {canTake && <span className="w-16" />}
                     </div>
@@ -268,13 +297,20 @@ export default function InventoryPage() {
                         ) : (
                           <>
                             <span className="flex-1 min-w-0 truncate text-sm text-gray-900">
-                              {s.name}
+                              <bdi>{s.name}</bdi>
                               {s.unit && <span className="text-gray-400"> · {s.unit}</span>}
+                              {s.stock > 0 && s.stock <= LOW_STOCK && (
+                                <span className="badge-yellow ms-2">{t(lang, 'lowStockBadge')}</span>
+                              )}
                             </span>
                             <span className="w-24 text-end text-sm text-gray-500 tabular-nums">
-                              {s.cost != null ? formatMoney(s.cost, lang) : ''}
+                              {s.cost != null ? formatMoney(s.cost, lang) : <span className="text-gray-300">—</span>}
                             </span>
-                            <span className={`w-16 text-end font-bold tabular-nums ${s.stock < 0 ? 'text-red-600' : 'text-gray-900'}`}>
+                            <span
+                              className={`w-16 text-end font-bold tabular-nums ${
+                                s.stock <= 0 ? 'text-red-600' : s.stock <= LOW_STOCK ? 'text-amber-600' : 'text-gray-900'
+                              }`}
+                            >
                               {s.stock}
                             </span>
                             {canTake && (
@@ -301,6 +337,12 @@ export default function InventoryPage() {
                     ))}
                   </div>
                 )}
+
+                {untrackedCount > 0 && (
+                  <p className="text-sm text-gray-500 bg-gray-50 rounded-xl px-4 py-3">
+                    {t(lang, 'invUntracked').replace('{n}', String(untrackedCount))}
+                  </p>
+                )}
               </div>
             )
           )}
@@ -316,7 +358,7 @@ export default function InventoryPage() {
                     <span className="w-28 shrink-0 text-gray-500 tabular-nums text-xs">{movTime(m.created_at)}</span>
                     <span className="w-28 shrink-0 text-gray-500">{t(lang, MOV_LABELS[m.type])}</span>
                     <span className="flex-1 min-w-0 truncate text-gray-900">
-                      {m.name}
+                      <bdi>{m.name}</bdi>
                       {m.supply_item_id && <span className="badge-gray ms-2">{t(lang, 'supplyBadge')}</span>}
                       {m.order && <span className="text-gray-400"> · #{m.order.daily_number}</span>}
                       {m.note && <span className="text-gray-400"> · {m.note}</span>}
@@ -391,7 +433,7 @@ export default function InventoryPage() {
                     {(report.data ?? []).map((r) => (
                       <div key={r.supply_item_id ?? r.menu_item_id ?? r.name} className="flex items-center gap-3 min-h-[44px] border-b border-gray-100 text-sm">
                         <span className="flex-1 min-w-0 truncate text-gray-900">
-                          {r.name}
+                          <bdi>{r.name}</bdi>
                           {r.kind === 'supply' && <span className="badge-gray ms-2">{t(lang, 'supplyBadge')}</span>}
                         </span>
                         <Num value={r.sold} />

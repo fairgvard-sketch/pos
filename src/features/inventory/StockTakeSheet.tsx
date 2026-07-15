@@ -91,7 +91,7 @@ export default function StockTakeSheet({ onClose }: { onClose: () => void }) {
     return (
       <div key={row.key} className="flex items-center gap-3 min-h-[56px] px-1 border-b border-gray-100">
         <span className={`flex-1 min-w-0 truncate text-sm ${valid ? 'font-bold' : ''} text-gray-900`}>
-          {row.name}
+          <bdi>{row.name}</bdi>
           {row.tracked ? (
             <span className="font-normal text-gray-400 tabular-nums">
               {' '}· {row.stock ?? 0}{row.unit ? ` ${row.unit}` : ''}

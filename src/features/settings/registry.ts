@@ -74,6 +74,7 @@ export const SEARCH_INDEX: SearchEntry[] = [
   { cat: 'business', label: 'menu', hint: 'menuAdminHint' },
   { cat: 'business', label: 'dashboard', hint: 'dashboardHint' },
   { cat: 'interface', label: 'allItemsTabTitle', hint: 'allItemsTabHint' },
+  { cat: 'interface', label: 'invEnabledTitle', hint: 'invEnabledHint' },
   { cat: 'device', label: 'deviceName', hint: 'deviceNameHint' },
   { cat: 'device', label: 'printBridgeStatus' },
   { cat: 'device', label: 'testPrint' },

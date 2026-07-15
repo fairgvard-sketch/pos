@@ -101,7 +101,7 @@ chunk.
 | `/shift` | PIN-сессия | текущая смена |
 | `/timesheet` | PIN-сессия | табель |
 | `/transactions` | PIN-сессия | операции и возвраты |
-| `/inventory` | PIN-сессия | склад; действия дополнительно гейтятся правами |
+| `/inventory` | PIN-сессия | склад; действия дополнительно гейтятся правами; при `interface.inventory_enabled = false` редиректит на стартовый экран |
 | `/menu` | `owner`, `manager` | управление каталогом |
 | `/reports` | `owner`, `manager` | отчёты |
 | `/settings` | `owner`, `manager` | настройки |
