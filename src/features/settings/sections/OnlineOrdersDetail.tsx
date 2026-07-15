@@ -250,12 +250,15 @@ export function ImageField({ label, hint, url, onChange }: {
 }
 
 /** Текстовое поле с сохранением на blur (без URL-логики) */
-export function TextField({ label, hint, placeholder, value, onSave }: {
+export function TextField({ label, hint, placeholder, value, onSave, multiline, rows }: {
   label: string
   hint?: string
   placeholder?: string
   value: string
   onSave: (v: string) => void
+  /** Многострочное поле — textarea вместо input (напр. часы работы построчно) */
+  multiline?: boolean
+  rows?: number
 }) {
   const [val, setVal] = useState(value)
   const [prevValue, setPrevValue] = useState(value)
@@ -263,21 +266,33 @@ export function TextField({ label, hint, placeholder, value, onSave }: {
     setPrevValue(value)
     setVal(value)
   }
+  const save = () => {
+    const v = val.trim()
+    if (v !== val) setVal(v)
+    if (v !== value) onSave(v)
+  }
   return (
     <label className="block">
       <span className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">{label}</span>
-      <input
-        className="input text-sm"
-        value={val}
-        placeholder={placeholder}
-        onChange={(e) => setVal(e.target.value)}
-        onBlur={() => {
-          const v = val.trim()
-          if (v !== val) setVal(v)
-          if (v !== value) onSave(v)
-        }}
-      />
-      {hint && <p className="text-xs text-gray-500 mt-1">{hint}</p>}
+      {multiline ? (
+        <textarea
+          className="input text-sm py-2 resize-y leading-relaxed"
+          rows={rows ?? 3}
+          value={val}
+          placeholder={placeholder}
+          onChange={(e) => setVal(e.target.value)}
+          onBlur={save}
+        />
+      ) : (
+        <input
+          className="input text-sm"
+          value={val}
+          placeholder={placeholder}
+          onChange={(e) => setVal(e.target.value)}
+          onBlur={save}
+        />
+      )}
+      {hint && <p className="text-xs text-gray-500 mt-1 whitespace-pre-line">{hint}</p>}
     </label>
   )
 }

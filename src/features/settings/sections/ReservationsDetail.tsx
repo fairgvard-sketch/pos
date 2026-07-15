@@ -372,6 +372,8 @@ function ReservePageBlock({ rsv, update, location }: {
             placeholder={t(lang, 'rsvHoursPlaceholder')}
             value={rsv.hours ?? ''}
             onSave={(v) => update({ reservations: { hours: v || null } })}
+            multiline
+            rows={4}
           />
         </div>
       </div>

@@ -1109,8 +1109,8 @@ export const translations = {
     rsvPageDesignHint: 'Что гость видит на странице бронирования.',
     rsvHeaderFallbackHint: 'Пусто — покажется шапка страницы онлайн-заказа',
     rsvHoursLabel: 'Часы работы',
-    rsvHoursSettingHint: 'Текст в подвале страницы. Можно в несколько строк.',
-    rsvHoursPlaceholder: 'Вс–Чт 8:00–22:00, Пт 8:00–14:00',
+    rsvHoursSettingHint: 'Показываются на странице рядом с кнопкой навигации. Каждый день — с новой строки.',
+    rsvHoursPlaceholder: 'Вс–Чт · 8:00–22:00\nПт · 8:00–14:00\nСб · выходной',
     rsvSocialHint: 'Кнопки в подвале страницы брони. Пустое поле — кнопки нет.',
     rsvErrHours: 'Выберите время в часы приёма',
     // Ручная бронь на кассе (060) — телефонный звонок
@@ -2288,8 +2288,8 @@ export const translations = {
     rsvPageDesignHint: 'מה שהאורח רואה בדף הזמנת השולחן.',
     rsvHeaderFallbackHint: 'ריק — תוצג הכותרת של דף ההזמנה אונליין',
     rsvHoursLabel: 'שעות פעילות',
-    rsvHoursSettingHint: 'טקסט בתחתית הדף. אפשר בכמה שורות.',
-    rsvHoursPlaceholder: 'א׳–ה׳ 8:00–22:00, ו׳ 8:00–14:00',
+    rsvHoursSettingHint: 'מוצג בדף ליד כפתור הניווט. כל יום בשורה נפרדת.',
+    rsvHoursPlaceholder: 'א׳–ה׳ · 8:00–22:00\nו׳ · 8:00–14:00\nשבת · סגור',
     rsvSocialHint: 'כפתורים בתחתית דף ההזמנה. שדה ריק — אין כפתור.',
     rsvErrHours: 'בחרו שעה בתוך שעות הקבלה',
     // הזמנה ידנית בקופה (060) — שיחת טלפון

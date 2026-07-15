@@ -192,8 +192,10 @@ curl "$FN/public-reserve?id=<CLIENT_UUID>" -H "apikey: $ANON" -H "Authorization:
 
 - отдельное фото-шапку с fallback на шапку онлайн-заказов, затем логотип;
 - адрес и необязательные координаты для точной кнопки навигации;
-- свободный текст часов работы;
-- ссылки Instagram, Facebook и Google Review.
+- многострочный текст часов работы (поле-textarea, строка на день) — на первом
+  экране страницы часы стоят в одной зоне с кнопками телефона/навигации
+  (часы слева построчно, кнопки справа), с `whitespace-pre-line`;
+- ссылки Instagram, Facebook и Google Review — в подвале страницы.
 
 Поля хранятся в `locations.settings.reservations` (JSONB), а `public-reserve`
 возвращает наружу только этот allow-listed профиль. Отдельная schema migration

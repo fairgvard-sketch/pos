@@ -349,18 +349,13 @@ function Shell({ isRtl, info, lang, hero, children }: {
 function ReserveFooter({ loc, lang }: { loc: NonNullable<ReserveInfo['location']>; lang: Lang }) {
   const links = loc.links
   const hasSocial = !!(links?.instagram || links?.facebook || links?.google_review)
-  const hasHours = !!loc.hours
-  if (!hasSocial && !hasHours) return null
+  // Часы работы переехали в зону «часы · навигация» на первом экране (SlotScreen);
+  // подвал теперь — только соцсети.
+  if (!hasSocial) return null
   const iconBtn =
     'w-12 h-12 rounded-full bg-white/10 text-white flex items-center justify-center active:scale-[0.94] transition-all'
   return (
     <footer className="mt-8 px-4 pt-8 pb-8 flex flex-col items-center gap-5 bg-black/85 border-t border-white/10">
-      {hasHours && (
-        <div className="text-center">
-          <div className="text-xs font-semibold text-white/50 uppercase tracking-wide">{t(lang, 'rsvHoursTitle')}</div>
-          <p className="text-sm text-white mt-1 whitespace-pre-line">{loc.hours}</p>
-        </div>
-      )}
       {(links?.instagram || links?.facebook) && (
         <div className="flex items-center gap-3">
           {links?.instagram && (
@@ -514,27 +509,40 @@ function SlotScreen({ lang, info, days, todayStr, todayHasSlots, date, time, gue
 
       <p className="text-sm text-gray-500 mt-4 text-center">{t(lang, 'rsvChooseHint')}</p>
 
-      {(loc.phone || mapsUrl) && (
-        <div className="flex gap-3 mt-6">
-          {loc.phone && (
-            <a
-              href={`tel:${loc.phone}`}
-              className="w-24 h-20 rounded-2xl border border-gray-300 flex flex-col items-center justify-center gap-1 text-gray-900 active:scale-[0.96] transition-all"
-            >
-              <PhoneIcon />
-              <span className="text-xs font-semibold">{t(lang, 'rsvPhoneBtn')}</span>
-            </a>
+      {/* Зона «часы работы · контакт» (066): часы слева построчно, кнопки
+          телефон/навигация справа. Разделитель между колонками — только когда
+          есть обе стороны. Пустые части не рендерятся. */}
+      {(loc.hours || loc.phone || mapsUrl) && (
+        <div className="w-full mt-6 rounded-2xl border border-gray-200 flex items-stretch divide-x divide-gray-100 rtl:divide-x-reverse overflow-hidden">
+          {loc.hours && (
+            <div className="flex-1 min-w-0 px-4 py-4">
+              <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{t(lang, 'rsvHoursTitle')}</div>
+              <p className="text-sm text-gray-900 mt-1.5 whitespace-pre-line leading-relaxed">{loc.hours}</p>
+            </div>
           )}
-          {mapsUrl && (
-            <a
-              href={mapsUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="w-24 h-20 rounded-2xl border border-gray-300 flex flex-col items-center justify-center gap-1 text-gray-900 active:scale-[0.96] transition-all"
-            >
-              <PinIcon />
-              <span className="text-xs font-semibold">{t(lang, 'rsvNavigateBtn')}</span>
-            </a>
+          {(loc.phone || mapsUrl) && (
+            <div className="shrink-0 flex items-center gap-2 px-4 py-4">
+              {loc.phone && (
+                <a
+                  href={`tel:${loc.phone}`}
+                  className="w-20 h-20 rounded-2xl border border-gray-300 flex flex-col items-center justify-center gap-1 text-gray-900 active:scale-[0.96] transition-all"
+                >
+                  <PhoneIcon />
+                  <span className="text-xs font-semibold">{t(lang, 'rsvPhoneBtn')}</span>
+                </a>
+              )}
+              {mapsUrl && (
+                <a
+                  href={mapsUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="w-20 h-20 rounded-2xl border border-gray-300 flex flex-col items-center justify-center gap-1 text-gray-900 active:scale-[0.96] transition-all"
+                >
+                  <PinIcon />
+                  <span className="text-xs font-semibold">{t(lang, 'rsvNavigateBtn')}</span>
+                </a>
+              )}
+            </div>
           )}
         </div>
       )}
