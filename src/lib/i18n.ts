@@ -1172,6 +1172,10 @@ export const translations = {
     rsvCheckingSlots: 'Проверяем свободные места…',
     // Подвал страницы брони (066)
     rsvHoursTitle: 'Часы работы',
+    // Бронь по зонам (072)
+    rsvZoneTitle: 'Где вам удобнее сесть?',
+    rsvZoneAny: 'Без разницы',
+    rsvErrZone: 'Эта зона сейчас недоступна — обновите страницу',
   },
   he: {
     // Общее
@@ -2343,6 +2347,10 @@ export const translations = {
     rsvCheckingSlots: 'בודקים מקומות פנויים…',
     // תחתית דף ההזמנה (066)
     rsvHoursTitle: 'שעות פעילות',
+    // הזמנה לפי אזורים (072)
+    rsvZoneTitle: 'איפה נוח לכם לשבת?',
+    rsvZoneAny: 'ללא העדפה',
+    rsvErrZone: 'האזור הזה אינו זמין כרגע — רעננו את הדף',
   },
 } as const
 

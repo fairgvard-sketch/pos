@@ -115,6 +115,9 @@ export default function PublicReservePage() {
 
   // Выбранный слот (шаг 1) и шаг флоу: слот → точное время (чипы) → контакты
   const [step, setStep] = useState<'slot' | 'times' | 'details'>('slot')
+  // Зона зала (072): пожелание гостя, null = без предпочтений. Чипы зон
+  // показываются на шаге точного времени, когда у точки две и больше зон.
+  const [zoneId, setZoneId] = useState<string | null>(null)
   const [date, setDate] = useState(() => (slotCtx.todayHasSlots ? slotCtx.days[0] : slotCtx.days[1]))
   const [time, setTime] = useState(() => {
     const slots = slotsFor(
@@ -157,6 +160,10 @@ export default function PublicReservePage() {
     if (!instant || !avail) return null // null = доступность не применяется (все свободны)
     return new Set(avail.slots.filter((s) => s.free).map((s) => s.time))
   }, [instant, avail])
+
+  // Зоны зала (072): выбор осмыслен от двух зон (одну — 066 создаёт всем)
+  const zones = useMemo(() => info?.location.zones ?? [], [info])
+  const zoneName = zoneId ? zones.find((z) => z.id === zoneId)?.name ?? null : null
 
   // Сверки во время рендера (реком. React вместо эффекта):
   // 1) Сегодня без слотов (часы приёма подгрузились и окно на сегодня пусто) —
@@ -253,11 +260,16 @@ export default function PublicReservePage() {
         {step === 'times' && (
           <TimesScreen
             lang={lang}
+            locId={locId}
             date={date}
             time={time}
             guests={guests}
             timeSlots={timeSlots}
+            instant={instant}
             freeTimes={freeTimes}
+            zones={zones}
+            zoneId={zoneId}
+            onZone={setZoneId}
             todayStr={slotCtx.todayStr}
             onBack={() => setStep('slot')}
             onPick={(v) => {
@@ -274,6 +286,8 @@ export default function PublicReservePage() {
             time={time}
             guests={guests}
             instant={instant}
+            zoneId={zoneId}
+            zoneName={zoneName}
             todayStr={slotCtx.todayStr}
             onBack={() => setStep('times')}
             onSubmitted={(uuid) => {
@@ -531,15 +545,24 @@ function SlotScreen({ lang, info, days, todayStr, todayHasSlots, date, time, gue
  * Точное время (как у Tabit): чипы вокруг запрошенного слота, ±2 по
  * 15 минут (окно сдвигается у краёв дня). Запрошенное — в жирной рамке;
  * тап по любому чипу ведёт к контактам с этим временем.
+ * Зоны (072): от двух зон — чипы «где сесть» над временем; в instant-режиме
+ * выбор зоны пересчитывает доступность времён по её столам.
  */
-function TimesScreen({ lang, date, time, guests, timeSlots, freeTimes, todayStr, onBack, onPick }: {
+function TimesScreen({ lang, locId, date, time, guests, timeSlots, instant, freeTimes, zones, zoneId, onZone, todayStr, onBack, onPick }: {
   lang: Lang
+  locId: string
   date: string
   time: string
   guests: number
   timeSlots: string[]
-  /** Свободные времена (instant-режим) или null */
+  /** instant-режим (063): доступность пересчитывается по выбранной зоне */
+  instant: boolean
+  /** Свободные времена по всей точке (instant-режим) или null */
   freeTimes: Set<string> | null
+  /** Зоны зала (072); чипы показываются от двух зон */
+  zones: { id: string; name: string }[]
+  zoneId: string | null
+  onZone: (v: string | null) => void
   todayStr: string
   onBack: () => void
   onPick: (v: string) => void
@@ -549,6 +572,25 @@ function TimesScreen({ lang, date, time, guests, timeSlots, freeTimes, todayStr,
     const start = Math.max(0, Math.min(i - 2, timeSlots.length - 5))
     return timeSlots.slice(start, start + 5)
   }, [timeSlots, time])
+
+  // Доступность в пределах зоны (072): свой запрос на выбранную зону.
+  // Пока грузится — показываем общую сетку; сервер всё равно перепроверит
+  // зону при submit (full_slot).
+  const { data: zoneAvail } = useQuery({
+    queryKey: ['reserve_avail', locId, date, guests, zoneId],
+    queryFn: () => fetchAvailability(locId, date, guests, zoneId),
+    enabled: instant && zoneId !== null,
+    staleTime: 20_000,
+  })
+  const zoneFree = useMemo(() => {
+    if (!instant || zoneId === null || !zoneAvail) return freeTimes
+    return new Set(zoneAvail.slots.filter((s) => s.free).map((s) => s.time))
+  }, [instant, zoneId, zoneAvail, freeTimes])
+
+  const zoneChipCls = (selected: boolean) =>
+    `h-11 px-4 rounded-xl text-sm font-bold active:scale-[0.96] transition-all ${
+      selected ? 'bg-white text-gray-900 border-2 border-gray-900' : 'bg-white text-gray-900 border border-gray-200 hover:border-gray-400'
+    }`
 
   return (
     <div className="px-4 pb-8">
@@ -560,7 +602,23 @@ function TimesScreen({ lang, date, time, guests, timeSlots, freeTimes, todayStr,
         {t(lang, 'rsvBackToSlot')}
       </button>
 
-      <h2 className="text-lg font-bold text-gray-900 mt-2">{t(lang, 'rsvPickTimeTitle')}</h2>
+      {zones.length >= 2 && (
+        <>
+          <h2 className="text-lg font-bold text-gray-900 mt-2">{t(lang, 'rsvZoneTitle')}</h2>
+          <div className="flex flex-wrap gap-2 mt-3">
+            <button className={zoneChipCls(zoneId === null)} onClick={() => onZone(null)}>
+              {t(lang, 'rsvZoneAny')}
+            </button>
+            {zones.map((z) => (
+              <button key={z.id} className={zoneChipCls(zoneId === z.id)} onClick={() => onZone(z.id)}>
+                {z.name}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+
+      <h2 className={`text-lg font-bold text-gray-900 ${zones.length >= 2 ? 'mt-6' : 'mt-2'}`}>{t(lang, 'rsvPickTimeTitle')}</h2>
       <p className="text-sm text-gray-500 mt-1">
         {dayOptionLabel(date, todayStr, lang)} · {guests} {t(lang, 'resGuestsShort')}
       </p>
@@ -568,7 +626,7 @@ function TimesScreen({ lang, date, time, guests, timeSlots, freeTimes, todayStr,
       <div className="grid grid-cols-5 gap-2 mt-4">
         {chips.map((s) => {
           const current = s === time
-          const full = freeTimes !== null && !freeTimes.has(s)
+          const full = zoneFree !== null && !zoneFree.has(s)
           return (
             <button
               key={s}
@@ -600,11 +658,12 @@ function reserveErrorText(lang: Lang, code: string): string {
     case 'outside_hours': return t(lang, 'rsvErrHours')
     case 'invalid_phone': return t(lang, 'rsvErrPhone')
     case 'full_slot': return t(lang, 'rsvErrFull')
+    case 'invalid_zone': return t(lang, 'rsvErrZone')
     default: return t(lang, 'rsvErrUnknown')
   }
 }
 
-function DetailsScreen({ lang, locId, date, time, guests, instant, todayStr, onBack, onSubmitted }: {
+function DetailsScreen({ lang, locId, date, time, guests, instant, zoneId, zoneName, todayStr, onBack, onSubmitted }: {
   lang: Lang
   locId: string
   date: string
@@ -612,6 +671,9 @@ function DetailsScreen({ lang, locId, date, time, guests, instant, todayStr, onB
   guests: number
   /** instant-режим (063): CTA — «Подтвердить бронь», не «Отправить заявку» */
   instant: boolean
+  /** Пожелание зоны (072); null = без предпочтений */
+  zoneId: string | null
+  zoneName: string | null
   todayStr: string
   onBack: () => void
   onSubmitted: (clientUuid: string) => void
@@ -649,6 +711,7 @@ function DetailsScreen({ lang, locId, date, time, guests, instant, todayStr, onB
         party_size: guests,
         reserved_at: at.toISOString(),
         note: note.trim() || null,
+        zone_id: zoneId,
       })
       onSubmitted(clientUuid)
     } catch (e) {
@@ -685,6 +748,12 @@ function DetailsScreen({ lang, locId, date, time, guests, instant, todayStr, onB
           <div className="font-bold text-gray-900 mt-1">{guests} {t(lang, 'resGuestsShort')}</div>
         </div>
       </div>
+
+      {zoneName && (
+        <p className="text-sm text-gray-500 mt-2 text-center">
+          {t(lang, 'rsvZoneTitle')}: <span className="font-semibold text-gray-900">{zoneName}</span>
+        </p>
+      )}
 
       <h2 className="text-base font-bold text-gray-900 mt-6 mb-3 text-center">{t(lang, 'rsvDetailsTitle')}</h2>
 
@@ -815,6 +884,7 @@ function StatusScreen({ lang, clientUuid, onNew }: {
       <div className="font-bold text-gray-900">{visitLabel(status.reserved_at, lang)}</div>
       <div className="text-sm text-gray-500 mt-1">
         {status.customer_name} · {status.party_size} {t(lang, 'resGuestsShort')}
+        {status.zone_name && <> · {status.zone_name}</>}
         {status.table_label && <> · {t(lang, 'tableLabel')} {status.table_label}</>}
       </div>
     </div>

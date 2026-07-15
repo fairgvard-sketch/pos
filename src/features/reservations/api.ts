@@ -20,6 +20,8 @@ export interface Reservation {
   order_id: string | null
   /** Назначенный стол (метка для карточки/чипа) */
   table: { id: string; label: string } | null
+  /** Пожелание зоны от гостя (072); null = без предпочтений */
+  zone: { id: string; name: string } | null
   /** Бронь пришла мгновенной (063, instant-режим) — без ручного подтверждения */
   auto: boolean
   /** Длительность визита, мин (063) */
@@ -60,7 +62,7 @@ export async function fetchReservations(): Promise<Reservation[]> {
   startOfToday.setHours(0, 0, 0, 0)
   const { data, error } = await supabase
     .from('reservations')
-    .select('*, table:table_id ( id, label )')
+    .select('*, table:table_id ( id, label ), zone:table_zones!reservations_zone_fk ( id, name )')
     .or(`status.eq.new,reserved_at.gte.${startOfToday.toISOString()}`)
     .order('reserved_at', { ascending: true })
     .limit(200)
@@ -78,7 +80,7 @@ export async function fetchUpcomingTableReservations(): Promise<Reservation[]> {
   const to = new Date(Date.now() + 2 * 3600_000).toISOString()
   const { data, error } = await supabase
     .from('reservations')
-    .select('*, table:table_id ( id, label )')
+    .select('*, table:table_id ( id, label ), zone:table_zones!reservations_zone_fk ( id, name )')
     .eq('status', 'confirmed')
     .not('table_id', 'is', null)
     .gte('reserved_at', from)

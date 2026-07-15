@@ -436,6 +436,7 @@ function ReservationHead({ r, lang, nowTs, showDay }: {
         </span>
         <span className="font-bold text-gray-900 truncate">{r.customer_name}</span>
         <span className="badge-gray tabular-nums shrink-0">{r.party_size} {t(lang, 'resGuestsShort')}</span>
+        {r.zone && <span className="badge-gray shrink-0">{r.zone.name}</span>}
         {r.table && <span className="badge-blue shrink-0">{t(lang, 'tableLabel')} {r.table.label}</span>}
         {r.auto && <span className="badge-gray shrink-0">{t(lang, 'resAutoBadge')}</span>}
       </div>
@@ -619,6 +620,8 @@ function TablePickerSheet({ lang, reservation, mode, tables, reservations, busy,
           </h2>
           <p className="text-sm text-gray-500 mt-1">
             {formatTime(reservation.reserved_at, lang)} · {reservation.customer_name} · {reservation.party_size} {t(lang, 'resGuestsShort')}
+            {/* Пожелание зоны от гостя (072) — подсказка, не ограничение */}
+            {reservation.zone && <> · <span className="font-semibold text-gray-900">{reservation.zone.name}</span></>}
           </p>
         </div>
 

@@ -51,6 +51,8 @@ export interface ReserveInfo {
       facebook?: string | null
       google_review?: string | null
     }
+    /** Зоны зала с активными столами (072); выбор показываем от двух зон */
+    zones?: { id: string; name: string }[]
   }
 }
 
@@ -68,6 +70,8 @@ export interface ReservePayload {
   party_size: number
   reserved_at: string // ISO
   note: string | null
+  /** Пожелание зоны зала (072); null = без предпочтений */
+  zone_id: string | null
 }
 
 export interface ReserveResult {
@@ -95,11 +99,13 @@ export interface AvailabilityResult {
  * Live-доступность слотов на дату под размер компании (063).
  * Возвращается только если у точки включён instant-режим — иначе
  * гостевая страница показывает слоты как раньше (все «свободны»).
+ * zoneId (072) сужает подбор столов до выбранной зоны зала.
  */
 export async function fetchAvailability(
-  locId: string, date: string, party: number,
+  locId: string, date: string, party: number, zoneId?: string | null,
 ): Promise<AvailabilityResult> {
   const qs = new URLSearchParams({ loc: locId, date, party: String(party) })
+  if (zoneId) qs.set('zone', zoneId)
   const res = await fetch(`${FN_BASE}/public-reserve?${qs}`, { headers })
   if (!res.ok) await parseError(res)
   return res.json()
@@ -123,6 +129,8 @@ export interface ReserveStatus {
   customer_name: string
   /** Метка назначенного стола (если касса выбрала) */
   table_label: string | null
+  /** Выбранная гостем зона зала (072); null = не выбирал */
+  zone_name: string | null
   created_at: string
 }
 
