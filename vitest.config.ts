@@ -13,7 +13,12 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./src/test/setup.ts'],
-    include: ['src/**/*.{test,spec}.{ts,tsx}'],
+    include: [
+      'src/**/*.{test,spec}.{ts,tsx}',
+      // Серверная логика Единого формата (Edge Functions) — чистые функции,
+      // тестируются тем же vitest, что и frontend.
+      'supabase/functions/_shared/**/*.{test,spec}.ts',
+    ],
     css: false,
   },
 })

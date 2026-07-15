@@ -36,6 +36,12 @@ Canvas receipt ─► ESC/POS raster ─► APK JS bridge ─► Sunmi printer
 точка берутся из JWT устройства. Публичные страницы не получают доступ к
 внутренним таблицам: они вызывают узкие Edge Functions.
 
+Общая серверная логика Edge Functions живёт в `supabase/functions/_shared/`.
+Там же строится модуль Единого формата 1.31 (`_shared/uniform-format/`):
+кодировка ISO-8859-8 и поля фиксированной длины для фискального экспорта
+`INI.TXT`/`BKMVDATA.TXT` (см. `docs/israel-compliance.md`). Чистые функции
+модуля тестируются общим vitest — include расширен в `vitest.config.ts`.
+
 ## Слои frontend
 
 ### Точка входа
