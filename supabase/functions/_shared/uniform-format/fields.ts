@@ -41,6 +41,38 @@ export function numeric(value: number, width: number): Uint8Array {
 }
 
 /**
+ * Знаковое число формата X9(n)V99…: символ знака `+`/`-`, затем цифры
+ * с подразумеваемой десятичной точкой. Значение передаётся в минимальных
+ * единицах (для денег V99 — агороты, для количества V9999 — десятитысячные).
+ * Ширина поля = 1 + intDigits + decDigits.
+ */
+export function signedNumber(value: number, intDigits: number, decDigits: number): Uint8Array {
+  if (!Number.isSafeInteger(value)) throw new Error('uf_bad_signed')
+  const digits = String(Math.abs(value))
+  if (digits.length > intDigits + decDigits) throw new Error('uf_signed_overflow')
+  return encodeIso8859_8((value < 0 ? '-' : '+') + digits.padStart(intDigits + decDigits, '0'))
+}
+
+/** Денежное поле X9(12)V99 (15 байт). Сумма — в целых агоротах. */
+export function amount15(agorot: number): Uint8Array {
+  return signedNumber(agorot, 12, 2)
+}
+
+/** Дата YYYYMMDD (8 байт). Пустая — нули, как принято для числовых полей. */
+export function date8(value: string | null): Uint8Array {
+  if (value === null || value === '') return encodeIso8859_8('00000000')
+  if (!/^\d{8}$/.test(value)) throw new Error('uf_bad_date')
+  return encodeIso8859_8(value)
+}
+
+/** Время HHMM (4 байта). Пустое — нули. */
+export function time4(value: string | null): Uint8Array {
+  if (value === null || value === '') return encodeIso8859_8('0000')
+  if (!/^\d{4}$/.test(value)) throw new Error('uf_bad_time')
+  return encodeIso8859_8(value)
+}
+
+/**
  * Сборка записи: конкатенация полей, проверка фиксированной длины
  * (без CRLF, как в таблице спецификации) и добавление CRLF.
  */
