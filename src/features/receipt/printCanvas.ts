@@ -572,98 +572,129 @@ export interface KitchenTicketData {
   orderType: 'here' | 'takeaway' | 'delivery'
   customerName: string
   tableLabel: string
+  /** Имя кассира (PIN-сессия) — строка קופאי/ת в шапке */
+  staffName: string
+  /** Имя устройства из настроек — строка מדפסת в шапке */
+  deviceName: string
   lines: KitchenTicketLine[]
-  /** Локализованные подписи (тикет — на языке интерфейса кассы) */
-  labels: { takeaway: string; here: string; delivery: string; table: string; addon: string }
 }
 
+// Тикет, как и чек, печатается только на иврите — независимо от языка кассы
+const TICKET_HE = {
+  printer: 'מדפסת',
+  orderNo: 'מספר הזמנה',
+  printedAt: 'תאריך ושעת הדפסה',
+  cashier: 'קופאי/ת',
+  order: 'הזמנה',
+  table: 'שולחן',
+  addon: 'תוספת להזמנה',
+  here: 'כאן',
+  takeaway: 'לקחת',
+  delivery: 'משלוח',
+} as const
+
 /**
- * Бегунок для бариста/кухни: номер крупно, тип, стол, позиции с
- * модификаторами и заметками. БЕЗ цен. Печатается при оплате
- * (весь заказ) или при дозаказе стола (только новые позиции).
+ * Бегунок для бариста/кухни в формате «как счёт»: ровная шапка
+ * метка-значение (принтер, номер заказа, время печати, кассир), затем
+ * стол/тип и номер умеренным жирным, затем позиции — количество отдельной
+ * колонкой, пунктир между позициями. БЕЗ цен и БЕЗ крупных «заказ/дозаказ»:
+ * у дозаказа стола вместо номера строка-пометка обычным кеглем.
  */
 export function renderKitchenTicketCanvas(d: KitchenTicketData): HTMLCanvasElement {
   const tall = document.createElement('canvas')
   tall.width = W
-  // Тикет крупным шрифтом: позиция ~44px + модификаторы ~38px + заметки.
-  // Считаем все рисуемые строки, чтобы длинный заказ не обрезался.
+  // Считаем все рисуемые строки, чтобы длинный заказ не обрезался:
+  // позиция ~48px + пунктир ~22px, модификаторы/заметки ~36px → запас 72.
   const ticketRows = d.lines.reduce(
     (s, l) => s + 1 + l.modifiers.length + (l.notes ? 1 : 0),
     0
   )
-  tall.height = scratchHeight(700, ticketRows, 50)
+  tall.height = scratchHeight(760, ticketRows, 72)
   const ctx = tall.getContext('2d')!
   ctx.fillStyle = '#fff'
   ctx.fillRect(0, 0, W, tall.height)
   ctx.fillStyle = '#000'
 
-  let y = 56
+  let y = 44
 
-  // Шапка одной строкой: номер крупно + стол/тип, имя, время — на общей
-  // базовой линии. Вся строка ужимается под ширину ленты (без обрезки).
-  // Офлайн-заказ приходит с локальным номером K-n (уже с префиксом)
-  const numText = d.dailyNumber !== null
-    ? (typeof d.dailyNumber === 'string' ? d.dailyNumber : `#${d.dailyNumber}`)
-    : d.labels.addon
-  const meta: string[] = []
-  if (d.tableLabel) meta.push(`${d.labels.table} ${d.tableLabel}`)
-  else meta.push(d.labels[d.orderType])
-  if (d.customerName) meta.push(d.customerName)
-  meta.push(new Date().toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' }))
-  const metaText = meta.join(' · ')
-
-  let numSize = 52
-  let metaSize = 28
-  const gapX = 16
-  const measure = () => {
-    ctx.font = FONT(numSize, true)
-    const nw = ctx.measureText(numText).width
-    ctx.font = FONT(metaSize, true)
-    return { nw, mw: ctx.measureText(metaText).width }
-  }
-  let { nw, mw } = measure()
-  if (nw + gapX + mw > RIGHT - MX) {
-    const k = (RIGHT - MX - gapX) / (nw + mw)
-    numSize = Math.max(32, Math.floor(numSize * k))
-    metaSize = Math.max(20, Math.floor(metaSize * k))
-    ;({ nw, mw } = measure())
-  }
-  const startX = Math.max(MX, (W - nw - gapX - mw) / 2)
-  ctx.textAlign = 'left'
-  ctx.font = FONT(numSize, true)
-  ctx.fillText(numText, startX, y)
-  ctx.font = FONT(metaSize, true)
-  ctx.fillText(metaText, startX + nw + gapX, y)
-  y += 28
-
-  // Разделитель
-  ctx.save()
-  ctx.setLineDash([8, 8])
-  ctx.beginPath()
-  ctx.moveTo(MX, y - 16)
-  ctx.lineTo(RIGHT, y - 16)
-  ctx.stroke()
-  ctx.restore()
-  y += 12
-
-  // Позиции: 2× Капучино Большой
-  for (const l of d.lines) {
-    ctx.font = FONT(34, true)
+  // Шапка: метка справа, значение слева — ровные края, как metaRow счёта
+  const metaRow = (label: string, value: string) => {
+    ctx.font = FONT(26)
     ctx.textAlign = 'right'
+    ctx.fillText(`${label}:`, RIGHT, y)
+    ctx.textAlign = 'left'
+    ctx.fillText(value, MX, y)
+    y += 36
+  }
+  const divider = () => {
+    ctx.save()
+    ctx.setLineDash([8, 8])
+    ctx.beginPath()
+    ctx.moveTo(MX, y - 22)
+    ctx.lineTo(RIGHT, y - 22)
+    ctx.stroke()
+    ctx.restore()
+    y += 22
+  }
+
+  // Офлайн-заказ приходит с локальным номером K-n (уже с префиксом)
+  const numText = d.dailyNumber === null
+    ? ''
+    : typeof d.dailyNumber === 'string' ? d.dailyNumber : `#${d.dailyNumber}`
+  const now = new Date()
+  const printedAt =
+    `${now.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })} ` +
+    now.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })
+
+  if (d.deviceName) metaRow(TICKET_HE.printer, d.deviceName)
+  if (numText) metaRow(TICKET_HE.orderNo, numText)
+  metaRow(TICKET_HE.printedAt, printedAt)
+  if (d.staffName) metaRow(TICKET_HE.cashier, d.staffName)
+  y += 8
+  divider()
+
+  // Куда нести: стол или тип заказа, имя клиента, номер — умеренный жирный
+  const subRow = (text: string) => {
+    ctx.font = FONT(30, true)
+    ctx.textAlign = 'right'
+    ctx.fillText(text, RIGHT, y)
+    y += 42
+  }
+  subRow(d.tableLabel ? `${TICKET_HE.table} ${d.tableLabel}` : TICKET_HE[d.orderType])
+  if (d.customerName) subRow(d.customerName)
+  subRow(numText ? `${TICKET_HE.order}: ${numText}` : TICKET_HE.addon)
+  y += 6
+  divider()
+
+  // Позиции: количество колонкой слева, название справа; длинное название
+  // ужимается под остаток ширины, чтобы колонки не наезжали друг на друга
+  d.lines.forEach((l, i) => {
+    if (i > 0) divider()
+    ctx.font = FONT(36, true)
+    ctx.textAlign = 'left'
+    ctx.fillText(String(l.qty), MX, y)
+    const qtyW = ctx.measureText(String(l.qty)).width
     const name = l.variantName ? `${l.name} ${l.variantName}` : l.name
-    ctx.fillText(`${l.qty > 1 ? `${l.qty}× ` : ''}${name}`, RIGHT, y)
-    y += 44
+    const maxW = RIGHT - MX - qtyW - 24
+    let size = 36
+    ctx.font = FONT(size, true)
+    while (size > 24 && ctx.measureText(name).width > maxW) {
+      size -= 2
+      ctx.font = FONT(size, true)
+    }
+    ctx.textAlign = 'right'
+    ctx.fillText(name, RIGHT, y)
+    y += 48
     ctx.font = FONT(28)
     for (const m of l.modifiers) {
-      ctx.fillText(`← ${m}`, RIGHT - 24, y)
-      y += 38
+      ctx.fillText(m, RIGHT - 36, y)
+      y += 36
     }
     if (l.notes) {
-      ctx.fillText(`✎ ${l.notes}`, RIGHT - 24, y)
-      y += 38
+      ctx.fillText(`✎ ${l.notes}`, RIGHT - 36, y)
+      y += 36
     }
-    y += 8
-  }
+  })
 
   const out = document.createElement('canvas')
   out.width = W

@@ -38,6 +38,7 @@ export default function OnlineOrdersPage() {
   const autoPrintOn = useDeviceStore((s) => s.autoPrintReceipt)
   const receiptPromptOn = useDeviceStore((s) => s.receiptPrompt)
   const kitchenTicketOn = useDeviceStore((s) => s.printKitchenTicket)
+  const deviceName = useDeviceStore((s) => s.deviceName)
 
   const { data: orders = [] } = useQuery({ queryKey: ['online_orders'], queryFn: fetchOnlineOrders })
   const { data: location } = useQuery({ queryKey: ['current_location'], queryFn: fetchCurrentLocation })
@@ -72,6 +73,8 @@ export default function OnlineOrdersPage() {
             orderType: 'takeaway',
             customerName: o.customer_name,
             tableLabel: '',
+            staffName: staff?.name ?? '',
+            deviceName,
             lines: o.items.map((l) => ({
               qty: l.qty,
               name: l.name,
@@ -79,13 +82,6 @@ export default function OnlineOrdersPage() {
               modifiers: l.mods.map((m) => m.name),
               notes: l.notes ?? '',
             })),
-            labels: {
-              takeaway: t(lang, 'takeaway'),
-              here: t(lang, 'here'),
-              delivery: t(lang, 'delivery'),
-              table: t(lang, 'tableLabel'),
-              addon: t(lang, 'kitchenAddon'),
-            },
           },
           printMode === 'rawbt'
         )

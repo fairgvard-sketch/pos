@@ -94,17 +94,6 @@ interface PayingOrder {
   offline?: boolean
 }
 
-/** Подписи тикета на языке интерфейса кассы */
-function ticketLabels(lang: 'ru' | 'he') {
-  return {
-    takeaway: t(lang, 'takeaway'),
-    here: t(lang, 'here'),
-    delivery: t(lang, 'delivery'),
-    table: t(lang, 'tableLabel'),
-    addon: t(lang, 'kitchenAddon'),
-  }
-}
-
 export default function SellPage() {
   const lang = useLangStore((s) => s.lang)
   const isRtl = lang === 'he'
@@ -116,6 +105,7 @@ export default function SellPage() {
   const autoPrintOn = useDeviceStore((s) => s.autoPrintReceipt)
   const receiptPromptOn = useDeviceStore((s) => s.receiptPrompt)
   const kitchenTicketOn = useDeviceStore((s) => s.printKitchenTicket)
+  const deviceName = useDeviceStore((s) => s.deviceName)
   const payMethodOrder = useDeviceStore((s) => s.payMethodOrder)
   const actionOrder = useDeviceStore((s) => s.actionOrder)
   const setActionOrder = useDeviceStore((s) => s.setActionOrder)
@@ -550,8 +540,9 @@ export default function SellPage() {
           orderType: cart.orderType,
           customerName: cart.customerName,
           tableLabel: cart.tableCtx?.tableLabel ?? cart.tableLabel,
+          staffName: staff?.name ?? '',
+          deviceName,
           lines: cart.lines.map(toTicketLine),
-          labels: ticketLabels(lang),
         },
         printMode === 'rawbt'
       )
@@ -937,8 +928,9 @@ export default function SellPage() {
             orderType: 'here',
             customerName: cart.customerName,
             tableLabel: tableCtx!.tableLabel,
+            staffName: staff?.name ?? '',
+            deviceName,
             lines: cart.lines.map(toTicketLine),
-            labels: ticketLabels(lang),
           },
           printMode === 'rawbt'
         )

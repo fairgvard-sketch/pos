@@ -99,7 +99,8 @@ describe('renderKitchenTicketCanvas — высота по контенту', () 
       orderType: 'takeaway' as const,
       tableLabel: '',
       customerName: '',
-      labels: { takeaway: 'לקחת', here: 'כאן', delivery: 'משלוח', table: 'שולחן', addon: 'תוספת' },
+      staffName: 'קיריל',
+      deviceName: 'SUNMI',
       lines: Array.from({ length: n }, (_, i) => ({
         name: `פריט ${i}`,
         variantName: null,
@@ -108,8 +109,8 @@ describe('renderKitchenTicketCanvas — высота по контенту', () 
         notes: '',
       })),
     })
-    const short = renderKitchenTicketCanvas(mk(2) as never)
-    const long = renderKitchenTicketCanvas(mk(100) as never)
+    const short = renderKitchenTicketCanvas(mk(2))
+    const long = renderKitchenTicketCanvas(mk(100))
     expect(long.height).toBeGreaterThan(short.height)
     expect(long.height).toBeGreaterThan(2000) // старый фикс
   })
