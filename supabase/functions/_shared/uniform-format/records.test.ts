@@ -70,7 +70,7 @@ describe('служебные записи', () => {
 const docHeader: DocumentHeader = {
   recordNumber: 2,
   taxId: identity.taxId,
-  docType: 320, // קבלה
+  docType: 320, // חשבונית מס/קבלה (приложение 1)
   docNumber: '1042',
   docDate: '20260715',
   docTime: '2143',
