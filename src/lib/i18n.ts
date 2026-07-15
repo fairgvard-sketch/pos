@@ -1174,8 +1174,12 @@ export const translations = {
     rsvHoursTitle: 'Часы работы',
     // Бронь по зонам (072)
     rsvZoneTitle: 'Где вам удобнее сесть?',
-    rsvZoneAny: 'Без разницы',
+    rsvZoneSummary: 'Зона',
     rsvErrZone: 'Эта зона сейчас недоступна — обновите страницу',
+    // Экран времени в стиле Ontopo (072): секции зон + метки слотов
+    rsvFoundTitle: 'Мы нашли для вас свободные места',
+    rsvInstantLabel: 'мгновенно',
+    rsvPhoneLabel: 'по телефону',
   },
   he: {
     // Общее
@@ -2349,8 +2353,12 @@ export const translations = {
     rsvHoursTitle: 'שעות פעילות',
     // הזמנה לפי אזורים (072)
     rsvZoneTitle: 'איפה נוח לכם לשבת?',
-    rsvZoneAny: 'ללא העדפה',
+    rsvZoneSummary: 'אזור',
     rsvErrZone: 'האזור הזה אינו זמין כרגע — רעננו את הדף',
+    // מסך שעות בסגנון Ontopo (072): מקטעי אזורים + תוויות סלוט
+    rsvFoundTitle: 'מצאנו מספר מקומות פנויים עבורך',
+    rsvInstantLabel: 'אישור מיידי',
+    rsvPhoneLabel: 'תיאום טלפוני',
   },
 } as const
 

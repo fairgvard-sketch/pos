@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQueries, useQuery } from '@tanstack/react-query'
 import { t, formatTime, type Lang } from '../../lib/i18n'
 import { PublicApiError } from '../online/publicApi'
 import {
@@ -113,10 +113,12 @@ export default function PublicReservePage() {
     return { todayStr, minTs, days, todayHasSlots }
   })
 
-  // Выбранный слот (шаг 1) и шаг флоу: слот → точное время (чипы) → контакты
+  // Выбранный слот (шаг 1) и шаг флоу: слот → точное время → контакты
   const [step, setStep] = useState<'slot' | 'times' | 'details'>('slot')
-  // Зона зала (072): пожелание гостя, null = без предпочтений. Чипы зон
-  // показываются на шаге точного времени, когда у точки две и больше зон.
+  // Зона зала (072): пожелание гостя, null = без предпочтений. На шаге
+  // точного времени зоны показываются секциями (Ontopo-стиль): у каждой
+  // свой ряд времён; выбор времени в секции = бронь этой зоны. Задаётся
+  // при тапе по слоту вместе со временем.
   const [zoneId, setZoneId] = useState<string | null>(null)
   const [date, setDate] = useState(() => (slotCtx.todayHasSlots ? slotCtx.days[0] : slotCtx.days[1]))
   const [time, setTime] = useState(() => {
@@ -268,12 +270,11 @@ export default function PublicReservePage() {
             instant={instant}
             freeTimes={freeTimes}
             zones={zones}
-            zoneId={zoneId}
-            onZone={setZoneId}
             todayStr={slotCtx.todayStr}
             onBack={() => setStep('slot')}
-            onPick={(v) => {
-              setTime(v)
+            onPick={(nextTime, nextZone) => {
+              setTime(nextTime)
+              setZoneId(nextZone)
               setStep('details')
             }}
           />
@@ -542,55 +543,57 @@ function SlotScreen({ lang, info, days, todayStr, todayHasSlots, date, time, gue
 }
 
 /**
- * Точное время (как у Tabit): чипы вокруг запрошенного слота, ±2 по
- * 15 минут (окно сдвигается у краёв дня). Запрошенное — в жирной рамке;
- * тап по любому чипу ведёт к контактам с этим временем.
- * Зоны (072): от двух зон — чипы «где сесть» над временем; в instant-режиме
- * выбор зоны пересчитывает доступность времён по её столам.
+ * Точное время (Ontopo-стиль): каждая зона зала — отдельная секция со
+ * своим рядом ±2 слота вокруг запрошенного времени. В instant-режиме у
+ * секции своя live-доступность: свободный слот — «мгновенное подтверждение»
+ * (зелёная точка), занятый — ⊘ и дизейбл. Тап по слоту несёт и время, и
+ * зону в контакты. Без зон (или одна) — единственная секция «вся точка»
+ * (zoneId=null).
  */
-function TimesScreen({ lang, locId, date, time, guests, timeSlots, instant, freeTimes, zones, zoneId, onZone, todayStr, onBack, onPick }: {
+function TimesScreen({ lang, locId, date, time, guests, timeSlots, instant, freeTimes, zones, todayStr, onBack, onPick }: {
   lang: Lang
   locId: string
   date: string
   time: string
   guests: number
   timeSlots: string[]
-  /** instant-режим (063): доступность пересчитывается по выбранной зоне */
+  /** instant-режим (063): каждая секция считает доступность по своей зоне */
   instant: boolean
   /** Свободные времена по всей точке (instant-режим) или null */
   freeTimes: Set<string> | null
-  /** Зоны зала (072); чипы показываются от двух зон */
+  /** Зоны зала (072); от двух зон — секция на зону, иначе одна общая */
   zones: { id: string; name: string }[]
-  zoneId: string | null
-  onZone: (v: string | null) => void
   todayStr: string
   onBack: () => void
-  onPick: (v: string) => void
+  /** (время, zoneId) — zoneId=null для общей секции «без зоны» */
+  onPick: (time: string, zoneId: string | null) => void
 }) {
+  // Ряд из 5 слотов вокруг запрошенного времени (окно у краёв дня сдвигается)
   const chips = useMemo(() => {
     const i = Math.max(0, timeSlots.indexOf(time))
     const start = Math.max(0, Math.min(i - 2, timeSlots.length - 5))
     return timeSlots.slice(start, start + 5)
   }, [timeSlots, time])
 
-  // Доступность в пределах зоны (072): свой запрос на выбранную зону.
-  // Пока грузится — показываем общую сетку; сервер всё равно перепроверит
-  // зону при submit (full_slot).
-  const { data: zoneAvail } = useQuery({
-    queryKey: ['reserve_avail', locId, date, guests, zoneId],
-    queryFn: () => fetchAvailability(locId, date, guests, zoneId),
-    enabled: instant && zoneId !== null,
-    staleTime: 20_000,
-  })
-  const zoneFree = useMemo(() => {
-    if (!instant || zoneId === null || !zoneAvail) return freeTimes
-    return new Set(zoneAvail.slots.filter((s) => s.free).map((s) => s.time))
-  }, [instant, zoneId, zoneAvail, freeTimes])
+  // От двух зон — секция на каждую (zoneId = z.id). Меньше — одна общая
+  // секция по всей точке (zoneId = null), доступность из freeTimes.
+  const sections = useMemo(
+    () => (zones.length >= 2
+      ? zones.map((z) => ({ id: z.id, name: z.name }))
+      : [{ id: null as string | null, name: null }]),
+    [zones]
+  )
 
-  const zoneChipCls = (selected: boolean) =>
-    `h-11 px-4 rounded-xl text-sm font-bold active:scale-[0.96] transition-all ${
-      selected ? 'bg-white text-gray-900 border-2 border-gray-900' : 'bg-white text-gray-900 border border-gray-200 hover:border-gray-400'
-    }`
+  // Каждой зоне-секции — свой запрос доступности (только instant). Хук
+  // useQueries держит стабильный порядок; общая секция берёт freeTimes.
+  const zoneQueries = useQueries({
+    queries: sections.map((s) => ({
+      queryKey: ['reserve_avail', locId, date, guests, s.id],
+      queryFn: () => fetchAvailability(locId, date, guests, s.id),
+      enabled: instant && s.id !== null,
+      staleTime: 20_000,
+    })),
+  })
 
   return (
     <div className="px-4 pb-8">
@@ -602,50 +605,98 @@ function TimesScreen({ lang, locId, date, time, guests, timeSlots, instant, free
         {t(lang, 'rsvBackToSlot')}
       </button>
 
-      {zones.length >= 2 && (
-        <>
-          <h2 className="text-lg font-bold text-gray-900 mt-2">{t(lang, 'rsvZoneTitle')}</h2>
-          <div className="flex flex-wrap gap-2 mt-3">
-            <button className={zoneChipCls(zoneId === null)} onClick={() => onZone(null)}>
-              {t(lang, 'rsvZoneAny')}
-            </button>
-            {zones.map((z) => (
-              <button key={z.id} className={zoneChipCls(zoneId === z.id)} onClick={() => onZone(z.id)}>
-                {z.name}
-              </button>
-            ))}
-          </div>
-        </>
-      )}
-
-      <h2 className={`text-lg font-bold text-gray-900 ${zones.length >= 2 ? 'mt-6' : 'mt-2'}`}>{t(lang, 'rsvPickTimeTitle')}</h2>
+      <h2 className="text-lg font-bold text-gray-900 mt-2">
+        {instant ? t(lang, 'rsvFoundTitle') : t(lang, 'rsvPickTimeTitle')}
+      </h2>
       <p className="text-sm text-gray-500 mt-1">
-        {dayOptionLabel(date, todayStr, lang)} · {guests} {t(lang, 'resGuestsShort')}
+        {dayOptionLabel(date, todayStr, lang)} · {time} · {guests} {t(lang, 'resGuestsShort')}
       </p>
 
-      <div className="grid grid-cols-5 gap-2 mt-4">
+      <div className="mt-5 space-y-6">
+        {sections.map((s, i) => {
+          // Свободные времена секции: своя зона → её запрос; общая → freeTimes
+          const q = zoneQueries[i]
+          const secFree = s.id === null
+            ? freeTimes
+            : (instant && q?.data
+                ? new Set(q.data.slots.filter((sl) => sl.free).map((sl) => sl.time))
+                : freeTimes)
+          return (
+            <ZoneTimeRow
+              key={s.id ?? '__any__'}
+              lang={lang}
+              zoneName={s.name}
+              chips={chips}
+              time={time}
+              instant={instant}
+              freeTimes={secFree}
+              onPick={(v) => onPick(v, s.id)}
+            />
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Секция одной зоны на экране времени: заголовок зоны (если есть) и ряд
+ * слотов. Свободный instant-слот подписан «мгновенное подтверждение»,
+ * дальний/не-instant — «по телефону», занятый — ⊘ и недоступен.
+ */
+function ZoneTimeRow({ lang, zoneName, chips, time, instant, freeTimes, onPick }: {
+  lang: Lang
+  zoneName: string | null
+  chips: string[]
+  time: string
+  instant: boolean
+  freeTimes: Set<string> | null
+  onPick: (v: string) => void
+}) {
+  return (
+    <section>
+      {zoneName && (
+        <div className="flex items-center gap-2 mb-3">
+          <span className="w-5 h-5 flex items-center justify-center text-gray-500 shrink-0"><ChairIcon /></span>
+          <h3 className="text-base font-bold text-gray-900">{zoneName}</h3>
+        </div>
+      )}
+      <div className="grid grid-cols-5 gap-2">
         {chips.map((s) => {
           const current = s === time
-          const full = zoneFree !== null && !zoneFree.has(s)
+          // instant: занят, если явно не в множестве свободных
+          const full = instant && freeTimes !== null && !freeTimes.has(s)
+          // Мгновенное подтверждение — только instant + слот свободен
+          const now = instant && (freeTimes === null || freeTimes.has(s))
           return (
             <button
               key={s}
               onClick={() => !full && onPick(s)}
               disabled={full}
-              className={`h-14 rounded-xl text-base font-bold tabular-nums active:scale-[0.96] transition-all ${
+              className={`h-16 rounded-xl flex flex-col items-center justify-center gap-0.5 active:scale-[0.96] transition-all ${
                 full
-                  ? 'bg-gray-50 text-gray-300 line-through border border-gray-100 cursor-not-allowed active:scale-100'
+                  ? 'bg-gray-50 border border-gray-100 cursor-not-allowed active:scale-100'
                   : current
-                    ? 'bg-white text-gray-900 border-2 border-gray-900'
-                    : 'bg-white text-gray-900 border border-gray-200 hover:border-gray-400'
+                    ? 'bg-white border-2 border-gray-900'
+                    : 'bg-white border border-gray-200 hover:border-gray-400'
               }`}
             >
-              {s}
+              <span className={`text-base font-bold tabular-nums ${full ? 'text-gray-300' : 'text-gray-900'}`}>{s}</span>
+              {full ? (
+                <span className="text-gray-300" aria-label={t(lang, 'rsvSlotFull')}><BlockedIcon /></span>
+              ) : now ? (
+                <span className="flex items-center gap-1 text-[11px] text-gray-500 leading-none">
+                  <span className="w-1.5 h-1.5 rounded-full bg-lime-500 shrink-0" aria-hidden />
+                  {t(lang, 'rsvInstantLabel')}
+                </span>
+              ) : (
+                <span className="text-[11px] text-gray-500 leading-none">{t(lang, 'rsvPhoneLabel')}</span>
+              )}
             </button>
           )
         })}
       </div>
-    </div>
+    </section>
   )
 }
 
@@ -751,7 +802,7 @@ function DetailsScreen({ lang, locId, date, time, guests, instant, zoneId, zoneN
 
       {zoneName && (
         <p className="text-sm text-gray-500 mt-2 text-center">
-          {t(lang, 'rsvZoneTitle')}: <span className="font-semibold text-gray-900">{zoneName}</span>
+          {t(lang, 'rsvZoneSummary')}: <span className="font-semibold text-gray-900">{zoneName}</span>
         </p>
       )}
 
@@ -1020,6 +1071,25 @@ function BackIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <path d="M15 5l-7 7 7 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+/** Стул — ярлык зоны в списке времён (нейтральный, для любой зоны) */
+function ChairIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M6 11V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v6M5 11h14M6 11v8m12-8v8M8 15h8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+/** Перечёркнутый круг — слот занят (нет свободного стола в instant-режиме) */
+function BlockedIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="12" cy="12" r="8.5" stroke="currentColor" strokeWidth="1.6" />
+      <path d="M6.5 6.5l11 11" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
     </svg>
   )
 }
