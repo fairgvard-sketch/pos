@@ -81,14 +81,17 @@ export default function ItemPicker({ item, groups, line, onConfirm, onClose }: P
 
   return (
     <div className="fixed inset-0 z-50 bg-black/30 flex items-center justify-center p-4">
-      <div className="card w-full max-w-md max-h-[90vh] overflow-y-auto p-6 space-y-5">
-        <div className="flex items-baseline justify-between">
+      <div className="card w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden">
+        {/* Шапка — зафиксирована, всегда видно название и цену */}
+        <div className="shrink-0 flex items-baseline justify-between px-6 pt-6 pb-4 border-b border-gray-100">
           <h2 className="text-lg font-bold text-gray-900">{item.name}</h2>
           <span className="font-black text-gray-900 tabular-nums">
             {formatMoney(lineUnitPrice(preview), lang)}
           </span>
         </div>
 
+        {/* Середина — скроллится только список размеров/модификаторов */}
+        <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4 space-y-5">
         {/* Размеры */}
         {variants.length > 0 && (
           <div className="flex gap-2 flex-wrap">
@@ -149,8 +152,10 @@ export default function ItemPicker({ item, groups, line, onConfirm, onClose }: P
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
         />
+        </div>
 
-        <div className="flex gap-2">
+        {/* Футер — зафиксирован, кнопка оплаты всегда на экране */}
+        <div className="shrink-0 flex gap-2 px-6 pt-4 pb-6 border-t border-gray-100">
           <button onClick={confirm} className="btn-primary flex-1 !py-3.5 !text-base">
             {line ? t(lang, 'save') : t(lang, 'add')} · {formatMoney(lineUnitPrice(preview), lang)}
           </button>
