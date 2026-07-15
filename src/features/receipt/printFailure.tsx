@@ -9,7 +9,11 @@ import { printCanvasWithResult } from '../../lib/escpos'
  * Ошибка печати не должна теряться: кассир видит тост и может перепечатать,
  * не прерывая поток продажи. Не блокирует, сам гаснет.
  */
-export function notifyPrintFailure(status: PrintStatus, onRetry: () => void): void {
+export function notifyPrintFailure(
+  status: PrintStatus,
+  onRetry: () => void,
+  detail?: string | null,
+): void {
   const lang = useLangStore.getState().lang
   const reason =
     status === 'no-paper'
@@ -17,11 +21,18 @@ export function notifyPrintFailure(status: PrintStatus, onRetry: () => void): vo
       : status === 'disconnected'
         ? t(lang, 'printDisconnected')
         : t(lang, 'printError')
+  // Причина от моста/принтера — в лог и мелко в тост: без неё ошибка
+  // недиагностируема удалённо (PII в статусах печати нет).
+  const code = detail ? `${status} · ${detail}` : status
+  console.warn('[print]', code)
 
   toast(
     (tst) => (
       <span className="flex items-center gap-3">
-        <span>{reason}</span>
+        <span>
+          <span className="block">{reason}</span>
+          <span className="block text-xs text-gray-500" dir="ltr">{code}</span>
+        </span>
         <button
           onClick={() => {
             toast.dismiss(tst.id)
@@ -47,12 +58,12 @@ export async function printCanvasWithRetry(
     if (outcome.ok) return true
     notifyPrintFailure(outcome.status, () => {
       void printCanvasWithRetry(makeCanvas, allowRawbt)
-    })
+    }, outcome.message)
     return false
-  } catch {
+  } catch (e) {
     notifyPrintFailure('error', () => {
       void printCanvasWithRetry(makeCanvas, allowRawbt)
-    })
+    }, e instanceof Error ? e.message : null)
     return false
   }
 }

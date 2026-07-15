@@ -57,7 +57,12 @@ export async function printCanvasWithResult(
     const result = awaitPrintResult(jobId, true, resultAware)
     try {
       const accepted = bridge.printBase64(canvasToEscposBase64(canvas), jobId)
-      if (!accepted) window.__kassaPrintResult?.(jobId, 'error', 'not-accepted')
+      if (!accepted) {
+        // Мост при отказе шлёт настоящую причину (например, disconnected)
+        // асинхронно через evaluateJavascript — даём ей дойти первой, иначе
+        // синхронный generic 'not-accepted' навсегда замаскирует статус.
+        setTimeout(() => window.__kassaPrintResult?.(jobId, 'error', 'not-accepted'), 500)
+      }
     } catch (e) {
       window.__kassaPrintResult?.(
         jobId,

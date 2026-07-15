@@ -7,6 +7,7 @@ import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.os.Handler
 import android.util.Base64
 import android.view.WindowManager
 import android.webkit.JavascriptInterface
@@ -21,6 +22,7 @@ import com.sunmi.peripheral.printer.InnerPrinterManager
 import com.sunmi.peripheral.printer.InnerResultCallback
 import com.sunmi.peripheral.printer.SunmiPrinterService
 import org.json.JSONObject
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Тонкая обёртка Kassa для терминалов Sunmi (T2 mini и пр.):
@@ -112,8 +114,17 @@ class MainActivity : Activity() {
                 emitPrintResult(jobId, "queued", null)
                 true
             } catch (e: Exception) {
-                emitPrintResult(jobId, "error", e.message ?: "send-failed")
-                false
+                // Старый сервис печати без transaction mode: буфер уже
+                // сброшен без печати — шлём напрямую, итог рапортует колбэк
+                // последнего чанка (семантика моста v1).
+                try {
+                    sendChunked(p, bytes, jobId)
+                    emitPrintResult(jobId, "queued", null)
+                    true
+                } catch (e2: Exception) {
+                    emitPrintResult(jobId, "error", e2.message ?: "send-failed")
+                    false
+                }
             }
         }
 
@@ -148,13 +159,51 @@ class MainActivity : Activity() {
         }
     }
 
-    /** Колбэк принтера → результат задания в JS */
+    /**
+     * Прямая отправка без transaction mode — fallback для прошивок, где
+     * transaction API бросает. Колбэк вешаем на последний чанк: его
+     * onRunResult(true) через RESULT_GRACE_MS подтвердит успех.
+     */
+    private fun sendChunked(p: SunmiPrinterService, bytes: ByteArray, jobId: String) {
+        var offset = 0
+        while (offset < bytes.size) {
+            val end = minOf(offset + CHUNK_SIZE, bytes.size)
+            val chunk = bytes.copyOfRange(offset, end)
+            val isLast = end >= bytes.size
+            p.sendRAWData(chunk, if (isLast) resultCallbackFor(jobId) else null)
+            offset = end
+        }
+    }
+
+    /**
+     * Не все прошивки шлют onPrintResult после commit: после успешного
+     * onRunResult ждём финал это время и, если его нет, подтверждаем успех
+     * сами (иначе web-часть считает печать проваленной по своему timeout).
+     */
+    private val RESULT_GRACE_MS = 5000L
+
+    private val mainHandler by lazy { Handler(mainLooper) }
+
+    /**
+     * Колбэк принтера → результат задания в JS. Финал шлём один раз: реальный
+     * onPrintResult/onRaiseException выигрывает у отложенного подтверждения,
+     * опоздавший дубль игнорируется и здесь, и в web-части.
+     */
     private fun resultCallbackFor(jobId: String) = object : InnerResultCallback() {
+        private val done = AtomicBoolean(false)
+        private fun emitOnce(status: String, message: String?) {
+            if (done.compareAndSet(false, true)) emitPrintResult(jobId, status, message)
+        }
         override fun onRunResult(isSuccess: Boolean) {
             // Это результат выполнения binder-команды, не физической печати.
-            // Успех подтверждаем только в onPrintResult; явный отказ можно
-            // сообщить сразу, не дожидаясь timeout web-части.
-            if (!isSuccess) emitPrintResult(jobId, "error", "run-failed")
+            // Явный отказ сообщаем сразу, не дожидаясь timeout web-части.
+            if (!isSuccess) {
+                emitOnce("error", "run-failed")
+                return
+            }
+            // Команда выполнена; если прошивка так и не пришлёт onPrintResult,
+            // считаем задание напечатанным (поведение моста v1).
+            mainHandler.postDelayed({ emitOnce("success", "run-result-only") }, RESULT_GRACE_MS)
         }
         override fun onReturnString(result: String?) { /* не используем */ }
         override fun onRaiseException(code: Int, msg: String?) {
@@ -163,7 +212,7 @@ class MainActivity : Activity() {
                 msg?.contains("paper", ignoreCase = true) == true -> "no-paper"
                 else -> "error"
             }
-            emitPrintResult(jobId, status, msg ?: "exception-$code")
+            emitOnce(status, msg ?: "exception-$code")
         }
         override fun onPrintResult(code: Int, msg: String?) {
             val status = when {
@@ -171,7 +220,7 @@ class MainActivity : Activity() {
                 msg?.contains("paper", ignoreCase = true) == true -> "no-paper"
                 else -> "error"
             }
-            emitPrintResult(jobId, status, msg ?: if (code == 0) null else "print-result-$code")
+            emitOnce(status, msg ?: if (code == 0) null else "print-result-$code")
         }
     }
 
