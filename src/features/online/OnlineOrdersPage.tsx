@@ -490,7 +490,7 @@ function OnlineStateSheet({ lang, enabled, pausedUntil, prepMin, prepMax, canPau
           // Выключено тумблером в настройках — пауза не имеет смысла
           <p className="text-sm text-gray-500 mt-4">{t(lang, 'onlineOffHint')}</p>
         ) : pausedUntil ? (
-          <div className="mt-4">
+          <div className="mt-4 rounded-2xl bg-gray-50 p-4">
             <div className="rounded-2xl bg-amber-50 text-amber-800 text-sm font-semibold px-4 py-3">
               {t(lang, 'onlinePausedUntil')} {formatTime(pausedUntil, lang)}
             </div>
@@ -504,7 +504,7 @@ function OnlineStateSheet({ lang, enabled, pausedUntil, prepMin, prepMax, canPau
             </button>
           </div>
         ) : (
-          <div className="mt-4">
+          <div className="mt-4 rounded-2xl bg-gray-50 p-4">
             <div className="text-sm font-bold text-gray-500">{t(lang, 'onlinePauseTitle')}</div>
             <p className="text-sm text-gray-500 mt-1">{t(lang, 'onlinePauseHint')}</p>
             <div className="grid grid-cols-2 gap-2 mt-3">
@@ -523,7 +523,7 @@ function OnlineStateSheet({ lang, enabled, pausedUntil, prepMin, prepMax, canPau
         )}
 
         {enabled && (
-          <div className="mt-6 pt-4 border-t border-gray-100">
+          <div className="mt-3 rounded-2xl bg-gray-50 p-4">
             <div className="text-sm font-bold text-gray-500">{t(lang, 'onlinePrepTitle')}</div>
             <p className="text-sm text-gray-500 mt-1">{t(lang, 'onlinePrepHint')}</p>
 
