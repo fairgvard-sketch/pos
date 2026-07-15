@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest'
-import { renderReceiptCanvas, renderKitchenTicketCanvas } from './printCanvas'
-import type { Receipt } from './api'
+import { renderReceiptCanvas, renderRefundReceiptCanvas, renderKitchenTicketCanvas } from './printCanvas'
+import type { Receipt, RefundReceipt } from './api'
 
 /**
  * P2/P6: длинный чек/тикет не должен обрезаться. Раньше черновой холст был
@@ -89,6 +89,41 @@ describe('renderReceiptCanvas — высота по контенту', () => {
   it('максимальный чек не превышает страховочный потолок', () => {
     const huge = renderReceiptCanvas(baseReceipt(5000), undefined)
     expect(huge.height).toBeLessThanOrEqual(20000)
+  })
+})
+
+function baseRefund(itemCount: number): RefundReceipt {
+  return {
+    refund_id: 'r1',
+    refund_number: 7,
+    amount: 1600 * itemCount,
+    method: 'cash',
+    reason: null,
+    items: itemCount > 0
+      ? Array.from({ length: itemCount }, (_, i) => ({ name: `פריט ${i}`, qty: 2, amount: 3200 }))
+      : null,
+    created_at: new Date().toISOString(),
+    staff_name: 'קיריל',
+    daily_number: 5,
+    receipt_number: 42,
+    doc_type: 'invoice_receipt',
+    vat_rate: 18,
+    vat_amount: Math.round(1600 * itemCount * 18 / 118),
+  }
+}
+
+describe('renderRefundReceiptCanvas — высота по контенту', () => {
+  it('возврат суммой (без позиций) рендерится', () => {
+    const c = renderRefundReceiptCanvas(baseRefund(0), undefined)
+    expect(c.width).toBe(576)
+    expect(c.height).toBeGreaterThan(0)
+    expect(c.height).toBeLessThan(1200)
+  })
+
+  it('длинный возврат выше короткого (таблица позиций растит холст)', () => {
+    const short = renderRefundReceiptCanvas(baseRefund(1), undefined)
+    const long = renderRefundReceiptCanvas(baseRefund(100), undefined)
+    expect(long.height).toBeGreaterThan(short.height)
   })
 })
 

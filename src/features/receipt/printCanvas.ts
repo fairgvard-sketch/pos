@@ -247,12 +247,14 @@ export function renderReceiptCanvas(
   return out
 }
 
-// ── תעודת זיכוי — чек возврата ────────────────────────────
+// ── Чек возврата (документ זכות) ──────────────────────────
 
 /**
- * Кредитный документ возврата: своя сквозная нумерация, ссылка на
- * исходный чек, возвращённые позиции (или одна строка суммой),
- * доля НДС, способ выдачи. Иврит/RTL, раскладка как у чека.
+ * Кредитный документ возврата: называется по типу исходного документа
+ * («חשבונית מס/קבלה זכות»), своя сквозная нумерация, ссылка на исходный
+ * чек, возвращённые позиции таблицей как у чека. Знаки — как в референсе
+ * старой системы: минус только в строках таблицы (количество и לתשלום),
+ * итог «לזיכוי», НДС и способ возврата — положительные.
  */
 export function renderRefundReceiptCanvas(
   r: RefundReceipt,
@@ -311,7 +313,7 @@ export function renderRefundReceiptCanvas(
   y += 6
 
   // ── Тип документа + номер ──
-  center(`תעודת זיכוי ${r.refund_number ?? '—'}`, 28, true, 6)
+  center(`${docTypeLabel(r.doc_type)} זכות ${r.refund_number ?? '—'}`, 28, true, 6)
   center(opts.copy ? '*העתק*' : '*מקור*', 22, false, 4)
   divider()
 
@@ -326,29 +328,66 @@ export function renderRefundReceiptCanvas(
   if (r.reason) metaRow('סיבה:', fitText(r.reason, RIGHT - 200))
   divider()
 
-  // ── Возвращённые позиции (или одна строка суммой) ──
+  // ── Возвращённые позиции таблицей как у чека; возврат произвольной
+  // суммой (items = null) идёт без таблицы, сразу итогом ──
   if (r.items && r.items.length > 0) {
+    ctx.font = FONT(22, true)
+    ctx.textAlign = 'right'
+    ctx.fillText('שם', RIGHT, y)
+    ctx.textAlign = 'left'
+    ctx.fillText('מחיר', COL_PRICE, y)
+    ctx.textAlign = 'center'
+    ctx.fillText('כמות', COL_QTY, y)
+    ctx.textAlign = 'left'
+    ctx.fillText('לתשלום', COL_TOTAL, y)
+    y += 28
+    ctx.save()
+    ctx.beginPath()
+    ctx.moveTo(MX, y - 20)
+    ctx.lineTo(RIGHT, y - 20)
+    ctx.stroke()
+    ctx.restore()
+
+    // Минус — в количестве и в сумме строки; מחיר (за единицу) выводится
+    // из снапшота суммы строки, поэтому включает долю скидки исходного чека
     for (const l of r.items) {
       ctx.font = FONT(26)
       ctx.textAlign = 'right'
-      ctx.fillText(fitText(`${l.qty > 1 ? `${l.qty}× ` : ''}${l.name}`, NAME_MAX + 150), RIGHT, y)
+      ctx.fillText(fitText(l.name, NAME_MAX), RIGHT, y)
+      ctx.textAlign = 'left'
+      ctx.fillText(fmt(Math.round(l.amount / l.qty)), COL_PRICE, y)
+      ctx.textAlign = 'center'
+      ctx.fillText(`−${l.qty}`, COL_QTY, y)
       ctx.textAlign = 'left'
       ctx.fillText(`−${fmt(l.amount)}`, COL_TOTAL, y)
       y += 34
     }
-    y += 4
+
+    ctx.save()
+    ctx.beginPath()
+    ctx.moveTo(MX, y - 22)
+    ctx.lineTo(RIGHT, y - 22)
+    ctx.stroke()
+    ctx.restore()
+    const itemCount = r.items.reduce((s, l) => s + l.qty, 0)
+    metaRow('סה"כ פריטים', `−${itemCount}`, 26, true)
   }
 
-  // ── Итог зикуя крупно ──
-  center(`סה"כ זיכוי: −${fmt(r.amount)}`, 36, true, 16)
+  // ── Итог зикуя крупно — положительный, направление задаёт метка ──
+  y += 10
+  center(`לזיכוי: ${fmt(r.amount)}`, 36, true, 16)
 
   // НДС (доля в возвращённой сумме)
-  metaRow('סה"כ חייב במע"מ', `−${fmt(r.amount - r.vat_amount)}`)
-  metaRow(`מע"מ ${Number(r.vat_rate).toFixed(1)}%`, `−${fmt(r.vat_amount)}`)
+  metaRow('סה"כ חייב במע"מ', fmt(r.amount - r.vat_amount))
+  metaRow(`מע"מ ${Number(r.vat_rate).toFixed(1)}%`, fmt(r.vat_amount))
 
-  // Способ выдачи
+  // ── Способ возврата денег ──
   divider()
-  metaRow(receiptMethodLabel(r.method), `−${fmt(r.amount)}`)
+  ctx.font = FONT(26, true)
+  ctx.textAlign = 'right'
+  ctx.fillText('אופן החזר כספי:', RIGHT, y)
+  y += 34
+  metaRow(receiptMethodLabel(r.method), fmt(r.amount))
 
   if (location?.receipt_footer) {
     divider()

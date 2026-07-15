@@ -6,6 +6,7 @@ import { useLangStore } from '../../store/langStore'
 import { useDeviceStore } from '../../store/deviceStore'
 import { hasSilentPrintPath } from '../../lib/escpos'
 import { printCanvasWithRetry } from './printFailure'
+import { receiptMethodLabel } from '../../lib/payMethods'
 import { t } from '../../lib/i18n'
 import type { Location } from '../../types'
 
@@ -17,7 +18,7 @@ interface Props {
 }
 
 /**
- * Просмотр и печать תעודת זיכוי (чека возврата). Документ — всегда
+ * Просмотр и печать чека возврата (документ זכות). Документ — всегда
  * иврит/RTL (фискальный), кнопки — на языке UI. Печать тем же
  * конвейером, что и чек: мост APK → RawBT → браузерный диалог.
  */
@@ -71,7 +72,20 @@ function fmt(agorot: number): string {
   return (agorot / 100).toFixed(2)
 }
 
-/** Тело зикуя — оно же печатается (класс receipt-print). Иврит, RTL. */
+/** Название типа документа на иврите (фиск. требование Израиля) */
+function docTypeLabel(dt: RefundReceipt['doc_type']): string {
+  switch (dt) {
+    case 'receipt': return 'קבלה'
+    case 'tax_invoice': return 'חשבונית מס'
+    case 'invoice_receipt': return 'חשבונית מס/קבלה'
+  }
+}
+
+/**
+ * Тело зикуя — оно же печатается (класс receipt-print). Иврит, RTL.
+ * Знаки — как в референсе старой системы: минус только в строках таблицы,
+ * итог «לזיכוי», НДС и способ возврата — положительные.
+ */
 function RefundReceiptBody({ receipt: r, location, copy = false }: {
   receipt: RefundReceipt
   location: Location | undefined
@@ -91,7 +105,7 @@ function RefundReceiptBody({ receipt: r, location, copy = false }: {
         {location?.receipt_tax_id && <div className="text-xs">ע.מ/ח.פ: {location.receipt_tax_id}</div>}
       </div>
 
-      <div className="text-center font-bold text-sm">תעודת זיכוי {r.refund_number ?? '—'}</div>
+      <div className="text-center font-bold text-sm">{docTypeLabel(r.doc_type)} זכות {r.refund_number ?? '—'}</div>
       <div className="text-center text-xs mb-1">{copy ? '*העתק*' : '*מקור*'}</div>
 
       <Divider />
@@ -109,29 +123,42 @@ function RefundReceiptBody({ receipt: r, location, copy = false }: {
 
       <Divider />
 
+      {/* Таблица позиций как у чека: минус в количестве и сумме строки.
+          Возврат произвольной суммой (items = null) — без таблицы. */}
       {r.items && r.items.length > 0 && (
         <>
+          <div className="grid grid-cols-[1fr_3.5rem_2rem_3.5rem] text-xs font-bold border-b border-gray-300 pb-1 mb-1">
+            <span>שם</span>
+            <span className="text-left">מחיר</span>
+            <span className="text-center">כמות</span>
+            <span className="text-left">לתשלום</span>
+          </div>
           {r.items.map((l, i) => (
-            <div key={i} className="flex justify-between text-sm">
-              <span className="min-w-0 truncate pl-2">
-                {l.qty > 1 && `${l.qty}× `}
-                {l.name}
-              </span>
-              <span className="tabular-nums shrink-0" dir="ltr">−{fmt(l.amount)}</span>
+            <div key={i} className="grid grid-cols-[1fr_3.5rem_2rem_3.5rem] text-sm items-baseline">
+              <span className="truncate pl-2">{l.name}</span>
+              <span className="text-left tabular-nums">{fmt(Math.round(l.amount / l.qty))}</span>
+              <span className="text-center tabular-nums" dir="ltr">−{l.qty}</span>
+              <span className="text-left tabular-nums" dir="ltr">−{fmt(l.amount)}</span>
             </div>
           ))}
+          <div className="flex justify-between text-sm font-bold border-t border-gray-300 mt-1 pt-1">
+            <span>סה"כ פריטים</span>
+            <span className="tabular-nums" dir="ltr">−{r.items.reduce((s, l) => s + l.qty, 0)}</span>
+          </div>
         </>
       )}
 
-      <div className="text-center font-bold text-lg my-3" >
-        סה"כ זיכוי: <span dir="ltr">−{fmt(r.amount)}</span>
+      {/* Итог зикуя — положительный, направление задаёт метка */}
+      <div className="text-center font-bold text-lg my-3">
+        לזיכוי: {fmt(r.amount)}
       </div>
 
-      <MetaRow label='סה"כ חייב במע"מ' value={`−${fmt(r.amount - r.vat_amount)}`} />
-      <MetaRow label={`מע"מ ${Number(r.vat_rate).toFixed(1)}%`} value={`−${fmt(r.vat_amount)}`} />
+      <MetaRow label='סה"כ חייב במע"מ' value={fmt(r.amount - r.vat_amount)} />
+      <MetaRow label={`מע"מ ${Number(r.vat_rate).toFixed(1)}%`} value={fmt(r.vat_amount)} />
 
       <Divider />
-      <MetaRow label={r.method === 'cash' ? 'מזומן' : 'אשראי'} value={`−${fmt(r.amount)}`} />
+      <div className="text-sm font-bold">אופן החזר כספי:</div>
+      <MetaRow label={receiptMethodLabel(r.method)} value={fmt(r.amount)} />
 
       {location?.receipt_footer && (
         <>
