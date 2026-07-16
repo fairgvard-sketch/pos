@@ -44,8 +44,13 @@ export default class RouteErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error) {
-    // Виден в консоли для диагностики; в проде можно завести отправку в лог
     console.error('[RouteErrorBoundary]', error)
+    // Сигнал телеметрии событием, без импорта модулей (единый канал с AppErrorBoundary)
+    try {
+      window.dispatchEvent(new CustomEvent('kassa:client-error', {
+        detail: { source: 'react', message: `RouteErrorBoundary: ${error.message}`, stack: error.stack },
+      }))
+    } catch { /* ignore */ }
   }
 
   render() {

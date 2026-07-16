@@ -40,6 +40,12 @@ export default class AppErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error) {
     console.error('[AppErrorBoundary]', error)
+    // Сигнал телеметрии событием, без импорта модулей (они могут быть причиной краша)
+    try {
+      window.dispatchEvent(new CustomEvent('kassa:client-error', {
+        detail: { source: 'react', message: `AppErrorBoundary: ${error.message}`, stack: error.stack },
+      }))
+    } catch { /* ignore */ }
   }
 
   private hardReload = () => {

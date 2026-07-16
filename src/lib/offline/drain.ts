@@ -15,6 +15,7 @@ import { t } from '../i18n'
 import { useLangStore } from '../../store/langStore'
 import { currentStaffToken, useAuthStore } from '../../store/authStore'
 import { isNetworkishError, isOnline, kickProbe, markOffline, useNetStore } from './net'
+import { captureMessage } from '../telemetry'
 import { useOutboxStore } from './outboxStore'
 import { opInCurrentScope, refreshScope } from './scope'
 import type { OpKind, OutboxOp } from './types'
@@ -242,6 +243,8 @@ export async function kickDrain(): Promise<void> {
           useOutboxStore.getState().markBlockedAuth(op.id)
         } else {
           useOutboxStore.getState().markFailed(op.id, msg)
+          // Стоп очереди — главный сигнал здоровья кассы для оператора (074)
+          captureMessage('outbox', `${op.kind} failed: ${msg}`)
           const lang = useLangStore.getState().lang
           toast.error(`${t(lang, 'offlineOpFailed')}: ${msg}`, { duration: 6000 })
         }

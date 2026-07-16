@@ -10,6 +10,7 @@
  * Старый мост (без jobId/колбэка) результат не шлёт — для него считаем
  * задание успешным по факту приёма (деградация без регресса).
  */
+import { captureMessage } from './telemetry'
 
 export type PrintStatus = 'success' | 'error' | 'no-paper' | 'disconnected' | 'timeout'
 
@@ -41,6 +42,9 @@ export function installPrintResultReceiver(): void {
     if (!p) return
     clearTimeout(p.timer)
     pending.delete(jobId)
+    if (status !== 'success') {
+      captureMessage('print', `bridge: ${status}${message ? ` (${message})` : ''}`)
+    }
     p.resolve({ ok: status === 'success', status: status as PrintStatus, message })
   }
 }
@@ -78,6 +82,7 @@ export function awaitPrintResult(
       pending.delete(jobId)
       // v2+ обещает callback: его отсутствие — ошибка, а не доказательство
       // физической печати. Для старого APK сохраняем accepted-only fallback.
+      if (resultAware) captureMessage('print', 'callback-timeout')
       resolve(resultAware
         ? { ok: false, status: 'timeout', message: 'callback-timeout' }
         : { ok: true, status: 'success', message: 'legacy-no-callback' })

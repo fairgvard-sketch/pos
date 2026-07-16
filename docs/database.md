@@ -118,7 +118,10 @@ supabase test db
 - `guests`, `loyalty_events` — клиентская база и лояльность;
 - `stock_movements`, `supply_items`, `waste_entries` — склад;
 - `online_orders` — входящие гостевые заказы;
-- `reservations` — заявки и подтверждённые брони.
+- `reservations` — заявки и подтверждённые брони;
+- `client_errors` — журнал клиентских ошибок телеметрии (074): дедупликация по
+  `fingerprint` в пределах дня, retention 30 дней, закрыта для клиентов
+  целиком (как `op_log`) — запись только через `report_client_errors`.
 
 ## Tenant-изоляция и RLS
 
@@ -198,6 +201,19 @@ RLS — защита, а не вспомогательный UI-фильтр. Л
 - `save_menu_item` — атомарное сохранение товара;
 - `reorder_menu` — атомарная сортировка;
 - `register_device`, `update_device_settings` — per-device конфигурация.
+
+### Телеметрия (074)
+
+- `device_heartbeat` — лёгкий периодический апдейт собственной строки
+  `devices`: версия приложения/моста печати, здоровье offline-очереди
+  (`outbox_pending`, `outbox_oldest_at`, `outbox_failed`), `last_seen_at`.
+  Heartbeat до `register_device` — тихий no-op: телеметрия не роняет кассу;
+- `report_client_errors` — приём пакета ошибок с клиента: не более 20 за
+  вызов, не более 100 новых fingerprint на устройство в день, все поля
+  обрезаются на входе, повтор fingerprint наращивает `count`;
+- операторские view `ops_fleet` и `ops_errors` — только для
+  `service_role`/SQL Editor (см. [deployment.md](deployment.md),
+  «Наблюдаемость парка»).
 
 ## Идемпотентность и время клиента
 

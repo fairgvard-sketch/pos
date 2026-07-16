@@ -9,6 +9,7 @@ import { initNet, OfflineError } from './lib/offline/net'
 import { initDrain } from './lib/offline/drain'
 import { initScope } from './lib/offline/scope'
 import { initDeviceSync } from './lib/deviceSync'
+import { initTelemetry } from './lib/telemetry'
 import DeviceSetupPage from './features/auth/DeviceSetupPage'
 import PinLoginPage from './features/auth/PinLoginPage'
 import ProtectedRoute from './features/auth/ProtectedRoute'
@@ -92,6 +93,7 @@ const persister = createSyncStoragePersister({
 void initScope().then(() => initDeviceSync())
 initNet()          // детекция сети (события браузера + проба Supabase)
 initDrain(queryClient)  // движок replay офлайн-очереди
+initTelemetry()    // журнал ошибок + heartbeat парка (074)
 
 /** "/" → куда нужно: нет сессии устройства → /setup, есть → /pin */
 function RootRedirect() {
