@@ -38,7 +38,10 @@ APP_HOME=$( cd "${APP_HOME:-./}" && pwd -P ) || exit
 APP_NAME="Gradle"
 APP_BASE_NAME=${0##*/}
 
-DEFAULT_JVM_OPTS='"-Xmx64m" "-Xms64m"'
+# Без вложенных кавычек: ниже переменная раскрывается в exec без eval,
+# и кавычки из официального шаблона уходят в java буквально
+# («Could not find or load main class "-Xmx64m"»).
+DEFAULT_JVM_OPTS='-Xmx64m -Xms64m'
 
 warn () {
     echo "$*"
