@@ -29,6 +29,7 @@ import ReceiptDetailsDetail from './sections/ReceiptDetailsDetail'
 import InterfaceSection from './sections/InterfaceSection'
 import DeviceSection from './sections/DeviceSection'
 import ProfileDetail from './sections/ProfileDetail'
+import UfExportDetail from './sections/UfExportDetail'
 
 /** Стартовая категория — запоминаем на время сессии (возврат в настройки открывает то же место) */
 const CAT_KEY = 'kassa-settings-cat'
@@ -49,6 +50,7 @@ const DETAIL_TITLES: Record<DetailId, TranslationKey> = {
   perms: 'permsTitle',
   'receipt-details': 'receiptDetailsTitle',
   profile: 'profileTitle',
+  'uf-export': 'ufExportTitle',
 }
 
 /**
@@ -197,6 +199,7 @@ export default function SettingsPage() {
                 {detail === 'perms' && <PermsDetail location={location} />}
                 {detail === 'receipt-details' && <ReceiptDetailsDetail location={location} />}
                 {detail === 'profile' && <ProfileDetail key={location?.id ?? 'no-loc'} location={location} />}
+                {detail === 'uf-export' && <UfExportDetail />}
               </div>
             ) : (
               // key на cat → плавная смена при переключении категории

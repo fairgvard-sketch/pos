@@ -16,7 +16,7 @@ export type CategoryId =
   | 'interface'
   | 'device'
 
-export type DetailId = 'tipping' | 'service-mode' | 'online-orders' | 'reservations' | 'loyalty' | 'guests' | 'perms' | 'receipt-details' | 'quick-amounts' | 'pay-methods' | 'profile'
+export type DetailId = 'tipping' | 'service-mode' | 'online-orders' | 'reservations' | 'loyalty' | 'guests' | 'perms' | 'receipt-details' | 'quick-amounts' | 'pay-methods' | 'profile' | 'uf-export'
 
 export const CATEGORIES: { id: CategoryId; label: TranslationKey }[] = [
   { id: 'payments', label: 'catPayments' },
@@ -70,6 +70,7 @@ export const SEARCH_INDEX: SearchEntry[] = [
   { cat: 'device', label: 'lockAfterSale', hint: 'lockAfterSaleHint' },
   { cat: 'business', detail: 'profile', label: 'profileTitle', hint: 'profileHint' },
   { cat: 'business', detail: 'receipt-details', label: 'receiptDetailsTitle', hint: 'receiptDetailsHint' },
+  { cat: 'business', detail: 'uf-export', label: 'ufExportTitle', hint: 'ufExportSearchHint' },
   { cat: 'business', label: 'menu', hint: 'menuAdminHint' },
   { cat: 'business', label: 'dashboard', hint: 'dashboardHint' },
   { cat: 'interface', path: '/settings/floor-plan', label: 'floorPlanTitle', hint: 'floorPlanSettingsHint' },

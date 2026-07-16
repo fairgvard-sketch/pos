@@ -173,6 +173,15 @@ RLS — защита, а не вспомогательный UI-фильтр. Л
 - `receive_stock`, `stock_take`, `add_waste`, `stock_report`;
 - `upsert_supply_item`, `set_supply_item_active`.
 
+### Фискальный экспорт (Единый формат 1.31)
+
+- `uf_export_info` — реквизиты точки для набора выгрузки;
+- `uf_export_documents` — постраничная хронологическая лента оплаченных
+  заказов и возвратов периода (границы дней — по Asia/Jerusalem).
+
+Оба требуют staff-сессию с правом `manage`; вызываются Edge Function
+`uniform-format-export` под JWT устройства (не `service_role`).
+
 ### Онлайн и бронь
 
 - `submit_online_order`, `get_online_order_status`, `accept_online_order`,
@@ -210,6 +219,7 @@ UUID должен создаваться до первой попытки зап
 | `public-menu` | безопасная публичная витрина каталога | production |
 | `public-order` | приём заказа и чтение статуса по client UUID | production |
 | `public-reserve` | профиль точки, слоты, создание/отмена брони | production |
+| `uniform-format-export` | набор Единого формата 1.31 за период (INI/BKMVDATA) | построена, деплой pending |
 | `cardcom-payment` | будущая платёжная интеграция | карантин, `503`/`501` |
 
 Публичные функции используют `service_role` только внутри Deno runtime и

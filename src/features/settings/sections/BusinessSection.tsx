@@ -21,6 +21,11 @@ export default function BusinessSection({
           value={location?.receipt_business_name ?? location?.name}
           onClick={() => openDetail('receipt-details')}
         />
+        <NavRow
+          label={t(lang, 'ufExportTitle')}
+          hint={t(lang, 'ufExportSearchHint')}
+          onClick={() => openDetail('uf-export')}
+        />
       </Group>
 
       {/* Экраны, убранные из сайдбара: полная админка меню и дашборд владельца */}
