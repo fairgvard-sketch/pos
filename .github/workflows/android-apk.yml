@@ -12,6 +12,7 @@ on:
   push:
     paths:
       - 'android/**'
+      - '.github/workflows/android-apk.yml'
     branches: [main]
 
 jobs:
@@ -49,7 +50,11 @@ jobs:
   release:
     runs-on: ubuntu-latest
     # Только по ручному запуску; сама сборка идёт лишь при заданных секретах.
+    # Контекст secrets в if-выражениях недоступен («Unrecognized named-value»,
+    # весь workflow становится невалидным) — признак подписи идёт через env.
     if: ${{ github.event_name == 'workflow_dispatch' }}
+    env:
+      HAS_SIGNING: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -70,11 +75,11 @@ jobs:
 
       # Ключ подписи — из секретов (base64). Никогда не коммитим keystore.
       - name: Decode keystore
-        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+        if: ${{ env.HAS_SIGNING == 'true' }}
         run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/release.keystore
 
       - name: Build release APK
-        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+        if: ${{ env.HAS_SIGNING == 'true' }}
         working-directory: android
         env:
           KEYSTORE_PATH: ${{ github.workspace }}/android/release.keystore
@@ -84,7 +89,7 @@ jobs:
         run: ./gradlew --no-daemon assembleRelease
 
       - uses: actions/upload-artifact@v4
-        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+        if: ${{ env.HAS_SIGNING == 'true' }}
         with:
           name: kassa-sunmi-apk-release
           path: android/app/build/outputs/apk/release/app-release.apk
