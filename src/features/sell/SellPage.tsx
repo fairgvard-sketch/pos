@@ -5,31 +5,23 @@ import toast from 'react-hot-toast'
 import { fetchCategories, fetchItems, fetchModifierGroups, toggleItemAvailability, reorderItems } from '../menu/api'
 // Редактор товара нужен только менеджеру в режиме правки — не грузим в горячий путь
 const ItemEditor = lazy(() => import('../menu/ItemEditor'))
-import { placeOrder, payOrder, splitOrder, type PaymentInput } from './api'
 import { fetchCurrentShift } from '../shift/api'
 import { fetchCurrentLocation } from '../auth/api'
-import { appendToOrder, voidTableOrder, fetchOrderLines, voidOrderItem, setOrderDiscount, type BillLine } from '../tables/api'
-import { useCartStore, cartSubtotal, cartTotal, discountAmount, loyaltyAmount, lineUnitPrice, type CartLine, type CartMod, type CartDiscount, type OrderType } from '../../store/cartStore'
+import { useCartStore, cartSubtotal, cartTotal, discountAmount, loyaltyAmount, lineUnitPrice, type CartLine, type CartMod } from '../../store/cartStore'
 import { useAuthStore } from '../../store/authStore'
 import { useLangStore } from '../../store/langStore'
 import { useDeviceStore, DEFAULT_ACTION_ORDER } from '../../store/deviceStore'
-import { playPaymentChime } from '../../lib/sound'
-import { autoPrintReceipt, autoPrintLocalReceipt, printKitchenTicket } from '../receipt/printService'
-import { buildLocalReceipt } from '../receipt/localReceipt'
-import { setOrderBuyer, type Receipt } from '../receipt/api'
-import { OfflineError, withOfflineFallback, useNetStore } from '../../lib/offline/net'
-import { enqueueOfflineSale, enqueueOfflinePayment, enqueueTableAppend, enqueueTablePayment, enqueueTableVoid } from '../../lib/offline/enqueue'
-import { useOutboxStore } from '../../lib/offline/outboxStore'
-import { billLineToReceiptLine } from '../receipt/localReceipt'
-import type { KitchenTicketLine } from '../receipt/printCanvas'
+import { useNetStore } from '../../lib/offline/net'
 import { t } from '../../lib/i18n'
-import { payMethodIcon, payMethodLabel, type PayMethodId } from '../../lib/payMethods'
+import { payMethodIcon, payMethodLabel } from '../../lib/payMethods'
 import { can } from '../../lib/perms'
-import { formatMoney, formatMoneyList, roundTipToWholeTotal } from '../../lib/money'
+import { formatMoney, formatMoneyList } from '../../lib/money'
 import type { MenuItem, ModifierGroup } from '../../types'
+import { usePayFlow } from './usePayFlow'
+import { useTableBill } from './useTableBill'
 import ItemPicker from './ItemPicker'
-import PaymentSheet, { type OrderBuyer } from './PaymentSheet'
-import TipSheet, { type TipOption } from './TipSheet'
+import PaymentSheet from './PaymentSheet'
+import TipSheet from './TipSheet'
 import DiscountSheet from './DiscountSheet'
 import PriceSheet from './PriceSheet'
 import QtySheet from './QtySheet'
@@ -41,6 +33,9 @@ import SplitItemsSheet from './SplitItemsSheet'
 import EqualSplitSheet from './EqualSplitSheet'
 import GuestSheet from '../loyalty/GuestSheet'
 import { formatPhone } from '../loyalty/api'
+import CartLineRow from './CartLineRow'
+import ExistingBillRow from './ExistingBillRow'
+import OrderTypeSwitch from './OrderTypeSwitch'
 import AppSidebar from '../../components/AppSidebar'
 import ItemImage from '../../components/ItemImage'
 import Icon from '../../components/Icon'
@@ -66,58 +61,16 @@ function defaultConfig(item: MenuItem, groups: ModifierGroup[]) {
   }
 }
 
-/** Строка корзины → строка кухонного тикета (с заметками) */
-function toTicketLine(l: CartLine): KitchenTicketLine {
-  return {
-    qty: l.qty,
-    name: l.name,
-    variantName: l.variantName,
-    modifiers: l.mods.map((m) => m.name),
-    notes: l.notes,
-  }
-}
-
-/** Заказ в потоке оплаты: после place, до pay (см. комментарий у payingOrder) */
-interface PayingOrder {
-  orderId: string
-  dailyNumber: number
-  total: number
-  intent: PayMethodId | 'choose'
-  fromCart?: boolean
-  /** Выбранные чаевые (агороты) — сверх total, вне базы НДС */
-  tip?: number
-  /**
-   * Офлайн (фаза 7): заказ НЕ создан на сервере — orderId = clientUuid
-   * корзины, итог посчитан на кассе (зеркало 034). Подтверждение оплаты
-   * ставит place+pay в офлайн-очередь одной группой.
-   */
-  offline?: boolean
-}
-
 export default function SellPage() {
   const lang = useLangStore((s) => s.lang)
   const isRtl = lang === 'he'
   const staff = useAuthStore((s) => s.staff)
-  const lockStaff = useAuthStore((s) => s.lock)
-  const lockAfterSale = useDeviceStore((s) => s.lockAfterSale)
-  const paymentSound = useDeviceStore((s) => s.paymentSound)
-  const printMode = useDeviceStore((s) => s.printMode)
-  const autoPrintOn = useDeviceStore((s) => s.autoPrintReceipt)
-  const receiptPromptOn = useDeviceStore((s) => s.receiptPrompt)
-  const kitchenTicketOn = useDeviceStore((s) => s.printKitchenTicket)
-  const deviceName = useDeviceStore((s) => s.deviceName)
   const payMethodOrder = useDeviceStore((s) => s.payMethodOrder)
   const actionOrder = useDeviceStore((s) => s.actionOrder)
   const setActionOrder = useDeviceStore((s) => s.setActionOrder)
   const collectTips = useDeviceStore((s) => s.collectTips)
-  const tipAskBeforePayment = useDeviceStore((s) => s.tipAskBeforePayment)
-  const tipPresets = useDeviceStore((s) => s.tipPresets)
   const tipAllowCustom = useDeviceStore((s) => s.tipAllowCustom)
-  const tipBeforeTax = useDeviceStore((s) => s.tipBeforeTax)
   const tipRoundUp = useDeviceStore((s) => s.tipRoundUp)
-  const tipSmartAmounts = useDeviceStore((s) => s.tipSmartAmounts)
-  const tipSmartThreshold = useDeviceStore((s) => s.tipSmartThreshold)
-  const tipSmartFixed = useDeviceStore((s) => s.tipSmartFixed)
   const qc = useQueryClient()
   const navigate = useNavigate()
   const online = useNetStore((s) => s.online)
@@ -144,6 +97,22 @@ export default function SellPage() {
   const { data: allGroups = [] } = useQuery({ queryKey: ['modifier_groups'], queryFn: fetchModifierGroups })
 
   const cart = useCartStore()
+
+  // Платёжный поток (place → чаевые → pay → чек/номер) — весь в usePayFlow;
+  // счёт стола (дозаказ, скидка счёта, оплата, void) — в useTableBill.
+  const {
+    payingOrder, tipping, splitRemainder, placedNumber,
+    showSplit, setShowSplit, showEqualSplit, setShowEqualSplit,
+    cartTip, setCartTip, showTipSheet, setShowTipSheet, percentBase, tipOptions,
+    paidOrderId, paidLocalReceipt, showReceipt, setShowReceipt, receiptChoice, setReceiptChoice,
+    place, pay, split, startPayment, proceedPayment, cancelPayFlow, dismissPlaced,
+  } = usePayFlow()
+  const {
+    tableCtx, tableEcho, isLocalTable,
+    existingLines, existingSubtotal,
+    tableDiscount, orderDiscount, voidItem,
+    saveBill, billToPay, voidBill, exitTable,
+  } = useTableBill(startPayment)
 
   // null = все товары. Категории всегда остаются на экране, поэтому товар
   // доступен первым тапом без отдельного «корня» витрины.
@@ -374,34 +343,6 @@ export default function SellPage() {
     }
     dragStartPt.current = null
   }
-  // Номер к показу: серверный #42 или локальный K-3 (офлайн-продажа)
-  const [placedNumber, setPlacedNumber] = useState<number | string | null>(null)
-  const [paidOrderId, setPaidOrderId] = useState<string | null>(null)  // последний оплаченный — для чека
-  // Офлайн: временный чек последней продажи (кнопка «Чек» без сети)
-  const [paidLocalReceipt, setPaidLocalReceipt] = useState<Receipt | null>(null)
-  const [showReceipt, setShowReceipt] = useState(false)
-  // Окно «Как выдать чек?» (настройка receiptPrompt); after — отложенное продолжение потока
-  const [receiptChoice, setReceiptChoice] = useState<{ orderId: string; receipt?: Receipt; after: () => void } | null>(null)
-  const [clientUuid, setClientUuid] = useState(() => crypto.randomUUID())
-  // Заказ, ожидающий оплаты (после place, до pay).
-  // intent: 'card' — оплатить сразу картой; 'cash'/'choose' — открыть диалог
-  // fromCart: свежий заказ из корзины (place_order) — при отмене оплаты его
-  // нужно аннулировать и сменить clientUuid, иначе повторный place_order
-  // по тому же UUID молча вернёт этот заказ со старой суммой
-  const [payingOrder, setPayingOrder] = useState<PayingOrder | null>(null)
-  // Шаг чаевых (настройка «Собирать чаевые»): показывается ПЕРЕД окном оплаты
-  const [tipping, setTipping] = useState<PayingOrder | null>(null)
-  // Чаевые, добавленные вручную кнопкой на экране продажи (до оформления).
-  // Расходуются при входе в оплату — авто-шаг тогда не показывается
-  const [cartTip, setCartTip] = useState(0)
-  const [showTipSheet, setShowTipSheet] = useState(false)
-  // Раздельная оплата по позициям: выбор позиций + остаток после оплаты части
-  const [showSplit, setShowSplit] = useState(false)
-  // Разделить поровну на N гостей (один чек, N платежей)
-  const [showEqualSplit, setShowEqualSplit] = useState(false)
-  const [splitRemainder, setSplitRemainder] = useState<{ orderId: string; total: number } | null>(null)
-  // Режим столов: после финальной части цепочки сплита вернуться в зал
-  const returnToHall = useRef(false)
 
   // Одноуровневая витрина: товары видны сразу, категории — постоянный фильтр.
   // Поиск работает по всему каталогу независимо от выбранной категории.
@@ -459,590 +400,6 @@ export default function SellPage() {
     cart.addLine(defaultConfig(item, groups))
   }
 
-  // Настройка кассы «PIN после каждой продажи» (Square: after each sale) —
-  // по завершении продажи сбрасываем сотрудника и уводим на PIN
-  function maybeLockAfterSale(): boolean {
-    if (!lockAfterSale) return false
-    lockStaff()
-    navigate('/pin', { replace: true })
-    return true
-  }
-
-  // База процента чаевых: итог с НДС или без (настройка кассы)
-  function tipPercentBase(total: number): number {
-    return tipBeforeTax ? total - Math.round((total * vatRate) / (100 + vatRate)) : total
-  }
-
-  // Варианты чаевых для суммы: умный режим на мелких заказах — фиксированные ₪,
-  // иначе проценты от базы. Каждый вариант подгоняется так, чтобы итог
-  // к оплате (total + tip) был целым числом шекелей.
-  function tipOptions(total: number): TipOption[] {
-    if (tipSmartAmounts && total <= tipSmartThreshold) {
-      return tipSmartFixed
-        .filter((a) => a > 0)
-        .map((a) => ({ amount: roundTipToWholeTotal(total, a, tipRoundUp) }))
-    }
-    const base = tipPercentBase(total)
-    return tipPresets
-      .filter((p) => p > 0)
-      .map((p) => ({ percent: p, amount: roundTipToWholeTotal(total, Math.round((base * p) / 100), tipRoundUp) }))
-  }
-
-  // Вход в оплату заказа. Чаевые с кнопки — сразу в оплату (не спрашиваем
-  // второй раз, расходуем); иначе авто-шаг TipSheet, если включён
-  function startPayment(o: PayingOrder) {
-    setPayingOrder(null)
-    if (collectTips && cartTip > 0) {
-      const tip = cartTip
-      setCartTip(0)
-      proceedPayment(o, tip)
-    } else if (collectTips && tipAskBeforePayment && o.total > 0) {
-      setTipping(o)
-    } else {
-      proceedPayment(o, 0)
-    }
-  }
-
-  // Чаевые выбраны (или шаг пропущен): безнал-intent (карта/кошелёк)
-  // платит сразу одним тапом, остальное — окно оплаты с итогом total + tip
-  function proceedPayment(o: PayingOrder, tip: number) {
-    setTipping(null)
-    if (o.intent !== 'cash' && o.intent !== 'choose') {
-      pay.mutate({ orderId: o.orderId, dailyNumber: o.dailyNumber, payments: [{ method: o.intent, amount: o.total + tip }], tip, offline: o.offline })
-    } else {
-      setPayingOrder({ ...o, tip })
-    }
-  }
-
-  // Отмена на шаге чаевых или в окне оплаты: свежий заказ из корзины
-  // аннулировать (аудит цел, void не delete) и сменить UUID — корзина
-  // осталась, следующий «Оформить» создаст новый заказ.
-  // Офлайн-заказ ещё нигде не существует (enqueue происходит только при
-  // подтверждении оплаты) — аннулировать нечего.
-  function cancelPayFlow(o: PayingOrder) {
-    setTipping(null)
-    setPayingOrder(null)
-    if (o.fromCart) {
-      setClientUuid(crypto.randomUUID())
-      if (!o.offline) voidTableOrder(o.orderId).catch(() => {})
-    }
-  }
-
-  function finishPaid(num: number | string, orderId: string, localReceipt?: Receipt) {
-    const wasTable = !!cart.tableCtx
-    // Автопечать — ДО очистки корзины (тикету нужны заметки позиций).
-    // Тикет печатается один раз на заказ: при сплите остаток его не дублирует
-    // (корзина к тому моменту уже пуста).
-    if (kitchenTicketOn && cart.lines.length > 0) {
-      void printKitchenTicket(
-        {
-          dailyNumber: num,
-          orderType: cart.orderType,
-          customerName: cart.customerName,
-          tableLabel: cart.tableCtx?.tableLabel ?? cart.tableLabel,
-          staffName: staff?.name ?? '',
-          deviceName,
-          lines: cart.lines.map(toTicketLine),
-        },
-        printMode === 'rawbt'
-      )
-    }
-    // «Как выдать чек?» заменяет автопечать: печать — только по выбору кассира.
-    // Офлайн: временный чек уже собран на кассе — печатаем без fetchReceipt.
-    if (!receiptPromptOn && autoPrintOn) {
-      if (localReceipt) void autoPrintLocalReceipt(localReceipt, location, printMode === 'rawbt')
-      else void autoPrintReceipt(orderId, location, printMode === 'rawbt')
-    }
-    setPayingOrder(null)
-    setShowEqualSplit(false)
-    cart.clear()
-    setClientUuid(crypto.randomUUID())
-    setPaidOrderId(orderId)  // для кнопки «Чек»
-    setPaidLocalReceipt(localReceipt ?? null)
-    if (paymentSound) playPaymentChime()
-    qc.invalidateQueries({ queryKey: ['orders'] })
-    qc.invalidateQueries({ queryKey: ['current_shift'] })
-    qc.invalidateQueries({ queryKey: ['open_table_orders'] })
-    qc.invalidateQueries({ queryKey: ['order_lines'] })
-    qc.invalidateQueries({ queryKey: ['queue'] })
-    const continueFlow = () => {
-      // Цепочка сплита не закончена: показать номер/чек части,
-      // по «Готово» откроется оплата остатка (не уходим в зал)
-      if (splitRemainder) {
-        if (wasTable) returnToHall.current = true
-        setPlacedNumber(num)
-        return
-      }
-      if (wasTable || returnToHall.current) {
-        returnToHall.current = false
-        if (maybeLockAfterSale()) return
-        navigate('/hall')  // счёт стола закрыт — назад в зал
-        return
-      }
-      setPlacedNumber(num)
-      // Авто-скрытие убрано: закрывается по «Готово» или показу чека
-    }
-    // Сначала выбор чека (навигация/номер заказа ждут его), потом обычный поток
-    if (receiptPromptOn) setReceiptChoice({ orderId, receipt: localReceipt, after: continueFlow })
-    else continueFlow()
-  }
-
-  // «Готово» в модалке номера: если остался неоплаченный остаток сплита —
-  // сразу открываем его оплату
-  function dismissPlaced() {
-    const num = typeof placedNumber === 'number' ? placedNumber : 0
-    setPlacedNumber(null)
-    if (splitRemainder) {
-      startPayment({ orderId: splitRemainder.orderId, dailyNumber: num, total: splitRemainder.total, intent: 'choose' })
-      setSplitRemainder(null)
-      return
-    }
-    maybeLockAfterSale()
-  }
-
-  // Раздельная оплата: выбранные позиции → отдельный заказ со своим чеком
-  const split = useMutation({
-    mutationFn: (items: { item_id: string; qty: number }[]) =>
-      splitOrder(payingOrder!.orderId, staff!.id, items),
-    onSuccess: (res) => {
-      setShowSplit(false)
-      // Сначала платим за выделенную часть; остаток — следом
-      setSplitRemainder({ orderId: payingOrder!.orderId, total: res.remaining_total })
-      // Каждая часть — отдельный чек: чаевые спрашиваются заново на часть
-      startPayment({ orderId: res.new_order_id, dailyNumber: res.daily_number, total: res.new_total, intent: 'choose' })
-      qc.invalidateQueries({ queryKey: ['order_lines'] })
-      qc.invalidateQueries({ queryKey: ['queue'] })
-    },
-    onError: (e) => toast.error(e.message),
-  })
-
-  // Шаг 1: создать заказ. intent решает, что дальше:
-  //   card   → сразу оплатить картой
-  //   cash   → открыть диалог с расчётом сдачи
-  //   choose → открыть диалог выбора способа
-  // Сеть упала/зависла (>4с) → продажа продолжается ОФЛАЙН: заказ не
-  // создаётся, итог считает касса (зеркало 034), place+pay встанут в
-  // очередь при подтверждении оплаты. Лояльность офлайн недоступна
-  // (баланс гостя валидирует сервер) — с гостем требуем сеть.
-  const place = useMutation({
-    mutationFn: async (intent: PayMethodId | 'choose') => {
-      const c = useCartStore.getState()
-      try {
-        const r = await withOfflineFallback(() =>
-          placeOrder(clientUuid, staff!.id, c.orderType, c.customerName, c.lines, c.discount, c.tableLabel, c.guest?.id ?? null, c.redeem)
-        )
-        return { ...r, intent, offline: false }
-      } catch (e) {
-        if (e instanceof OfflineError && !c.guest) {
-          return {
-            order_id: clientUuid,
-            daily_number: 0,
-            total: cartTotal(c.lines, c.discount, null),
-            duplicate: false,
-            intent,
-            offline: true,
-          }
-        }
-        throw e
-      }
-    },
-    onSuccess: (res) => {
-      startPayment({ orderId: res.order_id, dailyNumber: res.daily_number, total: res.total, intent: res.intent, fromCart: true, offline: res.offline })
-    },
-    onError: (e) => toast.error(e instanceof OfflineError ? t(lang, 'offlineBlockedHint') : e.message),
-  })
-
-  // Шаг 2: принять оплату → показать номер, очистить корзину.
-  // Три пути:
-  //   онлайн        → pay_order (с payment_uuid: ретрай не спишет дважды)
-  //   офлайн-заказ  → place+pay в очередь одной группой, временный чек K-n
-  //   таймаут pay   → заказ уже создан: в очередь только pay (с тем же
-  //                   payment_uuid — если вызов долетел, replay вернёт его результат)
-  const pay = useMutation({
-    mutationFn: async (v: {
-      orderId: string
-      dailyNumber: number
-      payments: PaymentInput[]
-      tip?: number
-      offline?: boolean
-      buyer?: OrderBuyer | null
-    }) => {
-      const c = useCartStore.getState()
-      const tip = v.tip ?? 0
-      const paidAt = new Date().toISOString()
-
-      // Оплата счёта СТОЛА офлайн: pay в очередь за append'ами того же счёта.
-      // Чек собирается из серверного кэша строк + эха + не должен ждать сеть.
-      const enqueueTablePay = (paymentUuid?: string) => {
-        const key = v.orderId
-        const st = useOutboxStore.getState()
-        const echo = st.localOrders[key]
-        const isLocal = !!echo && echo.serverOrderId === null
-        const knownTotal = v.payments.reduce((s, p) => s + p.amount, 0) - tip
-        const dailyNumber = echo?.serverDailyNumber ?? (v.dailyNumber || null)
-        // Локальный номер K-n нужен, только если серверного ещё нет
-        const prov = dailyNumber ? null : (echo?.provisionalNumber ?? st.nextProvisionalNumber())
-        const cachedLines = (qc.getQueryData(['order_lines', key]) as BillLine[] | undefined) ?? []
-        const receipt = buildLocalReceipt({
-          lines: echo?.lines ?? [],
-          extraLines: cachedLines.map(billLineToReceiptLine),
-          orderType: 'here',
-          customerName: c.customerName,
-          tableLabel: c.tableCtx?.tableLabel ?? null,
-          discount: null,
-          redeem: null,
-          payments: v.payments,
-          tip,
-          staffName: staff!.name,
-          location,
-          provisionalNumber: prov,
-          dailyNumber,
-          knownTotal,
-          paidAt,
-        })
-        enqueueTablePayment({
-          orderKey: key,
-          orderId: isLocal ? null : key,
-          tableId: c.tableCtx?.tableId ?? null,
-          tableLabel: c.tableCtx?.tableLabel ?? null,
-          payments: v.payments,
-          tip,
-          total: knownTotal,
-          receipt,
-          provisionalNumber: prov,
-          dailyNumber,
-          paymentUuid,
-        })
-        return { offlineNumber: (prov ?? dailyNumber) as number | string | null, orderId: key, receipt }
-      }
-
-      if (v.offline && c.tableCtx) {
-        return enqueueTablePay()
-      }
-
-      if (v.offline) {
-        const { provisionalNumber } = enqueueOfflineSale({
-          clientUuid: v.orderId,
-          staffId: staff!.id,
-          orderType: c.orderType,
-          customerName: c.customerName,
-          tableLabel: c.tableLabel,
-          lines: c.lines,
-          discount: c.discount,
-          payments: v.payments,
-          tip,
-          total: cartTotal(c.lines, c.discount, null),
-          buildReceipt: (prov) =>
-            buildLocalReceipt({
-              lines: c.lines,
-              orderType: c.orderType,
-              customerName: c.customerName,
-              tableLabel: c.tableLabel || null,
-              discount: c.discount,
-              redeem: null,
-              payments: v.payments,
-              tip,
-              staffName: staff!.name,
-              location,
-              provisionalNumber: prov,
-              paidAt,
-            }),
-        })
-        const echo = useOutboxStore.getState().localOrders[v.orderId]
-        return { offlineNumber: provisionalNumber as number | string, orderId: v.orderId, receipt: echo?.receipt ?? undefined }
-      }
-
-      const paymentUuid = crypto.randomUUID()
-      try {
-        await withOfflineFallback(() => payOrder(v.orderId, v.payments, tip, paymentUuid, null))
-        // Чек на компанию (048): реквизиты — сразу после оплаты, ДО автопечати,
-        // чтобы чек вышел с блоком לכבוד. Ошибка не валит оплату — реквизиты
-        // можно добавить из окна чека.
-        if (v.buyer) {
-          try {
-            await setOrderBuyer(v.orderId, v.buyer.name, v.buyer.taxId)
-          } catch {
-            toast.error(t(lang, 'bizPayFailed'))
-          }
-        }
-        return null
-      } catch (e) {
-        if (e instanceof OfflineError) {
-          if (v.buyer) toast.error(t(lang, 'bizPayFailed'))
-          // Стол: таймаут оплаты серверного счёта → в очередь с тем же uuid
-          if (c.tableCtx) return enqueueTablePay(paymentUuid)
-          // Итог заказа известен серверу (place прошёл): сумма платежей − tip
-          const knownTotal = v.payments.reduce((s, p) => s + p.amount, 0) - tip
-          const receipt = buildLocalReceipt({
-            lines: c.lines,
-            orderType: c.orderType,
-            customerName: c.customerName,
-            tableLabel: c.tableLabel || null,
-            discount: c.discount,
-            redeem: c.redeem,
-            payments: v.payments,
-            tip,
-            staffName: staff!.name,
-            location,
-            provisionalNumber: null,
-            dailyNumber: v.dailyNumber || null,
-            knownTotal,
-            paidAt,
-          })
-          enqueueOfflinePayment({
-            orderId: v.orderId,
-            dailyNumber: v.dailyNumber || null,
-            orderType: c.orderType,
-            customerName: c.customerName,
-            tableLabel: c.tableLabel || null,
-            lines: c.lines,
-            payments: v.payments,
-            tip,
-            total: receipt.total,
-            receipt,
-            paymentUuid,
-          })
-          return { offlineNumber: (v.dailyNumber || null) as number | string | null, orderId: v.orderId, receipt }
-        }
-        throw e
-      }
-    },
-    onSuccess: (res, v) => {
-      if (res) finishPaid(res.offlineNumber ?? v.dailyNumber, res.orderId, res.receipt)
-      else finishPaid(v.dailyNumber, v.orderId)
-    },
-    onError: (e) => toast.error(e.message),
-  })
-
-  const tableCtx = cart.tableCtx
-
-  // Офлайн (фаза 7): эхо счёта стола. Ключ = tableCtx.orderId — локальный
-  // uuid (стол открыт офлайн) либо серверный order_id (офлайн-дозаказ к
-  // серверному счёту). isLocalTable = счёт существует только на кассе.
-  const tableEcho = useOutboxStore((s) => (tableCtx ? s.localOrders[tableCtx.orderId] : undefined))
-  const isLocalTable = !!tableEcho && tableEcho.serverOrderId === null
-
-  // Уже заказанные позиции открытого счёта стола (read-only, до дозаказа).
-  // cart.lines в режиме стола = только НОВЫЕ позиции, поэтому существующие
-  // тянем отдельно, чтобы бариста/кассир видел, что уже на столе.
-  const { data: fetchedLines = [] } = useQuery({
-    queryKey: ['order_lines', tableCtx?.orderId],
-    queryFn: () => fetchOrderLines(tableCtx!.orderId),
-    enabled: !!tableCtx && !isLocalTable,
-  })
-  // Строки счёта: серверные + офлайн-дозаказы из эха
-  const existingLines = useMemo<BillLine[]>(() => {
-    const echoLines: BillLine[] = (tableEcho?.lines ?? []).map((l) => ({
-      id: l.key,
-      name: l.name,
-      variant_name: l.variantName,
-      qty: l.qty,
-      line_total: lineUnitPrice(l) * l.qty,
-      modifiers: l.mods.map((m) => m.name),
-      notes: l.notes.trim() || null,
-    }))
-    return [...fetchedLines, ...echoLines]
-  }, [fetchedLines, tableEcho])
-  const existingSubtotal = existingLines.reduce((s, l) => s + l.line_total, 0)
-
-  // Скидка на счёт стола живёт на ЗАКАЗЕ (не в корзине): ставится RPC
-  // set_order_discount. Локально помним последнюю применённую — для бейджа
-  // и предзаполнения диалога в рамках текущего захода на стол.
-  const [tableDiscount, setTableDiscount] = useState<(CartDiscount & { amount: number }) | null>(null)
-  // Сброс при переходе на другой счёт стола (сравнение с прошлым orderId в
-  // рендере вместо setState в эффекте)
-  const [prevDiscOrderId, setPrevDiscOrderId] = useState(tableCtx?.orderId)
-  if (tableCtx?.orderId !== prevDiscOrderId) {
-    setPrevDiscOrderId(tableCtx?.orderId)
-    setTableDiscount(null)
-  }
-
-  const orderDiscount = useMutation({
-    mutationFn: (d: CartDiscount | null) =>
-      setOrderDiscount(tableCtx!.orderId, d?.type ?? null, d?.value, d?.reason),
-    onSuccess: (res, d) => {
-      cart.setTableCtx({ ...tableCtx!, existingTotal: res.total })
-      setTableDiscount(d ? { ...d, amount: res.discount_amount } : null)
-      qc.invalidateQueries({ queryKey: ['open_table_orders'] })
-      setShowDiscount(false)
-    },
-    onError: (e) => toast.error(e.message),
-  })
-
-  // Снять уже заказанную позицию с открытого счёта (мягкий void)
-  const voidItem = useMutation({
-    mutationFn: (itemId: string) => voidOrderItem(itemId, staff!.id),
-    onSuccess: (res) => {
-      // Обновляем локальный существующий total, чтобы итог/шапка сразу сошлись
-      if (tableCtx) cart.setTableCtx({ ...tableCtx, existingTotal: res.total })
-      qc.invalidateQueries({ queryKey: ['order_lines', tableCtx!.orderId] })
-      qc.invalidateQueries({ queryKey: ['open_table_orders'] })
-      qc.invalidateQueries({ queryKey: ['queue'] })
-    },
-    onError: (e) => toast.error(e.message),
-  })
-
-  // Режим столов: сохранить дозаказ в открытый счёт (остаётся open) → назад в зал.
-  // Локальный стол → всегда в очередь (FIFO за open); серверный + обрыв сети →
-  // в очередь с тем же op_uuid (если вызов долетел, replay не задвоит строки).
-  const saveBill = useMutation({
-    mutationFn: async () => {
-      const c = useCartStore.getState()
-      const key = tableCtx!.orderId
-      if (isLocalTable) {
-        enqueueTableAppend({
-          orderKey: key,
-          orderId: null,
-          staffId: staff!.id,
-          lines: c.lines,
-          totalAfter: (tableEcho?.total ?? 0) + cartSubtotal(c.lines),
-        })
-        return
-      }
-      const opUuid = crypto.randomUUID()
-      try {
-        await withOfflineFallback(() => appendToOrder(key, staff!.id, c.lines, opUuid))
-      } catch (e) {
-        if (e instanceof OfflineError) {
-          enqueueTableAppend({
-            orderKey: key,
-            orderId: key,
-            staffId: staff!.id,
-            lines: c.lines,
-            totalAfter: tableCtx!.existingTotal + cartSubtotal(c.lines),
-            opUuid,
-            tableId: tableCtx!.tableId,
-            tableLabel: tableCtx!.tableLabel,
-          })
-          return
-        }
-        throw e
-      }
-    },
-    onSuccess: () => {
-      toast.success(t(lang, 'billSaved'))
-      // Тикет на кухню для дозаказа: только новые позиции, без номера
-      if (kitchenTicketOn && cart.lines.length > 0) {
-        void printKitchenTicket(
-          {
-            dailyNumber: null,
-            orderType: 'here',
-            customerName: cart.customerName,
-            tableLabel: tableCtx!.tableLabel,
-            staffName: staff?.name ?? '',
-            deviceName,
-            lines: cart.lines.map(toTicketLine),
-          },
-          printMode === 'rawbt'
-        )
-      }
-      qc.invalidateQueries({ queryKey: ['order_lines', tableCtx!.orderId] })
-      cart.clear()
-      qc.invalidateQueries({ queryKey: ['open_table_orders'] })
-      qc.invalidateQueries({ queryKey: ['queue'] })
-      navigate('/hall')
-    },
-    onError: (e) => toast.error(e.message),
-  })
-
-  // Режим столов: добавить новые позиции (если есть) и открыть оплату всего счёта.
-  // offline-флаг уводит последующий pay в офлайн-очередь (за append'ом, FIFO).
-  const billToPay = useMutation({
-    mutationFn: async (): Promise<{ total: number; offline: boolean }> => {
-      const c = useCartStore.getState()
-      const key = tableCtx!.orderId
-      if (isLocalTable) {
-        let totalAfter = tableEcho?.total ?? tableCtx!.existingTotal
-        if (c.lines.length > 0) {
-          totalAfter += cartSubtotal(c.lines)
-          enqueueTableAppend({ orderKey: key, orderId: null, staffId: staff!.id, lines: c.lines, totalAfter })
-        }
-        return { total: totalAfter, offline: true }
-      }
-      const opUuid = crypto.randomUUID()
-      try {
-        if (c.lines.length > 0) {
-          const r = await withOfflineFallback(() => appendToOrder(key, staff!.id, c.lines, opUuid))
-          return { total: r.total, offline: false }
-        }
-        return { total: tableCtx!.existingTotal, offline: false }
-      } catch (e) {
-        if (e instanceof OfflineError) {
-          const totalAfter = tableCtx!.existingTotal + cartSubtotal(c.lines)
-          enqueueTableAppend({
-            orderKey: key,
-            orderId: key,
-            staffId: staff!.id,
-            lines: c.lines,
-            totalAfter,
-            opUuid,
-            tableId: tableCtx!.tableId,
-            tableLabel: tableCtx!.tableLabel,
-          })
-          return { total: totalAfter, offline: true }
-        }
-        throw e
-      }
-    },
-    onSuccess: ({ total: billTotal, offline }) => {
-      startPayment({
-        orderId: tableCtx!.orderId,
-        dailyNumber: tableEcho?.serverDailyNumber ?? 0,
-        total: billTotal,
-        intent: 'choose',
-        offline,
-      })
-    },
-    onError: (e) => toast.error(e.message),
-  })
-
-  // Режим столов: отменить пустой/ошибочный счёт.
-  // Локальный стол: open ещё не ушёл → просто снять операции; ушёл → void в очередь.
-  const voidBill = useMutation({
-    mutationFn: async () => {
-      const key = tableCtx!.orderId
-      const st = useOutboxStore.getState()
-      if (isLocalTable) {
-        const openPending = st.ops.some((o) => o.orderKey === key && o.kind === 'table.open' && o.status === 'pending')
-        if (openPending) {
-          st.dropUnsent(key) // на сервер ничего не ушло — отменять нечего
-        } else {
-          enqueueTableVoid({ orderKey: key, orderId: null })
-          st.removeLocalOrder(key) // стол освобождается сразу
-        }
-        return
-      }
-      try {
-        await withOfflineFallback(() => voidTableOrder(key))
-      } catch (e) {
-        if (e instanceof OfflineError) {
-          enqueueTableVoid({ orderKey: key, orderId: key })
-          return
-        }
-        throw e
-      }
-    },
-    onSuccess: () => {
-      cart.clear()
-      qc.invalidateQueries({ queryKey: ['open_table_orders'] })
-      navigate('/hall')
-    },
-    onError: (e) => toast.error(e.message),
-  })
-
-  // Выход из стола («Назад»). Если счёт так и остался пустым (зашли по ошибке /
-  // просто посмотреть, ничего не добавили) — отменяем пустышку, чтобы стол не
-  // числился занятым. Иначе — просто выходим, счёт остаётся открытым.
-  function exitTable() {
-    const emptyOrder = existingLines.length === 0 && cart.lines.length === 0
-    if (emptyOrder && tableCtx) {
-      voidBill.mutate()
-    } else {
-      cart.clear()
-      navigate('/hall')
-    }
-  }
-
   const subtotal = cartSubtotal(cart.lines)
   const discAmount = discountAmount(subtotal, cart.discount, cart.redeem)
 
@@ -1096,7 +453,7 @@ export default function SellPage() {
 
   // Режим столов: продажа — не самостоятельный экран, вход через зал.
   // Открыли /sell без выбранного стола → возвращаем в зал.
-  if (location?.service_mode === 'tables' && !cart.tableCtx) {
+  if (location?.service_mode === 'tables' && !tableCtx) {
     return <Navigate to="/hall" replace />
   }
 
@@ -1627,7 +984,7 @@ export default function SellPage() {
       {tipping && (
         <TipSheet
           total={tipping.total}
-          percentBase={tipPercentBase(tipping.total)}
+          percentBase={percentBase(tipping.total)}
           options={tipOptions(tipping.total)}
           allowCustom={tipAllowCustom}
           roundUp={tipRoundUp}
@@ -1641,7 +998,7 @@ export default function SellPage() {
       {showTipSheet && (
         <TipSheet
           total={shownTotal}
-          percentBase={tipPercentBase(shownTotal)}
+          percentBase={percentBase(shownTotal)}
           options={tipOptions(shownTotal)}
           allowCustom={tipAllowCustom}
           roundUp={tipRoundUp}
@@ -1720,7 +1077,8 @@ export default function SellPage() {
                 toast.error(t(lang, 'offlineBlockedHint'))
                 return
               }
-              orderDiscount.mutate(d)  // диалог закроется по успеху RPC
+              // Диалог закроется по успеху RPC
+              orderDiscount.mutate(d, { onSuccess: () => setShowDiscount(false) })
             } else {
               cart.setDiscount(d)
               setShowDiscount(false)
@@ -1926,376 +1284,6 @@ export default function SellPage() {
           }}
         />
       )}
-    </div>
-  )
-}
-
-/** Порог свайпа (px), после которого позиция удаляется на отпускании */
-const SWIPE_DELETE_THRESHOLD = 96
-/** Ширина зоны удаления, до которой строка «прилипает» */
-const SWIPE_REVEAL_WIDTH = 80
-
-/** Строка счёта со свайпом на удаление (влево в LTR, вправо в RTL) */
-function CartLineRow({
-  line: l,
-  item,
-  lang,
-  isRtl,
-  onOpen,
-  onEditPrice,
-  onRemove,
-  onQty,
-}: {
-  line: CartLine
-  item: MenuItem | undefined
-  lang: 'ru' | 'he'
-  isRtl: boolean
-  onOpen: () => void
-  onEditPrice: () => void
-  onRemove: () => void
-  onQty: () => void
-}) {
-  // dx < 0 — строка уехала «в сторону удаления» (нормализовано под RTL)
-  const [dx, setDx] = useState(0)
-  const [dragging, setDragging] = useState(false)
-  const [removing, setRemoving] = useState(false)
-  const start = useRef<{ x: number; y: number } | null>(null)
-  // Пока не решили, что это горизонтальный свайп — не перехватываем тап
-  const locked = useRef(false)
-
-  // В RTL логическое «влево» — это движение вправо по экрану
-  const sign = isRtl ? -1 : 1
-
-  function onPointerDown(e: React.PointerEvent) {
-    if (e.pointerType === 'mouse' && e.button !== 0) return
-    start.current = { x: e.clientX, y: e.clientY }
-    locked.current = false
-  }
-
-  function onPointerMove(e: React.PointerEvent) {
-    if (!start.current) return
-    const rawX = (e.clientX - start.current.x) * sign
-    const rawY = e.clientY - start.current.y
-    if (!locked.current) {
-      // Определяем ось: горизонталь с явным преобладанием — это свайп
-      if (Math.abs(rawX) > 8 && Math.abs(rawX) > Math.abs(rawY)) {
-        locked.current = true
-        setDragging(true)
-        e.currentTarget.setPointerCapture(e.pointerId)
-      } else if (Math.abs(rawY) > 10) {
-        // Вертикальный скролл — отпускаем строку
-        start.current = null
-        return
-      }
-    }
-    if (locked.current) {
-      e.preventDefault()
-      // Только влево; вправо — резинка с затуханием
-      const next = rawX < 0 ? rawX : rawX * 0.25
-      setDx(Math.max(next, -160))
-    }
-  }
-
-  function onPointerUp() {
-    if (!start.current && !dragging) {
-      setDx(0)
-      return
-    }
-    start.current = null
-    setDragging(false)
-    if (-dx >= SWIPE_DELETE_THRESHOLD) {
-      // Уводим за край и удаляем
-      setRemoving(true)
-      setDx(-window.innerWidth)
-      setTimeout(onRemove, 180)
-    } else if (-dx >= SWIPE_REVEAL_WIDTH / 2) {
-      setDx(-SWIPE_REVEAL_WIDTH) // прилипнуть к раскрытой зоне
-    } else {
-      setDx(0)
-    }
-  }
-
-  const revealed = dx <= -SWIPE_REVEAL_WIDTH / 2
-
-  return (
-    <div className="relative overflow-hidden rounded-2xl animate-[rise-in_0.18s_ease-out]">
-      {/* Красная подложка удаления */}
-      <button
-        onClick={() => { setRemoving(true); setDx(-window.innerWidth); setTimeout(onRemove, 180) }}
-        aria-label={t(lang, 'delete')}
-        className="absolute inset-0 flex items-center justify-end bg-red-500 text-white pe-6"
-        style={{ opacity: -dx > 8 ? 1 : 0 }}
-      >
-        <span className="text-sm font-semibold">{t(lang, 'delete')}</span>
-      </button>
-
-      {/* Сама строка — двигается поверх подложки */}
-      <div
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerCancel={onPointerUp}
-        className="relative border border-gray-100 bg-white rounded-2xl p-3 touch-pan-y"
-        style={{
-          transform: `translateX(${dx}px)`,
-          transition: dragging ? 'none' : `transform ${removing ? 0.18 : 0.25}s ease-out`,
-        }}
-      >
-        <div className="flex items-start gap-2.5">
-          {item && <ItemImage item={item} size="line" />}
-          {/* div с role=button (не <button>), чтобы вложенный кликабельный
-              «× N» не был interactive-in-interactive */}
-          <div
-            role="button"
-            tabIndex={0}
-            className="text-start flex-1 min-w-0 cursor-pointer"
-            // Игнорируем клик, если строка раскрыта свайпом (сначала закрываем)
-            onClick={() => (revealed ? setDx(0) : onOpen())}
-          >
-            <span className="font-semibold text-gray-900 text-sm block leading-tight">
-              {l.name}
-              {/* Кол-во сразу после названия, мелким серым (как в референсе).
-                  Тап по нему открывает панель −/+; stopPropagation → не onOpen. */}
-              <span
-                onClick={(e) => { e.stopPropagation(); onQty() }}
-                className="text-gray-500 font-medium tabular-nums ms-1.5"
-              >
-                × {l.qty}
-              </span>
-            </span>
-            {/* Вариант (размер), модификаторы, заметка, правка цены — строкой под названием */}
-            {(l.variantName || l.mods.length > 0 || l.notes || l.priceOverride !== null) && (
-              <span className="block text-sm text-gray-500 mt-0.5 leading-snug">
-                {[
-                  l.variantName,
-                  ...l.mods.map((m) => m.name),
-                  l.notes,
-                  l.priceOverride !== null ? t(lang, 'priceOverridden') : '',
-                ]
-                  .filter(Boolean)
-                  .join(' · ')}
-              </span>
-            )}
-          </div>
-          <button
-            onClick={onEditPrice}
-            className={`font-bold text-sm tabular-nums shrink-0 ${
-              l.priceOverride !== null ? 'text-gray-900 underline decoration-dotted underline-offset-2' : 'text-gray-900'
-            }`}
-          >
-            {formatMoney(lineUnitPrice(l) * l.qty, lang)}
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-/** Строка уже заказанной позиции (счёт стола) со свайпом на снятие (void) */
-function ExistingBillRow({
-  line: l,
-  lang,
-  isRtl,
-  busy,
-  onVoid,
-}: {
-  line: BillLine
-  lang: 'ru' | 'he'
-  isRtl: boolean
-  busy: boolean
-  onVoid: () => void
-}) {
-  const [dx, setDx] = useState(0)
-  const [dragging, setDragging] = useState(false)
-  const start = useRef<{ x: number; y: number } | null>(null)
-  const locked = useRef(false)
-  const sign = isRtl ? -1 : 1
-
-  function onPointerDown(e: React.PointerEvent) {
-    if (busy) return
-    if (e.pointerType === 'mouse' && e.button !== 0) return
-    start.current = { x: e.clientX, y: e.clientY }
-    locked.current = false
-  }
-  function onPointerMove(e: React.PointerEvent) {
-    if (!start.current) return
-    const rawX = (e.clientX - start.current.x) * sign
-    const rawY = e.clientY - start.current.y
-    if (!locked.current) {
-      if (Math.abs(rawX) > 8 && Math.abs(rawX) > Math.abs(rawY)) {
-        locked.current = true
-        setDragging(true)
-        e.currentTarget.setPointerCapture(e.pointerId)
-      } else if (Math.abs(rawY) > 10) {
-        start.current = null
-        return
-      }
-    }
-    if (locked.current) {
-      e.preventDefault()
-      const next = rawX < 0 ? rawX : rawX * 0.25
-      setDx(Math.max(next, -140))
-    }
-  }
-  function onPointerUp() {
-    start.current = null
-    setDragging(false)
-    if (-dx >= 88) onVoid()
-    setDx(0)
-  }
-
-  return (
-    <div className="relative overflow-hidden rounded-xl">
-      <div
-        className="absolute inset-0 flex items-center justify-end bg-red-500 text-white pe-4 rounded-xl"
-        style={{ opacity: -dx > 8 ? 1 : 0 }}
-      >
-        <span className="text-xs font-semibold">{t(lang, 'delete')}</span>
-      </div>
-      <div
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerCancel={onPointerUp}
-        className="relative bg-gray-50 flex items-start justify-between gap-2 text-sm py-1 touch-pan-y"
-        style={{
-          transform: `translateX(${dx}px)`,
-          transition: dragging ? 'none' : 'transform 0.22s ease-out',
-        }}
-      >
-        <div className="min-w-0">
-          <span className="font-semibold text-gray-700">
-            {l.qty > 1 && <span className="text-gray-500">{l.qty}× </span>}
-            {l.name}
-            {l.variant_name && <span className="text-gray-500 font-medium"> · {l.variant_name}</span>}
-          </span>
-          {l.modifiers.length > 0 && (
-            <span className="block text-xs text-gray-500 leading-snug">{l.modifiers.join(' · ')}</span>
-          )}
-        </div>
-        <span className="font-bold text-gray-600 tabular-nums shrink-0">{formatMoney(l.line_total, lang)}</span>
-      </div>
-    </div>
-  )
-}
-
-/**
- * Переключатель типа заказа: одна полоса во всю ширину, показывает ТОЛЬКО
- * текущий вариант. Свайп листает (RTL-зеркально), тап — следующий по кругу.
- * Точки-индикаторы показывают, сколько вариантов и какой активен.
- *
- * Всё направление считается в ЭКРАННЫХ координатах (drag → knob едет за
- * пальцем, подпись выезжает с той же стороны). В RTL «следующий вариант»
- * физически слева — screenDir переводит экранное движение в шаг по списку.
- */
-const ORDER_TYPES: OrderType[] = ['here', 'takeaway', 'delivery']
-const SWIPE_THRESHOLD = 44   // px: минимальный горизонтальный сдвиг для перелистывания
-
-function OrderTypeSwitch({
-  value,
-  onChange,
-  lang,
-  isRtl,
-}: {
-  value: OrderType
-  onChange: (t: OrderType) => void
-  lang: 'ru' | 'he'
-  isRtl: boolean
-}) {
-  const start = useRef<{ x: number; y: number } | null>(null)
-  const moved = useRef(false)   // был ли распознан свайп — тогда клик игнорируем
-  // drag: смещение пальца во время жеста (экранные px); null — покоя
-  const [drag, setDrag] = useState<number | null>(null)
-  // Экранное направление последнего перехода: 1 — вправо, -1 — влево.
-  // Подпись выезжает с той стороны, откуда пришёл жест/тап.
-  const [screenDir, setScreenDir] = useState<1 | -1>(isRtl ? -1 : 1)
-  // «Выезд»: анимируем, когда текущий value — тот, на который мы только что
-  // перелистнули через slide(). Храним целевой тип (а не булев флаг), чтобы
-  // выезд играл ровно на рендере со сменившимся value: как только slide меняет
-  // тип, animateTo === value → анимация; при откате незавершённого свайпа value
-  // не меняется, animateTo !== value → span откатывается через transition.
-  // (Заменяет ref justChanged + эффект-сброс, которые читали ref в рендере.)
-  const [animateTo, setAnimateTo] = useState<OrderType | null>(null)
-  const justChanged = animateTo === value
-  const idx = ORDER_TYPES.indexOf(value)
-
-  // Перелистнуть по экранному направлению. sd>0 (вправо) в LTR = следующий,
-  // в RTL = предыдущий (список растёт влево). Зеркалим шаг через isRtl.
-  function slide(sd: 1 | -1) {
-    setScreenDir(sd)
-    const step = isRtl ? -sd : sd
-    const next = (idx + step + ORDER_TYPES.length) % ORDER_TYPES.length
-    setAnimateTo(ORDER_TYPES[next])
-    onChange(ORDER_TYPES[next])
-  }
-
-  function onPointerDown(e: React.PointerEvent) {
-    if (e.pointerType === 'mouse' && e.button !== 0) return
-    start.current = { x: e.clientX, y: e.clientY }
-    moved.current = false
-    setDrag(0)
-  }
-  function onPointerMove(e: React.PointerEvent) {
-    if (!start.current) return
-    const dx = e.clientX - start.current.x
-    const dy = e.clientY - start.current.y
-    // Пока горизонталь не преобладает — не перехватываем (даём вертикали скроллить)
-    if (!moved.current && Math.abs(dx) < 10) return
-    if (Math.abs(dx) <= Math.abs(dy)) return
-    moved.current = true
-    // Небольшое сопротивление у краёв жеста — тактильнее (клампим до ±ширины кнопки)
-    setDrag(Math.max(-120, Math.min(120, dx)))
-  }
-  function finish(e: React.PointerEvent) {
-    if (!start.current) return
-    const dx = e.clientX - start.current.x
-    start.current = null
-    setDrag(null)
-    if (moved.current && Math.abs(dx) > SWIPE_THRESHOLD) {
-      slide(dx > 0 ? 1 : -1)   // вправо → screenDir 1, влево → -1
-    }
-  }
-
-  const dragging = drag !== null
-  return (
-    <div className="mb-2.5">
-      <button
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={finish}
-        onPointerCancel={() => { start.current = null; setDrag(null) }}
-        onClick={() => { if (!moved.current) slide(isRtl ? -1 : 1) }} // тап = следующий
-        className="relative w-full h-11 rounded-xl bg-gray-100 border border-gray-300
-                   overflow-hidden touch-pan-y select-none active:scale-[0.99]"
-      >
-        <span
-          // key = value: перемонтаж (и анимация выезда) только при СМЕНЕ типа.
-          // Незавершённый свайп value не меняет → span тот же, translateX
-          // снимается с transition ниже (плавный откат к центру).
-          key={value}
-          className="absolute inset-0 flex items-center justify-center text-sm font-semibold text-gray-900"
-          style={
-            dragging
-              ? { transform: `translateX(${drag}px)`, opacity: 1 - Math.min(Math.abs(drag!) / 160, 0.5) }
-              : justChanged
-                ? { animation: `${screenDir === 1 ? 'ot-in-right' : 'ot-in-left'} 0.18s ease-out` }
-                : { transform: 'translateX(0)', transition: 'transform 0.18s ease-out' }
-          }
-        >
-          {t(lang, value)}
-        </span>
-      </button>
-      {/* Точки — сколько вариантов и текущий */}
-      <div className="flex justify-center gap-1.5 mt-1.5">
-        {ORDER_TYPES.map((tp, i) => (
-          <span
-            key={tp}
-            className={`h-1.5 rounded-full transition-all ${
-              i === idx ? 'w-4 bg-gray-800' : 'w-1.5 bg-gray-300'
-            }`}
-          />
-        ))}
-      </div>
     </div>
   )
 }
