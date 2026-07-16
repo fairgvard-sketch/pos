@@ -49,7 +49,7 @@ INSERT INTO staff (id, org_id, location_id, name, role, pin_hash) VALUES
   ('42000000-0000-4000-8000-000000000002',
    '40000000-0000-4000-8000-000000000001',
    '41000000-0000-4000-8000-000000000001',
-   'uf cashier', 'cashier', 'unused-in-test');
+   'uf barista', 'barista', 'unused-in-test');
 
 INSERT INTO staff_sessions (token, staff_id, org_id, location_id) VALUES
   ('43000000-0000-4000-8000-000000000001',
@@ -174,7 +174,7 @@ SELECT throws_ok(
     '2026-07-15', '2026-07-15', NULL, NULL, 200
   ) $$,
   'forbidden: manage',
-  'a cashier session cannot export fiscal data'
+  'a barista session cannot export fiscal data'
 );
 
 SELECT * FROM finish();
