@@ -37,9 +37,16 @@ jobs:
           fi
           echo "cb0da6751c2b753a16ac168bb354870ebb1e162e9083f116729cec9c781156b8  gradle/wrapper/gradle-wrapper.jar" | sha256sum -c -
 
+      # Хвост лога — в аннотацию (как database-job в ci.yml): причина падения
+      # видна без скачивания логов.
       - name: Build debug APK
         working-directory: android
-        run: ./gradlew --no-daemon assembleDebug
+        run: |
+          if ! ./gradlew --no-daemon assembleDebug > build.log 2>&1; then
+            msg=$(tail -c 3000 build.log); msg="${msg//$'\n'/%0A}"
+            echo "::error title=assembleDebug failed::${msg}"
+            exit 1
+          fi
 
       - uses: actions/upload-artifact@v4
         with:
@@ -86,7 +93,12 @@ jobs:
           KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        run: ./gradlew --no-daemon assembleRelease
+        run: |
+          if ! ./gradlew --no-daemon assembleRelease > build.log 2>&1; then
+            msg=$(tail -c 3000 build.log); msg="${msg//$'\n'/%0A}"
+            echo "::error title=assembleRelease failed::${msg}"
+            exit 1
+          fi
 
       - uses: actions/upload-artifact@v4
         if: ${{ env.HAS_SIGNING == 'true' }}
