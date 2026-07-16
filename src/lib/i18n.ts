@@ -988,6 +988,7 @@ export const translations = {
     // Пауза приёма и время приготовления (054, Square-стиль)
     onlineStateOn: 'Приём включён',
     onlineStateOff: 'Приём выключен',
+    onlineAcceptTitle: 'Приём заказов',
     onlinePausedUntil: 'Пауза до',
     onlinePauseTitle: 'Приостановить приём',
     onlinePauseHint: 'Гости не смогут отправить заявку — приём вернётся автоматически.',
@@ -2188,6 +2189,7 @@ export const translations = {
     // השהיית קבלה וזמן הכנה (054)
     onlineStateOn: 'קבלת הזמנות פעילה',
     onlineStateOff: 'קבלת הזמנות כבויה',
+    onlineAcceptTitle: 'קבלת הזמנות',
     onlinePausedUntil: 'בהשהיה עד',
     onlinePauseTitle: 'השהיית קבלת הזמנות',
     onlinePauseHint: 'אורחים לא יוכלו לשלוח הזמנה — הקבלה תחזור אוטומטית.',

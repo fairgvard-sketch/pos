@@ -135,7 +135,8 @@ export default function OnlineOrdersPage() {
   })
 
   // ── Пауза приёма и время приготовления (054, идея из Square) ──
-  const [stateSheet, setStateSheet] = useState(false)
+  // Каждая пилюля открывает свой шит: 'pause' — приём, 'prep' — время
+  const [stateSheet, setStateSheet] = useState<'pause' | 'prep' | null>(null)
   const oo = location?.settings?.online_orders
   const enabled = oo?.enabled !== false
   // Истёкшая пауза снимается сама — тик nowTs раз в 30с гасит пилюлю
@@ -195,7 +196,7 @@ export default function OnlineOrdersPage() {
             {/* Статус приёма и время приготовления — кликабельные пилюли (Square) */}
             {location && (
               <button
-                onClick={() => setStateSheet(true)}
+                onClick={() => setStateSheet('pause')}
                 className="h-11 px-4 rounded-full border border-gray-200 hover:border-gray-400 flex items-center gap-2 active:scale-[0.97] transition-all shrink-0"
               >
                 <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${
@@ -213,7 +214,7 @@ export default function OnlineOrdersPage() {
             )}
             {location && enabled && (
               <button
-                onClick={() => setStateSheet(true)}
+                onClick={() => setStateSheet('prep')}
                 className="h-11 px-4 rounded-full border border-gray-200 hover:border-gray-400 flex items-center gap-2 active:scale-[0.97] transition-all shrink-0"
               >
                 <ClockIcon />
@@ -341,6 +342,7 @@ export default function OnlineOrdersPage() {
 
       {stateSheet && location && (
         <OnlineStateSheet
+          mode={stateSheet}
           lang={lang}
           enabled={enabled}
           pausedUntil={pausedUntil}
@@ -351,7 +353,7 @@ export default function OnlineOrdersPage() {
           onPause={(untilIso) => pauseMut.mutate({ paused_until: untilIso })}
           onResume={() => pauseMut.mutate({ paused_until: null })}
           onPrep={(min, max) => prepMut.mutate({ min, max })}
-          onClose={() => setStateSheet(false)}
+          onClose={() => setStateSheet(null)}
         />
       )}
 
@@ -453,12 +455,14 @@ const PAUSE_PRESETS: { minutes: number | 'eod'; label: TranslationKey }[] = [
 const PREP_PRESETS = [10, 15, 20, 30, 45, 60]
 
 /**
- * Управление приёмом (054, Square-стиль): пауза на время (снимается
- * сама) и время приготовления, которое гость видит при заказе.
- * Изменения применяются сразу — шит не закрывается, статус в пилюлях
- * обновляется optimistic-патчем кеша current_location.
+ * Управление приёмом (054, Square-стиль). Каждая пилюля шапки открывает
+ * свой шит: mode 'pause' — пауза приёма (снимается сама), mode 'prep' —
+ * время приготовления, которое гость видит при заказе. Изменения
+ * применяются сразу — шит не закрывается, статус в пилюлях обновляется
+ * optimistic-патчем кеша current_location.
  */
-function OnlineStateSheet({ lang, enabled, pausedUntil, prepMin, prepMax, canPause, busy, onPause, onResume, onPrep, onClose }: {
+function OnlineStateSheet({ mode, lang, enabled, pausedUntil, prepMin, prepMax, canPause, busy, onPause, onResume, onPrep, onClose }: {
+  mode: 'pause' | 'prep'
   lang: 'ru' | 'he'
   enabled: boolean
   pausedUntil: string | null
@@ -482,50 +486,53 @@ function OnlineStateSheet({ lang, enabled, pausedUntil, prepMin, prepMax, canPau
     <div className="fixed inset-0 z-30 bg-black/40 flex items-center justify-center p-4" onClick={onClose}>
       <div className="w-full max-w-md bg-white rounded-3xl p-6" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between">
-          <h3 className="text-lg font-bold text-gray-900">{t(lang, 'onlineOrders')}</h3>
+          <h3 className="text-lg font-bold text-gray-900">
+            {t(lang, mode === 'pause' ? 'onlineAcceptTitle' : 'onlinePrepTitle')}
+          </h3>
           <button onClick={onClose} className="w-11 h-11 rounded-xl bg-gray-100 text-gray-500 font-bold active:scale-[0.94] transition-all">✕</button>
         </div>
 
-        {!enabled ? (
-          // Выключено тумблером в настройках — пауза не имеет смысла
-          <p className="text-sm text-gray-500 mt-4">{t(lang, 'onlineOffHint')}</p>
-        ) : pausedUntil ? (
-          <div className="mt-4 rounded-2xl bg-gray-50 p-4">
-            <div className="rounded-2xl bg-amber-50 text-amber-800 text-sm font-semibold px-4 py-3">
-              {t(lang, 'onlinePausedUntil')} {formatTime(pausedUntil, lang)}
+        {mode === 'pause' && (
+          !enabled ? (
+            // Выключено тумблером в настройках — пауза не имеет смысла
+            <p className="text-sm text-gray-500 mt-4">{t(lang, 'onlineOffHint')}</p>
+          ) : pausedUntil ? (
+            <div className="mt-4">
+              <div className="rounded-2xl bg-amber-50 text-amber-800 text-sm font-semibold px-4 py-3">
+                {t(lang, 'onlinePausedUntil')} {formatTime(pausedUntil, lang)}
+              </div>
+              <p className="text-sm text-gray-500 mt-2">{t(lang, 'onlinePauseHint')}</p>
+              <button
+                className="btn-primary w-full h-12 mt-3"
+                disabled={!canPause || busy}
+                onClick={onResume}
+              >
+                {t(lang, 'onlineResume')}
+              </button>
             </div>
-            <p className="text-sm text-gray-500 mt-2">{t(lang, 'onlinePauseHint')}</p>
-            <button
-              className="btn-primary w-full h-12 mt-3"
-              disabled={!canPause || busy}
-              onClick={onResume}
-            >
-              {t(lang, 'onlineResume')}
-            </button>
-          </div>
-        ) : (
-          <div className="mt-4 rounded-2xl bg-gray-50 p-4">
-            <div className="text-sm font-bold text-gray-500">{t(lang, 'onlinePauseTitle')}</div>
-            <p className="text-sm text-gray-500 mt-1">{t(lang, 'onlinePauseHint')}</p>
-            <div className="grid grid-cols-2 gap-2 mt-3">
-              {PAUSE_PRESETS.map((p) => (
-                <button
-                  key={String(p.minutes)}
-                  className="btn-secondary h-12"
-                  disabled={!canPause || busy}
-                  onClick={() => pauseFor(p.minutes)}
-                >
-                  {t(lang, p.label)}
-                </button>
-              ))}
+          ) : (
+            <div className="mt-4">
+              <div className="text-sm font-bold text-gray-500">{t(lang, 'onlinePauseTitle')}</div>
+              <p className="text-sm text-gray-500 mt-1">{t(lang, 'onlinePauseHint')}</p>
+              <div className="grid grid-cols-2 gap-2 mt-3">
+                {PAUSE_PRESETS.map((p) => (
+                  <button
+                    key={String(p.minutes)}
+                    className="btn-secondary h-12"
+                    disabled={!canPause || busy}
+                    onClick={() => pauseFor(p.minutes)}
+                  >
+                    {t(lang, p.label)}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )
         )}
 
-        {enabled && (
-          <div className="mt-3 rounded-2xl bg-gray-50 p-4">
-            <div className="text-sm font-bold text-gray-500">{t(lang, 'onlinePrepTitle')}</div>
-            <p className="text-sm text-gray-500 mt-1">{t(lang, 'onlinePrepHint')}</p>
+        {mode === 'prep' && (
+          <div className="mt-4">
+            <p className="text-sm text-gray-500">{t(lang, 'onlinePrepHint')}</p>
 
             {/* Выкл — гасит обе границы; иначе — две строки вилки «от … до …» */}
             <div className="flex flex-wrap gap-2 mt-3">
