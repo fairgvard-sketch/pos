@@ -241,20 +241,21 @@ export default function PublicOrderPage() {
         <>
           {cartCount > 0 && (
             // Панель прижата к низу колонки (max-w-lg, не на всю ширину экрана);
-            // лёгкий градиент-подложка только под самим pill, без сплошной белой
-            // полосы поверх фона-фото
+            // лёгкий градиент-подложка только под кнопкой, без сплошной белой
+            // полосы поверх фона-фото. Сама кнопка — общий стиль CTA гостевых
+            // страниц (h-14 rounded-2xl, как чекаут и бронь)
             <div className="fixed bottom-0 inset-x-0 pointer-events-none">
               <div className="max-w-lg mx-auto p-4 bg-gradient-to-t from-black/25 to-transparent">
               <button
                 onClick={() => setView('checkout')}
-                className="pointer-events-auto w-full h-16 rounded-full bg-gray-900 text-white ps-2 pe-6 flex items-center gap-4 active:scale-[0.98] transition-all shadow-xl shadow-black/20"
+                className="pointer-events-auto w-full h-14 rounded-2xl bg-gray-900 text-white ps-2 pe-5 flex items-center gap-3 active:scale-[0.98] transition-all shadow-lg shadow-black/15"
               >
-                <span className="w-11 h-11 shrink-0 rounded-full bg-white text-gray-900 font-bold text-lg flex items-center justify-center tabular-nums">
+                <span className="w-10 h-10 shrink-0 rounded-xl bg-white text-gray-900 font-bold flex items-center justify-center tabular-nums">
                   {cartCount}
                 </span>
-                <span className="font-bold text-lg">{t(lang, 'pubShowItems')}</span>
+                <span className="font-bold">{t(lang, 'pubShowItems')}</span>
                 {/* Сумма к краю (на RTL — левому); знак ₪ слева от числа */}
-                <span className="ms-auto font-bold text-xl tabular-nums" dir="ltr">
+                <span className="ms-auto font-bold text-lg tabular-nums" dir="ltr">
                   ₪{(cartTotal / 100).toLocaleString('he-IL', {
                     minimumFractionDigits: cartTotal % 100 === 0 ? 0 : 2,
                     maximumFractionDigits: 2,
