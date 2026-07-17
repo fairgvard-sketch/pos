@@ -9,10 +9,10 @@ import {
   SortableContext, verticalListSortingStrategy, arrayMove, useSortable,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { fetchCategories, createCategory, updateCategory, deleteCategory, fetchItems, reorderItems, reorderCategories, fetchModifierGroups, fetchStations } from './api'
+import { fetchCategories, createCategory, updateCategory, deleteCategory, fetchItems, reorderItems, reorderCategories, fetchModifierGroups, fetchStations, uploadItemImage } from './api'
 import type { MenuItem, MenuCategory } from '../../types'
 import { useLangStore } from '../../store/langStore'
-import { t, type TranslationKey } from '../../lib/i18n'
+import { t, type TranslationKey, type Lang } from '../../lib/i18n'
 import { formatMoney } from '../../lib/money'
 import AppSidebar from '../../components/AppSidebar'
 import ItemImage from '../../components/ItemImage'
@@ -181,6 +181,13 @@ export default function MenuPage() {
     onError: (e) => toast.error(e.message),
   })
 
+  // Обложка плитки категории в онлайн-меню (080). null = сброс на фото первого товара.
+  const setCover = useMutation({
+    mutationFn: ({ id, url }: { id: string; url: string | null }) => updateCategory(id, { cover_url: url }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['menu_categories'] }),
+    onError: (e) => toast.error(e.message),
+  })
+
   function selectItem(id: string) {
     setSelectedItemId(id)
     setCreating(false)
@@ -256,14 +263,17 @@ export default function MenuPage() {
                       <SortableCategoryRow
                         key={c.id}
                         cat={c}
+                        lang={lang}
                         active={!search && c.id === activeCat}
                         count={items.filter((i) => i.category_id === c.id).length}
+                        catItems={items.filter((i) => i.category_id === c.id)}
                         placeholder={t(lang, 'categoryName')}
                         onSelect={() => { setActiveCategoryId(c.id); setSearch('') }}
                         onRename={(name) => renameCategory.mutate({ id: c.id, name })}
                         onDelete={() => removeCategory.mutate(c.id)}
                         onToggleActive={() => toggleCategory.mutate({ id: c.id, isActive: !c.is_active })}
                         toggleTitle={t(lang, c.is_active ? 'catHide' : 'catShow')}
+                        onSetCover={(url) => setCover.mutate({ id: c.id, url })}
                       />
                     ))}
                   </div>
@@ -393,8 +403,11 @@ function ItemRow({ item, lang, selected, onSelect, handle }: RowProps) {
 // ── Строка категории (перетаскиваемая) ──────────────────────
 interface CatRowProps {
   cat: MenuCategory
+  lang: Lang
   active: boolean
   count: number
+  /** Товары этой категории — для выбора обложки из фото товара */
+  catItems: MenuItem[]
   placeholder: string
   onSelect: () => void
   onRename: (name: string) => void
@@ -402,13 +415,16 @@ interface CatRowProps {
   /** Временно скрыть/вернуть категорию в меню (POS и онлайн) */
   onToggleActive: () => void
   toggleTitle: string
+  /** Обложка плитки категории в онлайн-меню (080). null = сброс на фото товара. */
+  onSetCover: (url: string | null) => void
 }
 
-function SortableCategoryRow({ cat, active, count, placeholder, onSelect, onRename, onDelete, onToggleActive, toggleTitle }: CatRowProps) {
+function SortableCategoryRow({ cat, lang, active, count, catItems, placeholder, onSelect, onRename, onDelete, onToggleActive, toggleTitle, onSetCover }: CatRowProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: cat.id })
   // Инлайн-режимы прямо в строке сайдбара (поле не влезает в 16rem — правим на месте)
   const [editing, setEditing] = useState(false)
   const [confirming, setConfirming] = useState(false)
+  const [coverOpen, setCoverOpen] = useState(false)
   const [draft, setDraft] = useState(cat.name)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -494,6 +510,18 @@ function SortableCategoryRow({ cat, active, count, placeholder, onSelect, onRena
       ) : (
         <div className="absolute top-1/2 -translate-y-1/2 end-2 hidden group-hover:flex items-center gap-1.5 bg-inherit">
           <button
+            onClick={() => setCoverOpen(true)}
+            title={t(lang, 'catCover')}
+            aria-label={t(lang, 'catCover')}
+            className={`hover:text-gray-700 ${cat.cover_url ? 'text-gray-500' : 'text-gray-400'}`}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <rect x="3.5" y="4.5" width="17" height="15" rx="2.5" stroke="currentColor" strokeWidth="1.8" />
+              <circle cx="8.5" cy="9.5" r="1.6" stroke="currentColor" strokeWidth="1.8" />
+              <path d="M4 17.5 9 12.5l3.5 3.5 3-2.5 4.5 4" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+            </svg>
+          </button>
+          <button
             onClick={onToggleActive}
             title={toggleTitle}
             aria-label={toggleTitle}
@@ -514,6 +542,124 @@ function SortableCategoryRow({ cat, active, count, placeholder, onSelect, onRena
           <button onClick={startEdit} className="text-xs text-gray-400 hover:text-gray-700">✎</button>
           <button onClick={() => setConfirming(true)} className="text-xs text-gray-400 hover:text-red-500">✕</button>
         </div>
+      )}
+      {coverOpen && (
+        <CategoryCoverPopover
+          cat={cat}
+          lang={lang}
+          catItems={catItems}
+          onSetCover={onSetCover}
+          onClose={() => setCoverOpen(false)}
+        />
+      )}
+    </div>
+  )
+}
+
+/**
+ * Поповер обложки категории (080): загрузить своё фото, выбрать фото
+ * одного из товаров категории или сбросить на авто (фото первого товара).
+ * Открывается из строки категории; закрывается по клику вне/Esc.
+ */
+function CategoryCoverPopover({ cat, lang, catItems, onSetCover, onClose }: {
+  cat: MenuCategory
+  lang: Lang
+  catItems: MenuItem[]
+  onSetCover: (url: string | null) => void
+  onClose: () => void
+}) {
+  const fileRef = useRef<HTMLInputElement>(null)
+  const boxRef = useRef<HTMLDivElement>(null)
+  const [uploading, setUploading] = useState(false)
+  const withPhoto = catItems.filter((i) => i.image_url)
+
+  useEffect(() => {
+    function onDown(e: MouseEvent) {
+      if (boxRef.current && !boxRef.current.contains(e.target as Node)) onClose()
+    }
+    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose() }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [onClose])
+
+  async function upload(file: File) {
+    setUploading(true)
+    try {
+      const url = await uploadItemImage(file)
+      onSetCover(url)
+      onClose()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : String(e))
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  return (
+    <div
+      ref={boxRef}
+      className="absolute top-full end-1 z-20 mt-1 w-60 rounded-xl border border-gray-200 bg-white shadow-lg p-3"
+    >
+      <div className="flex items-center gap-3">
+        {cat.cover_url ? (
+          <img src={cat.cover_url} alt="" className="w-16 h-12 rounded-lg object-cover border border-gray-100 shrink-0" />
+        ) : (
+          <div className="w-16 h-12 rounded-lg bg-gray-100 shrink-0" />
+        )}
+        <div className="min-w-0">
+          <div className="text-sm font-semibold text-gray-900">{t(lang, 'catCover')}</div>
+          <p className="text-xs text-gray-500 mt-0.5">{t(lang, 'catCoverHint')}</p>
+        </div>
+      </div>
+
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); e.target.value = '' }}
+      />
+      <button
+        className="btn-secondary w-full !py-1.5 !text-xs mt-3"
+        disabled={uploading}
+        onClick={() => fileRef.current?.click()}
+      >
+        {uploading ? t(lang, 'loading') : t(lang, 'uploadPhoto')}
+      </button>
+
+      {withPhoto.length > 0 && (
+        <>
+          <div className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mt-3 mb-1.5">
+            {t(lang, 'catCoverFromItem')}
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {withPhoto.map((i) => (
+              <button
+                key={i.id}
+                title={i.name}
+                onClick={() => { onSetCover(i.image_url); onClose() }}
+                className={`w-11 h-11 rounded-lg overflow-hidden border-2 transition-all ${
+                  cat.cover_url === i.image_url ? 'border-gray-900' : 'border-transparent hover:border-gray-300'
+                }`}
+              >
+                <img src={i.image_url ?? ''} alt="" className="w-full h-full object-cover" />
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+
+      {cat.cover_url && (
+        <button
+          className="w-full text-xs text-gray-400 hover:text-red-500 mt-3"
+          onClick={() => { onSetCover(null); onClose() }}
+        >
+          {t(lang, 'catCoverReset')}
+        </button>
       )}
     </div>
   )

@@ -75,7 +75,7 @@ export interface PublicMenu {
       google_review?: string | null
     }
   }
-  categories: { id: string; name: string; items: PublicItem[] }[]
+  categories: { id: string; name: string; cover_url?: string | null; items: PublicItem[] }[]
 }
 
 /** Осмысленная ошибка публичного API: code — ключ для перевода гостю */

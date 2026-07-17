@@ -33,7 +33,7 @@ export async function createCategory(name: string, sortOrder: number, icon: stri
   return data as MenuCategory
 }
 
-export async function updateCategory(id: string, patch: Partial<Pick<MenuCategory, 'name' | 'icon' | 'sort_order' | 'is_active' | 'loyalty_stamps'>>) {
+export async function updateCategory(id: string, patch: Partial<Pick<MenuCategory, 'name' | 'icon' | 'cover_url' | 'sort_order' | 'is_active' | 'loyalty_stamps'>>) {
   const { error } = await supabase.from('menu_categories').update(patch).eq('id', id)
   if (error) throw error
 }

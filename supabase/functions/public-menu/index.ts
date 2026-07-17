@@ -47,7 +47,7 @@ Deno.serve(async (req) => {
     supabase
       .from('menu_categories')
       .select(`
-        id, name, sort_order,
+        id, name, sort_order, cover_url,
         menu_items (
           id, name, price, description, image_url, sort_order, is_available,
           item_variants ( id, name, price, is_default, sort_order ),
@@ -74,6 +74,8 @@ Deno.serve(async (req) => {
     .map((c) => ({
       id: c.id,
       name: c.name,
+      // Обложка плитки категории (080): своя картинка или null (гость возьмёт фото первого товара)
+      cover_url: (c as { cover_url?: string | null }).cover_url ?? null,
       items: (c.menu_items ?? [])
         .filter((i) => i.is_available)
         .sort(bySort)

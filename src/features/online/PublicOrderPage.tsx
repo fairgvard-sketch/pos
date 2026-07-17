@@ -175,14 +175,15 @@ export default function PublicOrderPage() {
         <>
           <div className="px-4 mt-4 grid grid-cols-2 gap-3">
             {menu.categories.map((cat) => {
-              const cover = cat.items.find((i) => i.image_url)?.image_url
+              // Обложка плитки (080): своя картинка категории, иначе фото первого товара
+              const cover = cat.cover_url ?? cat.items.find((i) => i.image_url)?.image_url
               return (
                 <button
                   key={cat.id}
                   onClick={() => setActiveCat(cat.id)}
                   className="relative aspect-[4/3] rounded-2xl overflow-hidden bg-gray-200 ring-1 ring-black/10 shadow-sm active:scale-[0.98] transition-all text-start"
                 >
-                  {cover && <img src={cover} alt="" loading="lazy" className="absolute inset-0 w-full h-full object-cover" />}
+                  {cover && <CategoryCover src={cover} />}
                   {/* Градиент снизу (стиль Wolt): фото видно целиком, подпись
                       всегда лежит на тёмном — читаема на любой картинке товара */}
                   <span className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
@@ -412,6 +413,28 @@ function Shell({ isRtl, title, logo, hero, headerImg, bgImg, onBack, backLabel, 
  * белой странице — деликатным тёмным footer. Светлые иконки на тёмном →
  * контраст гарантирован везде.
  */
+/**
+ * Обложка плитки категории. Горизонтальные фото заполняют карточку
+ * (object-cover, стиль Wolt); вертикальные (стакан, бутылка) в cover-кропе
+ * теряют верх и низ — такие показываем целиком на белом фоне: фото меню
+ * студийные, на белом, поэтому подложка сливается с фоном снимка.
+ */
+function CategoryCover({ src }: { src: string }) {
+  const [contain, setContain] = useState(false)
+  return (
+    <img
+      src={src}
+      alt=""
+      loading="lazy"
+      onLoad={(e) => {
+        const img = e.currentTarget
+        if (img.naturalHeight > img.naturalWidth) setContain(true)
+      }}
+      className={`absolute inset-0 w-full h-full ${contain ? 'object-contain bg-white p-2' : 'object-cover'}`}
+    />
+  )
+}
+
 function SocialFooter({ links, lang, padForCart }: {
   links?: PublicMenu['location']['links']
   lang: Lang

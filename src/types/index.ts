@@ -254,6 +254,8 @@ export interface MenuCategory {
   location_id: string
   name: string
   icon: string | null
+  /** Обложка плитки категории в онлайн-меню (080). NULL = фото первого товара. */
+  cover_url: string | null
   sort_order: number
   is_active: boolean
   loyalty_stamps: boolean
