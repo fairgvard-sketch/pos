@@ -173,6 +173,14 @@ export default function MenuPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['menu_categories'] }),
   })
 
+  // Временное скрытие категории из меню (витрина POS и онлайн-заказ).
+  // Товары и настройки категории сохраняются — в отличие от удаления.
+  const toggleCategory = useMutation({
+    mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) => updateCategory(id, { is_active: isActive }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['menu_categories'] }),
+    onError: (e) => toast.error(e.message),
+  })
+
   function selectItem(id: string) {
     setSelectedItemId(id)
     setCreating(false)
@@ -254,6 +262,8 @@ export default function MenuPage() {
                         onSelect={() => { setActiveCategoryId(c.id); setSearch('') }}
                         onRename={(name) => renameCategory.mutate({ id: c.id, name })}
                         onDelete={() => removeCategory.mutate(c.id)}
+                        onToggleActive={() => toggleCategory.mutate({ id: c.id, isActive: !c.is_active })}
+                        toggleTitle={t(lang, c.is_active ? 'catHide' : 'catShow')}
                       />
                     ))}
                   </div>
@@ -389,9 +399,12 @@ interface CatRowProps {
   onSelect: () => void
   onRename: (name: string) => void
   onDelete: () => void
+  /** Временно скрыть/вернуть категорию в меню (POS и онлайн) */
+  onToggleActive: () => void
+  toggleTitle: string
 }
 
-function SortableCategoryRow({ cat, active, count, placeholder, onSelect, onRename, onDelete }: CatRowProps) {
+function SortableCategoryRow({ cat, active, count, placeholder, onSelect, onRename, onDelete, onToggleActive, toggleTitle }: CatRowProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: cat.id })
   // Инлайн-режимы прямо в строке сайдбара (поле не влезает в 16rem — правим на месте)
   const [editing, setEditing] = useState(false)
@@ -452,7 +465,7 @@ function SortableCategoryRow({ cat, active, count, placeholder, onSelect, onRena
         onClick={onSelect}
         className={`flex-1 min-w-0 flex items-center justify-between px-3 py-2 rounded-xl text-sm font-semibold transition-all ${
           active ? 'bg-gray-100 text-gray-900' : 'text-gray-500 hover:bg-gray-50'
-        }`}
+        } ${!cat.is_active ? 'opacity-40' : ''}`}
       >
         <span className="truncate">
           {cat.icon && <span className="me-1.5">{cat.icon}</span>}
@@ -479,7 +492,25 @@ function SortableCategoryRow({ cat, active, count, placeholder, onSelect, onRena
           </button>
         </div>
       ) : (
-        <div className="absolute top-1/2 -translate-y-1/2 end-2 hidden group-hover:flex gap-1 bg-inherit">
+        <div className="absolute top-1/2 -translate-y-1/2 end-2 hidden group-hover:flex items-center gap-1.5 bg-inherit">
+          <button
+            onClick={onToggleActive}
+            title={toggleTitle}
+            aria-label={toggleTitle}
+            className="text-gray-400 hover:text-gray-700"
+          >
+            {cat.is_active ? (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+                <circle cx="12" cy="12" r="2.8" stroke="currentColor" strokeWidth="1.8" />
+              </svg>
+            ) : (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+                <path d="M4.5 19.5 19.5 4.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+              </svg>
+            )}
+          </button>
           <button onClick={startEdit} className="text-xs text-gray-400 hover:text-gray-700">✎</button>
           <button onClick={() => setConfirming(true)} className="text-xs text-gray-400 hover:text-red-500">✕</button>
         </div>

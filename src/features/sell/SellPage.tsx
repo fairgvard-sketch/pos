@@ -347,6 +347,12 @@ export default function SellPage() {
   // Одноуровневая витрина: товары видны сразу, категории — постоянный фильтр.
   // Поиск работает по всему каталогу независимо от выбранной категории.
   const activeCats = useMemo(() => categories.filter((c) => c.is_active), [categories])
+  // Скрытая категория (is_active=false) временно убирает и свои товары —
+  // из «Все товары» и поиска тоже, не только чип
+  const hiddenCatIds = useMemo(
+    () => new Set(categories.filter((c) => !c.is_active).map((c) => c.id)),
+    [categories]
+  )
 
   // Чип «Все товары» скрываем настройкой точки (069, settings.interface).
   // Без него витрина всегда в конкретной категории: как только категории
@@ -354,6 +360,10 @@ export default function SellPage() {
   const showAllTab = location?.settings.interface?.show_all_items_tab !== false
   if (!showAllTab && activeCat === null && activeCats.length > 0) {
     setActiveCat(activeCats[0].id)
+  }
+  // Категорию скрыли, пока она была открыта — уходим на «Все товары»/первую
+  if (activeCat !== null && categories.length > 0 && !activeCats.some((c) => c.id === activeCat)) {
+    setActiveCat(showAllTab ? null : (activeCats[0]?.id ?? null))
   }
 
   // Смена контекста (категория/поиск/выход из правки) сбрасывает локальный
@@ -369,8 +379,11 @@ export default function SellPage() {
   }
 
   const visibleItems = useMemo(() => {
+    // Товары скрытых категорий не продаются вовсе (даже в режиме правки —
+    // их чипа нет, вернуть категорию можно только в управлении меню)
+    let list = items.filter((i) => !hiddenCatIds.has(i.category_id))
     // В режиме правки показываем и снятые с продажи (приглушёнными)
-    let list = editMode ? items : items.filter((i) => i.is_available)
+    if (!editMode) list = list.filter((i) => i.is_available)
     if (search.trim()) {
       const q = search.trim().toLowerCase()
       return list.filter((i) => i.name.toLowerCase().includes(q))
@@ -382,7 +395,7 @@ export default function SellPage() {
       list = list.slice().sort((a, b) => (pos.get(a.id) ?? Infinity) - (pos.get(b.id) ?? Infinity))
     }
     return list
-  }, [items, activeCat, search, editMode, tileOrder])
+  }, [items, hiddenCatIds, activeCat, search, editMode, tileOrder])
 
   function itemGroups(item: MenuItem): ModifierGroup[] {
     const links = (item.menu_item_modifier_groups ?? []).slice().sort((a, b) => a.sort_order - b.sort_order)
