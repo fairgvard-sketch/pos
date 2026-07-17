@@ -62,7 +62,7 @@ export async function reorderCategories(orderedIds: string[]) {
 export async function fetchItems(): Promise<MenuItem[]> {
   const { data, error } = await supabase
     .from('menu_items')
-    .select('*, item_variants (*), menu_item_modifier_groups (group_id, sort_order)')
+    .select('*, item_variants (*), menu_item_modifier_groups (group_id, sort_order), variant_supplies (id, variant_id, supply_item_id, qty, takeaway_only)')
     .order('sort_order')
   if (error) throw error
   return data as MenuItem[]
@@ -84,6 +84,8 @@ export interface ItemInput {
   stock: number | null
   variants: { id?: string; name: string; price: number; is_default: boolean }[]
   modifier_group_ids: string[]
+  /** Упаковка (075): variant_index — позиция в variants, null = весь товар */
+  supplies: { variant_index: number | null; supply_item_id: string; qty: number; takeaway_only: boolean }[]
 }
 
 /** Загрузка фото товара в Storage → публичный URL. Сжимаем на клиенте
@@ -136,6 +138,7 @@ export async function createItem(input: ItemInput): Promise<string> {
     p_group_ids: input.modifier_group_ids,
     p_item_id: null,
     p_staff_session: currentStaffToken(),
+    p_supplies: input.supplies,
   })
   if (error) throw error
   return data as string
@@ -149,6 +152,7 @@ export async function updateItem(id: string, input: ItemInput) {
     p_group_ids: input.modifier_group_ids,
     p_item_id: id,
     p_staff_session: currentStaffToken(),
+    p_supplies: input.supplies,
   })
   if (error) throw error
 }
@@ -232,6 +236,42 @@ export async function updateModifier(id: string, patch: Partial<Pick<Modifier, '
 
 export async function deleteModifier(id: string) {
   const { error } = await supabase.from('modifiers').delete().eq('id', id)
+  if (error) throw error
+}
+
+// ── Расход модификаторов (076) ───────────────────────────
+// Сироп 20 мл, доп. шот 9 г зерна, овсяное молоко 180 мл. Дефолтные
+// модификаторы попадают в заказ автоматически, поэтому замена молока —
+// это расход на модификаторах группы «Молоко», не в рецепте товара.
+
+export interface ModifierSupply {
+  id: string
+  modifier_id: string
+  supply_item_id: string
+  /** В базовых единицах расходника (шт/г/мл) за единицу товара */
+  qty: number
+}
+
+export async function fetchModifierSupplies(): Promise<ModifierSupply[]> {
+  const { data, error } = await supabase
+    .from('modifier_supplies')
+    .select('id, modifier_id, supply_item_id, qty')
+  if (error) throw error
+  return data as ModifierSupply[]
+}
+
+/** Полная пересинхронизация расхода одного модификатора (каталог — не финансы) */
+export async function replaceModifierSupplies(
+  modifierId: string,
+  links: { supply_item_id: string; qty: number }[]
+): Promise<void> {
+  const { org_id } = await ctx()
+  const del = await supabase.from('modifier_supplies').delete().eq('modifier_id', modifierId)
+  if (del.error) throw del.error
+  if (links.length === 0) return
+  const { error } = await supabase.from('modifier_supplies').insert(
+    links.map((l) => ({ org_id, modifier_id: modifierId, supply_item_id: l.supply_item_id, qty: l.qty }))
+  )
   if (error) throw error
 }
 

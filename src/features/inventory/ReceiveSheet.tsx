@@ -2,7 +2,10 @@ import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { fetchItems } from '../menu/api'
-import { fetchSupplyItems, receiveStock, upsertSupplyItem, type ReceiveItem, type StockKind } from './api'
+import {
+  fetchSupplyItems, receiveStock, upsertSupplyItem, isFractionalUnit, SUPPLY_UNITS,
+  type ReceiveItem, type StockKind,
+} from './api'
 import { useAuthStore } from '../../store/authStore'
 import { useLangStore } from '../../store/langStore'
 import { t } from '../../lib/i18n'
@@ -40,8 +43,12 @@ export default function ReceiveSheet({ onClose }: { onClose: () => void }) {
   const [updateCostByKey, setUpdateCostByKey] = useState<Record<string, boolean>>({})
   const [note, setNote] = useState('')
   const [newName, setNewName] = useState('')
-  const [newUnit, setNewUnit] = useState('')
+  const [newUnit, setNewUnit] = useState<string>('шт')
   const [adding, setAdding] = useState(false)
+
+  const UNIT_LABELS: Record<string, string> = {
+    'шт': t(lang, 'unitPcs'), 'г': t(lang, 'unitG'), 'мл': t(lang, 'unitMl'),
+  }
 
   const menuRows = useMemo<Row[]>(
     () => items.map((i) => ({ key: `menu:${i.id}`, kind: 'menu', id: i.id, name: i.name, unit: null, stock: i.stock, cost: i.cost, tracked: i.track_inventory })),
@@ -72,10 +79,10 @@ export default function ReceiveSheet({ onClose }: { onClose: () => void }) {
   }
 
   const addSupply = useMutation({
-    mutationFn: () => upsertSupplyItem(null, newName.trim(), newUnit.trim() || null, null),
+    mutationFn: () => upsertSupplyItem(null, newName.trim(), newUnit || null, null),
     onSuccess: () => {
       setNewName('')
-      setNewUnit('')
+      setNewUnit('шт')
       setAdding(false)
       qc.invalidateQueries({ queryKey: ['supply_items'] })
     },
@@ -111,6 +118,8 @@ export default function ReceiveSheet({ onClose }: { onClose: () => void }) {
 
   function renderRow(row: Row) {
     const qty = qtyByKey[row.key] ?? 0
+    // Граммы/миллилитры степпером не набрать — прямой ввод в базовых единицах
+    const fractional = row.kind === 'supply' && isFractionalUnit(row.unit)
     return (
       <div key={row.key} className="border-b border-gray-100">
         <div className="flex items-center gap-2 min-h-[48px] px-1">
@@ -123,27 +132,52 @@ export default function ReceiveSheet({ onClose }: { onClose: () => void }) {
               <span className="badge-blue ms-2 font-normal">{t(lang, 'receiveWillTrack')}</span>
             )}
           </span>
-          <button
-            onClick={() => bump(row.key, -1)}
-            disabled={qty === 0}
-            className="w-11 h-11 rounded-xl border border-gray-200 font-bold text-gray-900 disabled:opacity-30 active:scale-[0.94]"
-          >
-            −
-          </button>
-          <span className="w-8 text-center font-bold tabular-nums text-gray-900">{qty || ''}</span>
-          <button
-            onClick={() => bump(row.key, 1)}
-            className="w-11 h-11 rounded-xl border border-gray-200 font-bold text-gray-900 active:scale-[0.94]"
-          >
-            +
-          </button>
+          {fractional ? (
+            <>
+              <input
+                className="input !py-2 !w-24 text-center tabular-nums"
+                inputMode="numeric"
+                value={qty || ''}
+                onChange={(e) => {
+                  const n = Math.min(1000000, parseInt(e.target.value.replace(/\D/g, ''), 10) || 0)
+                  setQtyByKey((prev) => {
+                    const next = { ...prev, [row.key]: n }
+                    if (n === 0) delete next[row.key]
+                    return next
+                  })
+                }}
+              />
+              <span className="w-8 text-xs text-gray-500">{row.unit}</span>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={() => bump(row.key, -1)}
+                disabled={qty === 0}
+                className="w-11 h-11 rounded-xl border border-gray-200 font-bold text-gray-900 disabled:opacity-30 active:scale-[0.94]"
+              >
+                −
+              </button>
+              <span className="w-8 text-center font-bold tabular-nums text-gray-900">{qty || ''}</span>
+              <button
+                onClick={() => bump(row.key, 1)}
+                className="w-11 h-11 rounded-xl border border-gray-200 font-bold text-gray-900 active:scale-[0.94]"
+              >
+                +
+              </button>
+            </>
+          )}
         </div>
         {qty > 0 && (
           <div className="flex items-center gap-3 pb-3 px-1">
             <input
               className="input !py-2 !w-32 text-sm"
               inputMode="decimal"
-              placeholder={row.cost != null ? formatMoney(row.cost, lang) : t(lang, 'receiveCostPh')}
+              placeholder={
+                fractional
+                  ? t(lang, row.unit === 'мл' ? 'costPerLPh' : 'costPerKgPh')
+                  : row.cost != null ? formatMoney(row.cost, lang) : t(lang, 'receiveCostPh')
+              }
               value={costByKey[row.key] ?? ''}
               onChange={(e) => setCostByKey((p) => ({ ...p, [row.key]: e.target.value }))}
             />
@@ -218,12 +252,13 @@ export default function ReceiveSheet({ onClose }: { onClose: () => void }) {
                 onChange={(e) => setNewName(e.target.value)}
                 autoFocus
               />
-              <input
-                className="input !py-2 !w-20 text-sm"
-                placeholder={t(lang, 'supplyUnitPh')}
+              <select
+                className="input !py-2 !w-24 text-sm"
                 value={newUnit}
                 onChange={(e) => setNewUnit(e.target.value)}
-              />
+              >
+                {SUPPLY_UNITS.map((u) => <option key={u} value={u}>{UNIT_LABELS[u]}</option>)}
+              </select>
               <button
                 onClick={() => addSupply.mutate()}
                 disabled={addSupply.isPending || newName.trim() === ''}

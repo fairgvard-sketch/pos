@@ -4,6 +4,23 @@ import { currentStaffToken } from '../../store/authStore'
 /** Вид складской позиции: товар меню или расходник (стаканы, упаковка) */
 export type StockKind = 'menu' | 'supply'
 
+// ── Единицы измерения (076) ───────────────────────────────
+// Ингредиенты ведутся в БАЗОВЫХ единицах (г/мл) целыми числами — как
+// деньги в агоротах. Конвенция стоимости: для г/мл supply_items.cost —
+// агороты за 1000 базовых единиц (кг/л); для штучных — за единицу.
+
+/** Канонические единицы для select'ов (хранятся как есть) */
+export const SUPPLY_UNITS = ['шт', 'г', 'мл'] as const
+
+export function isFractionalUnit(unit: string | null): boolean {
+  return unit === 'г' || unit === 'мл'
+}
+
+/** Цена за 1000 базовых единиц? (конвенция cost для г/мл) */
+export function costDivisor(unit: string | null): number {
+  return isFractionalUnit(unit) ? 1000 : 1
+}
+
 // ── Расходники (056) ──────────────────────────────────────
 
 export interface SupplyItem {

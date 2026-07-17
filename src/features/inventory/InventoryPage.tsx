@@ -8,6 +8,7 @@ import { fetchCurrentLocation } from '../auth/api'
 import { landingRoute } from '../auth/landing'
 import {
   fetchStockMovements, fetchStockReport, fetchSupplyItems, setSupplyItemActive, upsertSupplyItem,
+  isFractionalUnit, SUPPLY_UNITS,
   MOVEMENTS_PAGE, type StockMovement, type MovementType, type SupplyItem,
 } from './api'
 import ReceiveSheet from './ReceiveSheet'
@@ -179,6 +180,14 @@ export default function InventoryPage() {
     return `${d.toLocaleDateString(locale, { day: 'numeric', month: 'short' })} ${formatTime(iso, lang)}`
   }
 
+  /** Остаток ингредиента: от 1000 базовых единиц показываем кг/л (076) */
+  function fmtQty(stock: number, unit: string | null): string {
+    if (isFractionalUnit(unit) && Math.abs(stock) >= 1000) {
+      return `${Math.round(stock / 10) / 100} ${t(lang, unit === 'мл' ? 'unitL' : 'unitKg')}`
+    }
+    return String(stock)
+  }
+
   // Склад выключен тумблером точки (Настройки → Интерфейс) — уводим на
   // стартовый экран. Ждём загрузку location, чтобы не дёргать редирект зря.
   if (location && location.settings?.interface?.inventory_enabled === false) {
@@ -292,7 +301,6 @@ export default function InventoryPage() {
                             saving={renameSupply.isPending}
                             saveLabel={t(lang, 'save')}
                             namePh={t(lang, 'supplyNamePh')}
-                            unitPh={t(lang, 'supplyUnitPh')}
                           />
                         ) : (
                           <>
@@ -307,11 +315,11 @@ export default function InventoryPage() {
                               {s.cost != null ? formatMoney(s.cost, lang) : <span className="text-gray-300">—</span>}
                             </span>
                             <span
-                              className={`w-16 text-end font-bold tabular-nums ${
+                              className={`w-20 text-end font-bold tabular-nums ${
                                 s.stock <= 0 ? 'text-red-600' : s.stock <= LOW_STOCK ? 'text-amber-600' : 'text-gray-900'
                               }`}
                             >
-                              {s.stock}
+                              {fmtQty(s.stock, s.unit)}
                             </span>
                             {canTake && (
                               <div className="w-16 flex items-center justify-end gap-1">
@@ -458,9 +466,9 @@ export default function InventoryPage() {
   )
 }
 
-/** Инлайн-редактор расходника (имя + единица) в строке остатков */
+/** Инлайн-редактор расходника (имя + единица шт/г/мл) в строке остатков */
 function SupplyEditor({
-  item, onChange, onSave, onCancel, saving, saveLabel, namePh, unitPh,
+  item, onChange, onSave, onCancel, saving, saveLabel, namePh,
 }: {
   item: SupplyItem
   onChange: (v: SupplyItem) => void
@@ -469,7 +477,6 @@ function SupplyEditor({
   saving: boolean
   saveLabel: string
   namePh: string
-  unitPh: string
 }) {
   return (
     <div className="flex items-center gap-2 flex-1 py-1">
@@ -480,12 +487,17 @@ function SupplyEditor({
         onChange={(e) => onChange({ ...item, name: e.target.value })}
         autoFocus
       />
-      <input
-        className="input !py-2 !w-20 text-sm"
-        placeholder={unitPh}
-        value={item.unit ?? ''}
+      <select
+        className="input !py-2 !w-24 text-sm"
+        value={item.unit ?? 'шт'}
         onChange={(e) => onChange({ ...item, unit: e.target.value })}
-      />
+      >
+        {/* Легаси-единица свободным текстом остаётся выбираемой */}
+        {item.unit && !(SUPPLY_UNITS as readonly string[]).includes(item.unit) && (
+          <option value={item.unit}>{item.unit}</option>
+        )}
+        {SUPPLY_UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
+      </select>
       <button
         onClick={onSave}
         disabled={saving || item.name.trim() === ''}

@@ -1,12 +1,14 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import {
   fetchModifierGroups, createModifierGroup, updateModifierGroup, deleteModifierGroup,
   createModifier, updateModifier, deleteModifier, fetchModifierGroupUsage,
+  fetchModifierSupplies, replaceModifierSupplies, type ModifierSupply,
 } from './api'
+import { fetchSupplyItems, type SupplyItem } from '../inventory/api'
 import { useLangStore } from '../../store/langStore'
-import { t } from '../../lib/i18n'
+import { t, type Lang } from '../../lib/i18n'
 import { formatMoney, parseMoney } from '../../lib/money'
 import type { ModifierGroup } from '../../types'
 import InlineRename from '../../components/InlineRename'
@@ -17,10 +19,24 @@ export default function ModifierGroupsTab() {
   const qc = useQueryClient()
   const { data: groups = [] } = useQuery({ queryKey: ['modifier_groups'], queryFn: fetchModifierGroups })
   const { data: usage = {} } = useQuery({ queryKey: ['modifier_group_usage'], queryFn: fetchModifierGroupUsage })
+  const { data: supplyItems = [] } = useQuery({ queryKey: ['supply_items'], queryFn: fetchSupplyItems })
+  const { data: modSupplies = [] } = useQuery({ queryKey: ['modifier_supplies'], queryFn: fetchModifierSupplies })
+
+  const suppliesByMod = useMemo(() => {
+    const map = new Map<string, ModifierSupply[]>()
+    for (const ms of modSupplies) {
+      const list = map.get(ms.modifier_id) ?? []
+      list.push(ms)
+      map.set(ms.modifier_id, list)
+    }
+    return map
+  }, [modSupplies])
 
   const [newGroupName, setNewGroupName] = useState('')
   // Раскрыта одна группа за раз — с большим количеством групп экран не разрастается
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  // Редактор расхода открыт для одного модификатора за раз
+  const [recipeModId, setRecipeModId] = useState<string | null>(null)
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['modifier_groups'] })
 
@@ -142,26 +158,53 @@ export default function ModifierGroupsTab() {
                 </div>
 
                 <div className="space-y-1.5">
-                  {(g.modifiers ?? []).map((m) => (
-                    <div key={m.id} className="flex items-center gap-3 py-1.5 px-3 rounded-lg bg-gray-50">
-                      <span className="flex-1 text-sm text-gray-800">{m.name}</span>
-                      <span className="text-sm text-gray-500 tabular-nums">
-                        {m.price_delta === 0 ? '—' : `+${formatMoney(m.price_delta, lang)}`}
-                      </span>
-                      <button
-                        onClick={() => toggleDefault(g, m.id, !m.is_default)}
-                        className={`text-[10px] px-2 py-1 rounded-full font-semibold transition-all ${
-                          m.is_default
-                            ? 'bg-emerald-500 text-white'
-                            : 'bg-white border border-gray-200 text-gray-400 hover:border-gray-400'
-                        }`}
-                        title={t(lang, 'defaultLabel')}
-                      >
-                        {m.is_default ? '✓ ' : ''}{t(lang, 'defaultLabel')}
-                      </button>
-                      <ConfirmDeleteButton onConfirm={() => removeModifier.mutate(m.id)} className="text-gray-300 hover:text-red-500 text-sm" />
-                    </div>
-                  ))}
+                  {(g.modifiers ?? []).map((m) => {
+                    const links = suppliesByMod.get(m.id) ?? []
+                    return (
+                      <div key={m.id}>
+                        <div className="flex items-center gap-3 py-1.5 px-3 rounded-lg bg-gray-50">
+                          <span className="flex-1 text-sm text-gray-800">{m.name}</span>
+                          <span className="text-sm text-gray-500 tabular-nums">
+                            {m.price_delta === 0 ? '—' : `+${formatMoney(m.price_delta, lang)}`}
+                          </span>
+                          {supplyItems.length > 0 && (
+                            <button
+                              onClick={() => setRecipeModId(recipeModId === m.id ? null : m.id)}
+                              className={`text-[10px] px-2 py-1 rounded-full font-semibold transition-all ${
+                                links.length > 0
+                                  ? 'bg-gray-900 text-white'
+                                  : 'bg-white border border-gray-200 text-gray-400 hover:border-gray-400'
+                              }`}
+                              title={t(lang, 'modRecipeHint')}
+                            >
+                              {t(lang, 'modRecipeBtn')}{links.length > 0 ? ` · ${links.length}` : ''}
+                            </button>
+                          )}
+                          <button
+                            onClick={() => toggleDefault(g, m.id, !m.is_default)}
+                            className={`text-[10px] px-2 py-1 rounded-full font-semibold transition-all ${
+                              m.is_default
+                                ? 'bg-emerald-500 text-white'
+                                : 'bg-white border border-gray-200 text-gray-400 hover:border-gray-400'
+                            }`}
+                            title={t(lang, 'defaultLabel')}
+                          >
+                            {m.is_default ? '✓ ' : ''}{t(lang, 'defaultLabel')}
+                          </button>
+                          <ConfirmDeleteButton onConfirm={() => removeModifier.mutate(m.id)} className="text-gray-300 hover:text-red-500 text-sm" />
+                        </div>
+                        {recipeModId === m.id && (
+                          <ModifierRecipeEditor
+                            lang={lang}
+                            modifierId={m.id}
+                            links={links}
+                            supplyItems={supplyItems}
+                            onClose={() => setRecipeModId(null)}
+                          />
+                        )}
+                      </div>
+                    )
+                  })}
                 </div>
 
                 <AddModifierForm onAdd={(name, delta) => addModifier.mutate({ groupId: g.id, name, delta })} />
@@ -170,6 +213,101 @@ export default function ModifierGroupsTab() {
           </div>
         )
       })}
+    </div>
+  )
+}
+
+/**
+ * Расход модификатора (076): что списывать со склада при продаже с этой
+ * опцией — сироп 20 мл, доп. шот 9 г зерна. qty в базовых единицах
+ * расходника (шт/г/мл), сохранение — полной пересинхронизацией.
+ */
+function ModifierRecipeEditor({
+  lang, modifierId, links, supplyItems, onClose,
+}: {
+  lang: Lang
+  modifierId: string
+  links: ModifierSupply[]
+  supplyItems: SupplyItem[]
+  onClose: () => void
+}) {
+  const qc = useQueryClient()
+  const [drafts, setDrafts] = useState(() =>
+    links.map((l) => ({ supplyItemId: l.supply_item_id, qtyStr: String(l.qty) }))
+  )
+
+  const save = useMutation({
+    mutationFn: () =>
+      replaceModifierSupplies(
+        modifierId,
+        drafts
+          .filter((d) => d.supplyItemId)
+          .map((d) => ({
+            supply_item_id: d.supplyItemId,
+            qty: Math.min(99999, Math.max(1, parseInt(d.qtyStr, 10) || 1)),
+          }))
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['modifier_supplies'] })
+      toast.success(t(lang, 'saved'))
+      onClose()
+    },
+    onError: (e) => toast.error(e.message),
+  })
+
+  function unitOf(supplyItemId: string): string {
+    return supplyItems.find((s) => s.id === supplyItemId)?.unit ?? ''
+  }
+
+  return (
+    <div className="mt-1.5 ms-4 p-3 rounded-lg border border-gray-200 space-y-2">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-xs text-gray-500">{t(lang, 'modRecipeHint')}</span>
+        <button
+          type="button"
+          onClick={() => setDrafts((ds) => [...ds, { supplyItemId: supplyItems[0].id, qtyStr: '1' }])}
+          className="text-sm font-semibold text-gray-900 hover:underline whitespace-nowrap"
+        >
+          {t(lang, 'packagingAddBtn')}
+        </button>
+      </div>
+      {drafts.map((d, idx) => (
+        <div key={idx} className="flex items-center gap-2">
+          <select
+            className="input flex-1 !py-2 !text-sm"
+            value={d.supplyItemId}
+            onChange={(e) => setDrafts((ds) => ds.map((x, i) => (i === idx ? { ...x, supplyItemId: e.target.value } : x)))}
+          >
+            {!supplyItems.some((s) => s.id === d.supplyItemId) && <option value={d.supplyItemId}>—</option>}
+            {supplyItems.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+          <input
+            className="input !w-20 !py-2 !text-sm tabular-nums text-center"
+            inputMode="numeric"
+            value={d.qtyStr}
+            onChange={(e) => setDrafts((ds) => ds.map((x, i) => (i === idx ? { ...x, qtyStr: e.target.value.replace(/\D/g, '') } : x)))}
+          />
+          <span className="w-8 text-xs text-gray-500 shrink-0">{unitOf(d.supplyItemId)}</span>
+          <button
+            type="button"
+            onClick={() => setDrafts((ds) => ds.filter((_, i) => i !== idx))}
+            className="text-gray-300 hover:text-red-500 text-sm shrink-0"
+          >
+            ✕
+          </button>
+        </div>
+      ))}
+      <div className="flex justify-end gap-2 pt-1">
+        <button type="button" onClick={onClose} className="btn-ghost !py-1.5 !text-xs">{t(lang, 'cancel')}</button>
+        <button
+          type="button"
+          onClick={() => save.mutate()}
+          disabled={save.isPending}
+          className="btn-primary !py-1.5 !px-4 !text-xs disabled:opacity-40"
+        >
+          {t(lang, 'save')}
+        </button>
+      </div>
     </div>
   )
 }

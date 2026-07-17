@@ -112,6 +112,9 @@ export default function StockTakeSheet({ onClose }: { onClose: () => void }) {
           value={raw}
           onChange={(e) => setCountedByKey((p) => ({ ...p, [row.key]: e.target.value.replace(/[^\d]/g, '') }))}
         />
+        {row.kind === 'supply' && row.unit && (
+          <span className="w-8 shrink-0 text-xs text-gray-500">{row.unit}</span>
+        )}
       </div>
     )
   }

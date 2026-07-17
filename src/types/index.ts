@@ -275,6 +275,18 @@ export interface MenuItem {
   stock: number | null
   item_variants?: ItemVariant[]
   menu_item_modifier_groups?: { group_id: string; sort_order: number }[]
+  variant_supplies?: VariantSupply[]
+}
+
+/** Упаковка (075): расходник, который продажа списывает вместе с товаром */
+export interface VariantSupply {
+  id: string
+  /** null = любой вариант товара */
+  variant_id: string | null
+  supply_item_id: string
+  qty: number
+  /** true = списывать только для заказов с собой/доставки */
+  takeaway_only: boolean
 }
 
 export interface ItemVariant {

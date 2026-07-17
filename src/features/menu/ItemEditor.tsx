@@ -8,9 +8,10 @@ import {
   type ItemInput,
 } from './api'
 import { fetchCurrentLocation } from '../auth/api'
+import { fetchSupplyItems, costDivisor } from '../inventory/api'
 import { useLangStore } from '../../store/langStore'
 import { t } from '../../lib/i18n'
-import { parseMoney } from '../../lib/money'
+import { formatMoney, parseMoney } from '../../lib/money'
 import type { MenuItem, ModifierGroup } from '../../types'
 import ItemPreview from './ItemPreview'
 import BackButton from '../../components/BackButton'
@@ -19,6 +20,14 @@ interface VariantDraft {
   name: string
   priceStr: string
   is_default: boolean
+}
+
+/** Строка упаковки: variantIdx — позиция в variants, null = весь товар */
+interface SupplyLinkDraft {
+  variantIdx: number | null
+  supplyItemId: string
+  qtyStr: string
+  takeawayOnly: boolean
 }
 
 interface Props {
@@ -70,8 +79,30 @@ export default function ItemEditor({ item, defaultCategoryId, onSaved, onDeleted
   const [costStr, setCostStr] = useState(item?.cost != null ? (item.cost / 100).toString() : '')
   const [sku, setSku] = useState(item?.sku ?? '')
   const [stockStr, setStockStr] = useState(item?.stock != null ? String(item.stock) : '')
+  const [supplyLinks, setSupplyLinks] = useState<SupplyLinkDraft[]>(() => {
+    const sorted = (item?.item_variants ?? []).slice().sort((a, b) => a.sort_order - b.sort_order)
+    const idxByVariant = new Map(sorted.map((v, i) => [v.id, i]))
+    return (item?.variant_supplies ?? []).flatMap((vs) => {
+      const variantIdx = vs.variant_id === null ? null : idxByVariant.get(vs.variant_id)
+      if (variantIdx === undefined) return [] // связка на уже несуществующий вариант
+      return [{ variantIdx, supplyItemId: vs.supply_item_id, qtyStr: String(vs.qty), takeawayOnly: vs.takeaway_only }]
+    })
+  })
+  const { data: supplyItems = [] } = useQuery({
+    queryKey: ['supply_items'],
+    queryFn: fetchSupplyItems,
+    enabled: inventoryEnabled,
+  })
 
   const hasVariants = variants.some((v) => v.name.trim())
+
+  /** Удаление варианта сдвигает индексы — строки упаковки едут следом */
+  function removeVariant(idx: number) {
+    setVariants((vs) => vs.filter((_, i) => i !== idx))
+    setSupplyLinks((ls) => ls
+      .filter((l) => l.variantIdx !== idx)
+      .map((l) => (l.variantIdx !== null && l.variantIdx > idx ? { ...l, variantIdx: l.variantIdx - 1 } : l)))
+  }
 
   const save = useMutation({
     mutationFn: async (input: ItemInput) => {
@@ -114,14 +145,34 @@ export default function ItemEditor({ item, defaultCategoryId, onSaved, onDeleted
 
   function handleSave() {
     const parsedVariants = []
-    for (const v of variants) {
+    // Пустые варианты пропускаются → индексы едут; map драфт → payload
+    const variantPayloadIdx = new Map<number, number>()
+    for (const [i, v] of variants.entries()) {
       if (!v.name.trim()) continue
       const vp = parseMoney(v.priceStr || '0')
       if (vp === null) {
         toast.error(`${t(lang, 'variantName')}: ${v.name}`)
         return
       }
+      variantPayloadIdx.set(i, parsedVariants.length)
       parsedVariants.push({ name: v.name.trim(), price: vp, is_default: v.is_default })
+    }
+
+    const supplies: ItemInput['supplies'] = []
+    for (const l of supplyLinks) {
+      if (!l.supplyItemId) continue
+      let variantIndex: number | null = null
+      if (l.variantIdx !== null) {
+        const mapped = variantPayloadIdx.get(l.variantIdx)
+        if (mapped === undefined) continue // вариант пуст/удалён — связке не к чему крепиться
+        variantIndex = mapped
+      }
+      supplies.push({
+        variant_index: variantIndex,
+        supply_item_id: l.supplyItemId,
+        qty: Math.min(99999, Math.max(1, parseInt(l.qtyStr, 10) || 1)),
+        takeaway_only: l.takeawayOnly,
+      })
     }
 
     let price: number | null
@@ -157,12 +208,33 @@ export default function ItemEditor({ item, defaultCategoryId, onSaved, onDeleted
       stock: stockStr.trim() === '' ? null : Math.max(0, parseInt(stockStr, 10) || 0),
       variants: parsedVariants,
       modifier_group_ids: groupIds,
+      supplies,
     })
   }
 
   const attachedGroups = groupIds
     .map((id) => groups.find((g) => g.id === id))
     .filter((g): g is ModifierGroup => !!g)
+
+  /** Себестоимость рецепта варианта: Σ qty × cost, для г/мл cost — за кг/л */
+  function recipeCost(variantIdx: number | null): number | null {
+    let sum = 0
+    let known = false
+    for (const l of supplyLinks) {
+      if (l.variantIdx !== null && l.variantIdx !== variantIdx) continue
+      const s = supplyItems.find((x) => x.id === l.supplyItemId)
+      if (!s || s.cost == null) continue
+      sum += Math.round(((parseInt(l.qtyStr, 10) || 0) * s.cost) / costDivisor(s.unit))
+      known = true
+    }
+    return known ? sum : null
+  }
+
+  const recipeCostParts = (hasVariants
+    ? variants.map((v, i) => ({ name: v.name, cost: recipeCost(i) }))
+        .filter((p) => p.name.trim() !== '')
+    : [{ name: '', cost: recipeCost(null) }]
+  ).filter((p): p is { name: string; cost: number } => p.cost != null && p.cost > 0)
 
   return (
     <>
@@ -342,7 +414,7 @@ export default function ItemEditor({ item, defaultCategoryId, onSaved, onDeleted
                   </button>
                   <button
                     type="button"
-                    onClick={() => setVariants((vs) => vs.filter((_, i) => i !== idx))}
+                    onClick={() => removeVariant(idx)}
                     className="text-gray-300 hover:text-red-500 text-sm"
                   >
                     ✕
@@ -430,6 +502,93 @@ export default function ItemEditor({ item, defaultCategoryId, onSaved, onDeleted
                   />
                 </div>
               </div>
+            )}
+          </section>
+          )}
+
+          {/* ── Упаковка: расходники, списываемые продажей (075) ── */}
+          {inventoryEnabled && (
+          <section>
+            <div className="flex items-center gap-3 mb-1">
+              <SectionTitle noMargin>{t(lang, 'packagingTitle')}</SectionTitle>
+              {supplyItems.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setSupplyLinks((ls) => [
+                    ...ls,
+                    { variantIdx: null, supplyItemId: supplyItems[0].id, qtyStr: '1', takeawayOnly: true },
+                  ])}
+                  className="btn-ghost !py-1 !text-xs"
+                >
+                  {t(lang, 'packagingAddBtn')}
+                </button>
+              )}
+            </div>
+            <p className="text-xs text-gray-500 mb-3">
+              {t(lang, supplyItems.length === 0 ? 'packagingNoSupplies' : 'packagingHint')}
+            </p>
+            {supplyLinks.length > 0 && (
+              <div className="space-y-2 max-w-2xl">
+                {supplyLinks.map((l, idx) => (
+                  <div key={idx} className="flex items-center gap-2">
+                    {hasVariants && (
+                      <select
+                        className="input !w-36 !py-2 !text-sm shrink-0"
+                        value={l.variantIdx ?? ''}
+                        onChange={(e) => setSupplyLinks((ls) => ls.map((x, i) =>
+                          i === idx ? { ...x, variantIdx: e.target.value === '' ? null : Number(e.target.value) } : x))}
+                      >
+                        <option value="">{t(lang, 'packagingAllVariants')}</option>
+                        {variants.map((v, vi) => (v.name.trim() ? <option key={vi} value={vi}>{v.name}</option> : null))}
+                      </select>
+                    )}
+                    <select
+                      className="input flex-1 !py-2 !text-sm"
+                      value={l.supplyItemId}
+                      onChange={(e) => setSupplyLinks((ls) => ls.map((x, i) =>
+                        i === idx ? { ...x, supplyItemId: e.target.value } : x))}
+                    >
+                      {!supplyItems.some((s) => s.id === l.supplyItemId) && <option value={l.supplyItemId}>—</option>}
+                      {supplyItems.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    </select>
+                    <input
+                      className="input !w-20 !py-2 !text-sm tabular-nums text-center shrink-0"
+                      inputMode="numeric"
+                      value={l.qtyStr}
+                      onChange={(e) => setSupplyLinks((ls) => ls.map((x, i) =>
+                        i === idx ? { ...x, qtyStr: e.target.value.replace(/\D/g, '') } : x))}
+                    />
+                    <span className="w-8 text-xs text-gray-500 shrink-0">
+                      {supplyItems.find((s) => s.id === l.supplyItemId)?.unit ?? ''}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setSupplyLinks((ls) => ls.map((x, i) =>
+                        i === idx ? { ...x, takeawayOnly: !x.takeawayOnly } : x))}
+                      className={`px-3 py-2 rounded-lg text-xs font-semibold border transition-colors whitespace-nowrap shrink-0 ${
+                        l.takeawayOnly ? 'border-gray-900 text-gray-900' : 'border-gray-200 text-gray-400'
+                      }`}
+                    >
+                      {t(lang, 'packagingTakeawayOnly')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSupplyLinks((ls) => ls.filter((_, i) => i !== idx))}
+                      className="text-gray-300 hover:text-red-500 text-sm shrink-0"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {recipeCostParts.length > 0 && (
+              <p className="text-xs text-gray-500 mt-3 tabular-nums">
+                {t(lang, 'recipeCostLabel')}:{' '}
+                {recipeCostParts
+                  .map((p) => (p.name ? `${p.name} ${formatMoney(p.cost, lang)}` : formatMoney(p.cost, lang)))
+                  .join(' · ')}
+              </p>
             )}
           </section>
           )}
