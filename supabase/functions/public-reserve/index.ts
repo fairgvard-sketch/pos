@@ -107,6 +107,7 @@ Deno.serve(async (req) => {
       const rsv = (data as { rsv?: {
         enabled?: boolean; instant?: boolean; open?: string | null; close?: string | null
         slot_min?: number | null; max_party?: number | null
+        display_name?: string | null
         address?: string | null; lat?: number | null; lng?: number | null
         header_url?: string | null; hours?: string | null
         instagram?: string | null; facebook?: string | null; google_review?: string | null
@@ -137,7 +138,10 @@ Deno.serve(async (req) => {
           location: {
             id: data.id,
             name: data.name,
+            // Имя в шапке: своё имя страницы брони → публичное имя точки →
+            // название из чека → имя точки
             business_name:
+              rsv?.display_name ||
               (data as { display_name?: string | null }).display_name ||
               data.receipt_business_name ||
               data.name,

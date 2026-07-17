@@ -107,6 +107,9 @@ export interface LocationSettings {
      *  (query=lat,lng), а не текстовый поиск. */
     lat?: number | null
     lng?: number | null
+    /** Название в шапке страницы брони — своё, не общее с онлайн-заказом.
+     *  Пусто/null = display_name точки → имя из чека → имя точки. */
+    display_name?: string | null
     /** Фото-шапка страницы брони (066) — своя, не общая с онлайн-заказом.
      *  Пусто = fallback на header_url онлайн-заказа, затем логотип. */
     header_url?: string | null

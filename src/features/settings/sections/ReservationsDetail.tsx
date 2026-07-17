@@ -360,6 +360,13 @@ function ReservePageBlock({ rsv, update, location }: {
         <div className="text-sm font-semibold text-gray-900">{t(lang, 'rsvPageDesignTitle')}</div>
         <p className="text-xs text-gray-500 mt-0.5">{t(lang, 'rsvPageDesignHint')}</p>
         <div className="space-y-3 mt-3">
+          <TextField
+            label={t(lang, 'onlineNameLabel')}
+            hint={t(lang, 'onlineNameHint')}
+            placeholder={location?.receipt_business_name || location?.name || ''}
+            value={rsv.display_name ?? ''}
+            onSave={(v) => update({ reservations: { display_name: v || null } })}
+          />
           <ImageField
             label={t(lang, 'onlineImgHeader')}
             hint={fallbackHeader ? t(lang, 'rsvHeaderFallbackHint') : t(lang, 'onlineImgHeaderHint')}

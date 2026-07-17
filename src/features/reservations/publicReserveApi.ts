@@ -19,7 +19,8 @@ export interface ReserveInfo {
   location: {
     id: string
     name: string
-    /** Название заведения (шапка чека); показываем его, не имя точки */
+    /** Название в шапке: своё имя страницы брони (settings.reservations.
+     *  display_name) → публичное имя точки → шапка чека → имя точки */
     business_name?: string
     logo_url?: string | null
     /** false = владелец не включил приём броней (тумблер 053, default off) */
