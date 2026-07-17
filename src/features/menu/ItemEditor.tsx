@@ -230,11 +230,12 @@ export default function ItemEditor({ item, defaultCategoryId, onSaved, onDeleted
     return known ? sum : null
   }
 
+  // Фудкост: себестоимость рецепта, % от цены и маржа — по вариантам
   const recipeCostParts = (hasVariants
-    ? variants.map((v, i) => ({ name: v.name, cost: recipeCost(i) }))
+    ? variants.map((v, i) => ({ name: v.name, cost: recipeCost(i), price: parseMoney(v.priceStr || '') }))
         .filter((p) => p.name.trim() !== '')
-    : [{ name: '', cost: recipeCost(null) }]
-  ).filter((p): p is { name: string; cost: number } => p.cost != null && p.cost > 0)
+    : [{ name: '', cost: recipeCost(null), price: parseMoney(priceStr || '') }]
+  ).filter((p): p is { name: string; cost: number; price: number | null } => p.cost != null && p.cost > 0)
 
   return (
     <>
@@ -583,12 +584,21 @@ export default function ItemEditor({ item, defaultCategoryId, onSaved, onDeleted
               </div>
             )}
             {recipeCostParts.length > 0 && (
-              <p className="text-xs text-gray-500 mt-3 tabular-nums">
-                {t(lang, 'recipeCostLabel')}:{' '}
-                {recipeCostParts
-                  .map((p) => (p.name ? `${p.name} ${formatMoney(p.cost, lang)}` : formatMoney(p.cost, lang)))
-                  .join(' · ')}
-              </p>
+              <div className="text-xs text-gray-500 mt-3 tabular-nums space-y-1">
+                <div className="font-bold text-gray-400 uppercase tracking-wide">{t(lang, 'recipeCostLabel')}</div>
+                {recipeCostParts.map((p, i) => (
+                  <div key={i}>
+                    {p.name && <span className="font-semibold text-gray-900">{p.name}: </span>}
+                    {formatMoney(p.cost, lang)}
+                    {p.price != null && p.price > 0 && (
+                      <>
+                        {' · '}{t(lang, 'foodcostLabel')} {Math.round((p.cost / p.price) * 100)}%
+                        {' · '}{t(lang, 'marginLabel')} {formatMoney(p.price - p.cost, lang)}
+                      </>
+                    )}
+                  </div>
+                ))}
+              </div>
             )}
           </section>
           )}

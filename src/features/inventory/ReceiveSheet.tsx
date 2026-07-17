@@ -4,7 +4,8 @@ import toast from 'react-hot-toast'
 import { fetchItems } from '../menu/api'
 import {
   fetchSupplyItems, receiveStock, upsertSupplyItem, isFractionalUnit, SUPPLY_UNITS,
-  type ReceiveItem, type StockKind,
+  fetchSuppliers, upsertSupplier, fetchPackagings, costDivisor,
+  type Packaging, type ReceiveItem, type StockKind,
 } from './api'
 import { useAuthStore } from '../../store/authStore'
 import { useLangStore } from '../../store/langStore'
@@ -36,6 +37,8 @@ export default function ReceiveSheet({ onClose }: { onClose: () => void }) {
 
   const { data: items = [] } = useQuery({ queryKey: ['menu_items'], queryFn: fetchItems })
   const { data: supplies = [] } = useQuery({ queryKey: ['supply_items'], queryFn: fetchSupplyItems })
+  const { data: suppliers = [] } = useQuery({ queryKey: ['suppliers'], queryFn: fetchSuppliers })
+  const { data: packagings = [] } = useQuery({ queryKey: ['supply_packagings'], queryFn: fetchPackagings })
 
   const [search, setSearch] = useState('')
   const [qtyByKey, setQtyByKey] = useState<Record<string, number>>({})
@@ -45,6 +48,20 @@ export default function ReceiveSheet({ onClose }: { onClose: () => void }) {
   const [newName, setNewName] = useState('')
   const [newUnit, setNewUnit] = useState<string>('шт')
   const [adding, setAdding] = useState(false)
+  // Накладная (077): UUID создаётся при открытии шита и переживает
+  // retry — повтор после timeout идемпотентен на сервере
+  const [docId] = useState(() => crypto.randomUUID())
+  const [supplierId, setSupplierId] = useState('')
+  const [docNo, setDocNo] = useState('')
+  const [addingSupplier, setAddingSupplier] = useState(false)
+  const [newSupName, setNewSupName] = useState('')
+  const [newSupPhone, setNewSupPhone] = useState('')
+
+  const packagingsByItem = useMemo(() => {
+    const m: Record<string, Packaging[]> = {}
+    for (const p of packagings) (m[p.supply_item_id] ??= []).push(p)
+    return m
+  }, [packagings])
 
   const UNIT_LABELS: Record<string, string> = {
     'шт': t(lang, 'unitPcs'), 'г': t(lang, 'unitG'), 'мл': t(lang, 'unitMl'),
@@ -89,6 +106,31 @@ export default function ReceiveSheet({ onClose }: { onClose: () => void }) {
     onError: (e) => toast.error(e.message),
   })
 
+  const addSupplier = useMutation({
+    mutationFn: () => upsertSupplier(null, newSupName.trim(), newSupPhone.trim() || null),
+    onSuccess: (id) => {
+      setSupplierId(id)
+      setNewSupName('')
+      setNewSupPhone('')
+      setAddingSupplier(false)
+      qc.invalidateQueries({ queryKey: ['suppliers'] })
+    },
+    onError: (e) => toast.error(e.message),
+  })
+
+  // Сумма прихода по введённым ценам (конвенция cost: г/мл — за 1000)
+  const totalCost = useMemo(() => {
+    const rowByKey = new Map([...menuRows, ...supplyRows].map((r) => [r.key, r]))
+    let sum = 0
+    for (const [key, qty] of Object.entries(qtyByKey)) {
+      const row = rowByKey.get(key)
+      const cost = parseMoney(costByKey[key] ?? '')
+      if (!row || qty <= 0 || cost == null) continue
+      sum += Math.round((qty * cost) / (row.kind === 'supply' ? costDivisor(row.unit) : 1))
+    }
+    return sum
+  }, [qtyByKey, costByKey, menuRows, supplyRows])
+
   const save = useMutation({
     mutationFn: () => {
       const rowByKey = new Map([...menuRows, ...supplyRows].map((r) => [r.key, r]))
@@ -103,13 +145,14 @@ export default function ReceiveSheet({ onClose }: { onClose: () => void }) {
           update_cost: cost != null && !!updateCostByKey[key],
         }
       })
-      return receiveStock(staff!.id, payload, note)
+      return receiveStock(staff!.id, payload, note, supplierId || null, docNo, docId)
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['menu_items'] })
       qc.invalidateQueries({ queryKey: ['supply_items'] })
       qc.invalidateQueries({ queryKey: ['stock_movements'] })
       qc.invalidateQueries({ queryKey: ['stock_report'] })
+      qc.invalidateQueries({ queryKey: ['supply_docs'] })
       toast.success(t(lang, 'receiveDone'))
       onClose()
     },
@@ -168,6 +211,20 @@ export default function ReceiveSheet({ onClose }: { onClose: () => void }) {
             </>
           )}
         </div>
+        {/* Фасовки: тап добавляет объём упаковки к количеству (077) */}
+        {row.kind === 'supply' && (packagingsByItem[row.id]?.length ?? 0) > 0 && (
+          <div className="flex flex-wrap gap-1.5 pb-2 px-1">
+            {packagingsByItem[row.id].map((p) => (
+              <button
+                key={p.id}
+                onClick={() => bump(row.key, p.qty)}
+                className="h-11 px-4 rounded-xl bg-gray-100 text-sm font-semibold text-gray-700 active:scale-[0.95]"
+              >
+                +{p.name}
+              </button>
+            ))}
+          </div>
+        )}
         {qty > 0 && (
           <div className="flex items-center gap-3 pb-3 px-1">
             <input
@@ -220,7 +277,58 @@ export default function ReceiveSheet({ onClose }: { onClose: () => void }) {
             ✕
           </button>
         </div>
-        <p className="text-sm text-gray-500 mb-4">{t(lang, 'receiveHint')}</p>
+        <p className="text-sm text-gray-500 mb-1">{t(lang, 'receiveHint')}</p>
+        <p className="text-xs text-gray-400 mb-4">{t(lang, 'receiveAvgCostHint')}</p>
+
+        {/* Поставщик и номер накладной (077) */}
+        <div className="flex items-center gap-2 mb-2">
+          <select
+            className="input !py-2.5 flex-1 text-sm"
+            value={supplierId}
+            onChange={(e) => setSupplierId(e.target.value)}
+          >
+            <option value="">{t(lang, 'supplierNone')}</option>
+            {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+          <input
+            className="input !py-2.5 !w-36 text-sm"
+            placeholder={t(lang, 'docNoPh')}
+            value={docNo}
+            onChange={(e) => setDocNo(e.target.value)}
+          />
+          <button
+            onClick={() => setAddingSupplier((v) => !v)}
+            aria-label={t(lang, 'supplierAddBtn')}
+            className="w-11 h-11 shrink-0 rounded-xl border border-gray-200 font-bold text-gray-900 active:scale-[0.94]"
+          >
+            +
+          </button>
+        </div>
+        {addingSupplier && (
+          <div className="flex items-center gap-2 mb-2">
+            <input
+              className="input !py-2 flex-1 text-sm"
+              placeholder={t(lang, 'supplierNamePh')}
+              value={newSupName}
+              onChange={(e) => setNewSupName(e.target.value)}
+              autoFocus
+            />
+            <input
+              className="input !py-2 !w-36 text-sm"
+              inputMode="tel"
+              placeholder={t(lang, 'supplierPhonePh')}
+              value={newSupPhone}
+              onChange={(e) => setNewSupPhone(e.target.value)}
+            />
+            <button
+              onClick={() => addSupplier.mutate()}
+              disabled={addSupplier.isPending || newSupName.trim() === ''}
+              className="btn-primary !py-2 !px-4 disabled:opacity-40"
+            >
+              {t(lang, 'save')}
+            </button>
+          </div>
+        )}
 
         <input
           className="input !py-2.5 mb-3"
@@ -282,6 +390,13 @@ export default function ReceiveSheet({ onClose }: { onClose: () => void }) {
             value={note}
             onChange={(e) => setNote(e.target.value)}
           />
+        )}
+
+        {totalCost > 0 && (
+          <div className="flex items-center justify-between text-sm mb-3 px-1">
+            <span className="text-gray-500">{t(lang, 'receiveTotalLabel')}</span>
+            <span className="font-bold text-gray-900 tabular-nums">{formatMoney(totalCost, lang)}</span>
+          </div>
         )}
 
         <button

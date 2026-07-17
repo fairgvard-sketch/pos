@@ -1,6 +1,14 @@
 import { supabase } from '../../lib/supabase'
 import { currentStaffToken } from '../../store/authStore'
 
+/** org_id из JWT — обязателен при прямом INSERT (RLS WITH CHECK) */
+async function orgId(): Promise<string> {
+  const { data } = await supabase.auth.getSession()
+  const meta = data.session?.user.app_metadata as Record<string, string | undefined> | undefined
+  if (!meta?.org_id) throw new Error('Device not bootstrapped')
+  return meta.org_id
+}
+
 /** Вид складской позиции: товар меню или расходник (стаканы, упаковка) */
 export type StockKind = 'menu' | 'supply'
 
@@ -104,6 +112,135 @@ export async function fetchStockMovements(offset: number): Promise<StockMovement
   return (data ?? []) as unknown as StockMovement[]
 }
 
+// ── Поставщики (077) ──────────────────────────────────────
+
+export interface Supplier {
+  id: string
+  name: string
+  phone: string | null
+  note: string | null
+  is_active: boolean
+}
+
+/** Активные поставщики, по имени */
+export async function fetchSuppliers(): Promise<Supplier[]> {
+  const { data, error } = await supabase
+    .from('suppliers')
+    .select('id, name, phone, note, is_active')
+    .eq('is_active', true)
+    .order('name')
+  if (error) throw new Error(error.message)
+  return (data ?? []) as Supplier[]
+}
+
+/** Завести (id=null) или отредактировать поставщика */
+export async function upsertSupplier(
+  id: string | null,
+  name: string,
+  phone: string | null,
+  note: string | null = null
+): Promise<string> {
+  const { data, error } = await supabase.rpc('upsert_supplier', {
+    p_id: id,
+    p_name: name,
+    p_phone: phone,
+    p_note: note,
+    p_staff_session: currentStaffToken(),
+  })
+  if (error) throw new Error(error.message)
+  return (data as { id: string }).id
+}
+
+export async function setSupplierActive(id: string, active: boolean): Promise<void> {
+  const { error } = await supabase.rpc('set_supplier_active', {
+    p_id: id,
+    p_active: active,
+    p_staff_session: currentStaffToken(),
+  })
+  if (error) throw new Error(error.message)
+}
+
+// ── Накладные (077) ───────────────────────────────────────
+
+export interface SupplyDoc {
+  id: string
+  doc_no: string | null
+  note: string | null
+  /** Сумма строк, агороты (снапшот на момент проведения) */
+  total: number
+  created_at: string
+  supplier: { name: string } | null
+  staff: { name: string } | null
+}
+
+export const DOCS_PAGE = 30
+
+/** Страница накладных, свежие сверху */
+export async function fetchSupplyDocs(offset: number): Promise<SupplyDoc[]> {
+  const { data, error } = await supabase
+    .from('supply_docs')
+    .select('id, doc_no, note, total, created_at, supplier:suppliers(name), staff(name)')
+    .order('created_at', { ascending: false })
+    .order('id', { ascending: false })
+    .range(offset, offset + DOCS_PAGE - 1)
+  if (error) throw new Error(error.message)
+  return (data ?? []) as unknown as SupplyDoc[]
+}
+
+export interface DocLine {
+  id: string
+  name: string
+  qty_delta: number
+  unit_cost: number | null
+  value: number | null
+  supply_item_id: string | null
+  menu_item_id: string | null
+}
+
+/** Строки накладной — строки журнала её batch_id */
+export async function fetchDocLines(docId: string): Promise<DocLine[]> {
+  const { data, error } = await supabase
+    .from('stock_movements')
+    .select('id, name, qty_delta, unit_cost, value, supply_item_id, menu_item_id')
+    .eq('batch_id', docId)
+    .order('created_at')
+  if (error) throw new Error(error.message)
+  return (data ?? []) as DocLine[]
+}
+
+// ── Фасовки (077) ─────────────────────────────────────────
+
+export interface Packaging {
+  id: string
+  supply_item_id: string
+  /** «Мешок 25 кг» */
+  name: string
+  /** Базовых единиц в фасовке: 25000 г */
+  qty: number
+}
+
+export async function fetchPackagings(): Promise<Packaging[]> {
+  const { data, error } = await supabase
+    .from('supply_packagings')
+    .select('id, supply_item_id, name, qty')
+    .order('qty')
+  if (error) throw new Error(error.message)
+  return (data ?? []) as Packaging[]
+}
+
+export async function addPackaging(supplyItemId: string, name: string, qty: number): Promise<void> {
+  const org_id = await orgId()
+  const { error } = await supabase
+    .from('supply_packagings')
+    .insert({ org_id, supply_item_id: supplyItemId, name, qty })
+  if (error) throw new Error(error.message)
+}
+
+export async function deletePackaging(id: string): Promise<void> {
+  const { error } = await supabase.from('supply_packagings').delete().eq('id', id)
+  if (error) throw new Error(error.message)
+}
+
 // ── Приход (receive_stock) ────────────────────────────────
 
 export interface ReceiveItem {
@@ -114,20 +251,27 @@ export interface ReceiveItem {
   qty: number
   /** Закупочная цена/ед, агороты (снапшот в журнал) */
   unit_cost?: number | null
-  /** Перенести unit_cost в себестоимость позиции */
+  /** Установить себестоимость ТОЧНО в unit_cost (иначе — средневзвешенная) */
   update_cost?: boolean
 }
 
 export async function receiveStock(
   staffId: string,
   items: ReceiveItem[],
-  note: string
+  note: string,
+  supplierId: string | null = null,
+  docNo: string = '',
+  /** UUID документа: создаётся до первой попытки, повтор идемпотентен */
+  docId: string | null = null
 ): Promise<void> {
   const { error } = await supabase.rpc('receive_stock', {
     p_staff_id: staffId,
     p_items: items,
     p_note: note.trim() || null,
     p_staff_session: currentStaffToken(),
+    p_supplier_id: supplierId,
+    p_doc_no: docNo.trim() || null,
+    p_doc_id: docId,
   })
   if (error) throw new Error(error.message)
 }
@@ -141,18 +285,26 @@ export interface CountItem {
   counted: number
 }
 
+/** Итог расхождения инвентаризации по себестоимости, агороты (079) */
+export interface StockTakeResult {
+  shortage_value: number
+  surplus_value: number
+}
+
 export async function stockTake(
   staffId: string,
   items: CountItem[],
   note: string
-): Promise<void> {
-  const { error } = await supabase.rpc('stock_take', {
+): Promise<StockTakeResult> {
+  const { data, error } = await supabase.rpc('stock_take', {
     p_staff_id: staffId,
     p_items: items,
     p_note: note.trim() || null,
     p_staff_session: currentStaffToken(),
   })
   if (error) throw new Error(error.message)
+  const d = data as { shortage_value?: number; surplus_value?: number } | null
+  return { shortage_value: d?.shortage_value ?? 0, surplus_value: d?.surplus_value ?? 0 }
 }
 
 // ── Сводка за период (stock_report) ───────────────────────
@@ -163,11 +315,23 @@ export interface StockReportRow {
   kind: StockKind
   name: string
   unit: string | null
+  /** Остаток на начало периода (якорь по журналу, 078) */
+  opening: number
   sold: number
   returned: number
   waste: number
   received: number
   count_adj: number
+  /** Деньги движений за период, агороты (снапшоты value, 077) */
+  sold_value: number
+  returned_value: number
+  waste_value: number
+  received_value: number
+  count_value: number
+  /** Остаток на конец периода */
+  closing: number
+  /** Конечный остаток × текущая себестоимость; null = cost не задан */
+  closing_value: number | null
   /** Текущий остаток; null = позиция удалена или учёт выключен */
   stock_now: number | null
 }

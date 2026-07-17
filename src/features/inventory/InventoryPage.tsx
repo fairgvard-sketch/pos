@@ -8,11 +8,14 @@ import { fetchCurrentLocation } from '../auth/api'
 import { landingRoute } from '../auth/landing'
 import {
   fetchStockMovements, fetchStockReport, fetchSupplyItems, setSupplyItemActive, upsertSupplyItem,
+  fetchPackagings, addPackaging, deletePackaging,
   isFractionalUnit, SUPPLY_UNITS,
-  MOVEMENTS_PAGE, type StockMovement, type MovementType, type SupplyItem,
+  MOVEMENTS_PAGE, type StockMovement, type MovementType, type SupplyItem, type StockReportRow,
 } from './api'
 import ReceiveSheet from './ReceiveSheet'
 import StockTakeSheet from './StockTakeSheet'
+import SupplyDocsTab from './SupplyDocsTab'
+import SupplierOrderSheet from './SupplierOrderSheet'
 import { useAuthStore } from '../../store/authStore'
 import { useLangStore } from '../../store/langStore'
 import { useNetStore } from '../../lib/offline/net'
@@ -20,7 +23,7 @@ import { t, formatTime, type TranslationKey } from '../../lib/i18n'
 import { formatMoney } from '../../lib/money'
 import { can } from '../../lib/perms'
 
-type Tab = 'stock' | 'journal' | 'report'
+type Tab = 'stock' | 'docs' | 'journal' | 'report'
 type Preset = 'today' | '7d' | '30d' | 'custom'
 
 const PRESETS: { key: Preset; label: TranslationKey }[] = [
@@ -35,8 +38,16 @@ const LOW_STOCK = 2
 
 const TAB_HINTS: Record<Tab, TranslationKey> = {
   stock: 'invStockHint',
+  docs: 'invDocsHint',
   journal: 'invJournalHint',
   report: 'invReportHint',
+}
+
+const TAB_LABELS: Record<Tab, TranslationKey> = {
+  stock: 'invStockTab',
+  docs: 'invDocsTab',
+  journal: 'invJournalTab',
+  report: 'invReportTab',
 }
 
 const MOV_LABELS: Record<MovementType, TranslationKey> = {
@@ -92,11 +103,32 @@ export default function InventoryPage() {
   const [tab, setTab] = useState<Tab>('stock')
   const [showReceive, setShowReceive] = useState(false)
   const [showStockTake, setShowStockTake] = useState(false)
+  const [showOrder, setShowOrder] = useState(false)
 
   const canReceive = can(staff?.role, 'stock_receive', location?.settings)
   const canTake = can(staff?.role, 'stock_take', location?.settings)
 
   const tracked = useMemo(() => items.filter((i) => i.track_inventory), [items])
+
+  // Прогноз «кончится через N дней»: расход за 14 дней из оборотки
+  const usage = useQuery({
+    queryKey: ['stock_usage'],
+    queryFn: () => {
+      const to = new Date()
+      return fetchStockReport(new Date(to.getTime() - 14 * 24 * 3600 * 1000), to)
+    },
+    enabled: tab === 'stock',
+  })
+  const daysLeftByKey = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const r of usage.data ?? []) {
+      const id = r.supply_item_id ?? r.menu_item_id
+      const used = r.sold + r.waste - r.returned
+      if (!id || used <= 0 || r.stock_now == null || r.stock_now <= 0) continue
+      m.set(`${r.kind}:${id}`, Math.floor(r.stock_now / (used / 14)))
+    }
+    return m
+  }, [usage.data])
   // Сколько позиций меню живёт без учёта — иначе короткий список читается
   // как «весь склад», хотя это лишь подключённые товары
   const untrackedCount = items.length - tracked.length
@@ -201,6 +233,11 @@ export default function InventoryPage() {
         <div className="max-w-5xl mx-auto p-6">
           <div className="flex items-center gap-3 mb-6">
             <h1 className="text-2xl font-black text-gray-900 flex-1">{t(lang, 'inventory')}</h1>
+            {canReceive && (
+              <button onClick={() => setShowOrder(true)} className="btn-secondary">
+                {t(lang, 'supplierOrderBtn')}
+              </button>
+            )}
             {canTake && (
               <button
                 onClick={() => openSheet(setShowStockTake)}
@@ -221,7 +258,7 @@ export default function InventoryPage() {
 
           {/* Табы */}
           <div className="inline-flex bg-gray-100 rounded-xl p-1 mb-3">
-            {(['stock', 'journal', 'report'] as Tab[]).map((k) => (
+            {(['stock', 'docs', 'journal', 'report'] as Tab[]).map((k) => (
               <button
                 key={k}
                 onClick={() => setTab(k)}
@@ -229,7 +266,7 @@ export default function InventoryPage() {
                   tab === k ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
-                {t(lang, k === 'stock' ? 'invStockTab' : k === 'journal' ? 'invJournalTab' : 'invReportTab')}
+                {t(lang, TAB_LABELS[k])}
               </button>
             ))}
           </div>
@@ -264,6 +301,7 @@ export default function InventoryPage() {
                             {i.is_available && stock > 0 && stock <= LOW_STOCK && (
                               <span className="badge-yellow ms-2">{t(lang, 'lowStockBadge')}</span>
                             )}
+                            <DaysLeft d={daysLeftByKey.get(`menu:${i.id}`)} />
                           </span>
                           <span className="w-24 text-end text-sm text-gray-500 tabular-nums">
                             {i.cost != null ? formatMoney(i.cost, lang) : <span className="text-gray-300">—</span>}
@@ -291,7 +329,8 @@ export default function InventoryPage() {
                       {canTake && <span className="w-16" />}
                     </div>
                     {supplies.map((s) => (
-                      <div key={s.id} className="flex items-center gap-3 min-h-[48px] border-b border-gray-100">
+                      <div key={s.id} className="border-b border-gray-100">
+                      <div className="flex items-center gap-3 min-h-[48px]">
                         {editingSupply?.id === s.id ? (
                           <SupplyEditor
                             item={editingSupply}
@@ -310,6 +349,7 @@ export default function InventoryPage() {
                               {s.stock > 0 && s.stock <= LOW_STOCK && (
                                 <span className="badge-yellow ms-2">{t(lang, 'lowStockBadge')}</span>
                               )}
+                              <DaysLeft d={daysLeftByKey.get(`supply:${s.id}`)} />
                             </span>
                             <span className="w-24 text-end text-sm text-gray-500 tabular-nums">
                               {s.cost != null ? formatMoney(s.cost, lang) : <span className="text-gray-300">—</span>}
@@ -342,6 +382,9 @@ export default function InventoryPage() {
                           </>
                         )}
                       </div>
+                      {/* Фасовки (077): редактируются вместе с расходником */}
+                      {editingSupply?.id === s.id && <PackagingsEditor itemId={s.id} />}
+                      </div>
                     ))}
                   </div>
                 )}
@@ -354,6 +397,9 @@ export default function InventoryPage() {
               </div>
             )
           )}
+
+          {/* ── Поставки (077) ── */}
+          {tab === 'docs' && <SupplyDocsTab canManage={canReceive} />}
 
           {/* ── Журнал ── */}
           {tab === 'journal' && (
@@ -427,16 +473,19 @@ export default function InventoryPage() {
               {(report.data ?? []).length === 0 && !report.isLoading ? (
                 <div className="text-center py-16 text-sm text-gray-500">{t(lang, 'invJournalEmpty')}</div>
               ) : (
+                <>
                 <div className="overflow-x-auto">
-                  <div className="min-w-[640px]">
+                  <div className="min-w-[760px]">
                     <div className="flex items-center gap-3 pb-2 border-b border-gray-200 text-xs font-bold text-gray-400 uppercase tracking-wide">
                       <span className="flex-1">{t(lang, 'items')}</span>
+                      <span className="w-14 text-end">{t(lang, 'repOpening')}</span>
                       <span className="w-16 text-end">{t(lang, 'repSold')}</span>
                       <span className="w-16 text-end">{t(lang, 'repReturned')}</span>
                       <span className="w-16 text-end">{t(lang, 'repWaste')}</span>
                       <span className="w-16 text-end">{t(lang, 'repReceived')}</span>
                       <span className="w-16 text-end">{t(lang, 'repCountAdj')}</span>
-                      <span className="w-16 text-end">{t(lang, 'repStockNow')}</span>
+                      <span className="w-14 text-end">{t(lang, 'repClosing')}</span>
+                      <span className="w-20 text-end">{t(lang, 'repValueCol')}</span>
                     </div>
                     {(report.data ?? []).map((r) => (
                       <div key={r.supply_item_id ?? r.menu_item_id ?? r.name} className="flex items-center gap-3 min-h-[44px] border-b border-gray-100 text-sm">
@@ -444,16 +493,23 @@ export default function InventoryPage() {
                           <bdi>{r.name}</bdi>
                           {r.kind === 'supply' && <span className="badge-gray ms-2">{t(lang, 'supplyBadge')}</span>}
                         </span>
+                        <span className="w-14 text-end tabular-nums text-gray-500">{r.opening}</span>
                         <Num value={r.sold} />
                         <Num value={r.returned} />
                         <Num value={r.waste} />
                         <Num value={r.received} accent={r.received > 0} />
                         <Num value={r.count_adj} signed />
-                        <span className="w-16 text-end font-bold tabular-nums text-gray-900">{r.stock_now ?? '—'}</span>
+                        <span className="w-14 text-end font-bold tabular-nums text-gray-900">{r.closing}</span>
+                        <span className="w-20 text-end tabular-nums text-gray-500">
+                          {r.closing_value != null ? formatMoney(r.closing_value, lang) : '—'}
+                        </span>
                       </div>
                     ))}
                   </div>
                 </div>
+                {/* Итого в деньгах (077/078): приход, расход и стоимость склада */}
+                <ReportTotals rows={report.data ?? []} />
+                </>
               )}
             </div>
           )}
@@ -462,6 +518,7 @@ export default function InventoryPage() {
 
       {showReceive && <ReceiveSheet onClose={() => setShowReceive(false)} />}
       {showStockTake && <StockTakeSheet onClose={() => setShowStockTake(false)} />}
+      {showOrder && <SupplierOrderSheet onClose={() => setShowOrder(false)} />}
     </div>
   )
 }
@@ -506,6 +563,106 @@ function SupplyEditor({
         {saveLabel}
       </button>
       <button onClick={onCancel} className="w-9 h-9 rounded-lg hover:bg-gray-100 flex items-center justify-center text-gray-400">✕</button>
+    </div>
+  )
+}
+
+/** «≈N дн.» — прогноз по расходу за 14 дней; ≤3 дней — тревожный цвет */
+function DaysLeft({ d }: { d: number | undefined }) {
+  const lang = useLangStore((s) => s.lang)
+  if (d == null || d > 7) return null
+  return (
+    <span className={`ms-2 text-xs tabular-nums ${d <= 3 ? 'text-amber-600 font-semibold' : 'text-gray-400'}`}>
+      ≈{d} {t(lang, 'daysShort')}
+    </span>
+  )
+}
+
+/** Итоги оборотки в деньгах: приход, нетто-расход, стоимость остатка */
+function ReportTotals({ rows }: { rows: StockReportRow[] }) {
+  const lang = useLangStore((s) => s.lang)
+  const flowIn = rows.reduce((s, r) => s + r.received_value, 0)
+  const flowOut = rows.reduce((s, r) => s + r.sold_value + r.waste_value - r.returned_value, 0)
+  const stockValue = rows.reduce((s, r) => s + (r.closing_value ?? 0), 0)
+  const cell = (label: TranslationKey, v: number) => (
+    <div className="flex-1 min-w-[140px] bg-gray-50 rounded-xl px-4 py-3">
+      <div className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-1">{t(lang, label)}</div>
+      <div className="font-bold text-gray-900 tabular-nums">{formatMoney(v, lang)}</div>
+    </div>
+  )
+  return (
+    <div className="flex flex-wrap gap-3 mt-4">
+      {cell('repFlowIn', flowIn)}
+      {cell('repFlowOut', flowOut)}
+      {cell('repStockValue', stockValue)}
+    </div>
+  )
+}
+
+/** Фасовки расходника (077): «мешок 25 кг» — кнопки быстрой приёмки */
+function PackagingsEditor({ itemId }: { itemId: string }) {
+  const lang = useLangStore((s) => s.lang)
+  const qc = useQueryClient()
+  const { data: packagings = [] } = useQuery({ queryKey: ['supply_packagings'], queryFn: fetchPackagings })
+  const mine = packagings.filter((p) => p.supply_item_id === itemId)
+
+  const [name, setName] = useState('')
+  const [qty, setQty] = useState('')
+
+  const add = useMutation({
+    mutationFn: () => addPackaging(itemId, name.trim(), parseInt(qty, 10)),
+    onSuccess: () => {
+      setName('')
+      setQty('')
+      qc.invalidateQueries({ queryKey: ['supply_packagings'] })
+    },
+    onError: (e) => toast.error(e.message),
+  })
+  const del = useMutation({
+    mutationFn: (id: string) => deletePackaging(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['supply_packagings'] }),
+    onError: (e) => toast.error(e.message),
+  })
+
+  const qtyNum = parseInt(qty, 10)
+
+  return (
+    <div className="pb-3 ps-1">
+      <div className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-2">{t(lang, 'packagingsLabel')}</div>
+      <div className="flex flex-wrap items-center gap-2">
+        {mine.map((p) => (
+          <span key={p.id} className="inline-flex items-center gap-1 h-9 ps-3 pe-1 rounded-lg bg-gray-100 text-sm text-gray-700">
+            {p.name} · {p.qty}
+            <button
+              onClick={() => del.mutate(p.id)}
+              aria-label={t(lang, 'delete')}
+              className="w-7 h-7 rounded-md hover:bg-gray-200 flex items-center justify-center text-gray-400 hover:text-red-600"
+            >
+              ✕
+            </button>
+          </span>
+        ))}
+        <input
+          className="input !py-2 !w-36 text-sm"
+          placeholder={t(lang, 'packagingNamePh')}
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
+        <input
+          className="input !py-2 !w-32 text-sm"
+          inputMode="numeric"
+          placeholder={t(lang, 'packagingQtyPh')}
+          value={qty}
+          onChange={(e) => setQty(e.target.value.replace(/\D/g, ''))}
+        />
+        <button
+          onClick={() => add.mutate()}
+          disabled={add.isPending || name.trim() === '' || !(qtyNum >= 1)}
+          className="btn-secondary !py-2 !px-4 disabled:opacity-40"
+        >
+          {t(lang, 'add')}
+        </button>
+      </div>
     </div>
   )
 }

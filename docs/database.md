@@ -141,9 +141,15 @@ supabase test db
 - `tables` — столы, ссылка на зону, координаты, статус, вместимость и объединяемость;
 - `time_entries` — табель;
 - `guests`, `loyalty_events` — клиентская база и лояльность;
-- `stock_movements`, `supply_items`, `waste_entries` — склад;
+- `stock_movements`, `supply_items`, `waste_entries` — склад; каждая строка
+  журнала несёт снапшот себестоимости `unit_cost` и денежную оценку `value`
+  (077), а также монотонный `seq` (078) — тай-брейк порядка строк одной
+  транзакции;
 - `variant_supplies` — рецепт/упаковка товара: авто-списание продажей (075);
 - `modifier_supplies` — расход модификаторов: сиропы, молоко, доп. шоты (076);
+- `suppliers`, `supply_docs`, `supply_packagings` — поставщики, приходные
+  накладные и фасовки (077). Накладная неизменяема, её `id` = `batch_id`
+  строк журнала; `total` — снапшот суммы строк в агоротах;
 - `online_orders` — входящие гостевые заказы;
 - `reservations` — заявки и подтверждённые брони;
 - `client_errors` — журнал клиентских ошибок телеметрии (074): дедупликация по
@@ -200,8 +206,22 @@ RLS — защита, а не вспомогательный UI-фильтр. Л
 
 ### Склад
 
-- `receive_stock`, `stock_take`, `add_waste`, `stock_report`;
-- `upsert_supply_item`, `set_supply_item_active`.
+- `receive_stock` — приход как накладная (077): опциональные
+  `p_supplier_id`/`p_doc_no` и клиентский `p_doc_id` — повтор того же
+  документа после timeout идемпотентен (PRIMARY KEY `supply_docs`, не
+  `op_log`). Цена прихода пересчитывает себестоимость средневзвешенно;
+  `update_cost` = ручное «установить точно»;
+- `stock_take` — инвентаризация; возвращает `shortage_value` и
+  `surplus_value` (079) — расхождение по себестоимости в агоротах;
+- `add_waste`;
+- `stock_report` — оборотка (078): `opening`/`closing` по якорям
+  `stock_after`+`seq` журнала (ретроактивные правки каталога не искажают
+  прошлое), деньги движений из снапшотов `value`, `closing_value` — остаток
+  на конец × текущая себестоимость;
+- `upsert_supply_item`, `set_supply_item_active`;
+- `upsert_supplier`, `set_supplier_active` — право `stock_receive`;
+- `movement_value(qty, cost, unit)` — денежная оценка движения; конвенция
+  единиц 076: для `г`/`мл` cost — агороты за 1000 базовых единиц.
 
 ### Фискальный экспорт (Единый формат 1.31)
 

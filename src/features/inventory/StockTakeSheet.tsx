@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { fetchItems } from '../menu/api'
@@ -6,6 +6,7 @@ import { fetchSupplyItems, stockTake, type CountItem, type StockKind } from './a
 import { useAuthStore } from '../../store/authStore'
 import { useLangStore } from '../../store/langStore'
 import { t } from '../../lib/i18n'
+import { formatMoney } from '../../lib/money'
 
 interface Row {
   key: string
@@ -17,10 +18,15 @@ interface Row {
   tracked: boolean
 }
 
+/** Черновик пересчёта переживает случайное закрытие шита/страницы */
+const DRAFT_KEY = 'kassa_stocktake_draft'
+
 /**
- * Инвентаризация товаров и расходников (055/056): ввести фактический
+ * Инвентаризация товаров и расходников (055/056/079): ввести фактический
  * остаток → stock_take (остаток := факт, в журнал пишется дельта;
- * пустое поле = позиция не пересчитывается).
+ * пустое поле = позиция не пересчитывается). По умолчанию подсчёт
+ * СЛЕПОЙ — ожидаемый остаток скрыт, честность пересчёта не подсказана;
+ * расхождение в деньгах приходит из RPC после сохранения.
  */
 export default function StockTakeSheet({ onClose }: { onClose: () => void }) {
   const lang = useLangStore((s) => s.lang)
@@ -32,8 +38,21 @@ export default function StockTakeSheet({ onClose }: { onClose: () => void }) {
   const { data: supplies = [] } = useQuery({ queryKey: ['supply_items'], queryFn: fetchSupplyItems })
 
   const [search, setSearch] = useState('')
-  const [countedByKey, setCountedByKey] = useState<Record<string, string>>({})
+  const [countedByKey, setCountedByKey] = useState<Record<string, string>>(() => {
+    try {
+      return JSON.parse(localStorage.getItem(DRAFT_KEY) ?? '{}') as Record<string, string>
+    } catch {
+      return {}
+    }
+  })
   const [note, setNote] = useState('')
+  const [showStock, setShowStock] = useState(false)
+
+  useEffect(() => {
+    const hasDraft = Object.values(countedByKey).some((v) => v.trim() !== '')
+    if (hasDraft) localStorage.setItem(DRAFT_KEY, JSON.stringify(countedByKey))
+    else localStorage.removeItem(DRAFT_KEY)
+  }, [countedByKey])
 
   // Без поиска — учитываемые товары + все расходники; поиск — по всем
   const menuRows = useMemo<Row[]>(() => {
@@ -72,12 +91,16 @@ export default function StockTakeSheet({ onClose }: { onClose: () => void }) {
       })
       return stockTake(staff!.id, payload, note)
     },
-    onSuccess: () => {
+    onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ['menu_items'] })
       qc.invalidateQueries({ queryKey: ['supply_items'] })
       qc.invalidateQueries({ queryKey: ['stock_movements'] })
       qc.invalidateQueries({ queryKey: ['stock_report'] })
-      toast.success(t(lang, 'stockTakeDone'))
+      const parts = [t(lang, 'stockTakeDone')]
+      if (res.shortage_value > 0) parts.push(`${t(lang, 'stShortage')} ${formatMoney(res.shortage_value, lang)}`)
+      if (res.surplus_value > 0) parts.push(`${t(lang, 'stSurplus')} ${formatMoney(res.surplus_value, lang)}`)
+      toast.success(parts.join(' · '), { duration: 6000 })
+      localStorage.removeItem(DRAFT_KEY)
       onClose()
     },
     onError: (e) => toast.error(e.message),
@@ -87,15 +110,18 @@ export default function StockTakeSheet({ onClose }: { onClose: () => void }) {
     const raw = countedByKey[row.key] ?? ''
     const counted = raw.trim() === '' ? null : Number(raw)
     const valid = counted != null && Number.isInteger(counted) && counted >= 0
-    const delta = valid && row.tracked && row.stock != null ? counted - row.stock : null
+    // Слепой подсчёт: ожидаемый остаток и дельта видны только по тумблеру
+    const delta = showStock && valid && row.tracked && row.stock != null ? counted - row.stock : null
     return (
       <div key={row.key} className="flex items-center gap-3 min-h-[56px] px-1 border-b border-gray-100">
         <span className={`flex-1 min-w-0 truncate text-sm ${valid ? 'font-bold' : ''} text-gray-900`}>
           <bdi>{row.name}</bdi>
           {row.tracked ? (
-            <span className="font-normal text-gray-400 tabular-nums">
-              {' '}· {row.stock ?? 0}{row.unit ? ` ${row.unit}` : ''}
-            </span>
+            (showStock || row.unit) && (
+              <span className="font-normal text-gray-400 tabular-nums">
+                {showStock ? <> · {row.stock ?? 0}{row.unit ? ` ${row.unit}` : ''}</> : <> · {row.unit}</>}
+              </span>
+            )
           ) : (
             valid && <span className="badge-blue ms-2 font-normal">{t(lang, 'receiveWillTrack')}</span>
           )}
@@ -139,7 +165,17 @@ export default function StockTakeSheet({ onClose }: { onClose: () => void }) {
             ✕
           </button>
         </div>
-        <p className="text-sm text-gray-500 mb-4">{t(lang, 'stockTakeHint')}</p>
+        <p className="text-sm text-gray-500 mb-3">{t(lang, 'stockTakeHint')}</p>
+
+        <label className="flex items-center gap-2 text-sm text-gray-500 mb-3 min-h-[44px] cursor-pointer select-none">
+          <input
+            type="checkbox"
+            className="w-5 h-5 accent-gray-900"
+            checked={showStock}
+            onChange={(e) => setShowStock(e.target.checked)}
+          />
+          {t(lang, 'stockTakeShowStock')}
+        </label>
 
         <input
           className="input !py-2.5 mb-3"
