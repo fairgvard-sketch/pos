@@ -322,6 +322,8 @@ export interface StockReportRow {
   waste: number
   received: number
   count_adj: number
+  /** Число инвентаризационных строк периода (085): 0 = позицию не проверяли */
+  counts?: number
   /** Деньги движений за период, агороты (снапшоты value, 077) */
   sold_value: number
   returned_value: number

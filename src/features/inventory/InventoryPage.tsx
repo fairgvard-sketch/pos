@@ -12,6 +12,7 @@ import {
   isFractionalUnit, SUPPLY_UNITS,
   MOVEMENTS_PAGE, type StockMovement, type MovementType, type SupplyItem, type StockReportRow,
 } from './api'
+import { varianceRows, varianceTotals } from './variance'
 import ReceiveSheet from './ReceiveSheet'
 import StockTakeSheet from './StockTakeSheet'
 import SupplyDocsTab from './SupplyDocsTab'
@@ -101,6 +102,7 @@ export default function InventoryPage() {
   const { data: supplies = [] } = useQuery({ queryKey: ['supply_items'], queryFn: fetchSupplyItems })
 
   const [tab, setTab] = useState<Tab>('stock')
+  const [repMode, setRepMode] = useState<'flow' | 'variance'>('flow')
   const [showReceive, setShowReceive] = useState(false)
   const [showStockTake, setShowStockTake] = useState(false)
   const [showOrder, setShowOrder] = useState(false)
@@ -468,10 +470,26 @@ export default function InventoryPage() {
                     <input type="date" className="input !py-2 !w-40" value={customTo} onChange={(e) => setCustomTo(e.target.value)} />
                   </div>
                 )}
+                {/* Режим: оборотка / теория vs факт (P2) */}
+                <div className="inline-flex bg-gray-100 rounded-xl p-1 ms-auto">
+                  {(['flow', 'variance'] as const).map((m) => (
+                    <button
+                      key={m}
+                      onClick={() => setRepMode(m)}
+                      className={`h-9 px-3 rounded-lg text-sm font-semibold transition-all ${
+                        repMode === m ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                      }`}
+                    >
+                      {t(lang, m === 'flow' ? 'repModeFlow' : 'repModeVariance')}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               {(report.data ?? []).length === 0 && !report.isLoading ? (
                 <div className="text-center py-16 text-sm text-gray-500">{t(lang, 'invJournalEmpty')}</div>
+              ) : repMode === 'variance' ? (
+                <VarianceReport rows={report.data ?? []} />
               ) : (
                 <>
                 <div className="overflow-x-auto">
@@ -575,6 +593,94 @@ function DaysLeft({ d }: { d: number | undefined }) {
     <span className={`ms-2 text-xs tabular-nums ${d <= 3 ? 'text-amber-600 font-semibold' : 'text-gray-400'}`}>
       ≈{d} {t(lang, 'daysShort')}
     </span>
+  )
+}
+
+/**
+ * «Теория vs факт» (P2): ожидаемый расход по рецептурам и списаниям против
+ * инвентаризационных поправок. Позиции без инвентаризации в периоде честно
+ * помечены — они не «идеально сошлись», их просто не проверяли.
+ */
+function VarianceReport({ rows }: { rows: StockReportRow[] }) {
+  const lang = useLangStore((s) => s.lang)
+  const vRows = varianceRows(rows)
+  const totals = varianceTotals(vRows)
+
+  if (vRows.length === 0) {
+    return <div className="text-center py-16 text-sm text-gray-500">{t(lang, 'invJournalEmpty')}</div>
+  }
+
+  const pct = (v: number | null) =>
+    v === null ? '—' : `${v > 0 ? '+' : ''}${Math.round(v * 1000) / 10}%`
+
+  return (
+    <>
+      <div className="overflow-x-auto">
+        <div className="min-w-[720px]">
+          <div className="flex items-center gap-3 pb-2 border-b border-gray-200 text-xs font-bold text-gray-400 uppercase tracking-wide">
+            <span className="flex-1">{t(lang, 'items')}</span>
+            <span className="w-20 text-end">{t(lang, 'varExpected')}</span>
+            <span className="w-20 text-end">{t(lang, 'varFact')}</span>
+            <span className="w-20 text-end">{t(lang, 'varDiff')}</span>
+            <span className="w-16 text-end">%</span>
+            <span className="w-20 text-end">₪</span>
+          </div>
+          {vRows.map((r) => (
+            <div key={r.key} className="flex items-center gap-3 min-h-[44px] border-b border-gray-100 text-sm">
+              <span className="flex-1 min-w-0 truncate text-gray-900">
+                <bdi>{r.name}</bdi>
+                {r.kind === 'supply' && <span className="badge-gray ms-2">{t(lang, 'supplyBadge')}</span>}
+                {!r.counted && (
+                  <span className="ms-2 text-xs text-gray-400">{t(lang, 'varNotCounted')}</span>
+                )}
+              </span>
+              <span className="w-20 text-end tabular-nums text-gray-500">{r.expected}</span>
+              {r.counted ? (
+                <>
+                  <span className="w-20 text-end tabular-nums text-gray-900">{r.fact}</span>
+                  <span className={`w-20 text-end tabular-nums font-semibold ${
+                    r.diff > 0 ? 'text-red-600' : r.diff < 0 ? 'text-emerald-600' : 'text-gray-400'
+                  }`}>
+                    {r.diff > 0 ? `−${r.diff}` : r.diff < 0 ? `+${-r.diff}` : '0'}
+                  </span>
+                  <span className="w-16 text-end tabular-nums text-gray-500">{pct(r.diffPct === null ? null : -r.diffPct)}</span>
+                  <span className={`w-20 text-end tabular-nums font-semibold ${
+                    r.diffValue > 0 ? 'text-red-600' : r.diffValue < 0 ? 'text-emerald-600' : 'text-gray-400'
+                  }`}>
+                    {r.diffValue === 0
+                      ? '—'
+                      : `${r.diffValue > 0 ? '−' : '+'}${formatMoney(Math.abs(r.diffValue), lang)}`}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className="w-20 text-end text-gray-300">—</span>
+                  <span className="w-20 text-end text-gray-300">—</span>
+                  <span className="w-16 text-end text-gray-300">—</span>
+                  <span className="w-20 text-end text-gray-300">—</span>
+                </>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="flex flex-wrap gap-3 mt-4">
+        <div className="flex-1 min-w-[140px] bg-red-50 rounded-xl px-4 py-3">
+          <div className="text-xs font-bold text-red-400 uppercase tracking-wide mb-1">{t(lang, 'varShortTotal')}</div>
+          <div className="font-bold text-red-700 tabular-nums">−{formatMoney(totals.shortageValue, lang)}</div>
+        </div>
+        <div className="flex-1 min-w-[140px] bg-emerald-50 rounded-xl px-4 py-3">
+          <div className="text-xs font-bold text-emerald-500 uppercase tracking-wide mb-1">{t(lang, 'varSurplusTotal')}</div>
+          <div className="font-bold text-emerald-700 tabular-nums">+{formatMoney(totals.surplusValue, lang)}</div>
+        </div>
+        {totals.uncounted > 0 && (
+          <div className="flex-1 min-w-[140px] bg-gray-50 rounded-xl px-4 py-3">
+            <div className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-1">{t(lang, 'varNotCounted')}</div>
+            <div className="font-bold text-gray-900 tabular-nums">{totals.uncounted}</div>
+          </div>
+        )}
+      </div>
+    </>
   )
 }
 
