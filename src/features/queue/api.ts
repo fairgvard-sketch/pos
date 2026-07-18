@@ -1,4 +1,5 @@
 import { supabase } from '../../lib/supabase'
+import { currentStaffToken } from '../../store/authStore'
 
 export interface QueueItemMod {
   name: string
@@ -79,12 +80,20 @@ export async function fetchQueue(): Promise<QueueOrder[]> {
 }
 
 export async function markItemReady(itemId: string, ready = true): Promise<void> {
-  const { error } = await supabase.rpc('mark_item_ready', { p_item_id: itemId, p_ready: ready })
+  // Один тап = готово; сессия (086) подтверждается без лишних действий бариста
+  const { error } = await supabase.rpc('mark_item_ready', {
+    p_item_id: itemId,
+    p_ready: ready,
+    ...(currentStaffToken() ? { p_staff_session: currentStaffToken() } : {}),
+  })
   if (error) throw new Error(error.message)
 }
 
 export async function markOrderReady(orderId: string): Promise<void> {
-  const { error } = await supabase.rpc('mark_order_ready', { p_order_id: orderId })
+  const { error } = await supabase.rpc('mark_order_ready', {
+    p_order_id: orderId,
+    ...(currentStaffToken() ? { p_staff_session: currentStaffToken() } : {}),
+  })
   if (error) throw new Error(error.message)
 }
 

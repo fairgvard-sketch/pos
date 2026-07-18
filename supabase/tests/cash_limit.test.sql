@@ -7,7 +7,8 @@ SELECT plan(10);
 SELECT ok(
   has_function_privilege(
     'authenticated',
-    'pay_order(uuid,jsonb,integer,uuid,timestamptz)',
+    -- 086: pay_order получил p_staff_session (шестой аргумент)
+    'pay_order(uuid,jsonb,integer,uuid,timestamptz,uuid)',
     'EXECUTE'
   ),
   'authenticated can execute the guarded pay_order'

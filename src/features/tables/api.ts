@@ -157,6 +157,8 @@ export async function openTableOrder(
     p_staff_id: staffId,
     ...(clientUuid ? { p_client_uuid: clientUuid } : {}),
     ...(openedAt ? { p_opened_at: openedAt } : {}),
+    // Сессия текущего сотрудника (086, мягкий режим); автор — p_staff_id
+    ...(currentStaffToken() ? { p_staff_session: currentStaffToken() } : {}),
   })
   if (error) throw new Error(error.message)
   return data as TableOrderResult
@@ -176,6 +178,7 @@ export async function appendToOrder(
     p_order_id: orderId,
     p_staff_id: staffId,
     ...(opUuid ? { p_op_uuid: opUuid } : {}),
+    ...(currentStaffToken() ? { p_staff_session: currentStaffToken() } : {}),
     p_items: lines.map((l) => ({
       menu_item_id: l.itemId,
       variant_id: l.variantId,

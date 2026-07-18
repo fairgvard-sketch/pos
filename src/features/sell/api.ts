@@ -1,4 +1,5 @@
 import { supabase } from '../../lib/supabase'
+import { currentStaffToken } from '../../store/authStore'
 import type { CartDiscount, CartLine, CartRedeem, OrderType } from '../../store/cartStore'
 import type { PayMethodId } from '../../lib/payMethods'
 import { applyLoyalty } from '../loyalty/api'
@@ -35,6 +36,9 @@ export async function placeOrder(
     p_order_type: orderType,
     p_customer_name: customerName,
     p_table_label: tableLabel || null,
+    // Сессия читается в момент вызова/replay: автор (p_staff_id) исходный,
+    // токен — текущего залогиненного сотрудника (086, мягкий режим)
+    ...(currentStaffToken() ? { p_staff_session: currentStaffToken() } : {}),
     ...(placedAt ? { p_placed_at: placedAt } : {}),
     p_items: lines.map((l) => ({
       menu_item_id: l.itemId,
@@ -128,6 +132,7 @@ export async function payOrder(
     ...(tip > 0 ? { p_tip: tip } : {}),
     ...(paymentUuid ? { p_payment_uuid: paymentUuid } : {}),
     ...(paidAt ? { p_paid_at: paidAt } : {}),
+    ...(currentStaffToken() ? { p_staff_session: currentStaffToken() } : {}),
   })
   if (error) throw new Error(error.message)
   return data as PayOrderResult

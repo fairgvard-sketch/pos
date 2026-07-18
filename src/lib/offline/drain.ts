@@ -44,8 +44,12 @@ let retryTimer: ReturnType<typeof setTimeout> | null = null
  * право проверяется require_staff_perm). Их нельзя реплеить без PIN:
  * в строгом режиме (045) сервер ответит «staff session required», в мягком
  * (044) операция прошла бы с NULL-авторизацией — обе ветки нежелательны,
- * ждём реальную сессию. Остальные (place/pay/open/append/queue) сессию не
- * требуют (компромисс AGENTS.md) и не блокируются.
+ * ждём реальную сессию.
+ *
+ * Горячий поток (place/pay/open/append/queue) с 086 ШЛЁТ текущий токен из
+ * api-функций (мягкий режим: без токена сервер пропускает, битый токен →
+ * 'staff session invalid' → blocked_auth ниже). После строгой миграции
+ * горячие kind'ы добавить в этот набор, чтобы дренаж ждал PIN заранее.
  */
 const OPS_NEED_STAFF_TOKEN: ReadonlySet<OpKind> = new Set<OpKind>([
   'table.void',
