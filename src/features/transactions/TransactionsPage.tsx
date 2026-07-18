@@ -1,7 +1,17 @@
-import { useMemo, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useQuery, useInfiniteQuery } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { fetchTransactions, fetchRefunds, refundedTotal, type Transaction } from './api'
+import {
+  fetchTransactionsPage,
+  fetchTransactionsAll,
+  fetchRefunds,
+  refundedTotal,
+  TX_PAGE_SIZE,
+  type Transaction,
+  type TxFilters,
+} from './api'
+import { transactionsToCsv, downloadCsv } from './exportCsv'
+import { fetchStaffList } from '../settings/api'
 import { fetchReceipt, type Receipt } from '../receipt/api'
 import { fetchCurrentLocation } from '../auth/api'
 import { autoPrintRefundReceipt, printKitchenTicket } from '../receipt/printService'
@@ -19,7 +29,7 @@ import Icon from '../../components/Icon'
 import { useAuthStore } from '../../store/authStore'
 import { useLangStore } from '../../store/langStore'
 import { t, orderTypeLabel } from '../../lib/i18n'
-import { payMethodIcon, payMethodLabel } from '../../lib/payMethods'
+import { payMethodIcon, payMethodLabel, type PayMethodId } from '../../lib/payMethods'
 import { can } from '../../lib/perms'
 import { formatMoney } from '../../lib/money'
 
@@ -32,8 +42,97 @@ export default function TransactionsPage() {
   const isRtl = lang === 'he'
   const staff = useAuthStore((s) => s.staff)
 
-  const { data: txs = [], isLoading, error } = useQuery({ queryKey: ['transactions'], queryFn: fetchTransactions })
+  // ── Фильтры (P1): применяются СЕРВЕРОМ; состояние живёт здесь и не
+  // сбрасывается при открытии/закрытии деталей операции ──
   const [search, setSearch] = useState('')
+  const [dateFrom, setDateFrom] = useState('') // 'YYYY-MM-DD' input type=date
+  const [dateTo, setDateTo] = useState('')
+  const [status, setStatus] = useState<TxFilters['status']>(null)
+  const [method, setMethod] = useState<PayMethodId | null>(null)
+  const [staffId, setStaffId] = useState<string | null>(null)
+  const [tableFilter, setTableFilter] = useState('')
+  const [showFilters, setShowFilters] = useState(false)
+  // Поиск дебаунсится, чтобы не дёргать сервер на каждую букву
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedSearch(search.trim()), 300)
+    return () => clearTimeout(id)
+  }, [search])
+
+  const filters = useMemo<TxFilters>(
+    () => ({
+      // Границы дат — локальные сутки: from включительно, to исключительно
+      from: dateFrom ? new Date(`${dateFrom}T00:00`).toISOString() : null,
+      to: dateTo ? new Date(new Date(`${dateTo}T00:00`).getTime() + 86_400_000).toISOString() : null,
+      status,
+      method,
+      staffId,
+      table: tableFilter || null,
+      search: debouncedSearch || undefined,
+    }),
+    [dateFrom, dateTo, status, method, staffId, tableFilter, debouncedSearch]
+  )
+  const activeFilterCount =
+    (dateFrom || dateTo ? 1 : 0) + (status ? 1 : 0) + (method ? 1 : 0) + (staffId ? 1 : 0) + (tableFilter ? 1 : 0)
+
+  const txQ = useInfiniteQuery({
+    queryKey: ['transactions', filters],
+    queryFn: ({ pageParam }) => fetchTransactionsPage(filters, pageParam),
+    initialPageParam: 0,
+    getNextPageParam: (last, all) =>
+      last.length === TX_PAGE_SIZE ? all.reduce((s, p) => s + p.length, 0) : undefined,
+  })
+  // Offset-пагинация может дать дубль на стыке страниц (свежая продажа
+  // сдвинула выборку) — дедуп по id при склейке
+  const txs = useMemo(() => {
+    const seen = new Set<string>()
+    const out: Transaction[] = []
+    for (const page of txQ.data?.pages ?? []) {
+      for (const tx of page) {
+        if (!seen.has(tx.id)) {
+          seen.add(tx.id)
+          out.push(tx)
+        }
+      }
+    }
+    return out
+  }, [txQ.data])
+  const isLoading = txQ.isPending
+  const error = txQ.error
+
+  const { data: staffList = [] } = useQuery({ queryKey: ['staff_list'], queryFn: fetchStaffList })
+  const [exporting, setExporting] = useState(false)
+  async function exportPeriod() {
+    setExporting(true)
+    try {
+      const all = await fetchTransactionsAll(filters)
+      if (all.length === 0) {
+        toast.error(t(lang, 'txExportEmpty'))
+        return
+      }
+      const stamp = new Date().toISOString().slice(0, 10)
+      downloadCsv(`transactions_${stamp}.csv`, transactionsToCsv(all))
+    } catch (e) {
+      toast.error((e as Error).message)
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  // Автодогрузка: страж в конце списка тянет следующую страницу
+  const sentinelRef = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    const el = sentinelRef.current
+    if (!el) return
+    const io = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting && txQ.hasNextPage && !txQ.isFetchingNextPage) {
+        void txQ.fetchNextPage()
+      }
+    })
+    io.observe(el)
+    return () => io.disconnect()
+  }, [txQ, txs.length])
+
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [showReceipt, setShowReceipt] = useState(false)
   const [refunding, setRefunding] = useState(false)
@@ -64,21 +163,10 @@ export default function TransactionsPage() {
   const { data: location } = useQuery({ queryKey: ['current_location'], queryFn: fetchCurrentLocation })
   const canRefund = can(staff?.role, 'refund', location?.settings)
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    if (!q) return txs
-    return txs.filter((tx) =>
-      String(tx.daily_number).includes(q) ||
-      String(tx.receipt_number ?? '').includes(q) ||
-      (tx.customer_name ?? '').toLowerCase().includes(q) ||
-      String(tx.total / 100).includes(q)
-    )
-  }, [txs, search])
-
-  // Группировка по дням (локальная дата)
+  // Группировка по дням (локальная дата); фильтры уже применены сервером
   const byDay = useMemo(() => {
     const map = new Map<string, Transaction[]>()
-    for (const tx of filtered) {
+    for (const tx of txs) {
       const day = new Date(tx.paid_at ?? tx.created_at).toLocaleDateString(
         lang === 'he' ? 'he-IL' : 'ru-RU',
         { weekday: 'short', day: 'numeric', month: 'long' }
@@ -87,7 +175,7 @@ export default function TransactionsPage() {
       map.get(day)!.push(tx)
     }
     return [...map.entries()]
-  }, [filtered, lang])
+  }, [txs, lang])
 
   const selected = txs.find((tx) => tx.id === selectedId) ?? null
   // Позиции выбранного заказа — переиспользуем данные чека
@@ -128,12 +216,116 @@ export default function TransactionsPage() {
       <main className="w-[420px] shrink-0 bg-white rounded-3xl flex flex-col overflow-hidden">
         <div className="p-4 pb-2 shrink-0">
           <h1 className="text-2xl font-black text-gray-900 mb-3">{t(lang, 'transactions')}</h1>
-          <input
-            className="input !py-2.5"
-            placeholder={t(lang, 'searchPlaceholder')}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+          <div className="flex gap-2">
+            <input
+              className="input !py-2.5 flex-1"
+              placeholder={t(lang, 'searchPlaceholder')}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+            <button
+              onClick={() => setShowFilters((v) => !v)}
+              className={`shrink-0 px-3 rounded-xl border text-sm font-semibold transition-colors ${
+                showFilters || activeFilterCount > 0
+                  ? 'bg-gray-900 text-white border-gray-900'
+                  : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+              }`}
+            >
+              {t(lang, 'txFilters')}
+              {activeFilterCount > 0 && ` · ${activeFilterCount}`}
+            </button>
+          </div>
+
+          {showFilters && (
+            <div className="mt-2 rounded-2xl border border-gray-200 p-3 space-y-2 text-sm">
+              <div className="flex items-center gap-2">
+                <input
+                  type="date"
+                  className="input !py-2 flex-1 tabular-nums"
+                  value={dateFrom}
+                  onChange={(e) => setDateFrom(e.target.value)}
+                  aria-label={t(lang, 'txDateFrom')}
+                />
+                <span className="text-gray-400 shrink-0">—</span>
+                <input
+                  type="date"
+                  className="input !py-2 flex-1 tabular-nums"
+                  value={dateTo}
+                  onChange={(e) => setDateTo(e.target.value)}
+                  aria-label={t(lang, 'txDateTo')}
+                />
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {([null, 'paid', 'fulfilled', 'refunded'] as const).map((s) => (
+                  <button
+                    key={s ?? 'all'}
+                    onClick={() => setStatus(s)}
+                    className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+                      status === s
+                        ? 'bg-gray-900 text-white border-gray-900'
+                        : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                    }`}
+                  >
+                    {s === null
+                      ? t(lang, 'txStatusAll')
+                      : s === 'paid'
+                        ? t(lang, 'txStatusPaid')
+                        : s === 'fulfilled'
+                          ? t(lang, 'txStatusFulfilled')
+                          : t(lang, 'refunded')}
+                  </button>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <select
+                  className="input !py-2 flex-1"
+                  value={method ?? ''}
+                  onChange={(e) => setMethod((e.target.value || null) as PayMethodId | null)}
+                >
+                  <option value="">{t(lang, 'txMethodAll')}</option>
+                  {(['cash', 'card', 'cibus', 'tenbis', 'bit'] as const).map((m) => (
+                    <option key={m} value={m}>{payMethodLabel(lang, m)}</option>
+                  ))}
+                </select>
+                <select
+                  className="input !py-2 flex-1"
+                  value={staffId ?? ''}
+                  onChange={(e) => setStaffId(e.target.value || null)}
+                >
+                  <option value="">{t(lang, 'txStaffAll')}</option>
+                  {staffList.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex gap-2">
+                <input
+                  className="input !py-2 flex-1"
+                  placeholder={t(lang, 'tableLabel')}
+                  value={tableFilter}
+                  onChange={(e) => setTableFilter(e.target.value)}
+                />
+                <button
+                  onClick={exportPeriod}
+                  disabled={exporting}
+                  className="btn-secondary !py-2 !px-3 shrink-0 disabled:opacity-40"
+                >
+                  {exporting ? '…' : t(lang, 'txExport')}
+                </button>
+                {activeFilterCount > 0 && (
+                  <button
+                    onClick={() => {
+                      setDateFrom(''); setDateTo(''); setStatus(null)
+                      setMethod(null); setStaffId(null); setTableFilter('')
+                    }}
+                    className="btn-ghost !py-2 !px-3 shrink-0"
+                  >
+                    {t(lang, 'txReset')}
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
         </div>
         <div className="flex-1 overflow-y-auto px-2 pb-4">
           {/* Офлайн-продажи, ещё не доехавшие до сервера */}
@@ -215,6 +407,18 @@ export default function TransactionsPage() {
                 })}
               </section>
             ))
+          )}
+          {/* Автодогрузка следующей страницы + кнопка-фолбэк */}
+          {txQ.hasNextPage && (
+            <div ref={sentinelRef} className="pt-2 pb-1">
+              <button
+                onClick={() => void txQ.fetchNextPage()}
+                disabled={txQ.isFetchingNextPage}
+                className="w-full py-3 text-sm font-semibold text-gray-500 hover:text-gray-900 transition-colors"
+              >
+                {txQ.isFetchingNextPage ? '…' : t(lang, 'loadMore')}
+              </button>
+            </div>
           )}
         </div>
       </main>

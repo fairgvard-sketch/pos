@@ -21,18 +21,82 @@ export interface Transaction {
   payments: TxPayment[]
 }
 
-/** Журнал операций: оплаченные/возвращённые заказы, свежие сверху */
-export async function fetchTransactions(): Promise<Transaction[]> {
-  const { data, error } = await supabase
+/** Серверные фильтры журнала операций. Пустой объект = все операции. */
+export interface TxFilters {
+  /** Нижняя граница paid_at, ISO (включительно) */
+  from?: string | null
+  /** Верхняя граница paid_at, ISO (исключительно) */
+  to?: string | null
+  status?: 'paid' | 'fulfilled' | 'refunded' | null
+  method?: PayMethodId | null
+  staffId?: string | null
+  /** Подстрока метки стола */
+  table?: string | null
+  /** Число — номер чека ИЛИ дневной номер; текст — имя гостя */
+  search?: string
+}
+
+export const TX_PAGE_SIZE = 50
+
+// staff указываем через явный FK: после 025 у orders ДВА FK на staff
+// (staff_id и refunded_by) — без уточнения embedded-join неоднозначен
+const TX_SELECT =
+  'id, daily_number, receipt_number, total, status, paid_at, created_at, customer_name, table_label, staff:staff!orders_staff_id_fkey(name), payments(method, amount)'
+
+/**
+ * Страница журнала операций: фильтры и поиск выполняются СЕРВЕРОМ (не по
+ * загруженным строкам), порядок paid_at DESC + id DESC (стабильные страницы),
+ * offset-пагинация под useInfiniteQuery. Индексы — миграция 083.
+ */
+export async function fetchTransactionsPage(
+  filters: TxFilters = {},
+  offset = 0,
+  pageSize = TX_PAGE_SIZE
+): Promise<Transaction[]> {
+  // Фильтр по способу оплаты — второй embed тем же payments с !inner:
+  // он сужает выборку заказов, а полный payments(...) остаётся для UI
+  const select = filters.method ? `${TX_SELECT}, pay_filter:payments!inner(method)` : TX_SELECT
+  let q = supabase
     .from('orders')
-    // staff указываем через явный FK: после 025 у orders ДВА FK на staff
-    // (staff_id и refunded_by) — без уточнения embedded-join неоднозначен
-    .select('id, daily_number, receipt_number, total, status, paid_at, created_at, customer_name, table_label, staff:staff!orders_staff_id_fkey(name), payments(method, amount)')
-    .in('status', ['paid', 'fulfilled', 'refunded'])
+    .select(select)
+    .in('status', filters.status ? [filters.status] : ['paid', 'fulfilled', 'refunded'])
     .order('paid_at', { ascending: false })
-    .limit(200)
+    .order('id', { ascending: false })
+    .range(offset, offset + pageSize - 1)
+
+  if (filters.from) q = q.gte('paid_at', filters.from)
+  if (filters.to) q = q.lt('paid_at', filters.to)
+  if (filters.staffId) q = q.eq('staff_id', filters.staffId)
+  if (filters.table?.trim()) q = q.ilike('table_label', `%${filters.table.trim()}%`)
+  if (filters.method) q = q.eq('pay_filter.method', filters.method)
+
+  const s = filters.search?.trim()
+  if (s) {
+    if (/^\d+$/.test(s)) q = q.or(`daily_number.eq.${s},receipt_number.eq.${s}`)
+    else q = q.ilike('customer_name', `%${s}%`)
+  }
+
+  const { data, error } = await q
   if (error) throw new Error(error.message)
   return data as unknown as Transaction[]
+}
+
+/**
+ * Все операции периода для экспорта: постранично докачивает до конца
+ * (страховочный потолок cap — экспорт не должен уронить терминал).
+ */
+export async function fetchTransactionsAll(
+  filters: TxFilters,
+  cap = 5000
+): Promise<Transaction[]> {
+  const out: Transaction[] = []
+  const page = 500
+  for (let offset = 0; offset < cap; offset += page) {
+    const rows = await fetchTransactionsPage(filters, offset, page)
+    out.push(...rows)
+    if (rows.length < page) break
+  }
+  return out
 }
 
 /** Сколько уже возвращено по операции (отрицательные платежи) */
