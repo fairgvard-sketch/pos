@@ -60,6 +60,8 @@ export interface LocationSettings {
     close_reminder?: string | null
     /** Порог предупреждения «много наличных в кассе», агороты */
     cash_warn_threshold?: number | null
+    /** Граница операционного дня, 'HH:MM'; null/пусто = 04:00 (overdue-смены) */
+    day_cutoff?: string | null
   }
   /** Онлайн-заказы с сайта (051). Отсутствие ключа = включено. */
   online_orders?: {

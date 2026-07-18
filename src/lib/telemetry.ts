@@ -19,7 +19,7 @@ import { useOutboxStore, pendingOpsCount, hasFailedOps } from './offline/outboxS
  * заказов, имена гостей, PIN или токены (см. AGENTS.md «Авторизация»).
  */
 
-export type TelemetrySource = 'window' | 'promise' | 'react' | 'outbox' | 'print'
+export type TelemetrySource = 'window' | 'promise' | 'react' | 'outbox' | 'print' | 'shift'
 
 interface QueuedError {
   fingerprint: string

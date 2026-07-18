@@ -17,6 +17,7 @@ import { can } from '../lib/perms'
 import Icon from './Icon'
 import type { IconName } from './Icon'
 import OfflineBadge from './OfflineBadge'
+import ShiftOverdueBadge from './ShiftOverdueBadge'
 
 export type SidebarPage = 'sell' | 'hall' | 'queue' | 'online' | 'reservations' | 'transactions' | 'shift' | 'inventory' | 'timesheet' | 'menu' | 'analytics' | 'settings'
 
@@ -196,6 +197,7 @@ export default function AppSidebar({ active }: { active: SidebarPage }) {
       </nav>
 
       <div className="mt-auto space-y-2 pt-2">
+        <ShiftOverdueBadge />
         <OfflineBadge />
         <Clock lang={lang} />
         <div className="rounded-2xl bg-gray-50 p-2 text-center">

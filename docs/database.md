@@ -271,7 +271,11 @@ RLS — защита, а не вспомогательный UI-фильтр. Л
   Heartbeat до `register_device` — тихий no-op: телеметрия не роняет кассу;
 - `report_client_errors` — приём пакета ошибок с клиента: не более 20 за
   вызов, не более 100 новых fingerprint на устройство в день, все поля
-  обрезаются на входе, повтор fingerprint наращивает `count`;
+  обрезаются на входе, повтор fingerprint наращивает `count`. Источники:
+  `window|promise|react|outbox|print|shift` (082: `shift` — событие
+  `shift_overdue`, когда открытая смена пересекла границу операционного
+  дня `settings.shift.day_cutoff`, дефолт 04:00); неизвестный source
+  клампится в `window`;
 - операторские view `ops_fleet` и `ops_errors` — только для
   `service_role`/SQL Editor (см. [deployment.md](deployment.md),
   «Наблюдаемость парка»).

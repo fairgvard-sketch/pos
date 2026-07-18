@@ -7,6 +7,7 @@ import { fetchOnShiftStaff, clockOutStaff } from '../timesheet/api'
 import { fetchCurrentLocation } from '../auth/api'
 import { landingRoute } from '../auth/landing'
 import { useCloseReminder } from './reminder'
+import { useShiftOverdue } from './overdue'
 import { renderZReportCanvas, type ZReportData } from '../receipt/printCanvas'
 import { hasSilentPrintPath } from '../../lib/escpos'
 import { printCanvasWithRetry } from '../receipt/printFailure'
@@ -76,6 +77,7 @@ export default function ShiftPage() {
   const pendingOps = pendingOpsCount({ ops: outboxOps })
   const online = useNetStore((s) => s.online)
   const remindClose = useCloseReminder(shift?.opened_at, location?.settings?.shift?.close_reminder)
+  const overdue = useShiftOverdue(shift?.opened_at, location?.settings?.shift?.day_cutoff)
   const cashWarnAt = location?.settings?.shift?.cash_warn_threshold ?? null
   const tooMuchCash = report != null && cashWarnAt != null && cashWarnAt > 0 && report.expected_cash > cashWarnAt
 
@@ -236,6 +238,19 @@ export default function ShiftPage() {
           <p className="text-sm text-gray-500 mb-5">
             {t(lang, 'openedAt')}: {new Date(shift.opened_at).toLocaleString(lang === 'he' ? 'he-IL' : 'ru-RU')}
           </p>
+        )}
+
+        {/* Просроченная смена: пересекла границу операционного дня — просим
+            менеджера пересчитать кассу и закрыть смену (P1, overdue) */}
+        {overdue.daysCrossed >= 1 && (
+          <div className="rounded-2xl bg-red-50 border border-red-200 px-4 py-3 mb-3">
+            <p className="text-sm font-bold text-red-700">
+              {t(lang, 'shiftOverdueBanner')
+                .replace('{days}', String(overdue.daysCrossed))
+                .replace('{hours}', String(overdue.hours))}
+            </p>
+            <p className="text-sm text-red-700 mt-0.5">{t(lang, 'shiftOverdueAction')}</p>
+          </div>
         )}
 
         {/* Баннеры: пора закрывать / много наличных (настройки точки «Смена») */}

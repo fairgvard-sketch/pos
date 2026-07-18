@@ -33,6 +33,16 @@ export default function ShiftSection({ location }: { location: Location | undefi
             onChange={(e) => update({ shift: { ...shift, close_reminder: e.target.value || null } })}
           />
         </InputRow>
+        <InputRow label={t(lang, 'dayCutoffTitle')} hint={t(lang, 'dayCutoffHint')}>
+          <input
+            type="time"
+            className="input !w-32 text-center tabular-nums"
+            // Пусто = дефолт 04:00 (DEFAULT_DAY_CUTOFF); защита не отключается
+            placeholder="04:00"
+            value={shift?.day_cutoff ?? ''}
+            onChange={(e) => update({ shift: { ...shift, day_cutoff: e.target.value || null } })}
+          />
+        </InputRow>
         <MoneyRow
           label={t(lang, 'cashWarnTitle')}
           hint={t(lang, 'cashWarnHint')}
