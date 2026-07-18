@@ -21,6 +21,7 @@
     "preview": "vite preview",
     "check:ref": "node scripts/check-project-ref.mjs",
     "db:push": "node scripts/check-project-ref.mjs && supabase db push",
+    "db:dump": "node scripts/check-project-ref.mjs && node scripts/db-dump.mjs",
     "functions:deploy": "node scripts/check-project-ref.mjs && supabase functions deploy"
   },
   "dependencies": {
