@@ -7,6 +7,7 @@ import { useLangStore } from '../../../store/langStore'
 import { useDeviceStore } from '../../../store/deviceStore'
 import { renderTestPrintCanvas } from '../../receipt/printCanvas'
 import { hasSilentPrintPath } from '../../../lib/escpos'
+import { orientationSupport } from '../../../lib/orientation'
 import { printCanvasWithRetry } from '../../receipt/printFailure'
 import { syncDeviceNow, useDeviceSyncStore } from '../../../lib/deviceSync'
 import { t } from '../../../lib/i18n'
@@ -174,7 +175,16 @@ export default function DeviceSection({ location }: { location: Location | undef
         />
         <SegmentRow<'auto' | 'landscape' | 'portrait'>
           label={t(lang, 'orientation')}
-          hint={t(lang, 'orientationHint')}
+          // Честный hint: мост v3 — надёжно; браузер — по возможности; иначе
+          // прямо говорим, что нужен новый APK, а не молча игнорируем выбор
+          hint={t(
+            lang,
+            orientationSupport() === 'bridge'
+              ? 'orientationHint'
+              : orientationSupport() === 'web'
+                ? 'orientationWebHint'
+                : 'orientationUnsupported'
+          )}
           device
           options={[
             { value: 'auto', label: t(lang, 'orientationAuto') },

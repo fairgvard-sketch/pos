@@ -9,6 +9,7 @@ import { initNet, OfflineError } from './lib/offline/net'
 import { initDrain } from './lib/offline/drain'
 import { initScope } from './lib/offline/scope'
 import { initDeviceSync } from './lib/deviceSync'
+import { initOrientation } from './lib/orientation'
 import { initTelemetry } from './lib/telemetry'
 import DeviceSetupPage from './features/auth/DeviceSetupPage'
 import PinLoginPage from './features/auth/PinLoginPage'
@@ -91,6 +92,7 @@ const persister = createSyncStoragePersister({
 // Device sync стартует ПОСЛЕ scope: при смене аккаунта scope очищает старые
 // настройки из storage, затем sync безопасно восстанавливает snapshot сервера.
 void initScope().then(() => initDeviceSync())
+initOrientation()  // применяет настройку ориентации (мост APK v3 / браузер)
 initNet()          // детекция сети (события браузера + проба Supabase)
 initDrain(queryClient)  // движок replay офлайн-очереди
 initTelemetry()    // журнал ошибок + heartbeat парка (074)

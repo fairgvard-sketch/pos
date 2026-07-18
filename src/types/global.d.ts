@@ -5,8 +5,16 @@
 interface KassaAndroidBridge {
   /** Есть ли связь со встроенным принтером Sunmi */
   isAvailable(): boolean
-  /** Версия контракта моста. v2+ гарантирует callback результата задания. */
+  /**
+   * Версия контракта моста. v2+ гарантирует callback результата задания,
+   * v3+ умеет setOrientation.
+   */
   bridgeVersion?(): number
+  /**
+   * Ориентация интерфейса (v3+): auto|landscape|portrait → requestedOrientation.
+   * true = применено; false = недоверенная страница или неизвестный режим.
+   */
+  setOrientation?(mode: string): boolean
   /**
    * Печать сырых ESC/POS байтов (base64). Возвращает, ПРИНЯТО ли задание
    * (queued), НЕ результат печати. Реальный итог приходит асинхронно в

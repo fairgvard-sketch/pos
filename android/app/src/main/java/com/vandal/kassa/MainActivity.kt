@@ -5,6 +5,7 @@ import android.app.Activity
 import android.app.AlertDialog
 import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.content.pm.ActivityInfo
 import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
@@ -73,9 +74,31 @@ class MainActivity : Activity() {
 
     /** Мост для веб-страницы: window.KassaAndroid */
     inner class Bridge {
-        /** v2: printBase64(jobId) гарантирует финальный callback результата. */
+        /**
+         * v2: printBase64(jobId) гарантирует финальный callback результата.
+         * v3: setOrientation(mode) — ориентация интерфейса из настроек кассы.
+         */
         @JavascriptInterface
-        fun bridgeVersion(): Int = 2
+        fun bridgeVersion(): Int = 3
+
+        /**
+         * Ориентация интерфейса (Настройки → Устройство): auto|landscape|portrait.
+         * Источник истины — настройка кассы в вебе: страница вызывает мост при
+         * старте и при смене, отдельно в APK ничего не сохраняем. SENSOR_*
+         * разрешает оба разворота выбранной оси (экран не «вверх ногами»).
+         */
+        @JavascriptInterface
+        fun setOrientation(mode: String): Boolean {
+            if (!onAllowedPage()) return false
+            val value = when (mode) {
+                "landscape" -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                "portrait" -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+                "auto" -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+                else -> return false
+            }
+            runOnUiThread { requestedOrientation = value }
+            return true
+        }
 
         /** Есть ли связь со встроенным принтером (и мы на доверенной странице) */
         @JavascriptInterface
