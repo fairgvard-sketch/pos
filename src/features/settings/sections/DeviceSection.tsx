@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { safeUnlinkDevice, pendingOutboxCount } from '../../auth/unlink'
-import { useLangStore } from '../../../store/langStore'
+import { useLangStore, RUSSIAN_UI_ENABLED } from '../../../store/langStore'
 import { useDeviceStore } from '../../../store/deviceStore'
 import { renderTestPrintCanvas } from '../../receipt/printCanvas'
 import { hasSilentPrintPath } from '../../../lib/escpos'
@@ -135,9 +135,11 @@ export default function DeviceSection({ location }: { location: Location | undef
             onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
           />
         </InputRow>
-        <InputRow label={t(lang, 'interfaceLanguage')} device>
-          <LangToggle />
-        </InputRow>
+        {RUSSIAN_UI_ENABLED && (
+          <InputRow label={t(lang, 'interfaceLanguage')} device>
+            <LangToggle />
+          </InputRow>
+        )}
         <InputRow
           label={t(lang, 'deviceSyncStatus')}
           hint={deviceSyncError ?? undefined}

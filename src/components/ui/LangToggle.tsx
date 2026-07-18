@@ -1,7 +1,10 @@
-import { useLangStore } from '../../store/langStore'
+import { useLangStore, RUSSIAN_UI_ENABLED } from '../../store/langStore'
 
 export default function LangToggle() {
   const { lang, setLang } = useLangStore()
+
+  // Коммерческий прод иврит-only: без внутреннего флага переключателя нет
+  if (!RUSSIAN_UI_ENABLED) return null
 
   return (
     <div className="flex rounded-xl overflow-hidden border border-gray-200 bg-gray-50 p-0.5 gap-0.5">
