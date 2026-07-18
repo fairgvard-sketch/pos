@@ -9,6 +9,7 @@ import { useLangStore } from '../../store/langStore'
 import { useDeviceStore } from '../../store/deviceStore'
 import { printKitchenTicket } from '../receipt/printService'
 import { OfflineError, withOfflineFallback } from '../../lib/offline/net'
+import { failedNoCache } from '../../lib/queryState'
 import { enqueueTableAppend, enqueueTableVoid } from '../../lib/offline/enqueue'
 import { useOutboxStore } from '../../lib/offline/outboxStore'
 import { t } from '../../lib/i18n'
@@ -41,11 +42,16 @@ export function useTableBill(startPayment: (o: PayingOrder) => void) {
   // Уже заказанные позиции открытого счёта стола (read-only, до дозаказа).
   // cart.lines в режиме стола = только НОВЫЕ позиции, поэтому существующие
   // тянем отдельно, чтобы бариста/кассир видел, что уже на столе.
-  const { data: fetchedLines = [] } = useQuery({
+  const linesQ = useQuery({
     queryKey: ['order_lines', tableCtx?.orderId],
     queryFn: () => fetchOrderLines(tableCtx!.orderId),
     enabled: !!tableCtx && !isLocalTable,
   })
+  const { data: fetchedLines = [] } = linesQ
+  // Строки счёта не загрузились и кэша нет: счёт занятого стола нельзя рисовать
+  // пустым — кассир не видит, что уже заказано (P1-7). Ошибку показывает SellPage.
+  const billLinesFailed = failedNoCache(linesQ)
+  const retryBillLines = () => { void linesQ.refetch() }
   // Строки счёта: серверные + офлайн-дозаказы из эха
   const existingLines = useMemo<BillLine[]>(() => {
     const echoLines: BillLine[] = (tableEcho?.lines ?? []).map((l) => ({
@@ -260,7 +266,7 @@ export function useTableBill(startPayment: (o: PayingOrder) => void) {
 
   return {
     tableCtx, tableEcho, isLocalTable,
-    existingLines, existingSubtotal,
+    existingLines, existingSubtotal, billLinesFailed, retryBillLines,
     tableDiscount, orderDiscount, voidItem,
     saveBill, billToPay, voidBill, exitTable,
   }

@@ -25,6 +25,7 @@ import { useOutboxStore, pendingOpsCount, hasFailedOps } from '../../lib/offline
 import { useNetStore } from '../../lib/offline/net'
 import { useDeviceStore } from '../../store/deviceStore'
 import AppSidebar from '../../components/AppSidebar'
+import LoadErrorState from '../../components/LoadErrorState'
 import Icon from '../../components/Icon'
 import { useAuthStore } from '../../store/authStore'
 import { useLangStore } from '../../store/langStore'
@@ -368,7 +369,13 @@ export default function TransactionsPage() {
           {isLoading ? (
             <p className="text-center text-gray-400 pt-16">…</p>
           ) : error ? (
-            <p className="text-center text-red-500 text-sm pt-16 px-4">{(error as Error).message}</p>
+            <div className="pt-16 px-4">
+              <LoadErrorState
+                title={t(lang, 'dataLoadError')}
+                hint={(error as Error).message}
+                onRetry={() => { void txQ.refetch() }}
+              />
+            </div>
           ) : byDay.length === 0 ? (
             <p className="text-center text-gray-500 text-sm pt-16">{t(lang, 'noTransactions')}</p>
           ) : (

@@ -39,6 +39,8 @@ import OrderTypeSwitch from './OrderTypeSwitch'
 import AppSidebar from '../../components/AppSidebar'
 import ItemImage from '../../components/ItemImage'
 import Icon from '../../components/Icon'
+import LoadErrorState from '../../components/LoadErrorState'
+import { failedNoCache } from '../../lib/queryState'
 
 /** Дефолтная конфигурация товара — для добавления в 1 тап */
 function defaultConfig(item: MenuItem, groups: ModifierGroup[]) {
@@ -75,8 +77,10 @@ export default function SellPage() {
   const navigate = useNavigate()
   const online = useNetStore((s) => s.online)
 
-  const { data: shift, isLoading: shiftLoading } = useQuery({ queryKey: ['current_shift'], queryFn: fetchCurrentShift })
-  const { data: location } = useQuery({ queryKey: ['current_location'], queryFn: fetchCurrentLocation })
+  const shiftQ = useQuery({ queryKey: ['current_shift'], queryFn: fetchCurrentShift })
+  const locationQ = useQuery({ queryKey: ['current_location'], queryFn: fetchCurrentLocation })
+  const { data: shift, isLoading: shiftLoading } = shiftQ
+  const { data: location } = locationQ
   // Столы показываем, если точка не в режиме чистой стойки
   const showTable = location?.service_mode === 'counter_tables' || location?.service_mode === 'tables'
 
@@ -104,9 +108,7 @@ export default function SellPage() {
   // Группы модификаторов тоже критичны: без них товар уйдёт без обязательного
   // модификатора, поэтому их отказ без кэша блокирует сетку наравне с товарами.
   const catalogFailed =
-    (categoriesQ.isError && categoriesQ.data === undefined) ||
-    (itemsQ.isError && itemsQ.data === undefined) ||
-    (groupsQ.isError && groupsQ.data === undefined)
+    failedNoCache(categoriesQ) || failedNoCache(itemsQ) || failedNoCache(groupsQ)
   const catalogLoading =
     !catalogFailed && (categoriesQ.isPending || itemsQ.isPending)
   const retryCatalog = () => {
@@ -128,7 +130,7 @@ export default function SellPage() {
   } = usePayFlow()
   const {
     tableCtx, tableEcho, isLocalTable,
-    existingLines, existingSubtotal,
+    existingLines, existingSubtotal, billLinesFailed, retryBillLines,
     tableDiscount, orderDiscount, voidItem,
     saveBill, billToPay, voidBill, exitTable,
   } = useTableBill(startPayment)
@@ -489,6 +491,23 @@ export default function SellPage() {
     return <Navigate to="/hall" replace />
   }
 
+  // Смена/точка не загрузились и кэша нет: состояние неизвестно, ShiftGate
+  // здесь опасен — выглядит как «смена не открыта» и толкает открыть вторую
+  if (failedNoCache(shiftQ) || failedNoCache(locationQ)) {
+    return (
+      <div dir={isRtl ? 'rtl' : 'ltr'} className="h-screen bg-[#eceef1] flex gap-3 p-3 overflow-hidden">
+        <AppSidebar active="sell" />
+        <main className="flex-1 bg-white rounded-3xl flex items-center justify-center">
+          <LoadErrorState
+            title={t(lang, 'shiftLoadError')}
+            hint={t(lang, 'shiftLoadErrorHint')}
+            onRetry={() => { void shiftQ.refetch(); void locationQ.refetch() }}
+          />
+        </main>
+      </div>
+    )
+  }
+
   // Нет открытой смены — не пускаем к продажам
   if (!shiftLoading && !shift) {
     return <ShiftGate />
@@ -592,12 +611,12 @@ export default function SellPage() {
           }}
         >
           {catalogFailed ? (
-            <div className="text-center pt-20">
-              <p className="text-gray-900 text-sm font-semibold">{t(lang, 'catalogLoadError')}</p>
-              <p className="text-gray-500 text-sm mt-1">{t(lang, 'catalogLoadErrorHint')}</p>
-              <button className="btn-secondary mt-4" onClick={retryCatalog}>
-                {t(lang, 'offlineRetry')}
-              </button>
+            <div className="pt-20">
+              <LoadErrorState
+                title={t(lang, 'catalogLoadError')}
+                hint={t(lang, 'catalogLoadErrorHint')}
+                onRetry={retryCatalog}
+              />
             </div>
           ) : catalogLoading ? (
             <p className="text-gray-500 text-sm text-center pt-20">{t(lang, 'loading')}</p>
@@ -813,6 +832,12 @@ export default function SellPage() {
         </div>
 
         <div className="flex-1 overflow-y-auto px-4 space-y-2">
+          {/* Строки счёта не загрузились и кэша нет: не рисовать счёт пустым */}
+          {tableCtx && billLinesFailed && (
+            <div className="rounded-2xl bg-gray-50 border border-gray-100 p-4">
+              <LoadErrorState title={t(lang, 'billLoadError')} onRetry={retryBillLines} />
+            </div>
+          )}
           {/* Режим стола: уже заказанные позиции. Свайп влево → снять с счёта (void). */}
           {tableCtx && existingLines.length > 0 && (
             <div className="rounded-2xl bg-gray-50 border border-gray-100 p-3 space-y-1.5">
@@ -839,7 +864,7 @@ export default function SellPage() {
             </div>
           )}
 
-          {cart.lines.length === 0 && (!tableCtx || existingLines.length === 0) && (
+          {cart.lines.length === 0 && (!tableCtx || (existingLines.length === 0 && !billLinesFailed)) && (
             <div className="min-h-[240px] h-full flex flex-col items-center justify-center text-center px-6 pb-8">
               <div className="w-12 h-12 rounded-2xl bg-gray-100 text-gray-600 flex items-center justify-center mb-3">
                 <Icon name="orders" size={22} />

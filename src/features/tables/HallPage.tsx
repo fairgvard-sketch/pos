@@ -16,6 +16,8 @@ import { useOutboxStore } from '../../lib/offline/outboxStore'
 import { enqueueTableOpen } from '../../lib/offline/enqueue'
 import type { Table, TableStatus } from '../../types'
 import AppSidebar from '../../components/AppSidebar'
+import LoadErrorState from '../../components/LoadErrorState'
+import { failedNoCache } from '../../lib/queryState'
 import ShiftGate from '../shift/ShiftGate'
 import TableActionSheet from './TableActionSheet'
 
@@ -34,11 +36,16 @@ export default function HallPage() {
   const cart = useCartStore()
   const staff = useAuthStore((s) => s.staff)
 
-  const { data: shift, isLoading: shiftLoading } = useQuery({ queryKey: ['current_shift'], queryFn: fetchCurrentShift })
-  const { data: location } = useQuery({ queryKey: ['current_location'], queryFn: fetchCurrentLocation })
-  const { data: zones = [] } = useQuery({ queryKey: ['table_zones'], queryFn: fetchTableZones })
-  const { data: tables = [] } = useQuery({ queryKey: ['tables'], queryFn: fetchTables })
-  const { data: open = [] } = useQuery({ queryKey: ['open_table_orders'], queryFn: fetchOpenTableOrders })
+  const shiftQ = useQuery({ queryKey: ['current_shift'], queryFn: fetchCurrentShift })
+  const locationQ = useQuery({ queryKey: ['current_location'], queryFn: fetchCurrentLocation })
+  const zonesQ = useQuery({ queryKey: ['table_zones'], queryFn: fetchTableZones })
+  const tablesQ = useQuery({ queryKey: ['tables'], queryFn: fetchTables })
+  const openQ = useQuery({ queryKey: ['open_table_orders'], queryFn: fetchOpenTableOrders })
+  const { data: shift, isLoading: shiftLoading } = shiftQ
+  const { data: location } = locationQ
+  const { data: zones = [] } = zonesQ
+  const { data: tables = [] } = tablesQ
+  const { data: open = [] } = openQ
   // Брони «скоро» (053): окно now−30мин..now+2ч вычисляется в queryFn,
   // поэтому перезапрашиваем раз в минуту — граница окна ползёт со временем
   const { data: upcomingRes = [] } = useQuery({
@@ -207,7 +214,41 @@ export default function HallPage() {
     }
   }
 
+  // Смена/точка не загрузились и кэша нет — ShiftGate здесь выглядел бы как
+  // «смена не открыта» и толкал открыть вторую; честная ошибка + retry
+  if (failedNoCache(shiftQ) || failedNoCache(locationQ)) {
+    return (
+      <div dir={isRtl ? 'rtl' : 'ltr'} className="h-screen bg-[#eceef1] flex gap-3 p-3 overflow-hidden">
+        <AppSidebar active="hall" />
+        <main className="flex-1 bg-white rounded-3xl flex items-center justify-center">
+          <LoadErrorState
+            title={t(lang, 'shiftLoadError')}
+            hint={t(lang, 'shiftLoadErrorHint')}
+            onRetry={() => { void shiftQ.refetch(); void locationQ.refetch() }}
+          />
+        </main>
+      </div>
+    )
+  }
+
   if (!shiftLoading && !shift) return <ShiftGate />
+
+  // Столы или занятость не загрузились и кэша нет: рисовать «пустой зал» или
+  // «все столы свободны» опасно — второй счёт на занятый стол. Честная ошибка.
+  if (failedNoCache(tablesQ) || failedNoCache(zonesQ) || failedNoCache(openQ)) {
+    return (
+      <div dir={isRtl ? 'rtl' : 'ltr'} className="h-screen bg-[#eceef1] flex gap-3 p-3 overflow-hidden">
+        <AppSidebar active="hall" />
+        <main className="flex-1 bg-white rounded-3xl flex items-center justify-center">
+          <LoadErrorState
+            title={t(lang, 'hallLoadError')}
+            hint={t(lang, 'hallLoadErrorHint')}
+            onRetry={() => { void tablesQ.refetch(); void zonesQ.refetch(); void openQ.refetch() }}
+          />
+        </main>
+      </div>
+    )
+  }
 
   const modeOk = location?.service_mode === 'tables'
 

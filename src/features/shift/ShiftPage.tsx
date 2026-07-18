@@ -22,6 +22,8 @@ import { useNetStore } from '../../lib/offline/net'
 import { formatMoney, parseMoney } from '../../lib/money'
 import AppSidebar from '../../components/AppSidebar'
 import BackButton from '../../components/BackButton'
+import LoadErrorState from '../../components/LoadErrorState'
+import { failedNoCache } from '../../lib/queryState'
 import WasteSheet from './WasteSheet'
 import type { Location } from '../../types'
 
@@ -60,7 +62,8 @@ export default function ShiftPage() {
   const staff = useAuthStore((s) => s.staff)
   const qc = useQueryClient()
 
-  const { data: shift } = useQuery({ queryKey: ['current_shift'], queryFn: fetchCurrentShift })
+  const shiftQ = useQuery({ queryKey: ['current_shift'], queryFn: fetchCurrentShift })
+  const { data: shift } = shiftQ
   const { data: report } = useQuery({
     queryKey: ['shift_report', shift?.id],
     queryFn: () => fetchShiftReport(shift!.id),
@@ -226,6 +229,22 @@ export default function ShiftPage() {
         {/* Печатная версия דו"ח Z для браузерного диалога: на экране спрятана
             за пределами вьюпорта, @media print показывает только её */}
         {zData && <ZReportPrintBody z={zData} location={location} />}
+      </Shell>
+    )
+  }
+
+  // Состояние смены не загрузилось и кэша нет: страница без данных выглядит
+  // как «смены нет» — честная ошибка вместо пустых карточек (P1-7)
+  if (failedNoCache(shiftQ)) {
+    return (
+      <Shell isRtl={isRtl} onBack={() => navigate(backRoute)}>
+        <div className="pt-24">
+          <LoadErrorState
+            title={t(lang, 'shiftLoadError')}
+            hint={t(lang, 'shiftLoadErrorHint')}
+            onRetry={() => { void shiftQ.refetch() }}
+          />
+        </div>
       </Shell>
     )
   }
