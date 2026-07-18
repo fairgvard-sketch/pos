@@ -41,6 +41,7 @@ import ItemImage from '../../components/ItemImage'
 import Icon from '../../components/Icon'
 import LoadErrorState from '../../components/LoadErrorState'
 import { failedNoCache } from '../../lib/queryState'
+import { goLiveBlocked, goLiveGaps, GAP_LABELS } from '../golive/checks'
 
 /** Дефолтная конфигурация товара — для добавления в 1 тап */
 function defaultConfig(item: MenuItem, groups: ModifierGroup[]) {
@@ -503,6 +504,40 @@ export default function SellPage() {
             hint={t(lang, 'shiftLoadErrorHint')}
             onRetry={() => { void shiftQ.refetch(); void locationQ.refetch() }}
           />
+        </main>
+      </div>
+    )
+  }
+
+  // Точка не готова к первой продаже (P3-13): критические пробелы запуска
+  // (реквизиты чека, пустой каталог) блокируют, пока менеджер не закроет их
+  // в чек-листе. Подтверждённые точки (в т.ч. grandfather 084) не проверяются.
+  if (!catalogFailed && goLiveBlocked(location, itemsQ.data ? items.length : null)) {
+    const gaps = goLiveGaps(location!, itemsQ.data ? items.length : null)
+    const isManager = staff.role === 'owner' || staff.role === 'manager'
+    return (
+      <div dir={isRtl ? 'rtl' : 'ltr'} className="h-screen bg-[#eceef1] flex gap-3 p-3 overflow-hidden">
+        <AppSidebar active="sell" />
+        <main className="flex-1 bg-white rounded-3xl flex items-center justify-center">
+          <div className="text-center max-w-md px-6">
+            <h1 className="text-xl font-black text-gray-900">{t(lang, 'goLiveBlockedTitle')}</h1>
+            <p className="text-sm text-gray-500 mt-2">
+              {t(lang, isManager ? 'goLiveBlockedHint' : 'goLiveBlockedStaffHint')}
+            </p>
+            <ul className="mt-4 space-y-1.5 text-sm font-semibold text-gray-900">
+              {gaps.map((g) => (
+                <li key={g} className="flex items-center justify-center gap-2">
+                  <span className="inline-block w-2 h-2 rounded-full bg-red-500" />
+                  {t(lang, GAP_LABELS[g])}
+                </li>
+              ))}
+            </ul>
+            {isManager && (
+              <button className="btn-primary mt-6 !px-6" onClick={() => navigate('/settings/go-live')}>
+                {t(lang, 'goLiveOpenChecklist')}
+              </button>
+            )}
+          </div>
         </main>
       </div>
     )

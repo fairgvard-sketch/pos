@@ -26,6 +26,11 @@ export default function BusinessSection({
           hint={t(lang, 'ufExportSearchHint')}
           onClick={() => openDetail('uf-export')}
         />
+        <NavRow
+          label={t(lang, 'goLiveTitle')}
+          hint={t(lang, 'goLiveSearchHint')}
+          onClick={() => navigate('/settings/go-live')}
+        />
       </Group>
 
       {/* Экраны, убранные из сайдбара: полная админка меню и дашборд владельца */}

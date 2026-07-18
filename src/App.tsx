@@ -41,6 +41,7 @@ const ShiftPage = lazyWithRetry(() => import('./features/shift/ShiftPage'), 'Shi
 const TimesheetPage = lazyWithRetry(() => import('./features/timesheet/TimesheetPage'), 'TimesheetPage')
 const TransactionsPage = lazyWithRetry(() => import('./features/transactions/TransactionsPage'), 'TransactionsPage')
 const SettingsPage = lazyWithRetry(() => import('./features/settings/SettingsPage'), 'SettingsPage')
+const GoLivePage = lazyWithRetry(() => import('./features/golive/GoLivePage'), 'GoLivePage')
 const ReportsPage = lazyWithRetry(() => import('./features/reports/ReportsPage'), 'ReportsPage')
 const InventoryPage = lazyWithRetry(() => import('./features/inventory/InventoryPage'), 'InventoryPage')
 const DashboardPage = lazyWithRetry(() => import('./features/dashboard/DashboardPage'), 'DashboardPage')
@@ -259,6 +260,16 @@ export default function App() {
             element={
               <ProtectedRoute allowedRoles={['owner', 'manager']}>
                 <SettingsPage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Чек-лист запуска точки (P3-13) */}
+          <Route
+            path="/settings/go-live"
+            element={
+              <ProtectedRoute allowedRoles={['owner', 'manager']}>
+                <GoLivePage />
               </ProtectedRoute>
             }
           />

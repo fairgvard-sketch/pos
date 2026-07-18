@@ -139,6 +139,18 @@ export interface LocationSettings {
     /** Депозит требуется от N гостей (063; дефолт 1 = со всех). */
     deposit_from_party?: number
   }
+  /** Запуск точки — go-live wizard (P3-13, 084) */
+  go_live?: {
+    /** Запуск подтверждён (ISO): первая продажа не блокируется */
+    confirmed_at?: string | null
+    /** Имя менеджера, подтвердившего запуск (wizard) */
+    confirmed_by?: string | null
+    /** 'wizard' — подтверждено в чек-листе; 'grandfather' — миграция 084
+     *  (точка продавала до появления фичи) */
+    source?: 'wizard' | 'grandfather'
+    /** Владелец подтвердил бэкапы (ручная галочка, docs/backups.md) */
+    backup_confirmed_at?: string | null
+  }
 }
 
 export interface Location {
