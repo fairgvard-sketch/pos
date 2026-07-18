@@ -948,6 +948,13 @@ export const translations = {
     offlineOpFailed: 'Офлайн-операция не прошла',
     offlineWaitingPin: 'Введите PIN для отправки',
     offlineBlockedHint: 'Недоступно без сети',
+
+    // Версия схемы БД (081)
+    schemaOutdatedTitle: 'Требуется обновление базы данных',
+    schemaOutdatedHint: 'База данных отстаёт от версии приложения, работа кассы остановлена, чтобы не потерять данные. Обратитесь в поддержку.',
+    schemaVersions: 'Версия базы: {db} · нужна: {app}',
+    catalogLoadError: 'Не удалось загрузить каталог',
+    catalogLoadErrorHint: 'Проверьте соединение и повторите попытку. Если ошибка повторяется — обратитесь в поддержку.',
     offlineProvisionalDoc: 'Временный документ — фискальный номер будет присвоен при синхронизации',
     offlineCloseShiftBlocked: 'Сначала синхронизируйте офлайн-операции',
     offlineSale: 'Офлайн-продажа',
@@ -2211,6 +2218,13 @@ export const translations = {
     offlineOpFailed: 'פעולת אופליין נכשלה',
     offlineWaitingPin: 'הזינו PIN לשליחה',
     offlineBlockedHint: 'לא זמין ללא רשת',
+
+    // Версия схемы БД (081)
+    schemaOutdatedTitle: 'נדרש עדכון של בסיס הנתונים',
+    schemaOutdatedHint: 'בסיס הנתונים מפגר אחרי גרסת האפליקציה, הקופה הושהתה כדי למנוע אובדן נתונים. פנו לתמיכה.',
+    schemaVersions: 'גרסת בסיס: {db} · נדרשת: {app}',
+    catalogLoadError: 'טעינת הקטלוג נכשלה',
+    catalogLoadErrorHint: 'בדקו את החיבור ונסו שוב. אם השגיאה חוזרת — פנו לתמיכה.',
     offlineProvisionalDoc: 'מסמך זמני — מספר פיסקלי יוקצה בסנכרון',
     offlineCloseShiftBlocked: 'קודם סנכרנו את פעולות האופליין',
     offlineSale: 'מכירת אופליין',

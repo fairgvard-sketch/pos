@@ -3,6 +3,7 @@ import { Navigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../../lib/supabase'
 import { landingRouteFromCache } from './landing'
+import SchemaGuard from '../../components/SchemaGuard'
 import { useAuthStore } from '../../store/authStore'
 import type { Role } from '../../types'
 
@@ -34,5 +35,6 @@ export default function ProtectedRoute({ allowedRoles, children }: Props) {
   if (allowedRoles && !allowedRoles.includes(staff.role)) {
     return <Navigate to={landingRouteFromCache(qc)} replace />
   }
-  return <>{children}</>
+  // Отстающая схема БД блокирует все рабочие экраны диагностикой (081)
+  return <SchemaGuard>{children}</SchemaGuard>
 }

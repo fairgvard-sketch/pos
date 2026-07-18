@@ -92,9 +92,28 @@ export default function SellPage() {
     }
     fn()
   }
-  const { data: categories = [] } = useQuery({ queryKey: ['menu_categories'], queryFn: fetchCategories })
-  const { data: items = [] } = useQuery({ queryKey: ['menu_items'], queryFn: fetchItems })
-  const { data: allGroups = [] } = useQuery({ queryKey: ['modifier_groups'], queryFn: fetchModifierGroups })
+  const categoriesQ = useQuery({ queryKey: ['menu_categories'], queryFn: fetchCategories })
+  const itemsQ = useQuery({ queryKey: ['menu_items'], queryFn: fetchItems })
+  const groupsQ = useQuery({ queryKey: ['modifier_groups'], queryFn: fetchModifierGroups })
+  const categories = useMemo(() => categoriesQ.data ?? [], [categoriesQ.data])
+  const items = useMemo(() => itemsQ.data ?? [], [itemsQ.data])
+  const allGroups = useMemo(() => groupsQ.data ?? [], [groupsQ.data])
+  // Ошибка запроса каталога не должна выглядеть как пустое меню. Опасен только
+  // случай «ошибка и показать нечего»: при живом localStorage-кэше (persist)
+  // работаем по нему, офлайн-обрыв каталога не блокирует продажу.
+  // Группы модификаторов тоже критичны: без них товар уйдёт без обязательного
+  // модификатора, поэтому их отказ без кэша блокирует сетку наравне с товарами.
+  const catalogFailed =
+    (categoriesQ.isError && categoriesQ.data === undefined) ||
+    (itemsQ.isError && itemsQ.data === undefined) ||
+    (groupsQ.isError && groupsQ.data === undefined)
+  const catalogLoading =
+    !catalogFailed && (categoriesQ.isPending || itemsQ.isPending)
+  const retryCatalog = () => {
+    void categoriesQ.refetch()
+    void itemsQ.refetch()
+    void groupsQ.refetch()
+  }
 
   const cart = useCartStore()
 
@@ -572,7 +591,17 @@ export default function SellPage() {
             setWiggleMode(false)
           }}
         >
-          {visibleItems.length === 0 && !editMode ? (
+          {catalogFailed ? (
+            <div className="text-center pt-20">
+              <p className="text-gray-900 text-sm font-semibold">{t(lang, 'catalogLoadError')}</p>
+              <p className="text-gray-500 text-sm mt-1">{t(lang, 'catalogLoadErrorHint')}</p>
+              <button className="btn-secondary mt-4" onClick={retryCatalog}>
+                {t(lang, 'offlineRetry')}
+              </button>
+            </div>
+          ) : catalogLoading ? (
+            <p className="text-gray-500 text-sm text-center pt-20">{t(lang, 'loading')}</p>
+          ) : visibleItems.length === 0 && !editMode ? (
             <p className="text-gray-500 text-sm text-center pt-20">{t(lang, 'nothingFound')}</p>
           ) : (
             <div ref={gridRef} className="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-3">

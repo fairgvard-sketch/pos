@@ -63,8 +63,14 @@ export default function MenuPage() {
   const isRtl = lang === 'he'
   const qc = useQueryClient()
 
-  const { data: categories = [] } = useQuery({ queryKey: ['menu_categories'], queryFn: fetchCategories })
-  const { data: items = [] } = useQuery({ queryKey: ['menu_items'], queryFn: fetchItems })
+  const categoriesQ = useQuery({ queryKey: ['menu_categories'], queryFn: fetchCategories })
+  const itemsQ = useQuery({ queryKey: ['menu_items'], queryFn: fetchItems })
+  const categories = useMemo(() => categoriesQ.data ?? [], [categoriesQ.data])
+  const items = useMemo(() => itemsQ.data ?? [], [itemsQ.data])
+  // Ошибка каталога без кэша ≠ «меню пустое» — показываем явную ошибку (081)
+  const catalogFailed =
+    (categoriesQ.isError && categoriesQ.data === undefined) ||
+    (itemsQ.isError && itemsQ.data === undefined)
   // Счётчики для навигации секций (оба ключа уже греются другими экранами)
   const { data: modGroups = [] } = useQuery({ queryKey: ['modifier_groups'], queryFn: fetchModifierGroups })
   const { data: stations = [] } = useQuery({ queryKey: ['stations'], queryFn: fetchStations })
@@ -354,9 +360,22 @@ export default function MenuPage() {
           />
         ) : (
           <main className="flex-1 bg-white rounded-3xl flex items-center justify-center">
-            <p className="text-gray-300 text-sm">
-              {categories.length === 0 ? t(lang, 'noCategoriesYet') : t(lang, 'selectOrCreateItem')}
-            </p>
+            {catalogFailed ? (
+              <div className="text-center">
+                <p className="text-gray-900 text-sm font-semibold">{t(lang, 'catalogLoadError')}</p>
+                <p className="text-gray-500 text-sm mt-1">{t(lang, 'catalogLoadErrorHint')}</p>
+                <button
+                  className="btn-secondary mt-4"
+                  onClick={() => { void categoriesQ.refetch(); void itemsQ.refetch() }}
+                >
+                  {t(lang, 'offlineRetry')}
+                </button>
+              </div>
+            ) : (
+              <p className="text-gray-300 text-sm">
+                {categories.length === 0 ? t(lang, 'noCategoriesYet') : t(lang, 'selectOrCreateItem')}
+              </p>
+            )}
           </main>
         )
       ) : (
