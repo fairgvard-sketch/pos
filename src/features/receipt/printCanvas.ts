@@ -1,5 +1,6 @@
 import type { Receipt, RefundReceipt } from './api'
 import { receiptMethodLabel } from '../../lib/payMethods'
+import { useDeviceStore, type TapeWidth } from '../../store/deviceStore'
 import type { Location } from '../../types'
 
 /**
@@ -9,16 +10,55 @@ import type { Location } from '../../types'
  * рисует иврит (bidi внутри строки), выравнивание задаём вручную.
  */
 
-const W = 576              // ширина головки 80мм @ 203dpi
-const MX = 12              // поля
-const RIGHT = W - MX
-// Колонки таблицы (x в пикселях): в RTL название справа, суммы к левому краю
-const COL_TOTAL = MX       // לתשלום (левый край, textAlign left)
-const COL_QTY = 150        // כמות (центр)
-const COL_PRICE = 200      // מחיר (left)
-const NAME_MAX = RIGHT - 290 // максимум ширины названия
+/**
+ * Геометрия термоленты @203dpi: 80мм → 576px, 58мм → 384px. Ширина берётся
+ * из настройки устройства (Настройки → Устройство → Ширина ленты); явный
+ * параметр — для тестов. Кегли на 58мм ужимаются на 15% (fs): четыре колонки
+ * таблицы иначе не помещаются в 384px.
+ */
+interface TapeLayout {
+  W: number
+  MX: number
+  RIGHT: number
+  // Колонки таблицы (x в пикселях): в RTL название справа, суммы к левому краю
+  COL_TOTAL: number  // לתשלום (левый край, textAlign left)
+  COL_QTY: number    // כמות (центр)
+  COL_PRICE: number  // מחיר (left)
+  NAME_MAX: number   // максимум ширины названия
+  /** Масштаб кегля для этой ширины ленты */
+  fs: (size: number) => number
+}
 
-const FONT = (size: number, bold = false) => `${bold ? '700' : '400'} ${size}px monospace`
+function tapeLayout(tape: TapeWidth): TapeLayout {
+  const W = tape === 58 ? 384 : 576
+  const MX = 12
+  const RIGHT = W - MX
+  if (tape === 58) {
+    return {
+      W, MX, RIGHT,
+      COL_TOTAL: MX,
+      COL_QTY: 118,
+      COL_PRICE: 152,
+      NAME_MAX: RIGHT - 250,
+      fs: (size) => Math.round(size * 0.85),
+    }
+  }
+  return {
+    W, MX, RIGHT,
+    COL_TOTAL: MX,
+    COL_QTY: 150,
+    COL_PRICE: 200,
+    NAME_MAX: RIGHT - 290,
+    fs: (size) => size,
+  }
+}
+
+/** Текущая ширина ленты устройства — единый дефолт всех печатных документов */
+function currentTape(): TapeWidth {
+  return useDeviceStore.getState().tapeWidth
+}
+
+const RAW_FONT = (size: number, bold = false) => `${bold ? '700' : '400'} ${size}px monospace`
 
 /**
  * Высота чернового холста под чек/тикет. Раньше стояла ФИКСИРОВАННАЯ
@@ -48,6 +88,8 @@ function docTypeLabel(dt: Receipt['doc_type']): string {
 export interface ReceiptRenderOpts {
   /** Печать копии: *העתק* вместо *מקור* (второй экземпляр, перепечатка) */
   copy?: boolean
+  /** Ширина ленты; по умолчанию — настройка устройства */
+  tape?: TapeWidth
 }
 
 export function renderReceiptCanvas(
@@ -55,6 +97,9 @@ export function renderReceiptCanvas(
   location: Location | undefined,
   opts: ReceiptRenderOpts = {}
 ): HTMLCanvasElement {
+  const { W, MX, RIGHT, COL_TOTAL, COL_QTY, COL_PRICE, NAME_MAX, fs } =
+    tapeLayout(opts.tape ?? currentTape())
+  const F = (size: number, bold = false) => RAW_FONT(fs(size), bold)
   // Рисуем на холсте, высота которого посчитана от контента (иначе длинный
   // чек обрезался). Строки товаров + их модификаторы (если печатаются).
   const printModsForHeight = location?.settings?.receipt?.print_modifiers ?? false
@@ -72,14 +117,14 @@ export function renderReceiptCanvas(
   let y = 30
 
   const center = (text: string, size: number, bold = false, gap = 8) => {
-    ctx.font = FONT(size, bold)
+    ctx.font = F(size, bold)
     ctx.textAlign = 'center'
     ctx.fillText(text, W / 2, y)
     y += size + gap
   }
   // Метка справа, значение слева (RTL-строка)
   const metaRow = (label: string, value: string, size = 26, bold = false) => {
-    ctx.font = FONT(size, bold)
+    ctx.font = F(size, bold)
     ctx.textAlign = 'right'
     ctx.fillText(label, RIGHT, y)
     ctx.textAlign = 'left'
@@ -136,7 +181,7 @@ export function renderReceiptCanvas(
   divider()
 
   // ── Таблица позиций ──
-  ctx.font = FONT(22, true)
+  ctx.font = F(22, true)
   ctx.textAlign = 'right'
   ctx.fillText('שם', RIGHT, y)
   ctx.textAlign = 'left'
@@ -157,7 +202,7 @@ export function renderReceiptCanvas(
   // опция точки (Настройки → Чеки и печать → Модификаторы в чеке)
   const printMods = location?.settings?.receipt?.print_modifiers ?? false
   for (const l of r.lines) {
-    ctx.font = FONT(26)
+    ctx.font = F(26)
     const name = l.variant_name ? `${l.name} ${l.variant_name}` : l.name
     ctx.textAlign = 'right'
     ctx.fillText(fitText(name, NAME_MAX), RIGHT, y)
@@ -170,7 +215,7 @@ export function renderReceiptCanvas(
     y += 34
     if (printMods) {
       for (const m of l.modifiers) {
-        ctx.font = FONT(22)
+        ctx.font = F(22)
         ctx.textAlign = 'right'
         ctx.fillText(fitText(`+ ${m.name}`, NAME_MAX), RIGHT - 18, y)
         if (m.price_delta !== 0) {
@@ -261,6 +306,9 @@ export function renderRefundReceiptCanvas(
   location: Location | undefined,
   opts: ReceiptRenderOpts = {}
 ): HTMLCanvasElement {
+  const { W, MX, RIGHT, COL_TOTAL, COL_QTY, COL_PRICE, NAME_MAX, fs } =
+    tapeLayout(opts.tape ?? currentTape())
+  const F = (size: number, bold = false) => RAW_FONT(fs(size), bold)
   const tall = document.createElement('canvas')
   tall.width = W
   // Возврат может перечислять построчно возвращённые позиции — высота от их числа
@@ -273,13 +321,13 @@ export function renderRefundReceiptCanvas(
   let y = 30
 
   const center = (text: string, size: number, bold = false, gap = 8) => {
-    ctx.font = FONT(size, bold)
+    ctx.font = F(size, bold)
     ctx.textAlign = 'center'
     ctx.fillText(text, W / 2, y)
     y += size + gap
   }
   const metaRow = (label: string, value: string, size = 26, bold = false) => {
-    ctx.font = FONT(size, bold)
+    ctx.font = F(size, bold)
     ctx.textAlign = 'right'
     ctx.fillText(label, RIGHT, y)
     ctx.textAlign = 'left'
@@ -331,7 +379,7 @@ export function renderRefundReceiptCanvas(
   // ── Возвращённые позиции таблицей как у чека; возврат произвольной
   // суммой (items = null) идёт без таблицы, сразу итогом ──
   if (r.items && r.items.length > 0) {
-    ctx.font = FONT(22, true)
+    ctx.font = F(22, true)
     ctx.textAlign = 'right'
     ctx.fillText('שם', RIGHT, y)
     ctx.textAlign = 'left'
@@ -351,7 +399,7 @@ export function renderRefundReceiptCanvas(
     // Минус — в количестве и в сумме строки; מחיר (за единицу) выводится
     // из снапшота суммы строки, поэтому включает долю скидки исходного чека
     for (const l of r.items) {
-      ctx.font = FONT(26)
+      ctx.font = F(26)
       ctx.textAlign = 'right'
       ctx.fillText(fitText(l.name, NAME_MAX), RIGHT, y)
       ctx.textAlign = 'left'
@@ -383,7 +431,7 @@ export function renderRefundReceiptCanvas(
 
   // ── Способ возврата денег ──
   divider()
-  ctx.font = FONT(26, true)
+  ctx.font = F(26, true)
   ctx.textAlign = 'right'
   ctx.fillText('אופן החזר כספי:', RIGHT, y)
   y += 34
@@ -436,7 +484,13 @@ export interface ZReportData {
  * смены, брутто-продажи по способам, возвраты, НДС, кассовая сверка.
  * Иврит/RTL, раскладка как у чека.
  */
-export function renderZReportCanvas(z: ZReportData, location: Location | undefined): HTMLCanvasElement {
+export function renderZReportCanvas(
+  z: ZReportData,
+  location: Location | undefined,
+  tape?: TapeWidth
+): HTMLCanvasElement {
+  const { W, MX, RIGHT, fs } = tapeLayout(tape ?? currentTape())
+  const F = (size: number, bold = false) => RAW_FONT(fs(size), bold)
   const tall = document.createElement('canvas')
   tall.width = W
   // Разбивка по способам оплаты (кошельки) — высота с запасом на их число
@@ -449,13 +503,13 @@ export function renderZReportCanvas(z: ZReportData, location: Location | undefin
   let y = 30
 
   const center = (text: string, size: number, bold = false, gap = 8) => {
-    ctx.font = FONT(size, bold)
+    ctx.font = F(size, bold)
     ctx.textAlign = 'center'
     ctx.fillText(text, W / 2, y)
     y += size + gap
   }
   const metaRow = (label: string, value: string, size = 26, bold = false) => {
-    ctx.font = FONT(size, bold)
+    ctx.font = F(size, bold)
     ctx.textAlign = 'right'
     ctx.fillText(label, RIGHT, y)
     ctx.textAlign = 'left'
@@ -546,7 +600,14 @@ export function renderZReportCanvas(z: ZReportData, location: Location | undefin
  * проверка, что тихая печать реально доходит до принтера.
  * Двуязычно — иврит и русский, без фискальной нагрузки.
  */
-export function renderTestPrintCanvas(businessName: string, deviceName: string): HTMLCanvasElement {
+export function renderTestPrintCanvas(
+  businessName: string,
+  deviceName: string,
+  tape?: TapeWidth
+): HTMLCanvasElement {
+  const tapeMm = tape ?? currentTape()
+  const { W, MX, RIGHT, fs } = tapeLayout(tapeMm)
+  const F = (size: number, bold = false) => RAW_FONT(fs(size), bold)
   const tall = document.createElement('canvas')
   tall.width = W
   tall.height = 600
@@ -557,7 +618,7 @@ export function renderTestPrintCanvas(businessName: string, deviceName: string):
 
   let y = 40
   const center = (text: string, size: number, bold = false, gap = 10) => {
-    ctx.font = FONT(size, bold)
+    ctx.font = F(size, bold)
     ctx.textAlign = 'center'
     ctx.fillText(text, W / 2, y)
     y += size + gap
@@ -583,6 +644,8 @@ export function renderTestPrintCanvas(businessName: string, deviceName: string):
     `${now.toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' })} ${now.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}`,
     24, false, 10
   )
+  // Диагностика настройки ленты: сверить с фактической бумагой в принтере
+  center(`רוחב נייר: ${tapeMm} מ"מ`, 24, false, 10)
   center('✓ OK', 30, true, 10)
 
   const out = document.createElement('canvas')
@@ -639,7 +702,9 @@ const TICKET_HE = {
  * колонкой, пунктир между позициями. БЕЗ цен и БЕЗ крупных «заказ/дозаказ»:
  * у дозаказа стола вместо номера строка-пометка обычным кеглем.
  */
-export function renderKitchenTicketCanvas(d: KitchenTicketData): HTMLCanvasElement {
+export function renderKitchenTicketCanvas(d: KitchenTicketData, tape?: TapeWidth): HTMLCanvasElement {
+  const { W, MX, RIGHT, fs } = tapeLayout(tape ?? currentTape())
+  const F = (size: number, bold = false) => RAW_FONT(fs(size), bold)
   const tall = document.createElement('canvas')
   tall.width = W
   // Считаем все рисуемые строки, чтобы длинный заказ не обрезался:
@@ -658,7 +723,7 @@ export function renderKitchenTicketCanvas(d: KitchenTicketData): HTMLCanvasEleme
 
   // Шапка: метка справа, значение слева — ровные края, как metaRow счёта
   const metaRow = (label: string, value: string) => {
-    ctx.font = FONT(26)
+    ctx.font = F(26)
     ctx.textAlign = 'right'
     ctx.fillText(`${label}:`, RIGHT, y)
     ctx.textAlign = 'left'
@@ -694,7 +759,7 @@ export function renderKitchenTicketCanvas(d: KitchenTicketData): HTMLCanvasEleme
 
   // Куда нести: стол или тип заказа, имя клиента, номер — умеренный жирный
   const subRow = (text: string) => {
-    ctx.font = FONT(30, true)
+    ctx.font = F(30, true)
     ctx.textAlign = 'right'
     ctx.fillText(text, RIGHT, y)
     y += 42
@@ -709,22 +774,22 @@ export function renderKitchenTicketCanvas(d: KitchenTicketData): HTMLCanvasEleme
   // ужимается под остаток ширины, чтобы колонки не наезжали друг на друга
   d.lines.forEach((l, i) => {
     if (i > 0) divider()
-    ctx.font = FONT(36, true)
+    ctx.font = F(36, true)
     ctx.textAlign = 'left'
     ctx.fillText(String(l.qty), MX, y)
     const qtyW = ctx.measureText(String(l.qty)).width
     const name = l.variantName ? `${l.name} ${l.variantName}` : l.name
     const maxW = RIGHT - MX - qtyW - 24
     let size = 36
-    ctx.font = FONT(size, true)
+    ctx.font = F(size, true)
     while (size > 24 && ctx.measureText(name).width > maxW) {
       size -= 2
-      ctx.font = FONT(size, true)
+      ctx.font = F(size, true)
     }
     ctx.textAlign = 'right'
     ctx.fillText(name, RIGHT, y)
     y += 48
-    ctx.font = FONT(28)
+    ctx.font = F(28)
     for (const m of l.modifiers) {
       ctx.fillText(m, RIGHT - 36, y)
       y += 36
@@ -750,18 +815,26 @@ export function renderKitchenTicketCanvas(d: KitchenTicketData): HTMLCanvasEleme
  * название, QR со ссылкой на страницу заказа, подпись. Клеится на стойку.
  * qr — уже отрисованный QR-canvas (библиотека qrcode), мы только компонуем.
  */
-export function renderQrFlyerCanvas(businessName: string, qr: HTMLCanvasElement, caption: string): HTMLCanvasElement {
-  const qrSize = 400
+export function renderQrFlyerCanvas(
+  businessName: string,
+  qr: HTMLCanvasElement,
+  caption: string,
+  tape?: TapeWidth
+): HTMLCanvasElement {
+  const { W, fs } = tapeLayout(tape ?? currentTape())
+  const F = (size: number, bold = false) => RAW_FONT(fs(size), bold)
+  // QR остаётся сканируемым и на узкой ленте — почти вся её ширина
+  const qrSize = W >= 576 ? 400 : W - 84
   const canvas = document.createElement('canvas')
   canvas.width = W
-  canvas.height = 620
+  canvas.height = qrSize + 220
   const ctx = canvas.getContext('2d')!
   ctx.fillStyle = '#fff'
   ctx.fillRect(0, 0, W, canvas.height)
   ctx.fillStyle = '#000'
 
   let y = 56
-  ctx.font = FONT(40, true)
+  ctx.font = F(40, true)
   ctx.textAlign = 'center'
   ctx.fillText(businessName, W / 2, y)
   y += 28
@@ -769,7 +842,7 @@ export function renderQrFlyerCanvas(businessName: string, qr: HTMLCanvasElement,
   ctx.drawImage(qr, (W - qrSize) / 2, y, qrSize, qrSize)
   y += qrSize + 52
 
-  ctx.font = FONT(30)
+  ctx.font = F(30)
   ctx.fillText(caption, W / 2, y)
   return canvas
 }
