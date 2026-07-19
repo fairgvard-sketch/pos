@@ -323,8 +323,11 @@ function Shell({ isRtl, title, logo, hero, headerImg, bgImg, onBack, backLabel, 
   return (
     <div dir={isRtl ? 'rtl' : 'ltr'} className="min-h-screen bg-[#eceef1]">
       {hasBg && (
-        // Фон не скроллится вместе с контентом; колонка та же max-w-lg
-        <div className="fixed inset-0 pointer-events-none" aria-hidden>
+        // Фон не скроллится вместе с контентом; колонка та же max-w-lg.
+        // Высота — 100lvh (большой вьюпорт): на iOS Safari fixed inset-0
+        // тянется лишь до нижней адресной строки, за ней просвечивал серый
+        // body. lvh уводит фото под панель; inset-0 — фолбэк для старых WebView.
+        <div className="fixed inset-x-0 top-0 h-screen [height:100lvh] pointer-events-none" aria-hidden>
           <div className="max-w-lg mx-auto h-full relative overflow-hidden">
             <img src={bgImg!} alt="" className="absolute inset-0 w-full h-full object-cover" />
             {/* Плотнее затемняем фон-фото витрины: на светлых участках плитки
