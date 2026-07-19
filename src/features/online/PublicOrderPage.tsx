@@ -640,7 +640,9 @@ function ItemConfigSheet({ item, lang, isRtl, onClose, onAdd }: {
         onClick={(e) => e.stopPropagation()}
       >
         {item.image_url && (
-          <img src={item.image_url} alt="" className="w-full h-44 object-cover shrink-0" />
+          // Фото целиком, без кропа: снимки каталога — студийные на белом,
+          // object-cover в низкой широкой шапке оставлял крупный обрезок
+          <img src={item.image_url} alt="" className="w-full h-52 object-contain bg-white pt-3 shrink-0" />
         )}
         <div className="px-6 pt-5 pb-3 flex items-start justify-between gap-3 shrink-0">
           <div className="min-w-0">
