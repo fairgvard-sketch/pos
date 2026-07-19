@@ -193,7 +193,24 @@ export default function PublicOrderPage() {
             })}
           </div>
           <div className="flex-1" />
-          <SocialFooter links={menu.location.links} lang={lang} padForCart={cartCount > 0} />
+          <SocialFooter links={menu.location.links} lang={lang} padForCart={false} />
+          {/* Корзина на начальном экране — иконкой в углу (end = левый в RTL),
+              вместо нижней панели; бейдж с числом позиций, тап → чекаут */}
+          {cartCount > 0 && (
+            <button
+              onClick={() => setView('checkout')}
+              aria-label={t(lang, 'pubShowItems')}
+              className="fixed top-4 end-4 z-30 w-12 h-12 rounded-full bg-gray-900 text-white ring-1 ring-white/30 flex items-center justify-center shadow-lg shadow-black/25 active:scale-[0.94] transition-all"
+            >
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M6 8h12l-1 11a2 2 0 0 1-2 1.8H9A2 2 0 0 1 7 19L6 8Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+                <path d="M9 8V6.5a3 3 0 0 1 6 0V8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+              </svg>
+              <span className="absolute -top-1 -end-1 min-w-5 h-5 px-1 rounded-full bg-white text-gray-900 text-xs font-bold flex items-center justify-center tabular-nums">
+                {cartCount}
+              </span>
+            </button>
+          )}
         </>
       )}
 
@@ -226,13 +243,15 @@ export default function PublicOrderPage() {
         )
       })()}
 
-      {view === 'menu' && (
+      {view === 'menu' && activeCat && (
         <>
           {cartCount > 0 && (
             // Панель прижата к низу колонки (max-w-lg, не на всю ширину экрана);
             // лёгкий градиент-подложка только под кнопкой, без сплошной белой
             // полосы поверх фона-фото. Сама кнопка — общий стиль CTA гостевых
-            // страниц (h-14 rounded-2xl, как чекаут и бронь)
+            // страниц (h-14 rounded-2xl, как чекаут и бронь).
+            // На начальном экране (без категории) панель не показываем —
+            // там корзина живёт иконкой в углу (см. hero-блок выше)
             <div className="fixed bottom-0 inset-x-0 pointer-events-none">
               <div className="max-w-lg mx-auto p-4 bg-gradient-to-t from-black/25 to-transparent">
               <button
@@ -321,7 +340,7 @@ function Shell({ isRtl, title, logo, hero, headerImg, bgImg, onBack, backLabel, 
 }) {
   const hasBg = !!(hero && bgImg)
   return (
-    <div dir={isRtl ? 'rtl' : 'ltr'} className="min-h-screen bg-[#eceef1]">
+    <div dir={isRtl ? 'rtl' : 'ltr'} className="min-h-screen bg-[#eceef1] overflow-x-clip overscroll-x-none">
       {hasBg && (
         // Фон не скроллится вместе с контентом; колонка та же max-w-lg.
         // Высота — 100lvh (большой вьюпорт): на iOS Safari fixed inset-0

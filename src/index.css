@@ -105,6 +105,9 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     margin: 0;
     background: #f8f9fb;
     color: #111827;
+    /* Гасим горизонтальный «отскок»/сдвиг страницы (iOS rubber-band).
+       Только ось X — вертикальный скролл и pull-to-refresh не трогаем. */
+    overscroll-behavior-x: none;
   }
 
   #root {
