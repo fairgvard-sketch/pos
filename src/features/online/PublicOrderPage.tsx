@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { t, formatTime, type Lang } from '../../lib/i18n'
@@ -203,19 +203,7 @@ export default function PublicOrderPage() {
         return (
           <>
             {/* Чипы быстрого перехода между категориями (возврат к плиткам — стрелка в шапке) */}
-            <nav className="sticky top-14 z-10 bg-white/95 backdrop-blur border-b border-gray-100 px-4 py-2 flex gap-2 overflow-x-auto">
-              {menu.categories.map((c) => (
-                <button
-                  key={c.id}
-                  onClick={() => setActiveCat(c.id)}
-                  className={`h-10 px-4 rounded-full text-sm font-semibold whitespace-nowrap transition-all active:scale-[0.96] shrink-0 ${
-                    c.id === activeCat ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600'
-                  }`}
-                >
-                  {c.name}
-                </button>
-              ))}
-            </nav>
+            <CategoryChips categories={menu.categories} activeCat={activeCat} onSelect={setActiveCat} />
             <div className="px-4 pb-32">
               <h2 className="text-lg font-bold text-gray-900 mt-5 mb-3">{cat.name}</h2>
               <div className="space-y-2">
@@ -419,6 +407,65 @@ function Shell({ isRtl, title, logo, hero, headerImg, bgImg, onBack, backLabel, 
  * теряют верх и низ — такие показываем целиком на белом фоне: фото меню
  * студийные, на белом, поэтому подложка сливается с фоном снимка.
  */
+/**
+ * Полоса чипов категорий. Скроллбар скрыт (на десктопе рисовал линию под
+ * чипами); вместо него прокрутка перетаскиванием самих чипов мышью —
+ * на тач-экранах и так работает свайп. Клик после протяжки гасится,
+ * чтобы drag не срабатывал как выбор категории. Активный чип сам
+ * подъезжает в видимую зону.
+ */
+function CategoryChips({ categories, activeCat, onSelect }: {
+  categories: PublicMenu['categories']
+  activeCat: string
+  onSelect: (id: string) => void
+}) {
+  const navRef = useRef<HTMLElement>(null)
+  const drag = useRef({ down: false, moved: false, startX: 0, startLeft: 0 })
+
+  useEffect(() => {
+    navRef.current?.querySelector<HTMLElement>('[data-active="true"]')
+      ?.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' })
+  }, [activeCat])
+
+  return (
+    <nav
+      ref={navRef}
+      className="sticky top-14 z-10 bg-white/95 backdrop-blur border-b border-gray-100 px-4 py-2 flex gap-2 overflow-x-auto select-none [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      onMouseDown={(e) => {
+        drag.current = { down: true, moved: false, startX: e.clientX, startLeft: navRef.current?.scrollLeft ?? 0 }
+      }}
+      onMouseMove={(e) => {
+        if (!drag.current.down || !navRef.current) return
+        const dx = e.clientX - drag.current.startX
+        if (Math.abs(dx) > 4) drag.current.moved = true
+        navRef.current.scrollLeft = drag.current.startLeft - dx
+      }}
+      onMouseUp={() => { drag.current.down = false }}
+      onMouseLeave={() => { drag.current.down = false }}
+      onClickCapture={(e) => {
+        if (drag.current.moved) {
+          e.preventDefault()
+          e.stopPropagation()
+          drag.current.moved = false
+        }
+      }}
+    >
+      {categories.map((c) => (
+        <button
+          key={c.id}
+          data-active={c.id === activeCat || undefined}
+          onClick={() => onSelect(c.id)}
+          className={`h-10 px-4 rounded-full text-sm font-semibold whitespace-nowrap transition-all active:scale-[0.96] shrink-0 ${
+            c.id === activeCat ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600'
+          }`}
+        >
+          {c.name}
+        </button>
+      ))}
+    </nav>
+  )
+}
+
 function CategoryCover({ src }: { src: string }) {
   const [contain, setContain] = useState(false)
   return (
