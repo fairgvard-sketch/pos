@@ -362,7 +362,11 @@ function Shell({ isRtl, title, logo, hero, headerImg, bgImg, onBack, backLabel, 
 }) {
   const hasBg = !!(hero && bgImg)
   return (
-    <div dir={isRtl ? 'rtl' : 'ltr'} className="min-h-screen bg-[#eceef1] overflow-x-clip overscroll-x-none">
+    // ВАЖНО: не вешать на корень overflow-x-clip — на iOS Safari clip на
+    // предке ломает position:fixed у потомков (иконка корзины и нижняя
+    // панель начинают скроллиться со страницей). Горизонтальный сдвиг
+    // гасится на html/body в index.css.
+    <div dir={isRtl ? 'rtl' : 'ltr'} className="min-h-screen bg-[#eceef1]">
       {hasBg && (
         // Фон не скроллится вместе с контентом; колонка та же max-w-lg.
         // Высота — 100lvh (большой вьюпорт): на iOS Safari fixed inset-0

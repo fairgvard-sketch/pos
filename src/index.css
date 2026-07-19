@@ -99,6 +99,11 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     font-family: 'Inter', system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    /* Запрет горизонтального скролла страницы. Именно на html: overflow
+       пропагируется на viewport и НЕ ломает position:fixed — в отличие от
+       overflow-x-clip на контейнере, который на iOS Safari отвязывал
+       fixed-элементы от экрана (иконка корзины, нижняя панель). */
+    overflow-x: hidden;
   }
 
   body {
