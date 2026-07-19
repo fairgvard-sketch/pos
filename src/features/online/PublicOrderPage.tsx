@@ -639,20 +639,27 @@ function ItemConfigSheet({ item, lang, isRtl, onClose, onAdd }: {
   return (
     <div dir={isRtl ? 'rtl' : 'ltr'} className="fixed inset-0 z-20 flex items-end justify-center bg-black/40" onClick={onClose}>
       <div
-        className="w-full max-w-lg bg-white rounded-t-3xl max-h-[85vh] flex flex-col overflow-hidden"
+        className="relative w-full max-w-lg bg-white rounded-t-3xl max-h-[85vh] flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
+        {/* Крестик — плавающей кнопкой в верхнем углу карточки (над фото).
+            start в RTL — правый край: закрытие под большим пальцем, не спорит
+            с заголовком; фон полупрозрачный, читаем и на фото, и на белом */}
+        <button
+          onClick={onClose}
+          aria-label={t(lang, 'close')}
+          className="absolute top-3 start-3 z-10 w-10 h-10 rounded-full bg-black/10 text-gray-700 font-bold flex items-center justify-center active:scale-[0.94] transition-all"
+        >
+          ✕
+        </button>
         {item.image_url && (
           // Фото целиком, без кропа: снимки каталога — студийные на белом,
           // object-cover в низкой широкой шапке оставлял крупный обрезок
           <img src={item.image_url} alt="" className="w-full h-52 object-contain bg-white pt-3 shrink-0" />
         )}
-        <div className="px-6 pt-5 pb-3 flex items-start justify-between gap-3 shrink-0">
-          <div className="min-w-0">
-            <h3 className="text-lg font-bold text-gray-900">{item.name}</h3>
-            {item.description && <p className="text-sm text-gray-500 mt-1 leading-snug">{item.description}</p>}
-          </div>
-          <button onClick={onClose} className="w-9 h-9 rounded-xl bg-gray-100 text-gray-500 font-bold active:scale-[0.94] transition-all">✕</button>
+        <div className="px-6 pt-5 pb-3 shrink-0">
+          <h3 className="text-lg font-bold text-gray-900">{item.name}</h3>
+          {item.description && <p className="text-sm text-gray-500 mt-1 leading-snug">{item.description}</p>}
         </div>
 
         <div className="px-6 overflow-y-auto space-y-5 pb-4">
