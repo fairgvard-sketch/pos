@@ -80,6 +80,26 @@ export default function PublicOrderPage() {
   const cartCount = cart.reduce((s, l) => s + l.qty, 0)
   const cartTotal = cart.reduce((s, l) => s + l.unitPrice * l.qty, 0)
 
+  // Пульс кнопки корзины при добавлении товара: key={bumpSeq} перезапускает
+  // CSS-анимацию на каждом добавлении. bumping гаснет по таймауту (не по
+  // animationend: в скрытой вкладке событие не приходит, класс бы «застрял»
+  // и пульс проигрывался при каждом remount экрана)
+  const [bumpSeq, setBumpSeq] = useState(0)
+  const [bumping, setBumping] = useState(false)
+  const prevCount = useRef(0)
+  useEffect(() => {
+    if (cartCount > prevCount.current) {
+      setBumpSeq((s) => s + 1)
+      setBumping(true)
+    }
+    prevCount.current = cartCount
+  }, [cartCount])
+  useEffect(() => {
+    if (!bumping) return
+    const timer = setTimeout(() => setBumping(false), 400) // анимация 0.28s + запас
+    return () => clearTimeout(timer)
+  }, [bumping, bumpSeq])
+
   function addLine(line: Omit<CartLine, 'key' | 'qty'>) {
     setCart((prev) => {
       const same = prev.find(
@@ -198,9 +218,10 @@ export default function PublicOrderPage() {
               вместо нижней панели; бейдж с числом позиций, тап → чекаут */}
           {cartCount > 0 && (
             <button
+              key={bumpSeq}
               onClick={() => setView('checkout')}
               aria-label={t(lang, 'pubShowItems')}
-              className="fixed top-4 end-4 z-30 w-12 h-12 rounded-full bg-gray-900 text-white ring-1 ring-white/30 flex items-center justify-center shadow-lg shadow-black/25 active:scale-[0.94] transition-all"
+              className={`fixed top-4 end-4 z-30 w-12 h-12 rounded-full bg-gray-900 text-white ring-1 ring-white/30 flex items-center justify-center shadow-lg shadow-black/25 active:scale-[0.94] transition-all ${bumping ? 'cart-bump' : ''}`}
             >
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <path d="M6 8h12l-1 11a2 2 0 0 1-2 1.8H9A2 2 0 0 1 7 19L6 8Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
@@ -255,8 +276,9 @@ export default function PublicOrderPage() {
             <div className="fixed bottom-0 inset-x-0 pointer-events-none">
               <div className="max-w-lg mx-auto p-4 bg-gradient-to-t from-black/25 to-transparent">
               <button
+                key={bumpSeq}
                 onClick={() => setView('checkout')}
-                className="pointer-events-auto w-full h-14 rounded-2xl bg-gray-900 text-white ps-2 pe-5 flex items-center gap-3 active:scale-[0.98] transition-all shadow-lg shadow-black/15"
+                className={`pointer-events-auto w-full h-14 rounded-2xl bg-gray-900 text-white ps-2 pe-5 flex items-center gap-3 active:scale-[0.98] transition-all shadow-lg shadow-black/15 ${bumping ? 'cart-bump' : ''}`}
               >
                 <span className="w-10 h-10 shrink-0 rounded-xl bg-white text-gray-900 font-bold flex items-center justify-center tabular-nums">
                   {cartCount}
