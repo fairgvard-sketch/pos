@@ -243,12 +243,16 @@ export default function PublicOrderPage() {
                   {cartCount}
                 </span>
                 <span className="font-bold">{t(lang, 'pubShowItems')}</span>
-                {/* Сумма к краю (на RTL — левому); знак ₪ слева от числа */}
-                <span className="ms-auto font-bold text-lg tabular-nums" dir="ltr">
-                  ₪{(cartTotal / 100).toLocaleString('he-IL', {
-                    minimumFractionDigits: cartTotal % 100 === 0 ? 0 : 2,
-                    maximumFractionDigits: 2,
-                  })}
+                {/* Сумма к краю (на RTL — левому). dir="ltr" (знак ₪ слева от
+                    числа) — на внутреннем span: на одном элементе с ms-auto он
+                    разворачивал логический отступ, и сумма липла к тексту */}
+                <span className="ms-auto font-bold text-lg tabular-nums">
+                  <span dir="ltr">
+                    ₪{(cartTotal / 100).toLocaleString('he-IL', {
+                      minimumFractionDigits: cartTotal % 100 === 0 ? 0 : 2,
+                      maximumFractionDigits: 2,
+                    })}
+                  </span>
                 </span>
               </button>
               </div>
