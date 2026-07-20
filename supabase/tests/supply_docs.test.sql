@@ -64,9 +64,17 @@ SELECT set_config(
   true
 );
 
+-- Строгий режим (090): привилегированные RPC требуют staff-сессию
+INSERT INTO staff_sessions (token, staff_id, org_id, location_id)
+VALUES ('41f00000-0000-4000-8000-000000000001',
+        '41200000-0000-4000-8000-000000000001',
+        '41000000-0000-4000-8000-000000000001',
+        '41100000-0000-4000-8000-000000000001');
+
 -- ── Поставщик через RPC ──────────────────────────────────────
 CREATE TEMP TABLE sup AS
-SELECT ((upsert_supplier(NULL, 'Тнува', '0501234567')) ->> 'id')::UUID AS id;
+SELECT ((upsert_supplier(NULL, 'Тнува', '0501234567', NULL,
+                         '41f00000-0000-4000-8000-000000000001')) ->> 'id')::UUID AS id;
 
 SELECT is((SELECT count(*) FROM suppliers WHERE name = 'Тнува'),
   1::bigint, 'upsert_supplier создаёт поставщика');
@@ -79,7 +87,7 @@ SELECT receive_stock(
   '[{"kind":"supply","supply_item_id":"41600000-0000-4000-8000-000000000001","qty":6000,"unit_cost":800},
     {"kind":"supply","supply_item_id":"41600000-0000-4000-8000-000000000002","qty":100,"unit_cost":60},
     {"kind":"supply","supply_item_id":"41600000-0000-4000-8000-000000000003","qty":25000,"unit_cost":320}]'::jsonb,
-  NULL, NULL,
+  NULL, '41f00000-0000-4000-8000-000000000001',
   (SELECT id FROM sup), 'INV-77',
   '41d00000-0000-4000-8000-000000000001'
 ) AS r;
@@ -112,7 +120,7 @@ SELECT receive_stock(
   '[{"kind":"supply","supply_item_id":"41600000-0000-4000-8000-000000000001","qty":6000,"unit_cost":800},
     {"kind":"supply","supply_item_id":"41600000-0000-4000-8000-000000000002","qty":100,"unit_cost":60},
     {"kind":"supply","supply_item_id":"41600000-0000-4000-8000-000000000003","qty":25000,"unit_cost":320}]'::jsonb,
-  NULL, NULL,
+  NULL, '41f00000-0000-4000-8000-000000000001',
   (SELECT id FROM sup), 'INV-77',
   '41d00000-0000-4000-8000-000000000001'
 ) AS r;
@@ -130,7 +138,8 @@ SELECT is(
 CREATE TEMP TABLE recv2 AS
 SELECT receive_stock(
   '41200000-0000-4000-8000-000000000001',
-  '[{"kind":"supply","supply_item_id":"41600000-0000-4000-8000-000000000002","qty":10,"unit_cost":100,"update_cost":true}]'::jsonb
+  '[{"kind":"supply","supply_item_id":"41600000-0000-4000-8000-000000000002","qty":10,"unit_cost":100,"update_cost":true}]'::jsonb,
+  NULL, '41f00000-0000-4000-8000-000000000001'
 ) AS r;
 
 SELECT is((SELECT cost FROM supply_items WHERE id = '41600000-0000-4000-8000-000000000002'),
@@ -166,7 +175,8 @@ SELECT is(
 CREATE TEMP TABLE count1 AS
 SELECT stock_take(
   '41200000-0000-4000-8000-000000000001',
-  '[{"kind":"supply","supply_item_id":"41600000-0000-4000-8000-000000000001","counted":9000}]'::jsonb
+  '[{"kind":"supply","supply_item_id":"41600000-0000-4000-8000-000000000001","counted":9000}]'::jsonb,
+  NULL, '41f00000-0000-4000-8000-000000000001'
 ) AS r;
 
 SELECT is(
@@ -177,7 +187,8 @@ SELECT is(
 CREATE TEMP TABLE waste1 AS
 SELECT add_waste(
   '41200000-0000-4000-8000-000000000001',
-  '[{"kind":"supply","supply_item_id":"41600000-0000-4000-8000-000000000001","qty":500,"reason":"прокисло"}]'::jsonb
+  '[{"kind":"supply","supply_item_id":"41600000-0000-4000-8000-000000000001","qty":500,"reason":"прокисло"}]'::jsonb,
+  '41f00000-0000-4000-8000-000000000001'
 ) AS r;
 
 SELECT is(
@@ -229,7 +240,7 @@ SELECT throws_ok(
   $$ SELECT receive_stock(
        '41200000-0000-4000-8000-000000000001',
        '[{"kind":"supply","supply_item_id":"41600000-0000-4000-8000-000000000001","qty":100,"unit_cost":700}]'::jsonb,
-       NULL, NULL, '41e00000-0000-4000-8000-000000000001') $$,
+       NULL, '41f00000-0000-4000-8000-000000000001', '41e00000-0000-4000-8000-000000000001') $$,
   'supplier not found', 'приход с поставщиком чужой org отклонён');
 
 SELECT * FROM finish();

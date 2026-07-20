@@ -19,6 +19,13 @@ VALUES ('42200000-0000-4000-8000-000000000001',
         '42100000-0000-4000-8000-000000000001',
         'pgTAP owner', 'owner', 'unused-in-test');
 
+-- Строгий режим (090): привилегированные RPC требуют staff-сессию
+INSERT INTO staff_sessions (token, staff_id, org_id, location_id)
+VALUES ('42d00000-0000-4000-8000-000000000001',
+        '42200000-0000-4000-8000-000000000001',
+        '42000000-0000-4000-8000-000000000001',
+        '42100000-0000-4000-8000-000000000001');
+
 INSERT INTO supply_items (id, org_id, location_id, name, unit, stock, cost) VALUES
   ('42600000-0000-4000-8000-000000000001',
    '42000000-0000-4000-8000-000000000001',
@@ -34,7 +41,8 @@ SELECT set_config(
 CREATE TEMP TABLE recv AS
 SELECT receive_stock(
   '42200000-0000-4000-8000-000000000001',
-  '[{"kind":"supply","supply_item_id":"42600000-0000-4000-8000-000000000001","qty":1000,"unit_cost":800}]'::jsonb
+  '[{"kind":"supply","supply_item_id":"42600000-0000-4000-8000-000000000001","qty":1000,"unit_cost":800}]'::jsonb,
+  NULL, '42d00000-0000-4000-8000-000000000001'
 ) AS r;
 
 UPDATE stock_movements SET created_at = NOW() - INTERVAL '2 days'
@@ -45,13 +53,15 @@ WHERE location_id = '42100000-0000-4000-8000-000000000001';
 CREATE TEMP TABLE waste AS
 SELECT add_waste(
   '42200000-0000-4000-8000-000000000001',
-  '[{"kind":"supply","supply_item_id":"42600000-0000-4000-8000-000000000001","qty":200,"reason":"пролили"}]'::jsonb
+  '[{"kind":"supply","supply_item_id":"42600000-0000-4000-8000-000000000001","qty":200,"reason":"пролили"}]'::jsonb,
+  '42d00000-0000-4000-8000-000000000001'
 ) AS r;
 
 CREATE TEMP TABLE cnt AS
 SELECT stock_take(
   '42200000-0000-4000-8000-000000000001',
-  '[{"kind":"supply","supply_item_id":"42600000-0000-4000-8000-000000000001","counted":700}]'::jsonb
+  '[{"kind":"supply","supply_item_id":"42600000-0000-4000-8000-000000000001","counted":700}]'::jsonb,
+  NULL, '42d00000-0000-4000-8000-000000000001'
 ) AS r;
 
 -- ── Период «сегодня»: приход за бортом, opening — якорь ──────

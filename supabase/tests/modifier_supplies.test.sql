@@ -140,11 +140,18 @@ SELECT set_config(
   true
 );
 
+-- Строгий режим (090): привилегированные RPC требуют staff-сессию
+INSERT INTO staff_sessions (token, staff_id, org_id, location_id)
+VALUES ('40d00000-0000-4000-8000-000000000001',
+        '40200000-0000-4000-8000-000000000001',
+        '40000000-0000-4000-8000-000000000001',
+        '40100000-0000-4000-8000-000000000001');
+
 CREATE TEMP TABLE recv_flour AS
 SELECT receive_stock(
   '40200000-0000-4000-8000-000000000001',
   '[{"kind":"supply","supply_item_id":"40600000-0000-4000-8000-000000000004","qty":25000}]'::jsonb,
-  'мешок 25 кг'
+  'мешок 25 кг', '40d00000-0000-4000-8000-000000000001'
 ) AS r;
 
 SELECT is((SELECT stock FROM supply_items WHERE id = '40600000-0000-4000-8000-000000000004'),
@@ -153,13 +160,15 @@ SELECT is((SELECT stock FROM supply_items WHERE id = '40600000-0000-4000-8000-00
 SELECT throws_ok(
   $$ SELECT receive_stock(
        '40200000-0000-4000-8000-000000000001',
-       '[{"kind":"menu","menu_item_id":"40400000-0000-4000-8000-000000000001","qty":25000}]'::jsonb) $$,
+       '[{"kind":"menu","menu_item_id":"40400000-0000-4000-8000-000000000001","qty":25000}]'::jsonb,
+       NULL, '40d00000-0000-4000-8000-000000000001') $$,
   'invalid qty', 'receive: лимит товаров меню прежний (9999)');
 
 CREATE TEMP TABLE count_flour AS
 SELECT stock_take(
   '40200000-0000-4000-8000-000000000001',
-  '[{"kind":"supply","supply_item_id":"40600000-0000-4000-8000-000000000004","counted":150000}]'::jsonb
+  '[{"kind":"supply","supply_item_id":"40600000-0000-4000-8000-000000000004","counted":150000}]'::jsonb,
+  NULL, '40d00000-0000-4000-8000-000000000001'
 ) AS r;
 
 SELECT is((SELECT stock FROM supply_items WHERE id = '40600000-0000-4000-8000-000000000004'),

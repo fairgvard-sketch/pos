@@ -155,6 +155,13 @@ SELECT set_config(
   true
 );
 
+-- Строгий режим (090): save_menu_item требует staff-сессию
+INSERT INTO staff_sessions (token, staff_id, org_id, location_id)
+VALUES ('30d00000-0000-4000-8000-000000000001',
+        '30200000-0000-4000-8000-000000000001',
+        '30000000-0000-4000-8000-000000000001',
+        '30100000-0000-4000-8000-000000000001');
+
 CREATE TEMP TABLE saved_item AS
 SELECT save_menu_item(
   jsonb_build_object('category_id', '30300000-0000-4000-8000-000000000001',
@@ -162,7 +169,7 @@ SELECT save_menu_item(
   '[{"name":"Большой","price":1700,"is_default":true},{"name":"Маленький","price":1500}]'::jsonb,
   '[]'::jsonb,
   NULL,
-  NULL,
+  '30d00000-0000-4000-8000-000000000001',
   '[{"variant_index":0,"supply_item_id":"30600000-0000-4000-8000-000000000001","qty":1},
     {"variant_index":null,"supply_item_id":"30600000-0000-4000-8000-000000000004","qty":2,"takeaway_only":false}]'::jsonb
 ) AS id;
@@ -185,7 +192,7 @@ SELECT save_menu_item(
   '[{"name":"Большой","price":1800,"is_default":true},{"name":"Маленький","price":1500}]'::jsonb,
   '[]'::jsonb,
   (SELECT id FROM saved_item),
-  NULL
+  '30d00000-0000-4000-8000-000000000001'
 ) AS id;
 
 SELECT is(
@@ -205,7 +212,7 @@ SELECT save_menu_item(
   '[{"name":"Большой","price":1800,"is_default":true}]'::jsonb,
   '[]'::jsonb,
   (SELECT id FROM saved_item),
-  NULL,
+  '30d00000-0000-4000-8000-000000000001',
   '[]'::jsonb
 ) AS id;
 
