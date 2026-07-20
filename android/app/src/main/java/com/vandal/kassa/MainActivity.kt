@@ -46,6 +46,16 @@ class MainActivity : Activity() {
     @Volatile
     private var printer: SunmiPrinterService? = null
 
+    /**
+     * Текущий URL WebView, обновляется только на UI-потоке (doUpdateVisitedHistory).
+     * Методы моста читают ЕГО, а не webView.url: обращение к WebView из
+     * JavaBridge-потока при занятом UI-потоке кидает RuntimeException
+     * («Probable deadlock detected») — инцидент 20.07: падали печать,
+     * настройки и обработчик закрытия смены.
+     */
+    @Volatile
+    private var currentUrl: String = ""
+
     /** Точный origin, которому доверяем (схема+хост, без пути) */
     private val allowedOrigin: Uri by lazy { Uri.parse(getString(R.string.app_url)) }
 
@@ -67,7 +77,7 @@ class MainActivity : Activity() {
     }
 
     /** Мы сейчас на доверенной странице? Мост работает только там. */
-    private fun onAllowedPage(): Boolean = isAllowedOrigin(Uri.parse(webView.url ?: ""))
+    private fun onAllowedPage(): Boolean = isAllowedOrigin(Uri.parse(currentUrl))
 
     /** Экранировать строку для безопасной вставки в JS-литерал */
     private fun jsString(s: String): String = JSONObject.quote(s)
@@ -302,6 +312,17 @@ class MainActivity : Activity() {
                 override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                     val uri = request.url
                     return handleUrl(uri)
+                }
+
+                // Оба колбэка приходят на UI-потоке. onPageStarted покрывает
+                // начало полной загрузки, doUpdateVisitedHistory — SPA-переходы
+                // через History API (pushState) и redirect-ы.
+                override fun onPageStarted(view: WebView, url: String, favicon: android.graphics.Bitmap?) {
+                    currentUrl = url
+                }
+
+                override fun doUpdateVisitedHistory(view: WebView, url: String, isReload: Boolean) {
+                    currentUrl = url
                 }
             }
             webChromeClient = object : WebChromeClient() {

@@ -15,6 +15,7 @@ import {
   installPrintResultReceiver,
   type PrintOutcome,
 } from './printJobs'
+import { bridgeAvailable } from './androidBridge'
 
 /** ESC/POS байты картинки в base64 — для моста APK (KassaAndroid) и RawBT */
 export function canvasToEscposBase64(canvas: HTMLCanvasElement): string {
@@ -34,7 +35,7 @@ export function canvasToRawbtUrl(canvas: HTMLCanvasElement): string {
 
 /** Есть тихий путь, который не откроет системный browser print dialog. */
 export function hasSilentPrintPath(allowRawbt: boolean): boolean {
-  return !!window.KassaAndroid?.isAvailable() || allowRawbt
+  return bridgeAvailable() || allowRawbt
 }
 
 /**
@@ -48,7 +49,7 @@ export async function printCanvasWithResult(
   allowRawbt: boolean,
 ): Promise<PrintOutcome> {
   const bridge = window.KassaAndroid
-  if (bridge?.isAvailable()) {
+  if (bridge && bridgeAvailable()) {
     const jobId = newPrintJobId()
     // Promise регистрируем ДО синхронного JavascriptInterface-вызова: одного
     // receiver недостаточно — быстрый callback должен уже найти jobId в Map.

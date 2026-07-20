@@ -7,6 +7,7 @@ import { useLangStore, RUSSIAN_UI_ENABLED } from '../../../store/langStore'
 import { useDeviceStore } from '../../../store/deviceStore'
 import { renderTestPrintCanvas } from '../../receipt/printCanvas'
 import { hasSilentPrintPath } from '../../../lib/escpos'
+import { bridgeAvailable } from '../../../lib/androidBridge'
 import { orientationSupport } from '../../../lib/orientation'
 import { printCanvasWithRetry } from '../../receipt/printFailure'
 import { syncDeviceNow, useDeviceSyncStore } from '../../../lib/deviceSync'
@@ -77,7 +78,7 @@ export default function DeviceSection({ location }: { location: Location | undef
   const [pendingOnConfirm, setPendingOnConfirm] = useState(0)
 
   const engine = chromeMajor()
-  const bridgeReady = typeof window !== 'undefined' && !!window.KassaAndroid?.isAvailable()
+  const bridgeReady = bridgeAvailable()
   const printStatus = bridgeReady
     ? t(lang, 'printBridgeApk')
     : printMode === 'rawbt'

@@ -8,6 +8,7 @@ import { checkSchemaVersion, MIN_SCHEMA_VERSION } from '../../lib/schemaVersion'
 import { goLiveConfirmed, goLiveGaps, GAP_LABELS } from './checks'
 import { useLocationSettings } from '../settings/useLocationSettings'
 import { hasSilentPrintPath } from '../../lib/escpos'
+import { bridgeAvailable } from '../../lib/androidBridge'
 import { renderTestPrintCanvas } from '../receipt/printCanvas'
 import { printCanvasWithRetry } from '../receipt/printFailure'
 import { useAuthStore } from '../../store/authStore'
@@ -97,7 +98,7 @@ export default function GoLivePage() {
   // Пока location/каталог не приехали — кнопка неактивна (решение по фактам)
   const canConfirm = !!location && itemsCount !== null && gaps.length === 0 && !confirmed
 
-  const bridgePresent = typeof window.KassaAndroid?.isAvailable === 'function' && window.KassaAndroid.isAvailable()
+  const bridgePresent = bridgeAvailable()
   const printStatus: RowStatus = bridgePresent ? 'ok' : printMode === 'rawbt' ? 'warn' : 'warn'
   const printValue = bridgePresent
     ? t(lang, 'goLivePrintBridge')

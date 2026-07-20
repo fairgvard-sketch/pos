@@ -57,6 +57,25 @@ Android Binder. Все chunks попадают в transaction buffer; насто
 - финальный статус задания отправляется один раз: реальный
   `onPrintResult`/`onRaiseException` выигрывает у отложенного подтверждения.
 
+## Потоки моста и устойчивость вызовов (APK 1.5)
+
+Методы `@JavascriptInterface` выполняются в потоке JavaBridge, не в UI-потоке.
+Обращение к WebView из этого потока (например, `webView.url`) при занятом
+UI-потоке кидает `RuntimeException` («Probable deadlock detected…»), которое
+прилетает в JS как «Java exception was raised during method invocation» —
+инцидент 20.07.2026: падали печать чеков, рендер настроек и обработчик
+закрытия смены. Правила:
+
+- в APK текущий URL кэшируется в volatile-поле из UI-потока
+  (`onPageStarted`/`doUpdateVisitedHistory`); `onAllowedPage()` читает кэш и
+  не трогает WebView. Новые методы моста не должны обращаться к WebView
+  напрямую — только через `runOnUiThread` (fire-and-forget) или volatile-кэш;
+- в web-части голые вызовы `KassaAndroid.isAvailable()`/`bridgeVersion()`
+  запрещены: только обёртки `bridgeAvailable()`/`bridgeVersion()` из
+  `src/lib/androidBridge.ts` — они переживают исключение моста (деградация в
+  «принтера нет») и сигналят в телеметрию через `kassa:client-error`.
+  Исключение — `printBase64` внутри существующего try/catch `escpos.ts`.
+
 ## Ориентация интерфейса (мост v3, APK 1.4)
 
 Настройка «Ориентация» (Настройки → Устройство) применяется модулем

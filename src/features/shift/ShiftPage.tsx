@@ -134,19 +134,33 @@ export default function ShiftPage() {
       setZData(z)
       setClosing(false)
       setConfirmOpen(false)
+      // Кэш смены обновляем ДО попытки печати: сбой печати не должен
+      // оставить в кэше «открытую» смену (инцидент 20.07 — вечный
+      // «shift already closed» при повторном закрытии)
+      qc.invalidateQueries({ queryKey: ['current_shift'] })
+      qc.invalidateQueries({ queryKey: ['timesheet'] })
       // דו"ח Z печатается при закрытии автоматически (тихие пути:
       // мост APK / RawBT); в браузерном режиме — кнопкой на экране итога
       const allowRawbt = printMode === 'rawbt'
       if (hasSilentPrintPath(allowRawbt)) {
         void printCanvasWithRetry(() => renderZReportCanvas(z, location), allowRawbt)
       }
-      qc.invalidateQueries({ queryKey: ['current_shift'] })
-      qc.invalidateQueries({ queryKey: ['timesheet'] })
     },
-    onError: (e) =>
+    onError: (e) => {
+      // Смена уже закрыта на сервере (другое устройство или потерянный ответ
+      // прошлой попытки): деньги посчитаны, Z-отчёт есть — не тупик, а
+      // устаревший экран. Обновляем состояние и говорим честно.
+      if (e.message.includes('shift already closed') || e.message.includes('shift not found')) {
+        setClosing(false)
+        setConfirmOpen(false)
+        qc.invalidateQueries({ queryKey: ['current_shift'] })
+        toast.error(t(lang, 'shiftAlreadyClosedToast'))
+        return
+      }
       toast.error(
         e.message.includes('open orders') ? t(lang, 'closeShiftOpenOrders') : e.message
-      ),
+      )
+    },
   })
 
   // Нажали «Закрыть смену» в форме → открываем диалог (сам подтянет табель)
@@ -391,7 +405,9 @@ export default function ShiftPage() {
           </div>
         )}
 
-        {!closing ? (
+        {/* Блок закрытия — только при открытой смене: после рефетча
+            current_shift → null кнопка для несуществующей смены не рисуется */}
+        {shift && (!closing ? (
           <button
             onClick={() => {
               if (!canCloseShift) { toast.error(t(lang, 'permManagerToast')); return }
@@ -436,7 +452,7 @@ export default function ShiftPage() {
               <button onClick={() => setClosing(false)} className="btn-secondary">{t(lang, 'cancel')}</button>
             </div>
           </div>
-        )}
+        ))}
       </div>
 
       {confirmOpen && (

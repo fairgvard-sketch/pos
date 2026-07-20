@@ -2,6 +2,7 @@ import { supabase } from './supabase'
 import { deviceUuid } from './deviceSync'
 import { isOnline, useNetStore } from './offline/net'
 import { useOutboxStore, pendingOpsCount, hasFailedOps } from './offline/outboxStore'
+import { bridgeVersion } from './androidBridge'
 
 /**
  * Телеметрия парка (074): журнал клиентских ошибок + heartbeat устройства.
@@ -162,11 +163,10 @@ export async function sendHeartbeat(): Promise<void> {
     if (!session) return
 
     const outbox = useOutboxStore.getState()
-    const bridge = window.KassaAndroid
     await supabase.rpc('device_heartbeat', {
       p_device_uuid: deviceUuid(),
       p_app_version: __APP_VERSION__,
-      p_bridge_version: bridge ? (bridge.bridgeVersion?.() ?? 1) : null,
+      p_bridge_version: bridgeVersion(),
       p_outbox_pending: pendingOpsCount(outbox),
       p_outbox_oldest: outbox.ops[0]?.createdAt ?? null,
       p_outbox_failed: hasFailedOps(outbox),
