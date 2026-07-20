@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { fetchQueue, subscribeQueue, markItemReady, markOrderReady, type QueueOrder, type QueueItem } from './api'
+import { fetchQueue, subscribeQueue, markItemReady, markOrderReady, setOrderUrgent, type QueueOrder, type QueueItem } from './api'
+import { sortQueueOrders, sortItemsByStation } from './sorting'
 import { fetchStations } from '../menu/api'
 import { useLangStore } from '../../store/langStore'
 import { t, orderTypeLabel, formatTime } from '../../lib/i18n'
 import { playNewOrderChime } from '../../lib/sound'
 import { useOutboxStore } from '../../lib/offline/outboxStore'
 import { useNetStore } from '../../lib/offline/net'
-import { enqueueItemReady, enqueueOrderReady } from '../../lib/offline/enqueue'
+import { enqueueItemReady, enqueueOrderReady, enqueueSetUrgent } from '../../lib/offline/enqueue'
 import AppSidebar from '../../components/AppSidebar'
 
 const STATION_KEY = 'kassa-queue-station'
@@ -27,6 +28,9 @@ const THEMES = {
     emptyTitle: 'text-white',
     card: 'bg-[#26292e] border-white/10',
     cardBorder: 'border-white/10',
+    cardUrgent: 'bg-[#26292e] border-red-500/70',
+    cardUrgentBorder: 'border-red-500/40',
+    urgentBtnIdle: 'bg-white/5 text-gray-500 hover:bg-white/10',
     number: 'text-white',
     customer: 'text-gray-200',
     allReadyBtn: 'bg-white text-gray-900 hover:bg-gray-100',
@@ -49,6 +53,9 @@ const THEMES = {
     emptyTitle: 'text-gray-900',
     card: 'bg-white border-gray-100',
     cardBorder: 'border-gray-100',
+    cardUrgent: 'bg-white border-red-400',
+    cardUrgentBorder: 'border-red-200',
+    urgentBtnIdle: 'bg-gray-50 text-gray-400 hover:bg-gray-100',
     number: 'text-gray-900',
     customer: 'text-gray-700',
     allReadyBtn: 'bg-gray-900 text-white hover:bg-gray-800',
@@ -97,6 +104,7 @@ export default function QueuePage() {
         status: 'paid',
         paid_at: lo.createdAt,
         created_at: lo.createdAt,
+        is_urgent: false,
         isLocal: true,
         order_items: lo.lines.map((l) => ({
           id: l.key,
@@ -109,7 +117,8 @@ export default function QueuePage() {
           order_item_modifiers: l.mods.map((m) => ({ name: m.name })),
         })),
       }))
-    return [...serverOrders, ...echo].sort((a, b) => a.created_at.localeCompare(b.created_at))
+    // Срочные первыми (087), внутри групп — прежний FIFO
+    return sortQueueOrders([...serverOrders, ...echo])
   }, [serverOrders, localOrders])
 
   // Выбранная станция запоминается на устройстве
@@ -163,6 +172,25 @@ export default function QueuePage() {
     onSettled: () => qc.invalidateQueries({ queryKey: ['queue'] }),
   })
 
+  // Срочность (087): оптимистично переставляем карточку сразу — sortQueueOrders
+  // пересчитается из кэша; при ошибке возвращаем снапшот
+  const urgentMut = useMutation<void, Error, { orderId: string; urgent: boolean }, { prev: QueueOrder[] | undefined }>({
+    mutationFn: ({ orderId, urgent }) => setOrderUrgent(orderId, urgent),
+    onMutate: async ({ orderId, urgent }) => {
+      await qc.cancelQueries({ queryKey: ['queue'] })
+      const prev = qc.getQueryData<QueueOrder[]>(['queue'])
+      qc.setQueryData<QueueOrder[]>(['queue'], (old) =>
+        old?.map((o) => (o.id === orderId ? { ...o, is_urgent: urgent } : o))
+      )
+      return { prev }
+    },
+    onError: (e, _vars, ctx) => {
+      if (ctx?.prev) qc.setQueryData(['queue'], ctx.prev)
+      toast.error((e as Error).message)
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ['queue'] }),
+  })
+
   // Готовность позиции: эхо — локальная отметка; серверный заказ офлайн —
   // операция в очередь + оптимистичный кэш (mark_*_ready идемпотентны)
   function handleItemReady(order: MergedQueueOrder, itemId: string, ready: boolean) {
@@ -189,6 +217,20 @@ export default function QueuePage() {
     readyItem.mutate({ id: itemId, ready, orderId: order.id })
   }
 
+  // Эхо офлайн-заказа ещё не на сервере — для него срочность недоступна
+  function handleToggleUrgent(order: MergedQueueOrder) {
+    if (order.isLocal) return
+    const urgent = !order.is_urgent
+    if (!online) {
+      enqueueSetUrgent(order.id, urgent)
+      qc.setQueryData<QueueOrder[]>(['queue'], (old) =>
+        old?.map((o) => (o.id === order.id ? { ...o, is_urgent: urgent } : o))
+      )
+      return
+    }
+    urgentMut.mutate({ orderId: order.id, urgent })
+  }
+
   function handleAllReady(order: MergedQueueOrder) {
     if (order.isLocal) {
       patchLocalOrder(order.id, { localFulfilled: true })
@@ -202,13 +244,17 @@ export default function QueuePage() {
     readyOrder.mutate(order.id)
   }
 
-  // Фильтр по станции: показываем заказы, где есть хоть одна позиция станции
+  // Фильтр по станции: показываем заказы, где есть хоть одна позиция станции.
+  // Строки внутри карточки — в порядке станций (Меню → Станции, 087)
   const visibleOrders = useMemo(() => {
-    if (station === 'all') return orders
-    return orders
-      .map((o) => ({ ...o, order_items: o.order_items.filter((i) => i.station_id === station) }))
-      .filter((o) => o.order_items.length > 0)
-  }, [orders, station])
+    const base =
+      station === 'all'
+        ? orders
+        : orders
+            .map((o) => ({ ...o, order_items: o.order_items.filter((i) => i.station_id === station) }))
+            .filter((o) => o.order_items.length > 0)
+    return base.map((o) => ({ ...o, order_items: sortItemsByStation(o.order_items, stations) }))
+  }, [orders, station, stations])
 
   // Звук при появлении нового заказа (сравниваем множества id, не количество)
   const knownIds = useRef<Set<string> | null>(null)
@@ -273,6 +319,7 @@ export default function QueuePage() {
                   theme={c}
                   onItemReady={(id, ready) => handleItemReady(order, id, ready)}
                   onAllReady={() => handleAllReady(order)}
+                  onToggleUrgent={() => handleToggleUrgent(order)}
                 />
               ))}
             </div>
@@ -286,21 +333,27 @@ export default function QueuePage() {
 type ThemeStyles = typeof THEMES[Theme]
 
 function OrderCard({
-  order, lang, theme, onItemReady, onAllReady,
+  order, lang, theme, onItemReady, onAllReady, onToggleUrgent,
 }: {
   order: MergedQueueOrder
   lang: 'ru' | 'he'
   theme: ThemeStyles
   onItemReady: (id: string, ready: boolean) => void
   onAllReady: () => void
+  onToggleUrgent: () => void
 }) {
   const waited = elapsed(order.paid_at ?? order.created_at, lang)
   const allReady = order.order_items.every((i) => i.prep_status === 'ready')
+  const urgent = order.is_urgent === true
 
   return (
-    <div className={`rounded-2xl border ${theme.card} flex flex-col overflow-hidden animate-[rise-in_0.18s_ease-out]`}>
+    <div
+      className={`rounded-2xl border flex flex-col overflow-hidden animate-[rise-in_0.18s_ease-out] ${
+        urgent ? theme.cardUrgent : theme.card
+      }`}
+    >
       {/* Заголовок карточки */}
-      <div className={`flex items-center justify-between px-4 py-3 border-b ${theme.cardBorder}`}>
+      <div className={`flex items-center justify-between px-4 py-3 border-b ${urgent ? theme.cardUrgentBorder : theme.cardBorder}`}>
         <div className="flex items-baseline gap-2">
           {/* Эхо офлайн-заказа показывает локальный номер K-n */}
           <span className={`text-2xl font-black tabular-nums ${theme.number}`}>
@@ -322,7 +375,21 @@ function OrderCard({
             </span>
           )}
         </div>
-        <span className={`text-xs tabular-nums ${theme.itemDetailIdle}`}>{waited}</span>
+        <div className="flex items-center gap-2 ms-2 shrink-0">
+          <span className={`text-xs tabular-nums ${theme.itemDetailIdle}`}>{waited}</span>
+          {/* Срочность: недоступна для эха офлайн-заказа (ещё не на сервере) */}
+          {!order.isLocal && (
+            <button
+              onClick={onToggleUrgent}
+              title={t(lang, 'urgent')}
+              className={`w-11 h-11 -my-2 -me-2 rounded-xl flex items-center justify-center text-lg font-black transition-all active:scale-[0.9] ${
+                urgent ? 'bg-red-500 text-white' : theme.urgentBtnIdle
+              }`}
+            >
+              !
+            </button>
+          )}
+        </div>
       </div>
 
       {order.customer_name && (

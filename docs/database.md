@@ -197,7 +197,8 @@ RLS — защита, а не вспомогательный UI-фильтр. Л
 сессию, организацию, активность сотрудника и требуемый уровень права.
 
 Горячий поток (`place_order`, `pay_order`, `open_or_get_table_order`,
-`append_to_order`, `mark_item_ready`, `mark_order_ready`) с 086 тоже принимает
+`append_to_order`, `mark_item_ready`, `mark_order_ready`, `set_order_urgent`)
+с 086 (087 для срочности) тоже принимает
 `p_staff_session` и проверяет её `require_staff_session()` в МЯГКОМ режиме:
 NULL пропускается (старые клиенты, хвост офлайн-очереди), переданный битый
 токен даёт `staff session invalid`. Автор операции остаётся `p_staff_id` из
@@ -215,6 +216,9 @@ payload — сессия лишь подтверждает живого сотр
 - `move_table_order`, `merge_table_orders`, `split_order`;
 - `set_order_discount`, `void_order_item`, `void_table_order`;
 - `mark_item_ready`, `mark_order_ready`;
+- `set_order_urgent` — срочность заказа в очереди бариста (087): идемпотентный
+  флаг `orders.is_urgent`, тихий no-op вне статусов `open`/`paid` (replay
+  офлайн-очереди не падает на закрытом заказе);
 - `issue_refund`, `set_order_buyer`, `apply_loyalty`.
 
 ### Смены и учёт

@@ -310,6 +310,19 @@ export async function updateStation(id: string, name: string) {
   if (error) throw error
 }
 
+/**
+ * Новый порядок станций одним атомарным RPC (087) — как reorderCategories.
+ * Порядок станций задаёт очередность позиций для кухни на экране бариста.
+ */
+export async function reorderStations(orderedIds: string[]) {
+  const { error } = await supabase.rpc('reorder_menu', {
+    p_kind: 'station',
+    p_ids: orderedIds,
+    p_staff_session: currentStaffToken(),
+  })
+  if (error) throw error
+}
+
 export async function deleteStation(id: string) {
   const { error } = await supabase.from('stations').delete().eq('id', id)
   if (error) throw error

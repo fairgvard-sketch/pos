@@ -28,6 +28,7 @@ const KIND_LABEL: Record<OutboxOp['kind'], TranslationKey> = {
   'table.void_item': 'offlineOpVoidItem',
   'queue.item_ready': 'offlineOpReady',
   'queue.order_ready': 'offlineOpReady',
+  'queue.set_urgent': 'offlineOpUrgent',
 }
 
 /** Сумма операции для списка (только у оплат) */

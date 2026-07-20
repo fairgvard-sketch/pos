@@ -29,6 +29,8 @@ export interface QueueOrder {
   source?: 'pos' | 'site'
   /** Когда гость просил забрать (онлайн-заказ); null = как можно скорее */
   pickup_at?: string | null
+  /** Срочный заказ (087): всплывает наверх очереди и подсвечивается */
+  is_urgent?: boolean
   order_items: QueueItem[]
 }
 
@@ -53,7 +55,7 @@ export async function fetchQueue(): Promise<QueueOrder[]> {
   const { data, error } = await supabase
     .from('orders')
     .select(`
-      id, daily_number, order_type, customer_name, table_label, status, paid_at, created_at, table_id, source, pickup_at,
+      id, daily_number, order_type, customer_name, table_label, status, paid_at, created_at, table_id, source, pickup_at, is_urgent,
       order_items (
         id, name, variant_name, qty, notes, station_id, prep_status,
         order_item_modifiers ( name )
@@ -92,6 +94,16 @@ export async function markItemReady(itemId: string, ready = true): Promise<void>
 export async function markOrderReady(orderId: string): Promise<void> {
   const { error } = await supabase.rpc('mark_order_ready', {
     p_order_id: orderId,
+    ...(currentStaffToken() ? { p_staff_session: currentStaffToken() } : {}),
+  })
+  if (error) throw new Error(error.message)
+}
+
+/** Срочность заказа (087): идемпотентный флаг, no-op вне open/paid */
+export async function setOrderUrgent(orderId: string, urgent: boolean): Promise<void> {
+  const { error } = await supabase.rpc('set_order_urgent', {
+    p_order_id: orderId,
+    p_urgent: urgent,
     ...(currentStaffToken() ? { p_staff_session: currentStaffToken() } : {}),
   })
   if (error) throw new Error(error.message)

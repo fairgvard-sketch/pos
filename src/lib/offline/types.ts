@@ -69,6 +69,10 @@ export interface QueueItemReadyPayload {
   ready: boolean
 }
 
+export interface QueueSetUrgentPayload {
+  urgent: boolean
+}
+
 interface OpBase {
   /** crypto.randomUUID() — уходит на сервер как p_client_uuid / p_payment_uuid / p_op_uuid */
   id: string
@@ -104,6 +108,7 @@ export type OutboxOp = OpBase &
     | { kind: 'table.void_item'; payload: VoidItemPayload }
     | { kind: 'queue.item_ready'; payload: QueueItemReadyPayload }
     | { kind: 'queue.order_ready'; payload: Record<string, never> }
+    | { kind: 'queue.set_urgent'; payload: QueueSetUrgentPayload }
   )
 
 export type OpKind = OutboxOp['kind']

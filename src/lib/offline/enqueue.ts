@@ -366,3 +366,15 @@ export function enqueueOrderReady(orderId: string): void {
   })
   void kickDrain()
 }
+
+/** Срочность СЕРВЕРНОГО заказа офлайн (087); set_order_urgent идемпотентен */
+export function enqueueSetUrgent(orderId: string, urgent: boolean): void {
+  const ob = useOutboxStore.getState()
+  ob.enqueue({
+    ...opBase(null, orderId),
+    id: crypto.randomUUID(),
+    kind: 'queue.set_urgent',
+    payload: { urgent },
+  })
+  void kickDrain()
+}

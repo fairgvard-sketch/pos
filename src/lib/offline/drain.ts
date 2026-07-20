@@ -9,7 +9,7 @@ import {
   voidOrderItem,
   type TableOrderResult,
 } from '../../features/tables/api'
-import { markItemReady, markOrderReady } from '../../features/queue/api'
+import { markItemReady, markOrderReady, setOrderUrgent } from '../../features/queue/api'
 import { supabase } from '../supabase'
 import { t } from '../i18n'
 import { useLangStore } from '../../store/langStore'
@@ -183,6 +183,13 @@ async function runOp(op: OutboxOp): Promise<string | undefined> {
       const orderId = resolveOrderId(op)
       if (!orderId) throw new Error('offline order not synced')
       await withTimeout(markOrderReady(orderId))
+      return orderId
+    }
+    case 'queue.set_urgent': {
+      const orderId = resolveOrderId(op)
+      if (!orderId) throw new Error('offline order not synced')
+      // Заказ мог уехать из очереди до replay — set_order_urgent тогда no-op
+      await withTimeout(setOrderUrgent(orderId, op.payload.urgent))
       return orderId
     }
   }
