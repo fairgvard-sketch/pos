@@ -75,6 +75,25 @@ Instant-режим
 Ссылка для гостей: `https://pos-self-sigma.vercel.app/reserve/<location_id>`.
 QR-флаер печатается из Настройки → Обслуживание → Бронирование.
 
+## Настройки из бэкофиса
+
+Веб-кабинет владельца (репо `anglesite`, раздел «QR & reservations») правит
+тот же `locations.settings.reservations` через `patch_location_settings_web`
+(091) — раздел в allow-листе и мержится поключево, кабинет шлёт дельту.
+
+Покрыты: тумблер, окно приёма (`open`/`close`/`slot_min`/`max_party`),
+instant-блок (`instant`/`combine`/`duration_min`/`buffer_min`), депозит
+(`deposit_required`/`deposit_amount`/`deposit_from_party`) и витрина
+(`display_name`/`hours`/`address`/`instagram`). Остаются только в кассе:
+загрузка шапки, выбор точки на карте (`lat`/`lng`) и печать QR-флаера —
+в кабинете QR только отображается на экране.
+
+Депозит и там, и там хранится **целыми агоротами**; кабинет конвертирует
+ввод в шекелях через `Math.round(shekels * 100)` (`backoffice/src/online.js`).
+При изменении набора ключей править оба клиента:
+`src/features/settings/sections/ReservationsDetail.tsx` и
+`backoffice/src/QrChannels.jsx`.
+
 ## Проверка после деплоя
 
 ```bash
