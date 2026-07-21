@@ -27,6 +27,9 @@ export default function PinLoginPage() {
   const [pin, setPin] = useState('')
   const [checking, setChecking] = useState(false)
   const [shake, setShake] = useState(false)
+  // Блокировка после серии неудач (throttle 095): без явного текста кассир
+  // видел бы обычную тряску и не понимал, почему верный PIN не пускает.
+  const [lockedOut, setLockedOut] = useState(false)
   const submitting = useRef(false)
 
   // Греем кэш рабочего экрана, пока кассир вводит PIN: сессия устройства
@@ -47,6 +50,7 @@ export default function PinLoginPage() {
       setChecking(true)
       try {
         const staff = await verifyStaffPin(fullPin)
+        setLockedOut(false)
         setStaff(staff)
         // Сразу на рабочий экран (зал/продажа по режиму точки), минуя хаб.
         // Режим берём из кэша, иначе тянем (кэшируется на будущее).
@@ -55,7 +59,8 @@ export default function PinLoginPage() {
           queryFn: fetchCurrentLocation,
         })
         navigate(landingRoute(location.service_mode), { replace: true })
-      } catch {
+      } catch (e) {
+        setLockedOut(e instanceof Error && e.message === 'pin-locked-out')
         setShake(true)
         setTimeout(() => setShake(false), 400)
         setPin('')
@@ -100,8 +105,15 @@ export default function PinLoginPage() {
       <h1 className="mb-2">
         <BrandWordmark className="text-2xl" />
       </h1>
-      <p className="text-sm text-gray-500 mb-8">
-        {checking ? t(lang, 'checking') : t(lang, 'enterPin')}
+      <p
+        className={`text-sm mb-8 ${lockedOut ? 'text-gray-900 font-medium' : 'text-gray-500'}`}
+        role={lockedOut ? 'alert' : undefined}
+      >
+        {lockedOut
+          ? t(lang, 'pinLockedOut')
+          : checking
+            ? t(lang, 'checking')
+            : t(lang, 'enterPin')}
       </p>
 
       {/* Индикатор ввода */}

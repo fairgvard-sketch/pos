@@ -69,6 +69,7 @@ export const translations = {
     enterPin: 'Введите PIN-код',
     wrongPin: 'Неверный PIN-код',
     checking: 'Проверка...',
+    pinLockedOut: 'Слишком много попыток. Подождите 15 минут',
 
     // Роли
     owner: 'Владелец',
@@ -1415,6 +1416,7 @@ export const translations = {
     enterPin: 'הזן קוד PIN',
     wrongPin: 'קוד PIN שגוי',
     checking: 'בודקים...',
+    pinLockedOut: 'יותר מדי ניסיונות. המתינו 15 דקות',
 
     // Роли
     owner: 'בעלים',

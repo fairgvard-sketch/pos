@@ -150,7 +150,12 @@ export async function bootstrapOrg(
 
 export async function verifyStaffPin(pin: string): Promise<StaffSession> {
   const { data, error } = await supabase.rpc('verify_staff_pin', { p_pin: pin })
-  if (error) throw new Error(error.message)
+  if (error) {
+    // Throttle 095: блокировку показываем отдельным текстом, иначе кассир
+    // видит «неверный PIN» на верном коде и долбит заведомо мёртвый ввод.
+    if (error.message.includes('pin_locked_out')) throw new Error('pin-locked-out')
+    throw new Error(error.message)
+  }
   const row = Array.isArray(data) ? data[0] : data
   if (!row) throw new Error('wrong-pin')
   return row as StaffSession
