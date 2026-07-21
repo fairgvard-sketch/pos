@@ -438,11 +438,11 @@ function HoursRows({ text }: { text: string }) {
     <div className="mt-1.5 space-y-1 text-sm text-gray-900">
       {rows.map((r, i) => (
         <div key={i} className="flex items-baseline justify-between gap-2">
-          {/* Колонка узкая (половина карточки). Без whitespace-nowrap диапазон
-              рвётся посередине: «08:00 –» на одной строке, «20:00» на другой.
-              День может сжаться и обрезаться, время — никогда: оно короткое и
-              несёт суть строки. */}
-          <span className="font-semibold min-w-0 truncate">{r.day}</span>
+          {/* Время не переносится и не сжимается: диапазон «8:00–22:00» рвался
+              по дефису («08:00 –» / «20:00»). День при нехватке места
+              переносится целыми словами — обрезать его нельзя, «Вс–Чт»
+              и «Вс» значат разное. */}
+          <span className="font-semibold min-w-0">{r.day}</span>
           {r.time && (
             <span className="text-gray-600 tabular-nums whitespace-nowrap shrink-0" dir="ltr">{r.time}</span>
           )}
@@ -550,26 +550,27 @@ function SlotScreen({ lang, info, days, todayStr, todayHasSlots, date, time, gue
 
       <p className="text-sm text-gray-500 mt-4 text-center">{t(lang, 'rsvChooseHint')}</p>
 
-      {/* Зона «часы работы · контакт» (066): часы слева построчно, кнопки
-          телефон/навигация справа. Разделитель между колонками — только когда
-          есть обе стороны. Пустые части не рендерятся. */}
-      {/* Зона «часы работы · навигация» (066): ровно 50/50. Часы слева
-          двумя колонками (день/время выровнены), кнопки телефона/навигации
-          справа по центру. Если одна из сторон пуста — вторая занимает всё. */}
+      {/* Зона «часы работы · навигация» (066): часы слева двумя колонками
+          (день/время выровнены), кнопки телефона/навигации справа.
+          Ширина НЕ 50/50: кнопки занимают ровно свои 80px (shrink-0), всё
+          остальное достаётся часам — при делении пополам колонка часов была
+          уже, чем требует диапазон «8:00–22:00», и день обрезался, хотя
+          рядом с одинокой кнопкой оставалось пустое место.
+          Разделитель — только когда есть обе стороны. */}
       {(loc.hours || loc.phone || mapsUrl) && (
         <div className={`w-full mt-6 rounded-2xl border border-gray-200 overflow-hidden ${
           loc.hours && (loc.phone || mapsUrl)
-            ? 'grid grid-cols-2 divide-x divide-gray-100 rtl:divide-x-reverse'
+            ? 'flex divide-x divide-gray-100 rtl:divide-x-reverse'
             : ''
         }`}>
           {loc.hours && (
-            <div className="min-w-0 px-4 py-4">
+            <div className="min-w-0 grow px-4 py-4">
               <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{t(lang, 'rsvHoursTitle')}</div>
               <HoursRows text={loc.hours} />
             </div>
           )}
           {(loc.phone || mapsUrl) && (
-            <div className="flex items-center justify-center gap-3 px-4 py-4">
+            <div className="flex shrink-0 items-center justify-center gap-2 px-3 py-4">
               {loc.phone && (
                 <a
                   href={`tel:${loc.phone}`}
