@@ -131,7 +131,15 @@ export default function App() {
         maxAge: 7 * 24 * 3600_000,
         buster: __APP_VERSION__, // новая версия приложения сбрасывает кэш
         dehydrateOptions: {
-          shouldDehydrateQuery: (q) => PERSIST_KEYS.has(String(q.queryKey[0])) && q.state.status === 'success',
+          // Пустой справочник в persist не кладём. Запрос под ещё не поднятой
+          // сессией (org_id в JWT нет) получает от RLS законные [] + HTTP 200 —
+          // для React Query это success, и пустышка залипала в localStorage на
+          // gcTime (7 дней): зал и меню оставались пустыми до ручной чистки.
+          // Офлайн пустой каталог бесполезен, терять тут нечего.
+          shouldDehydrateQuery: (q) =>
+            PERSIST_KEYS.has(String(q.queryKey[0])) &&
+            q.state.status === 'success' &&
+            !(Array.isArray(q.state.data) && q.state.data.length === 0),
         },
       }}
     >
