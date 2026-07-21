@@ -203,6 +203,19 @@ export interface Staff {
   role: Role
   is_active: boolean
   created_at: string
+  /** Кастомная роль (094); NULL — права по базовой роли и настройкам точки */
+  role_id?: string | null
+}
+
+/** Именованный набор прав (094): надстройка над Role, не замена */
+export interface CustomRole {
+  id: string
+  org_id: string
+  name: string
+  base: 'manager' | 'barista'
+  /** Разрешённые ключи прав; 'manage' сюда не попадает по определению */
+  perms: string[]
+  created_at: string
 }
 
 /** Результат verify_staff_pin() */
@@ -213,6 +226,9 @@ export interface StaffSession {
   location_id: string | null
   /** Токен серверной сессии (044); optional — сессии до обновления его не имеют */
   session_token?: string | null
+  /** Кастомная роль (094) — приходит из verify_staff_pin вместе с набором прав */
+  role_id?: string | null
+  role_perms?: string[] | null
 }
 
 // ── Каталог ──────────────────────────────────────────────

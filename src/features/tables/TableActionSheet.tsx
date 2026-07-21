@@ -41,7 +41,7 @@ export default function TableActionSheet({ table, occ, tables, occupancy, onOpen
   // Освобождение стола аннулирует счёт → право void_order (настройки точки)
   const staff = useAuthStore((s) => s.staff)
   const { data: location } = useQuery({ queryKey: ['current_location'], queryFn: fetchCurrentLocation })
-  const canVoidOrder = can(staff?.role, 'void_order', location?.settings)
+  const canVoidOrder = can(staff?.role, 'void_order', location?.settings, staff?.role_perms)
 
   const refresh = () => qc.invalidateQueries({ queryKey: ['open_table_orders'] })
 

@@ -141,7 +141,7 @@ export default function OnlineOrdersPage() {
   const enabled = oo?.enabled !== false
   // Истёкшая пауза снимается сама — тик nowTs раз в 30с гасит пилюлю
   const pausedUntil = oo?.paused_until && Date.parse(oo.paused_until) > nowTs ? oo.paused_until : null
-  const canPause = can(staff?.role, 'online_pause', location?.settings)
+  const canPause = can(staff?.role, 'online_pause', location?.settings, staff?.role_perms)
   // Вилка приготовления (061): новые ключи в приоритете, legacy prep_minutes = min=max
   const prepMin = oo?.prep_min ?? oo?.prep_minutes ?? 0
   const prepMax = oo?.prep_max ?? oo?.prep_minutes ?? 0
@@ -180,7 +180,7 @@ export default function OnlineOrdersPage() {
     onSettled: onlineMutOpts.onSettled,
   })
 
-  const canVoid = can(staff?.role, 'void_order', location?.settings)
+  const canVoid = can(staff?.role, 'void_order', location?.settings, staff?.role_perms)
   const fresh = orders.filter((o) => o.status === 'new')
   const awaiting = orders.filter((o) => o.status === 'accepted' && o.order?.status === 'open')
   const done = orders.filter((o) => !fresh.includes(o) && !awaiting.includes(o))

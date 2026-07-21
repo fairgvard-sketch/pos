@@ -107,8 +107,8 @@ export default function InventoryPage() {
   const [showStockTake, setShowStockTake] = useState(false)
   const [showOrder, setShowOrder] = useState(false)
 
-  const canReceive = can(staff?.role, 'stock_receive', location?.settings)
-  const canTake = can(staff?.role, 'stock_take', location?.settings)
+  const canReceive = can(staff?.role, 'stock_receive', location?.settings, staff?.role_perms)
+  const canTake = can(staff?.role, 'stock_take', location?.settings, staff?.role_perms)
 
   const tracked = useMemo(() => items.filter((i) => i.track_inventory), [items])
 

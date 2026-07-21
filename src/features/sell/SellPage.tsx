@@ -86,9 +86,9 @@ export default function SellPage() {
   const showTable = location?.service_mode === 'counter_tables' || location?.service_mode === 'tables'
 
   // Права по ролям (настройки точки → Сотрудники → Права доступа)
-  const canDiscount = can(staff?.role, 'discount', location?.settings)
-  const canPriceEdit = can(staff?.role, 'price_edit', location?.settings)
-  const canVoidOrder = can(staff?.role, 'void_order', location?.settings)
+  const canDiscount = can(staff?.role, 'discount', location?.settings, staff?.role_perms)
+  const canPriceEdit = can(staff?.role, 'price_edit', location?.settings, staff?.role_perms)
+  const canVoidOrder = can(staff?.role, 'void_order', location?.settings, staff?.role_perms)
   /** Выполнить действие, если хватает прав; иначе — подсказка про менеджера */
   function requirePerm(allowed: boolean, fn: () => void) {
     if (!allowed) {

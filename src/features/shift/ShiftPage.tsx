@@ -74,7 +74,7 @@ export default function ShiftPage() {
   const backRoute = landingRoute(location?.service_mode)
 
   // Настройки точки: право закрытия, напоминание, порог наличных
-  const canCloseShift = can(staff?.role, 'close_shift', location?.settings)
+  const canCloseShift = can(staff?.role, 'close_shift', location?.settings, staff?.role_perms)
   // Офлайн (фаза 7): закрытие смены заблокировано, пока очередь не пуста
   const outboxOps = useOutboxStore((s) => s.ops)
   const pendingOps = pendingOpsCount({ ops: outboxOps })
@@ -85,7 +85,7 @@ export default function ShiftPage() {
   const tooMuchCash = report != null && cashWarnAt != null && cashWarnAt > 0 && report.expected_cash > cashWarnAt
 
   // ── Движение наличных (038): внесение/изъятие в течение смены ──
-  const canCashMove = can(staff?.role, 'cash_movement', location?.settings)
+  const canCashMove = can(staff?.role, 'cash_movement', location?.settings, staff?.role_perms)
   const [movementType, setMovementType] = useState<'in' | 'out' | null>(null)
   // Списание дня (047): онлайн-only — add_waste не идемпотентен
   const [showWaste, setShowWaste] = useState(false)

@@ -30,8 +30,25 @@ export function permLevel(settings: LocationSettings | undefined, key: PermKey):
   return settings?.perms?.[key] ?? DEFAULTS[key]
 }
 
-/** Может ли сотрудник с ролью выполнить действие на этой точке */
-export function can(role: Role | undefined, key: PermKey, settings: LocationSettings | undefined): boolean {
+/**
+ * Может ли сотрудник выполнить действие на этой точке.
+ *
+ * Зеркалит серверный require_staff_perm (094) — порядок веток обязан
+ * совпадать, иначе UI покажет кнопку, на которой сервер откажет:
+ *   1) владелец может всё (роль его не ограничивает);
+ *   2) есть кастомная роль → решает её набор прав ('manage' в него не входит);
+ *   3) иначе прежняя логика: уровень права из настроек точки + база.
+ *
+ * Клиентская проверка только прячет недоступное; отказ выносит сервер.
+ */
+export function can(
+  role: Role | undefined,
+  key: PermKey,
+  settings: LocationSettings | undefined,
+  rolePerms?: string[] | null,
+): boolean {
+  if (role === 'owner') return true
+  if (rolePerms) return rolePerms.includes(key)
   if (permLevel(settings, key) === 'all') return true
-  return role === 'manager' || role === 'owner'
+  return role === 'manager'
 }

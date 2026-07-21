@@ -48,7 +48,7 @@ export default function OfflineOpsSheet({ onClose }: { onClose: () => void }) {
   const discardOp = useOutboxStore((s) => s.discardOp)
   const online = useNetStore((s) => s.online)
 
-  const canDiscard = can(staff?.role, 'void_order', location?.settings)
+  const canDiscard = can(staff?.role, 'void_order', location?.settings, staff?.role_perms)
 
   const synced = Object.values(localOrders)
     .filter((o) => o.status === 'synced')

@@ -181,7 +181,7 @@ export default function AppSidebar({ active }: { active: SidebarPage }) {
         {/* Склад (055): виден тем, кому доступен приход (право точки),
             и только если учёт остатков не выключен тумблером точки */}
         {location?.settings?.interface?.inventory_enabled !== false &&
-          can(staff.role, 'stock_receive', location?.settings) && (
+          can(staff.role, 'stock_receive', location?.settings, staff.role_perms) && (
           <SideLink active={active === 'inventory'} label={t(lang, 'inventory')} iconName="note" onClick={() => navigate('/inventory')} />
         )}
         {/* Менеджерский блок отделён. Редкие экраны из сайдбара убраны:

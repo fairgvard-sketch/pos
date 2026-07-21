@@ -162,7 +162,7 @@ export default function TransactionsPage() {
   const kitchenTicketOn = useDeviceStore((s) => s.printKitchenTicket)
   const deviceName = useDeviceStore((s) => s.deviceName)
   const { data: location } = useQuery({ queryKey: ['current_location'], queryFn: fetchCurrentLocation })
-  const canRefund = can(staff?.role, 'refund', location?.settings)
+  const canRefund = can(staff?.role, 'refund', location?.settings, staff?.role_perms)
 
   // Группировка по дням (локальная дата); фильтры уже применены сервером
   const byDay = useMemo(() => {
