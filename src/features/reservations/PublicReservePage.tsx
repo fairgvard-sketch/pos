@@ -437,9 +437,15 @@ function HoursRows({ text }: { text: string }) {
   return (
     <div className="mt-1.5 space-y-1 text-sm text-gray-900">
       {rows.map((r, i) => (
-        <div key={i} className="flex items-baseline justify-between gap-3">
-          <span className="font-semibold">{r.day}</span>
-          {r.time && <span className="text-gray-600 tabular-nums" dir="ltr">{r.time}</span>}
+        <div key={i} className="flex items-baseline justify-between gap-2">
+          {/* Колонка узкая (половина карточки). Без whitespace-nowrap диапазон
+              рвётся посередине: «08:00 –» на одной строке, «20:00» на другой.
+              День может сжаться и обрезаться, время — никогда: оно короткое и
+              несёт суть строки. */}
+          <span className="font-semibold min-w-0 truncate">{r.day}</span>
+          {r.time && (
+            <span className="text-gray-600 tabular-nums whitespace-nowrap shrink-0" dir="ltr">{r.time}</span>
+          )}
         </div>
       ))}
     </div>
