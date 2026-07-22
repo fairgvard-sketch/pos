@@ -2442,7 +2442,7 @@ export const translations = {
     pubYourName: 'השם שלך',
     pubPhone: 'טלפון',
     pubAsap: 'בהקדם האפשרי',
-    pubAtTime: 'לשעה',
+    pubAtTime: 'הזמנה עתידית',
     pubNote: 'הערה להזמנה',
     pubSubmit: 'לשלוח הזמנה',
     pubSubmitting: 'שולחים...',

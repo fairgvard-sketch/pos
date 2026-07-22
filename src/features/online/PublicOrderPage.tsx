@@ -924,7 +924,7 @@ function CheckoutScreen({ lang, locId, isOpen, prepMin, prepMax, orderTypes, car
           onChange={(e) => setPhone(e.target.value)}
         />
 
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Chip active={asap} onClick={() => setAsap(true)}>
             {t(lang, 'pubAsap')}
             {formatPrepRange(lang, prepMin, prepMax) && (
