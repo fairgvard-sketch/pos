@@ -11,6 +11,10 @@ import { printCanvasWithRetry } from '../../receipt/printFailure'
 import { renderQrFlyerCanvas } from '../../receipt/printCanvas'
 import { useLocationSettings } from '../useLocationSettings'
 import { Group, ToggleRow } from '../ui'
+import {
+  findMenuBackgroundPreset,
+  MENU_BACKGROUND_PRESETS,
+} from '../../online/menuBackgrounds'
 import type { Location } from '../../../types'
 
 /** Подпись на QR-флаере — для гостей, поэтому всегда иврит */
@@ -155,7 +159,7 @@ export default function OnlineOrdersDetail({ location }: { location: Location | 
             url={settings.online_orders?.header_url ?? null}
             onChange={(v) => update({ online_orders: { header_url: v } })}
           />
-          <ImageField
+          <BackgroundPresetField
             label={t(lang, 'onlineImgBg')}
             hint={t(lang, 'onlineImgBgHint')}
             url={settings.online_orders?.background_url ?? null}
@@ -191,16 +195,81 @@ export default function OnlineOrdersDetail({ location }: { location: Location | 
   )
 }
 
+function BackgroundPresetField({ label, hint, url, onChange }: {
+  label: string
+  hint: string
+  url: string | null
+  onChange: (url: string | null) => void
+}) {
+  const lang = useLangStore((s) => s.lang)
+  const customLabel = lang === 'he' ? 'תמונה אישית' : 'Свое изображение'
+  const selectedPreset = findMenuBackgroundPreset(url)
+  const customUrl = selectedPreset ? null : url
+
+  return (
+    <div>
+      <div className="text-xs font-bold text-gray-500 uppercase tracking-wide">{label}</div>
+      <p className="text-xs text-gray-500 mt-0.5">{hint}</p>
+      <div className="grid grid-cols-3 gap-2 mt-2">
+        {MENU_BACKGROUND_PRESETS.map((preset) => {
+          const selected = selectedPreset?.id === preset.id
+          return (
+            <button
+              key={preset.id}
+              type="button"
+              aria-pressed={selected}
+              aria-label={preset.labels[lang]}
+              onClick={() => onChange(preset.url)}
+              className={`relative h-24 overflow-hidden rounded-xl border-2 transition-all active:scale-[0.97] ${
+                selected
+                  ? 'border-gray-900 shadow-md'
+                  : 'border-transparent hover:border-gray-300'
+              }`}
+            >
+              <img
+                src={preset.url}
+                alt=""
+                className="absolute inset-0 h-full w-full object-cover"
+              />
+              <span className="absolute inset-x-0 bottom-0 bg-black/65 px-2 py-1.5 text-center text-xs font-bold text-white">
+                {preset.labels[lang]}
+              </span>
+              {selected && (
+                <span
+                  aria-hidden="true"
+                  className="absolute end-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-white text-xs font-black text-gray-900 shadow"
+                >
+                  ✓
+                </span>
+              )}
+            </button>
+          )
+        })}
+      </div>
+      <div className="mt-3 border-t border-gray-100 pt-3">
+        <ImageField
+          label={customLabel}
+          hint=""
+          url={customUrl}
+          onChange={onChange}
+          hidePreviewWhenEmpty
+        />
+      </div>
+    </div>
+  )
+}
+
 /**
  * Фото оформления гостевой страницы: превью + загрузка в Storage
  * (тот же бакет и компрессия, что у фото товаров) + удаление.
  * Удаление не трогает файл в Storage — только ссылку в настройках.
  */
-export function ImageField({ label, hint, url, onChange }: {
+export function ImageField({ label, hint, url, onChange, hidePreviewWhenEmpty = false }: {
   label: string
   hint: string
   url: string | null
   onChange: (url: string | null) => void
+  hidePreviewWhenEmpty?: boolean
 }) {
   const lang = useLangStore((s) => s.lang)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -213,9 +282,9 @@ export function ImageField({ label, hint, url, onChange }: {
     <div className="flex items-center gap-3">
       {url ? (
         <img src={url} alt="" className="w-24 h-14 rounded-xl object-cover border border-gray-100 shrink-0" />
-      ) : (
+      ) : !hidePreviewWhenEmpty ? (
         <div className="w-24 h-14 rounded-xl bg-gray-100 shrink-0" />
-      )}
+      ) : null}
       <div className="flex-1 min-w-0">
         <div className="text-xs font-bold text-gray-500 uppercase tracking-wide">{label}</div>
         <p className="text-xs text-gray-500 mt-0.5">{hint}</p>

@@ -7,6 +7,11 @@ import {
   fetchPublicMenu, fetchPublicStatus, submitPublicOrder, PublicApiError,
   type PublicItem, type PublicMenu, type PublicStatus, type PublicOrderType,
 } from './publicApi'
+import {
+  menuBackgroundThemeColor,
+  menuBackgroundUsesDarkUi,
+  resolveMenuBackgroundUrl,
+} from './menuBackgrounds'
 import BrandSplash from '../../components/ui/BrandSplash'
 
 /**
@@ -17,22 +22,6 @@ import BrandSplash from '../../components/ui/BrandSplash'
  */
 
 const ACTIVE_KEY = 'kassa-public-active' // {clientUuid, locId} — текущая заявка
-
-const BACKGROUND_THEME_COLORS: [string, string][] = [
-  ['ivory-food', '#eee4cf'],
-  ['sage-food', '#d8e2ce'],
-  ['coral-food', '#efaa9d'],
-  ['midnight-food', '#171717'],
-  ['mustard-food', '#e5c44f'],
-]
-
-function backgroundThemeColor(url: string): string {
-  return BACKGROUND_THEME_COLORS.find(([name]) => url.includes(name))?.[1] ?? '#f8f9fb'
-}
-
-function backgroundUsesDarkUi(url: string): boolean {
-  return url.includes('midnight-food')
-}
 
 /** «~20–35 мин» / «~20 мин» / '' — вилка приготовления для гостя (061) */
 function formatPrepRange(lang: Lang, min: number, max: number): string {
@@ -91,7 +80,7 @@ export default function PublicOrderPage() {
     queryFn: () => fetchPublicMenu(locId),
     staleTime: 30_000,
   })
-  const menuBackground = menu?.location.background_url ?? null
+  const menuBackground = resolveMenuBackgroundUrl(menu?.location.background_url)
 
   // Safari рисует safe-area и rubber-band из canvas документа. Поэтому
   // единственный экземпляр изображения живёт на <html>: он продолжается
@@ -104,10 +93,10 @@ export default function PublicOrderPage() {
     const previousThemeColor = themeMeta?.content
 
     root.classList.add('public-menu-themed')
-    root.classList.toggle('public-menu-dark', backgroundUsesDarkUi(menuBackground))
+    root.classList.toggle('public-menu-dark', menuBackgroundUsesDarkUi(menuBackground))
     root.style.setProperty('--public-menu-background-image', `url(${JSON.stringify(menuBackground)})`)
-    root.style.setProperty('--public-menu-theme-color', backgroundThemeColor(menuBackground))
-    themeMeta?.setAttribute('content', backgroundThemeColor(menuBackground))
+    root.style.setProperty('--public-menu-theme-color', menuBackgroundThemeColor(menuBackground))
+    themeMeta?.setAttribute('content', menuBackgroundThemeColor(menuBackground))
 
     return () => {
       root.classList.remove('public-menu-themed', 'public-menu-dark')
@@ -172,7 +161,7 @@ export default function PublicOrderPage() {
         isRtl={isRtl}
         title={menu?.location.business_name || menu?.location.name}
         logo={menu?.location.logo_url}
-        bgImg={menu?.location.background_url}
+        bgImg={menuBackground}
       >
         <StatusScreen lang={lang} clientUuid={activeUuid} onNewOrder={startNewOrder} />
       </Shell>
@@ -212,7 +201,7 @@ export default function PublicOrderPage() {
       logo={menu.location.logo_url}
       hero={view === 'menu' && !activeCat}
       headerImg={menu.location.header_url}
-      bgImg={menu.location.background_url}
+      bgImg={menuBackground}
       // Возврат в шапке: из чекаута → к меню, из категории → к плиткам
       onBack={
         view === 'checkout' ? () => setView('menu')
