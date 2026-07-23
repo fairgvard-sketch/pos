@@ -74,7 +74,6 @@ export default function PublicOrderPage() {
     queryKey: ['public_menu', locId],
     queryFn: () => fetchPublicMenu(locId),
     staleTime: 30_000,
-    enabled: !activeUuid, // на экране статуса меню не нужно
   })
 
   const cartCount = cart.reduce((s, l) => s + l.qty, 0)
@@ -128,7 +127,12 @@ export default function PublicOrderPage() {
   // ── Экран статуса активной заявки ──────────────────────────
   if (activeUuid) {
     return (
-      <Shell isRtl={isRtl} title={menu?.location.business_name || menu?.location.name} logo={menu?.location.logo_url}>
+      <Shell
+        isRtl={isRtl}
+        title={menu?.location.business_name || menu?.location.name}
+        logo={menu?.location.logo_url}
+        bgImg={menu?.location.background_url}
+      >
         <StatusScreen lang={lang} clientUuid={activeUuid} onNewOrder={startNewOrder} />
       </Shell>
     )
@@ -345,8 +349,10 @@ export default function PublicOrderPage() {
  * компактная sticky-шапка (h-14) — категории/корзина/статус, к ней
  * привязаны чипы навигации (sticky top-14).
  * Оформление (Настройки → Онлайн-заказы): headerImg — баннер вместо
- * белой hero-шапки; bgImg — фон главного экрана (fixed-подложка),
- * шапка и плитки накладываются поверх, текст шапки — белый.
+ * белой hero-шапки; bgImg — единая fixed-подложка всего гостевого сценария:
+ * категории, товары, корзина и статус заказа сохраняют выбранное оформление.
+ * На внутренних экранах фон слегка осветляется, чтобы формы и служебный текст
+ * читались; главная витрина показывает выбранный фон без затемняющей плёнки.
  */
 function Shell({ isRtl, title, logo, hero, headerImg, bgImg, onBack, backLabel, children }: {
   isRtl: boolean
@@ -360,7 +366,7 @@ function Shell({ isRtl, title, logo, hero, headerImg, bgImg, onBack, backLabel, 
   backLabel?: string
   children: React.ReactNode
 }) {
-  const hasBg = !!(hero && bgImg)
+  const hasBg = !!bgImg
   return (
     // ВАЖНО (iOS Safari): не вешать overflow-x-clip на корень — clip на
     // предке ломает position:fixed у потомков (иконка корзины и нижняя
@@ -377,9 +383,9 @@ function Shell({ isRtl, title, logo, hero, headerImg, bgImg, onBack, backLabel, 
         <div className="fixed inset-x-0 top-0 h-screen [height:100lvh] pointer-events-none" aria-hidden>
           <div className="max-w-lg mx-auto h-full relative overflow-hidden">
             <img src={bgImg!} alt="" className="absolute inset-0 w-full h-full object-cover" />
-            {/* Плотнее затемняем фон-фото витрины: на светлых участках плитки
-                иначе сливаются с подложкой (правило 60-30-10 — фон должен быть тихим) */}
-            <span className="absolute inset-0 bg-black/50" />
+            {/* Витрина показывает оригинальные цвета пресета. На внутренних
+                экранах лёгкая светлая вуаль поддерживает читаемость форм. */}
+            {!hero && <span className="absolute inset-0 bg-white/55" />}
           </div>
         </div>
       )}
