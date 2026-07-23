@@ -30,6 +30,10 @@ function backgroundThemeColor(url: string): string {
   return BACKGROUND_THEME_COLORS.find(([name]) => url.includes(name))?.[1] ?? '#f8f9fb'
 }
 
+function backgroundUsesDarkUi(url: string): boolean {
+  return url.includes('midnight-food')
+}
+
 /** «~20–35 мин» / «~20 мин» / '' — вилка приготовления для гостя (061) */
 function formatPrepRange(lang: Lang, min: number, max: number): string {
   const hi = Math.max(min, max)
@@ -100,12 +104,13 @@ export default function PublicOrderPage() {
     const previousThemeColor = themeMeta?.content
 
     root.classList.add('public-menu-themed')
+    root.classList.toggle('public-menu-dark', backgroundUsesDarkUi(menuBackground))
     root.style.setProperty('--public-menu-background-image', `url(${JSON.stringify(menuBackground)})`)
     root.style.setProperty('--public-menu-theme-color', backgroundThemeColor(menuBackground))
     themeMeta?.setAttribute('content', backgroundThemeColor(menuBackground))
 
     return () => {
-      root.classList.remove('public-menu-themed')
+      root.classList.remove('public-menu-themed', 'public-menu-dark')
       root.style.removeProperty('--public-menu-background-image')
       root.style.removeProperty('--public-menu-theme-color')
       if (themeMeta && previousThemeColor) themeMeta.content = previousThemeColor
@@ -283,7 +288,7 @@ export default function PublicOrderPage() {
             {/* Чипы быстрого перехода между категориями (возврат к плиткам — стрелка в шапке) */}
             <CategoryChips categories={menu.categories} activeCat={activeCat} onSelect={setActiveCat} />
             <div className="px-4 pb-32">
-              <h2 className="text-lg font-bold text-gray-900 mt-5 mb-3">{cat.name}</h2>
+              <h2 className="public-menu-section-title text-lg font-bold text-gray-900 mt-5 mb-3">{cat.name}</h2>
               <div className="space-y-2">
                 {cat.items.map((item) => (
                   <ItemRow key={item.id} item={item} lang={lang} onTap={() => {
@@ -413,7 +418,7 @@ function Shell({ isRtl, title, logo, hero, headerImg, bgImg, onBack, backLabel, 
     // на html/body в index.css.
     <div
       dir={isRtl ? 'rtl' : 'ltr'}
-      className={`min-h-screen ${hasBg ? 'bg-transparent' : 'bg-[#eceef1]'}`}
+      className={`public-menu-shell min-h-screen ${hasBg ? 'bg-transparent' : 'bg-[#eceef1]'}`}
     >
       <div className={`relative max-w-lg mx-auto min-h-screen flex flex-col ${hasBg ? '' : 'bg-white'}`}>
         {hero ? (
@@ -449,7 +454,7 @@ function Shell({ isRtl, title, logo, hero, headerImg, bgImg, onBack, backLabel, 
           )
         ) : (
           <header
-            className="sticky top-0 z-10 bg-white border-b border-gray-100 px-4 flex items-center justify-center relative"
+            className="public-menu-compact-header sticky top-0 z-10 bg-white border-b border-gray-100 px-4 flex items-center justify-center relative"
             style={{
               height: 'calc(3.5rem + env(safe-area-inset-top))',
               paddingTop: 'env(safe-area-inset-top)',
@@ -460,7 +465,7 @@ function Shell({ isRtl, title, logo, hero, headerImg, bgImg, onBack, backLabel, 
               <button
                 onClick={onBack}
                 aria-label={backLabel}
-                className="absolute left-2 h-10 px-4 rounded-full bg-gray-900 text-white shadow-md shadow-black/15 flex items-center gap-1.5 text-sm font-bold active:scale-[0.96] transition-all"
+                className="public-menu-back-button absolute left-2 h-10 px-4 rounded-full bg-gray-900 text-white shadow-md shadow-black/15 flex items-center gap-1.5 text-sm font-bold active:scale-[0.96] transition-all"
               >
                 {/* Пилюля возврата всегда слева (левый край экрана), стрелка смотрит влево */}
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -471,7 +476,7 @@ function Shell({ isRtl, title, logo, hero, headerImg, bgImg, onBack, backLabel, 
             ) : (
               logo && <img src={logo} alt="" className="absolute start-4 w-9 h-9 rounded-full object-cover" />
             )}
-            <span className="font-display px-14 text-center font-bold text-xl text-gray-900 truncate">
+            <span className="public-menu-header-title font-display px-14 text-center font-bold text-xl text-gray-900 truncate">
               {title ?? ''}
             </span>
           </header>
@@ -521,7 +526,7 @@ function CategoryChips({ categories, activeCat, onSelect }: {
   return (
     <nav
       ref={navRef}
-      className="sticky z-10 bg-white/95 backdrop-blur border-b border-gray-100 px-4 py-2 flex gap-2 overflow-x-auto select-none [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      className="public-menu-category-nav sticky z-10 bg-white/95 backdrop-blur border-b border-gray-100 px-4 py-2 flex gap-2 overflow-x-auto select-none [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       style={{ top: 'calc(3.5rem + env(safe-area-inset-top))' }}
       onMouseDown={(e) => {
         drag.current = { down: true, moved: false, startX: e.clientX, startLeft: navRef.current?.scrollLeft ?? 0 }
@@ -547,7 +552,7 @@ function CategoryChips({ categories, activeCat, onSelect }: {
           key={c.id}
           data-active={c.id === activeCat || undefined}
           onClick={() => onSelect(c.id)}
-          className={`h-10 px-4 rounded-full text-sm font-semibold whitespace-nowrap transition-all active:scale-[0.96] shrink-0 ${
+          className={`public-menu-category-chip h-10 px-4 rounded-full text-sm font-semibold whitespace-nowrap transition-all active:scale-[0.96] shrink-0 ${
             c.id === activeCat ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600'
           }`}
         >
@@ -642,7 +647,7 @@ function ItemRow({ item, lang, onTap }: { item: PublicItem; lang: Lang; onTap: (
   return (
     <button
       onClick={onTap}
-      className="w-full rounded-2xl bg-white border border-gray-200 shadow-sm hover:bg-gray-50 active:scale-[0.99] transition-all flex items-center gap-3 p-3 text-start"
+      className="public-menu-item-card w-full rounded-2xl bg-white border border-gray-200 shadow-sm hover:bg-gray-50 active:scale-[0.99] transition-all flex items-center gap-3 p-3 text-start"
     >
       {item.image_url ? (
         <img src={item.image_url} alt="" loading="lazy" className="w-16 h-16 rounded-xl object-cover shrink-0 bg-white" />
@@ -652,12 +657,12 @@ function ItemRow({ item, lang, onTap }: { item: PublicItem; lang: Lang; onTap: (
         </span>
       )}
       <span className="flex-1 min-w-0">
-        <span className="block font-semibold text-gray-900 leading-snug">{item.name}</span>
+        <span className="public-menu-item-primary block font-semibold text-gray-900 leading-snug">{item.name}</span>
         {item.description && (
-          <span className="block text-xs text-gray-500 mt-0.5 leading-snug line-clamp-2">{item.description}</span>
+          <span className="public-menu-item-muted block text-xs text-gray-500 mt-0.5 leading-snug line-clamp-2">{item.description}</span>
         )}
-        <span className="block text-sm font-semibold text-gray-900 mt-1 tabular-nums">
-          {hasRange && <span className="text-gray-500 font-normal">{t(lang, 'pubFrom')} </span>}
+        <span className="public-menu-item-primary block text-sm font-semibold text-gray-900 mt-1 tabular-nums">
+          {hasRange && <span className="public-menu-item-muted text-gray-500 font-normal">{t(lang, 'pubFrom')} </span>}
           {/* dir=ltr: цена не пляшет в bidi-контексте ивритских названий */}
           <span dir="ltr">{formatMoney(minPrice, lang)}</span>
         </span>
