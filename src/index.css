@@ -111,11 +111,16 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
 
   /*
    * Safe-area и rubber-band iOS Safari показывают canvas документа.
-   * Здесь нужен только цвет выбранного пресета; изображение рисует один
-   * прокручиваемый слой Shell, иначе два фона расходятся при скролле.
+   * Изображение живёт только здесь: на телефоне занимает всю ширину, на
+   * десктопе ограничено шириной гостевой колонки. В Shell второго слоя нет.
    */
   html.public-menu-themed {
     background-color: var(--public-menu-theme-color, #f8f9fb);
+    background-image: var(--public-menu-background-image);
+    background-position: center top;
+    background-size: min(100vw, 32rem) auto;
+    background-repeat: repeat-y;
+    background-attachment: scroll;
   }
 
   body {

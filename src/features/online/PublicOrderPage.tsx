@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { t, formatTime, type Lang } from '../../lib/i18n'
@@ -89,9 +89,9 @@ export default function PublicOrderPage() {
   })
   const menuBackground = menu?.location.background_url ?? null
 
-  // Safari рисует safe-area и rubber-band из canvas документа. Корень
-  // получает только подходящий цвет пресета; само изображение остаётся
-  // единственным фоном Shell и прокручивается вместе со страницей.
+  // Safari рисует safe-area и rubber-band из canvas документа. Поэтому
+  // единственный экземпляр изображения живёт на <html>: он продолжается
+  // под Dynamic Island и остаётся общим для всего сценария.
   useEffect(() => {
     if (!menuBackground) return
 
@@ -100,11 +100,13 @@ export default function PublicOrderPage() {
     const previousThemeColor = themeMeta?.content
 
     root.classList.add('public-menu-themed')
+    root.style.setProperty('--public-menu-background-image', `url(${JSON.stringify(menuBackground)})`)
     root.style.setProperty('--public-menu-theme-color', backgroundThemeColor(menuBackground))
     themeMeta?.setAttribute('content', backgroundThemeColor(menuBackground))
 
     return () => {
       root.classList.remove('public-menu-themed')
+      root.style.removeProperty('--public-menu-background-image')
       root.style.removeProperty('--public-menu-theme-color')
       if (themeMeta && previousThemeColor) themeMeta.content = previousThemeColor
     }
@@ -385,8 +387,9 @@ export default function PublicOrderPage() {
  * Оформление (Настройки → Онлайн-заказы): headerImg — баннер вместо
  * белой hero-шапки; bgImg — единый фон всего гостевого сценария:
  * категории, товары, корзина и статус заказа сохраняют выбранное оформление.
- * Фон находится на самой колонке страницы и прокручивается вместе со всем
- * содержимым, без отдельных fixed-слоёв и цветовых плёнок.
+ * Фон находится на canvas документа, поэтому единым полотном проходит под
+ * системной safe-area, заголовком, содержимым и подвалом. Внутри Shell нет
+ * второго изображения или цветовой плёнки.
  */
 function Shell({ isRtl, title, logo, hero, headerImg, bgImg, onBack, backLabel, children }: {
   isRtl: boolean
@@ -401,16 +404,6 @@ function Shell({ isRtl, title, logo, hero, headerImg, bgImg, onBack, backLabel, 
   children: React.ReactNode
 }) {
   const hasBg = !!bgImg
-  const backgroundStyle: CSSProperties | undefined = hasBg
-    ? {
-        backgroundColor: backgroundThemeColor(bgImg!),
-        backgroundImage: `url(${JSON.stringify(bgImg)})`,
-        backgroundPosition: 'center top',
-        backgroundSize: '100% auto',
-        backgroundRepeat: 'repeat-y',
-      }
-    : undefined
-
   return (
     // ВАЖНО (iOS Safari): не вешать overflow-x-clip на корень — clip на
     // предке ломает position:fixed у потомков (иконка корзины и нижняя
@@ -420,12 +413,9 @@ function Shell({ isRtl, title, logo, hero, headerImg, bgImg, onBack, backLabel, 
     // на html/body в index.css.
     <div
       dir={isRtl ? 'rtl' : 'ltr'}
-      className="min-h-screen bg-[#eceef1]"
+      className={`min-h-screen ${hasBg ? 'bg-transparent' : 'bg-[#eceef1]'}`}
     >
-      <div
-        className={`relative max-w-lg mx-auto min-h-screen flex flex-col ${hasBg ? '' : 'bg-white'}`}
-        style={backgroundStyle}
-      >
+      <div className={`relative max-w-lg mx-auto min-h-screen flex flex-col ${hasBg ? '' : 'bg-white'}`}>
         {hero ? (
           headerImg ? (
             // Баннер-шапка: фото, поверх — логотип и название (белым на скриме)
