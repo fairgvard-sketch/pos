@@ -488,9 +488,9 @@ function Shell({ isRtl, title, logo, hero, headerImg, bgImg, onBack, backLabel, 
  * пустая ссылка = кнопки нет. padForCart — просвет под фиксированной
  * кнопкой корзины.
  *
- * Компактная полупрозрачная полоса сохраняет видимым общий фон страницы.
- * После неё идёт прозрачная safe-зона: нижняя панель Safari перекрывает
- * фон, а не ссылки и кнопку отзыва.
+ * Действия стоят прямо на общем фоне без отдельной полосы. Контраст даёт
+ * собственная подложка каждой кнопки. После них идёт прозрачная safe-зона:
+ * нижняя панель Safari перекрывает фон, а не ссылки и кнопку отзыва.
  */
 /**
  * Обложка плитки категории. Горизонтальные фото заполняют карточку
@@ -580,12 +580,12 @@ function SocialFooter({ links, lang, padForCart }: {
   padForCart: boolean
 }) {
   const iconBtn =
-    'w-11 h-11 shrink-0 rounded-full bg-white/12 ring-1 ring-white/10 text-white flex items-center justify-center active:scale-[0.94] transition-all'
+    'w-12 h-12 shrink-0 rounded-full bg-black/75 ring-1 ring-white/15 text-white shadow-lg shadow-black/25 flex items-center justify-center active:scale-[0.94] transition-all'
   const hasAny = !!(links?.instagram || links?.facebook || links?.google_review)
   if (!hasAny) return padForCart ? <div className="pb-24" /> : null
   return (
     <>
-      <footer className="mt-6 px-4 py-4 bg-black/50 backdrop-blur-[2px] border-t border-white/15">
+      <footer className="mt-6 px-4 py-4">
         <div className="mx-auto flex max-w-md flex-wrap items-center justify-center gap-2.5">
           {(links?.instagram || links?.facebook) && (
             <div className="flex items-center gap-2">
@@ -612,7 +612,7 @@ function SocialFooter({ links, lang, padForCart }: {
               href={links.google_review}
               target="_blank"
               rel="noopener noreferrer"
-              className="h-11 max-w-full px-4 rounded-full bg-white/12 ring-1 ring-white/10 text-sm font-semibold text-white flex items-center justify-center gap-2 active:scale-[0.96] transition-all"
+              className="h-12 max-w-full px-5 rounded-full bg-black/75 ring-1 ring-white/15 text-sm font-semibold text-white shadow-lg shadow-black/25 flex items-center justify-center gap-2 active:scale-[0.96] transition-all"
             >
               <svg className="shrink-0" width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
                 <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z" />
