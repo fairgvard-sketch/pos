@@ -488,11 +488,9 @@ function Shell({ isRtl, title, logo, hero, headerImg, bgImg, onBack, backLabel, 
  * пустая ссылка = кнопки нет. padForCart — просвет под фиксированной
  * кнопкой корзины.
  *
- * Тёмная полупрозрачная плашка со скруглённым верхом и hairline-чертой:
- * явно отделяет подвал от сетки плиток (гештальт-близость) и читается в
- * обоих контекстах — поверх фона-фото витрины единой тёмной зоной, на
- * белой странице — деликатным тёмным footer. Светлые иконки на тёмном →
- * контраст гарантирован везде.
+ * Компактная полупрозрачная полоса сохраняет видимым общий фон страницы.
+ * После неё идёт прозрачная safe-зона: нижняя панель Safari перекрывает
+ * фон, а не ссылки и кнопку отзыва.
  */
 /**
  * Обложка плитки категории. Горизонтальные фото заполняют карточку
@@ -582,49 +580,53 @@ function SocialFooter({ links, lang, padForCart }: {
   padForCart: boolean
 }) {
   const iconBtn =
-    'w-12 h-12 rounded-full bg-white/10 text-white flex items-center justify-center active:scale-[0.94] transition-all'
+    'w-11 h-11 shrink-0 rounded-full bg-white/12 ring-1 ring-white/10 text-white flex items-center justify-center active:scale-[0.94] transition-all'
   const hasAny = !!(links?.instagram || links?.facebook || links?.google_review)
   if (!hasAny) return padForCart ? <div className="pb-24" /> : null
   return (
-    <footer
-      className={`mt-8 px-4 pt-8 flex flex-col items-center gap-4 bg-black/85 border-t border-white/10 ${
-        padForCart ? 'pb-28' : 'pb-8'
-      }`}
-    >
-      {(links?.instagram || links?.facebook) && (
-        <div className="flex items-center gap-3">
-          {links?.instagram && (
-            <a href={links.instagram} target="_blank" rel="noopener noreferrer" aria-label="Instagram" className={iconBtn}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
-                <rect x="3" y="3" width="18" height="18" rx="5" />
-                <circle cx="12" cy="12" r="4" />
-                <circle cx="17.2" cy="6.8" r="1.2" fill="currentColor" stroke="none" />
-              </svg>
-            </a>
+    <>
+      <footer className="mt-6 px-4 py-4 bg-black/50 backdrop-blur-[2px] border-t border-white/15">
+        <div className="mx-auto flex max-w-md flex-wrap items-center justify-center gap-2.5">
+          {(links?.instagram || links?.facebook) && (
+            <div className="flex items-center gap-2">
+              {links?.instagram && (
+                <a href={links.instagram} target="_blank" rel="noopener noreferrer" aria-label="Instagram" className={iconBtn}>
+                  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+                    <rect x="3" y="3" width="18" height="18" rx="5" />
+                    <circle cx="12" cy="12" r="4" />
+                    <circle cx="17.2" cy="6.8" r="1.2" fill="currentColor" stroke="none" />
+                  </svg>
+                </a>
+              )}
+              {links?.facebook && (
+                <a href={links.facebook} target="_blank" rel="noopener noreferrer" aria-label="Facebook" className={iconBtn}>
+                  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" aria-hidden>
+                    <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z" />
+                  </svg>
+                </a>
+              )}
+            </div>
           )}
-          {links?.facebook && (
-            <a href={links.facebook} target="_blank" rel="noopener noreferrer" aria-label="Facebook" className={iconBtn}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" aria-hidden>
-                <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z" />
+          {links?.google_review && (
+            <a
+              href={links.google_review}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="h-11 max-w-full px-4 rounded-full bg-white/12 ring-1 ring-white/10 text-sm font-semibold text-white flex items-center justify-center gap-2 active:scale-[0.96] transition-all"
+            >
+              <svg className="shrink-0" width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z" />
               </svg>
+              <span className="truncate">{t(lang, 'pubReviewGoogle')}</span>
             </a>
           )}
         </div>
-      )}
-      {links?.google_review && (
-        <a
-          href={links.google_review}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="h-11 px-5 rounded-full bg-white/10 text-sm font-semibold text-white flex items-center gap-2 active:scale-[0.96] transition-all"
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z" />
-          </svg>
-          {t(lang, 'pubReviewGoogle')}
-        </a>
-      )}
-    </footer>
+      </footer>
+      <div
+        aria-hidden
+        className={padForCart ? 'h-28 shrink-0' : 'h-[calc(env(safe-area-inset-bottom)+3rem)] shrink-0'}
+      />
+    </>
   )
 }
 
