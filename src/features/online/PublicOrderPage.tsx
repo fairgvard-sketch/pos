@@ -18,6 +18,18 @@ import BrandSplash from '../../components/ui/BrandSplash'
 
 const ACTIVE_KEY = 'kassa-public-active' // {clientUuid, locId} — текущая заявка
 
+const BACKGROUND_THEME_COLORS: [string, string][] = [
+  ['ivory-food', '#eee4cf'],
+  ['sage-food', '#d8e2ce'],
+  ['coral-food', '#efaa9d'],
+  ['midnight-food', '#171717'],
+  ['mustard-food', '#e5c44f'],
+]
+
+function backgroundThemeColor(url: string): string {
+  return BACKGROUND_THEME_COLORS.find(([name]) => url.includes(name))?.[1] ?? '#f8f9fb'
+}
+
 /** «~20–35 мин» / «~20 мин» / '' — вилка приготовления для гостя (061) */
 function formatPrepRange(lang: Lang, min: number, max: number): string {
   const hi = Math.max(min, max)
@@ -75,6 +87,30 @@ export default function PublicOrderPage() {
     queryFn: () => fetchPublicMenu(locId),
     staleTime: 30_000,
   })
+  const menuBackground = menu?.location.background_url ?? null
+
+  // Safari рисует safe-area и rubber-band из canvas документа, а не из
+  // position:fixed подложки Shell. Передаём тот же фон на <html> и красим
+  // браузерный chrome ближайшим цветом выбранного пресета.
+  useEffect(() => {
+    if (!menuBackground) return
+
+    const root = document.documentElement
+    const themeMeta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')
+    const previousThemeColor = themeMeta?.content
+
+    root.classList.add('public-menu-themed')
+    root.style.setProperty('--public-menu-background-image', `url(${JSON.stringify(menuBackground)})`)
+    root.style.setProperty('--public-menu-theme-color', backgroundThemeColor(menuBackground))
+    themeMeta?.setAttribute('content', backgroundThemeColor(menuBackground))
+
+    return () => {
+      root.classList.remove('public-menu-themed')
+      root.style.removeProperty('--public-menu-background-image')
+      root.style.removeProperty('--public-menu-theme-color')
+      if (themeMeta && previousThemeColor) themeMeta.content = previousThemeColor
+    }
+  }, [menuBackground])
 
   const cartCount = cart.reduce((s, l) => s + l.qty, 0)
   const cartTotal = cart.reduce((s, l) => s + l.unitPrice * l.qty, 0)
@@ -374,7 +410,10 @@ function Shell({ isRtl, title, logo, hero, headerImg, bgImg, onBack, backLabel, 
     // на html — это отключает заход контента под нижний тулбар Safari
     // (фон обрезается полосой). Сдвиг гасится overscroll-behavior-x
     // на html/body в index.css.
-    <div dir={isRtl ? 'rtl' : 'ltr'} className="min-h-screen bg-[#eceef1]">
+    <div
+      dir={isRtl ? 'rtl' : 'ltr'}
+      className={`min-h-screen ${hasBg ? 'bg-transparent' : 'bg-[#eceef1]'}`}
+    >
       {hasBg && (
         // Фон не скроллится вместе с контентом; колонка та же max-w-lg.
         // Высота — 100lvh (большой вьюпорт): на iOS Safari fixed inset-0
@@ -393,7 +432,10 @@ function Shell({ isRtl, title, logo, hero, headerImg, bgImg, onBack, backLabel, 
         {hero ? (
           headerImg ? (
             // Баннер-шапка: фото, поверх — логотип и название (белым на скриме)
-            <header className="relative h-32 shrink-0">
+            <header
+              className="relative shrink-0"
+              style={{ height: 'calc(8rem + env(safe-area-inset-top))' }}
+            >
               <img src={headerImg} alt="" className="absolute inset-0 w-full h-full object-cover" />
               <span className="absolute inset-0 bg-black/35" />
               {/* Логотип на баннере не дублируем — сам баннер уже брендирован.
@@ -405,7 +447,10 @@ function Shell({ isRtl, title, logo, hero, headerImg, bgImg, onBack, backLabel, 
               </div>
             </header>
           ) : (
-          <header className="relative px-6 pt-9 pb-5 text-center">
+          <header
+            className="relative px-6 pb-5 text-center"
+            style={{ paddingTop: 'calc(2.25rem + env(safe-area-inset-top))' }}
+          >
             {/* На фоне-фото: мягкий градиент сверху вытягивает название из картинки
                 и отделяет его от сетки плиток — без коробки, чистая типографика. */}
             {hasBg && (
@@ -421,7 +466,13 @@ function Shell({ isRtl, title, logo, hero, headerImg, bgImg, onBack, backLabel, 
           </header>
           )
         ) : (
-          <header className="sticky top-0 z-10 bg-white border-b border-gray-100 px-4 h-14 flex items-center justify-center relative">
+          <header
+            className="sticky top-0 z-10 bg-white border-b border-gray-100 px-4 flex items-center justify-center relative"
+            style={{
+              height: 'calc(3.5rem + env(safe-area-inset-top))',
+              paddingTop: 'env(safe-area-inset-top)',
+            }}
+          >
             {/* У начала строки: стрелка возврата (если есть) либо логотип; название — по центру */}
             {onBack ? (
               <button
@@ -490,7 +541,8 @@ function CategoryChips({ categories, activeCat, onSelect }: {
   return (
     <nav
       ref={navRef}
-      className="sticky top-14 z-10 bg-white/95 backdrop-blur border-b border-gray-100 px-4 py-2 flex gap-2 overflow-x-auto select-none [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      className="sticky z-10 bg-white/95 backdrop-blur border-b border-gray-100 px-4 py-2 flex gap-2 overflow-x-auto select-none [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      style={{ top: 'calc(3.5rem + env(safe-area-inset-top))' }}
       onMouseDown={(e) => {
         drag.current = { down: true, moved: false, startX: e.clientX, startLeft: navRef.current?.scrollLeft ?? 0 }
       }}

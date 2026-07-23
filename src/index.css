@@ -109,6 +109,20 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     overscroll-behavior-x: none;
   }
 
+  /*
+   * Публичное QR-меню красит canvas документа тем же пресетом, что и Shell.
+   * Это важно на iOS Safari: safe-area вокруг Dynamic Island и резиновый
+   * overscroll показывают фон html, а не position:fixed внутри React.
+   */
+  html.public-menu-themed {
+    background-color: var(--public-menu-theme-color, #f8f9fb);
+    background-image: var(--public-menu-background-image);
+    background-position: center top;
+    background-size: cover;
+    background-repeat: no-repeat;
+    background-attachment: fixed;
+  }
+
   body {
     margin: 0;
     background: #f8f9fb;
@@ -116,6 +130,10 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     /* Гасим горизонтальный «отскок»/сдвиг страницы (iOS rubber-band).
        Только ось X — вертикальный скролл и pull-to-refresh не трогаем. */
     overscroll-behavior-x: none;
+  }
+
+  html.public-menu-themed body {
+    background: transparent;
   }
 
   #root {
