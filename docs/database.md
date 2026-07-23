@@ -479,7 +479,14 @@ auth-аккаунты с валидным `org_id` в `app_metadata`, чтобы
   клампится в `window`;
 - операторские view `ops_fleet` и `ops_errors` — только для
   `service_role`/SQL Editor (см. [deployment.md](deployment.md),
-  «Наблюдаемость парка»).
+  «Наблюдаемость парка»);
+- `get_backoffice_fleet` (097) — веб-раздел «Девайсы» для владельца: парк
+  своей организации (имя, точка, версии, здоровье offline-очереди,
+  `last_seen_at`, `silence_seconds`). Гейт как у `sales_report` (089):
+  членство владельца/менеджера ИЛИ `require_staff_perm(session,'manage')`;
+  `SECURITY INVOKER`, чтение под RLS `devices_select` (чужая org недостижима).
+  Стеки ошибок (`client_errors`) СЮДА НЕ ВХОДЯТ — остаются операторским
+  каналом.
 
 ## Идемпотентность и время клиента
 
