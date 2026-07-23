@@ -488,6 +488,23 @@ auth-аккаунты с валидным `org_id` в `app_metadata`, чтобы
   Стеки ошибок (`client_errors`) СЮДА НЕ ВХОДЯТ — остаются операторским
   каналом.
 
+### Лента активности (098)
+
+- `activity_events` — журнал событий кассы для дашборда владельца: открытие
+  смены (`shift_opened`), закрытие (`shift_closed`), возврат (`refund_issued`).
+  Пишется ТОЛЬКО AFTER-триггерами на `shifts` (INSERT / UPDATE→closed) и
+  `refunds` (INSERT), а не телами RPC — событие атомарно с операцией, ловится
+  независимо от версии `open_shift`/`close_shift`/`issue_refund` и не может
+  быть подделано клиентом. Снапшот (тип, точка, имя сотрудника, сумма, `detail`)
+  фиксируется в момент события. Таблица закрыта на запись клиентам; чтение —
+  своя org (RLS).
+- `get_activity_feed(limit, before, location_id, staff_session)` — лента для
+  веб-кабинета (Home + раздел «Activity»). Гейт и модель доступа как у
+  `get_backoffice_fleet` (097): членство владельца/менеджера ИЛИ
+  `require_staff_perm(session,'manage')`, `SECURITY INVOKER`, keyset-пагинация
+  по `created_at` (`before`). Уведомлений пока нет — поверх этой же таблицы их
+  можно добавить позже без переделки.
+
 ## Идемпотентность и время клиента
 
 Миграция `042_offline_idempotency.sql` добавляет `op_log` и UUID-параметры для
