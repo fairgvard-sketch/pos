@@ -110,17 +110,12 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   }
 
   /*
-   * Публичное QR-меню красит canvas документа тем же пресетом, что и Shell.
-   * Это важно на iOS Safari: safe-area вокруг Dynamic Island и резиновый
-   * overscroll показывают фон html, а не position:fixed внутри React.
+   * Safe-area и rubber-band iOS Safari показывают canvas документа.
+   * Здесь нужен только цвет выбранного пресета; изображение рисует один
+   * прокручиваемый слой Shell, иначе два фона расходятся при скролле.
    */
   html.public-menu-themed {
     background-color: var(--public-menu-theme-color, #f8f9fb);
-    background-image: var(--public-menu-background-image);
-    background-position: center top;
-    background-size: cover;
-    background-repeat: no-repeat;
-    background-attachment: fixed;
   }
 
   body {

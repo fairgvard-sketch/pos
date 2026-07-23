@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { t, formatTime, type Lang } from '../../lib/i18n'
@@ -89,9 +89,9 @@ export default function PublicOrderPage() {
   })
   const menuBackground = menu?.location.background_url ?? null
 
-  // Safari рисует safe-area и rubber-band из canvas документа, а не из
-  // position:fixed подложки Shell. Передаём тот же фон на <html> и красим
-  // браузерный chrome ближайшим цветом выбранного пресета.
+  // Safari рисует safe-area и rubber-band из canvas документа. Корень
+  // получает только подходящий цвет пресета; само изображение остаётся
+  // единственным фоном Shell и прокручивается вместе со страницей.
   useEffect(() => {
     if (!menuBackground) return
 
@@ -100,13 +100,11 @@ export default function PublicOrderPage() {
     const previousThemeColor = themeMeta?.content
 
     root.classList.add('public-menu-themed')
-    root.style.setProperty('--public-menu-background-image', `url(${JSON.stringify(menuBackground)})`)
     root.style.setProperty('--public-menu-theme-color', backgroundThemeColor(menuBackground))
     themeMeta?.setAttribute('content', backgroundThemeColor(menuBackground))
 
     return () => {
       root.classList.remove('public-menu-themed')
-      root.style.removeProperty('--public-menu-background-image')
       root.style.removeProperty('--public-menu-theme-color')
       if (themeMeta && previousThemeColor) themeMeta.content = previousThemeColor
     }
@@ -385,10 +383,10 @@ export default function PublicOrderPage() {
  * компактная sticky-шапка (h-14) — категории/корзина/статус, к ней
  * привязаны чипы навигации (sticky top-14).
  * Оформление (Настройки → Онлайн-заказы): headerImg — баннер вместо
- * белой hero-шапки; bgImg — единая fixed-подложка всего гостевого сценария:
+ * белой hero-шапки; bgImg — единый фон всего гостевого сценария:
  * категории, товары, корзина и статус заказа сохраняют выбранное оформление.
- * На внутренних экранах фон слегка осветляется, чтобы формы и служебный текст
- * читались; главная витрина показывает выбранный фон без затемняющей плёнки.
+ * Фон находится на самой колонке страницы и прокручивается вместе со всем
+ * содержимым, без отдельных fixed-слоёв и цветовых плёнок.
  */
 function Shell({ isRtl, title, logo, hero, headerImg, bgImg, onBack, backLabel, children }: {
   isRtl: boolean
@@ -403,6 +401,16 @@ function Shell({ isRtl, title, logo, hero, headerImg, bgImg, onBack, backLabel, 
   children: React.ReactNode
 }) {
   const hasBg = !!bgImg
+  const backgroundStyle: CSSProperties | undefined = hasBg
+    ? {
+        backgroundColor: backgroundThemeColor(bgImg!),
+        backgroundImage: `url(${JSON.stringify(bgImg)})`,
+        backgroundPosition: 'center top',
+        backgroundSize: '100% auto',
+        backgroundRepeat: 'repeat-y',
+      }
+    : undefined
+
   return (
     // ВАЖНО (iOS Safari): не вешать overflow-x-clip на корень — clip на
     // предке ломает position:fixed у потомков (иконка корзины и нижняя
@@ -412,23 +420,12 @@ function Shell({ isRtl, title, logo, hero, headerImg, bgImg, onBack, backLabel, 
     // на html/body в index.css.
     <div
       dir={isRtl ? 'rtl' : 'ltr'}
-      className={`min-h-screen ${hasBg ? 'bg-transparent' : 'bg-[#eceef1]'}`}
+      className="min-h-screen bg-[#eceef1]"
     >
-      {hasBg && (
-        // Фон не скроллится вместе с контентом; колонка та же max-w-lg.
-        // Высота — 100lvh (большой вьюпорт): на iOS Safari fixed inset-0
-        // тянется лишь до нижней адресной строки, за ней просвечивал серый
-        // body. lvh уводит фото под панель; inset-0 — фолбэк для старых WebView.
-        <div className="fixed inset-x-0 top-0 h-screen [height:100lvh] pointer-events-none" aria-hidden>
-          <div className="max-w-lg mx-auto h-full relative overflow-hidden">
-            <img src={bgImg!} alt="" className="absolute inset-0 w-full h-full object-cover" />
-            {/* Витрина показывает оригинальные цвета пресета. На внутренних
-                экранах лёгкая светлая вуаль поддерживает читаемость форм. */}
-            {!hero && <span className="absolute inset-0 bg-white/55" />}
-          </div>
-        </div>
-      )}
-      <div className={`relative max-w-lg mx-auto min-h-screen flex flex-col ${hasBg ? '' : 'bg-white'}`}>
+      <div
+        className={`relative max-w-lg mx-auto min-h-screen flex flex-col ${hasBg ? '' : 'bg-white'}`}
+        style={backgroundStyle}
+      >
         {hero ? (
           headerImg ? (
             // Баннер-шапка: фото, поверх — логотип и название (белым на скриме)
@@ -451,11 +448,6 @@ function Shell({ isRtl, title, logo, hero, headerImg, bgImg, onBack, backLabel, 
             className="relative px-6 pb-5 text-center"
             style={{ paddingTop: 'calc(2.25rem + env(safe-area-inset-top))' }}
           >
-            {/* На фоне-фото: мягкий градиент сверху вытягивает название из картинки
-                и отделяет его от сетки плиток — без коробки, чистая типографика. */}
-            {hasBg && (
-              <span className="absolute inset-x-0 top-0 h-44 bg-gradient-to-b from-black/60 via-black/25 to-transparent pointer-events-none" aria-hidden />
-            )}
             <h1 className={`relative font-display text-[52px] font-extrabold leading-[0.95] tracking-tight ${
               hasBg
                 ? 'text-white [text-shadow:0_2px_12px_rgba(0,0,0,0.5),0_1px_2px_rgba(0,0,0,0.5)]'
