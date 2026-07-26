@@ -12,6 +12,10 @@ SELECT has_column('op_log', 'result');
 -- open-заказ. RPC вызывается дважды с одним payment UUID.
 INSERT INTO orgs (id, name)
 VALUES ('10000000-0000-4000-8000-000000000001', 'pgTAP org');
+-- Capability-гейты 105: рабочие POS-потоки требуют entitlement 'pos'.
+INSERT INTO organization_products (org_id, product) VALUES
+  ('10000000-0000-4000-8000-000000000001', 'pos');
+
 
 INSERT INTO locations (id, org_id, name)
 VALUES (

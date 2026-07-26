@@ -15,6 +15,10 @@ SELECT plan(9);
 -- ── Фикстура: организация, точка, менеджер, бариста, сессии ──
 INSERT INTO orgs (id, name)
 VALUES ('70000000-0000-4000-8000-000000000001', 'pgTAP org S');
+-- Capability-гейты 105: рабочие POS-потоки требуют entitlement 'pos'.
+INSERT INTO organization_products (org_id, product) VALUES
+  ('70000000-0000-4000-8000-000000000001', 'pos');
+
 
 INSERT INTO locations (id, org_id, name)
 VALUES ('71000000-0000-4000-8000-000000000001',

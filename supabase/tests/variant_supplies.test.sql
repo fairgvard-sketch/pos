@@ -11,6 +11,10 @@ SELECT has_column('stock_movements', 'order_item_id');
 -- ── Фикстуры: org, точка, сотрудник, каталог, расходники ─────
 INSERT INTO orgs (id, name)
 VALUES ('30000000-0000-4000-8000-000000000001', 'pgTAP org');
+-- Capability-гейты 105: рабочие POS-потоки требуют entitlement 'pos'.
+INSERT INTO organization_products (org_id, product) VALUES
+  ('30000000-0000-4000-8000-000000000001', 'pos');
+
 
 INSERT INTO locations (id, org_id, name)
 VALUES ('30100000-0000-4000-8000-000000000001',

@@ -69,20 +69,22 @@ Deno.serve(async (req) => {
   if (locRes.error || !locRes.data) return json({ error: 'invalid_location' }, 404)
   if (catRes.error) return json({ error: 'menu_failed' }, 502)
 
-  // Модули организации (100): публичная витрина требует entitlement `menu`.
+  // Capability-гейты (105): публичная витрина требует public_menu —
+  // возможность дают и ANGLE Menu, и ANGLE Orders (без покупки Menu).
   // module_disabled ≠ invalid_location: модуль не подключён, точка существует.
-  // online_orders читаем тем же запросом: без него страница — чистая витрина
+  // online_orders — той же RPC: без него страница — чистая витрина
   // (без корзины и статуса приёма), см. modules в ответе.
-  const entRes = await supabase
-    .from('organization_products')
-    .select('product')
-    .eq('org_id', (locRes.data as { org_id: string }).org_id)
-    .in('product', ['menu', 'online_orders', 'pos'])
-    .eq('is_active', true)
-  if (entRes.error) return json({ error: 'menu_failed' }, 502)
-  const activeProducts = new Set((entRes.data ?? []).map((r) => (r as { product: string }).product))
-  if (!activeProducts.has('menu')) return json({ error: 'module_disabled' }, 404)
-  const orderingModuleOn = activeProducts.has('online_orders')
+  const gatesRes = await supabase.rpc('org_public_menu_gates', {
+    p_org: (locRes.data as { org_id: string }).org_id,
+  })
+  if (gatesRes.error) return json({ error: 'menu_failed' }, 502)
+  const gates = gatesRes.data as {
+    public_menu: boolean
+    online_orders: boolean
+    pos: boolean
+  }
+  if (!gates?.public_menu) return json({ error: 'module_disabled' }, 404)
+  const orderingModuleOn = gates.online_orders === true
 
   const bySort = (a: { sort_order: number }, b: { sort_order: number }) => a.sort_order - b.sort_order
 
@@ -151,7 +153,7 @@ Deno.serve(async (req) => {
   const fulfilment =
     fulfilmentSetting === 'pos' || fulfilmentSetting === 'standalone'
       ? fulfilmentSetting
-      : activeProducts.has('pos') ? 'pos' : 'standalone'
+      : gates.pos === true ? 'pos' : 'standalone'
   let isOpen = (shiftRes.data ?? []).length > 0
   if (fulfilment === 'standalone') {
     const hoursRes = await supabase.rpc('online_hours_open', {

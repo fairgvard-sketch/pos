@@ -22,6 +22,11 @@ SELECT ok(
 INSERT INTO orgs (id, name)
 VALUES ('60000000-0000-4000-8000-000000000001', 'pgTAP org U'),
        ('60000000-0000-4000-8000-000000000002', 'pgTAP org U2');
+-- Capability-гейты 105: рабочие POS-потоки требуют entitlement 'pos'.
+INSERT INTO organization_products (org_id, product) VALUES
+  ('60000000-0000-4000-8000-000000000001', 'pos'),
+  ('60000000-0000-4000-8000-000000000002', 'pos');
+
 INSERT INTO locations (id, org_id, name)
 VALUES ('61000000-0000-4000-8000-000000000001',
         '60000000-0000-4000-8000-000000000001', 'Loc U');

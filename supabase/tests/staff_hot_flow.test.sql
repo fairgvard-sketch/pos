@@ -30,6 +30,10 @@ SELECT ok(
 -- ── Фикстура: организация, точка, сотрудник, смена, открытый заказ ──
 INSERT INTO orgs (id, name)
 VALUES ('50000000-0000-4000-8000-000000000001', 'pgTAP org H');
+-- Capability-гейты 105: рабочие POS-потоки требуют entitlement 'pos'.
+INSERT INTO organization_products (org_id, product) VALUES
+  ('50000000-0000-4000-8000-000000000001', 'pos');
+
 INSERT INTO locations (id, org_id, name)
 VALUES ('51000000-0000-4000-8000-000000000001',
         '50000000-0000-4000-8000-000000000001', 'Loc H');

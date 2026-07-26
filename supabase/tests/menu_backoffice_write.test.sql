@@ -12,6 +12,11 @@ SELECT plan(6);
 INSERT INTO orgs (id, name) VALUES
   ('90000000-0000-4000-8000-000000000001', 'pgTAP org M1'),
   ('90000000-0000-4000-8000-000000000002', 'pgTAP org M2');
+-- Capability-гейты 105: рабочие POS-потоки требуют entitlement 'pos'.
+INSERT INTO organization_products (org_id, product) VALUES
+  ('90000000-0000-4000-8000-000000000001', 'pos'),
+  ('90000000-0000-4000-8000-000000000002', 'pos');
+
 
 INSERT INTO locations (id, org_id, name) VALUES
   ('91000000-0000-4000-8000-000000000001', '90000000-0000-4000-8000-000000000001', 'Loc M1');
