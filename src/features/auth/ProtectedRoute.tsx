@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../../lib/supabase'
 import { landingRouteFromCache } from './landing'
 import SchemaGuard from '../../components/SchemaGuard'
+import PosGuard from '../../components/PosGuard'
 import { useAuthStore } from '../../store/authStore'
 import type { Role } from '../../types'
 
@@ -35,6 +36,11 @@ export default function ProtectedRoute({ allowedRoles, children }: Props) {
   if (allowedRoles && !allowedRoles.includes(staff.role)) {
     return <Navigate to={landingRouteFromCache(qc)} replace />
   }
-  // Отстающая схема БД блокирует все рабочие экраны диагностикой (081)
-  return <SchemaGuard>{children}</SchemaGuard>
+  // Отстающая схема БД блокирует все рабочие экраны диагностикой (081);
+  // организация без активного продукта pos — явный экран активации (Phase 5)
+  return (
+    <SchemaGuard>
+      <PosGuard>{children}</PosGuard>
+    </SchemaGuard>
+  )
 }

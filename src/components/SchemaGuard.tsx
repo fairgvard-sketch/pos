@@ -1,7 +1,13 @@
+import { lazy, Suspense } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { checkSchemaVersion, MIN_SCHEMA_VERSION } from '../lib/schemaVersion'
 import { useLangStore } from '../store/langStore'
 import { t } from '../lib/i18n'
+
+// Блокирующий экран показывается только при живом ответе сервера (offline →
+// 'unknown' → не блокируем), поэтому его можно грузить лениво и не тащить
+// в стартовый bundle горячего потока.
+const GuardScreen = lazy(() => import('./GuardScreen'))
 
 /**
  * Экран «Требуется обновление базы данных»: если БД отстаёт от фронта
@@ -22,24 +28,27 @@ export default function SchemaGuard({ children }: { children: React.ReactNode })
   if (data?.status !== 'outdated') return <>{children}</>
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 p-8">
-      <div className="max-w-md text-center">
-        <div className="mx-auto w-12 h-12 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M12 9v4m0 4h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </div>
-        <h1 className="text-xl font-bold text-gray-900 mt-4">{t(lang, 'schemaOutdatedTitle')}</h1>
-        <p className="text-sm text-gray-500 mt-2 leading-relaxed">{t(lang, 'schemaOutdatedHint')}</p>
+    <Suspense fallback={null}>
+    <GuardScreen
+      iconClass="bg-amber-100 text-amber-600"
+      icon={
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M12 9v4m0 4h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      }
+      title={t(lang, 'schemaOutdatedTitle')}
+      hint={t(lang, 'schemaOutdatedHint')}
+      extra={
         <p className="text-sm text-gray-500 mt-3">
           {t(lang, 'schemaVersions')
             .replace('{db}', String(data.version))
             .replace('{app}', String(MIN_SCHEMA_VERSION))}
         </p>
-        <button className="btn-secondary mt-6" onClick={() => refetch()} disabled={isRefetching}>
-          {t(lang, 'offlineRetry')}
-        </button>
-      </div>
-    </div>
+      }
+      retryLabel={t(lang, 'offlineRetry')}
+      onRetry={() => refetch()}
+      retrying={isRefetching}
+    />
+    </Suspense>
   )
 }
