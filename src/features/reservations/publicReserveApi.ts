@@ -123,7 +123,8 @@ export async function submitPublicReservation(payload: ReservePayload): Promise<
 }
 
 export interface ReserveStatus {
-  status: 'new' | 'confirmed' | 'rejected' | 'cancelled'
+  /** completed/no_show — терминальные статусы веб-стола хостес (102) */
+  status: 'new' | 'confirmed' | 'rejected' | 'cancelled' | 'completed' | 'no_show'
   reject_reason: string | null
   reserved_at: string
   party_size: number

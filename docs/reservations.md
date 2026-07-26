@@ -99,6 +99,28 @@ instant-блок (`instant`/`combine`/`duration_min`/`buffer_min`), депози
 `src/features/settings/sections/ReservationsDetail.tsx` и
 `backoffice/src/QrChannels.jsx`.
 
+## Веб-стол хостес без POS (102)
+
+Standalone-модуль ANGLE Reserve: полный цикл брони ведётся из кабинета
+(`anglesite`, раздел Reservations) без устройства и PIN.
+
+- `set_reservation_status_web(location, id, status, reason)` — переводы:
+  `new → confirmed|rejected|cancelled`, `confirmed → cancelled|completed|
+  no_show`. Только owner/manager-членство (091/096), модуль
+  `reservations` обязателен; атрибуция — `decided_by_member`.
+- Статусы `completed`/`no_show` — терминальные и **сознательно вне
+  предикатов движка доступности** (occupancy, exclusion-индекс 063
+  считают занятость по `new`/`confirmed`): визит занимает стол в
+  `confirmed`, терминальный статус освобождает окно. Активные
+  arrived/seated в v1 не добавлялись — это переделка движка.
+- Брони, посаженные в POS-заказ (`order_id`, `seat_reservation` 057),
+  из веба неприкасаемы (`pos_mode`) — «посадить и открыть заказ»
+  остаётся возможностью точек с POS.
+- Гостевая страница: `no_show` показывается как отмена, `completed` —
+  подтверждённая карточка без кнопки отмены.
+
+pgTAP: `reservations_web_desk.test.sql`.
+
 ## Проверка после деплоя
 
 ```bash

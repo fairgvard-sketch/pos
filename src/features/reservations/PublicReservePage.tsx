@@ -1048,7 +1048,8 @@ function StatusScreen({ lang, clientUuid, onNew }: {
     )
   }
 
-  if (status.status === 'cancelled') {
+  // no_show (102) для гостя равнозначен отменённой брони — визит не состоялся
+  if (status.status === 'cancelled' || status.status === 'no_show') {
     return (
       <CenterCard>
         <p className="text-2xl font-black text-gray-900">{t(lang, 'rsvCancelledTitle')}</p>
@@ -1105,7 +1106,8 @@ function StatusScreen({ lang, clientUuid, onNew }: {
     )
   }
 
-  // confirmed
+  // confirmed / completed (102): после визита карточка остаётся
+  // подтверждённой, но отменять уже нечего
   return (
     <CenterCard>
       <div className="w-14 h-14 mx-auto rounded-full bg-green-100 flex items-center justify-center">
@@ -1116,7 +1118,7 @@ function StatusScreen({ lang, clientUuid, onNew }: {
       <p className="text-2xl font-black text-gray-900 mt-4">{t(lang, 'rsvConfirmedTitle')}</p>
       <p className="text-sm text-gray-500 mt-2">{t(lang, 'rsvConfirmedHint')}</p>
       {details}
-      {cancelBlock}
+      {status.status === 'completed' ? <NewBtn lang={lang} onClick={onNew} /> : cancelBlock}
     </CenterCard>
   )
 }
