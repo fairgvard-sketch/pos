@@ -254,9 +254,9 @@ export default function OnlineOrdersPage() {
           ) : (
             <div className="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-6 items-start">
               {fresh.length > 0 && (
-                <Section title={t(lang, 'onlineNew')}>
+                <Section title={t(lang, 'onlineNew')} count={fresh.length} tone="urgent">
                   {fresh.map((o) => (
-                    <div key={o.id} className="card p-4 border-2 border-gray-900">
+                    <div key={o.id} className="card p-4 border-2 border-gray-900 shadow-md shadow-black/5">
                       <OrderHead o={o} lang={lang} nowTs={nowTs} />
                       <Items o={o} lang={lang} />
                       {rejecting === o.id ? (
@@ -293,7 +293,7 @@ export default function OnlineOrdersPage() {
               )}
 
               {awaiting.length > 0 && (
-                <Section title={t(lang, 'onlineAwaitingPickup')}>
+                <Section title={t(lang, 'onlineAwaitingPickup')} count={awaiting.length} tone="pickup">
                   {awaiting.map((o) => (
                     <div key={o.id} className="card p-4">
                       <OrderHead o={o} lang={lang} nowTs={nowTs} number={o.order!.daily_number} />
@@ -325,7 +325,7 @@ export default function OnlineOrdersPage() {
               )}
 
               {atTables.length > 0 && (
-                <Section title={t(lang, 'onlineAtTables')}>
+                <Section title={t(lang, 'onlineAtTables')} count={atTables.length} tone="table">
                   {atTables.map((o) => (
                     <div key={o.id} className="card p-4">
                       <OrderHead o={o} lang={lang} nowTs={nowTs} number={o.order!.daily_number} />
@@ -339,7 +339,7 @@ export default function OnlineOrdersPage() {
               )}
 
               {done.length > 0 && (
-                <Section title={t(lang, 'onlineFinished')}>
+                <Section title={t(lang, 'onlineFinished')} count={done.length}>
                   {done.map((o) => (
                     <div key={o.id} className="card p-4 flex items-center gap-3">
                       <div className="flex-1 min-w-0">
@@ -398,10 +398,30 @@ export default function OnlineOrdersPage() {
   )
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({ title, count, tone = 'neutral', children }: {
+  title: string
+  count: number
+  tone?: 'urgent' | 'pickup' | 'table' | 'neutral'
+  children: React.ReactNode
+}) {
+  const countClass = tone === 'urgent'
+    ? 'bg-gray-900 text-white'
+    : tone === 'table'
+      ? 'bg-emerald-100 text-emerald-800'
+      : tone === 'pickup'
+        ? 'bg-blue-100 text-blue-800'
+        : 'bg-gray-200 text-gray-700'
   return (
     <section>
-      <h2 className="text-sm font-bold text-gray-500 uppercase tracking-wide mb-3">{title}</h2>
+      <h2 className="min-h-8 flex items-center gap-2 text-sm font-bold text-gray-600 uppercase tracking-wide mb-3">
+        <span>{title}</span>
+        <span
+          className={`min-w-7 h-7 px-2 rounded-full flex items-center justify-center text-xs font-black tabular-nums ${countClass}`}
+          aria-label={`${title}: ${count}`}
+        >
+          {count}
+        </span>
+      </h2>
       <div className="space-y-3">{children}</div>
     </section>
   )
@@ -415,12 +435,14 @@ function agoText(iso: string, nowTs: number, lang: 'ru' | 'he'): string {
 
 /** Шапка карточки: имя, телефон, когда пришла, когда забрать */
 function OrderHead({ o, lang, nowTs, number }: { o: OnlineOrder; lang: 'ru' | 'he'; nowTs: number; number?: number }) {
+  const primaryLabel = o.customer_name?.trim()
+    || (o.table_label ? `${t(lang, 'onlineTable')} ${o.table_label}` : t(lang, 'onlineGuestOrder'))
   return (
     <div className="flex items-start justify-between gap-3">
       <div className="min-w-0">
         <div className="flex items-baseline gap-2">
           {number !== undefined && <span className="text-xl font-black tabular-nums text-gray-900">#{number}</span>}
-          <span className="font-bold text-gray-900 truncate">{o.customer_name}</span>
+          <span className="font-bold text-gray-900 truncate">{primaryLabel}</span>
           {o.customer_phone && (
             <span className="text-sm text-gray-500 tabular-nums" dir="ltr">{o.customer_phone}</span>
           )}
@@ -437,7 +459,9 @@ function OrderHead({ o, lang, nowTs, number }: { o: OnlineOrder; lang: 'ru' | 'h
           }`}>
             {o.table_label
               ? `${t(lang, 'onlineTable')} ${o.table_label}`
-              : t(lang, o.order_type === 'here' ? 'onlineTypeHere' : o.order_type === 'delivery' ? 'onlineTypeDelivery' : 'onlineTypeTakeaway')}
+              : o.order_type === 'delivery'
+                ? t(lang, 'onlineTypeDelivery')
+                : `${t(lang, 'onlineCounterPickup')} · ${t(lang, o.order_type === 'here' ? 'onlineTypeHere' : 'onlineTypeTakeaway')}`}
           </span>
         </div>
         {o.order_type === 'delivery' && o.delivery_address && (

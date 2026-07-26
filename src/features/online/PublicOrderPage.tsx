@@ -14,7 +14,6 @@ import {
   menuBackgroundUsesDarkUi,
   resolveMenuBackgroundUrl,
 } from './menuBackgrounds'
-import BrandSplash from '../../components/ui/BrandSplash'
 
 /**
  * Публичная страница «закажи и забери» (050): меню → корзина → заявка →
@@ -218,22 +217,28 @@ export default function PublicOrderPage() {
   // React сохраняет его состояние и анимация не перезапускается.
   if (isLoading) {
     return (
-      <>
-        <BrandSplash done={false} />
-        <Shell isRtl={isRtl}>
-          <div className="py-24 text-center text-gray-500">{t(lang, 'loading')}</div>
-        </Shell>
-      </>
+      <Shell isRtl={isRtl}>
+        <MenuSkeleton lang={lang} />
+      </Shell>
     )
   }
   if (isError || !menu) {
     return (
-      <>
-        <BrandSplash />
-        <Shell isRtl={isRtl}>
-          <div className="py-24 text-center text-gray-500">{t(lang, 'pubMenuError')}</div>
-        </Shell>
-      </>
+      <Shell isRtl={isRtl}>
+        <div className="min-h-[70vh] px-6 flex items-center justify-center text-center">
+          <div>
+            <div className="w-12 h-12 mx-auto rounded-2xl bg-rose-50 text-rose-700 flex items-center justify-center text-2xl font-black" aria-hidden>!</div>
+            <p className="mt-4 text-lg font-bold text-gray-900">{t(lang, 'pubMenuError')}</p>
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="mt-5 h-12 px-6 rounded-2xl bg-gray-900 text-white font-bold active:scale-[0.98] transition-transform"
+            >
+              {t(lang, 'pubRetry')}
+            </button>
+          </div>
+        </div>
+      </Shell>
     )
   }
   const orderTypes = menu.location.order_types ?? ['here', 'takeaway']
@@ -247,8 +252,6 @@ export default function PublicOrderPage() {
       : orderTypes[0] ?? 'takeaway'
 
   return (
-    <>
-    <BrandSplash />
     <Shell
       isRtl={isRtl}
       title={menu.location.business_name || menu.location.name}
@@ -290,11 +293,17 @@ export default function PublicOrderPage() {
         // распорка flex-1 толкает подвал к низу экрана при коротком меню
         <>
           <div className="px-4 mt-4">
-            {menu.order_context?.kind === 'table' && (
+            {menu.order_context?.kind === 'table' ? (
               <OrderContextPill
                 label={menu.order_context.label}
                 zone={menu.order_context.zone}
                 lang={lang}
+              />
+            ) : (
+              <PickupContextPill
+                lang={lang}
+                type={initialOrderType}
+                requiresChoice={orderTypes.length > 1}
               />
             )}
             <SearchField value={search} onChange={setSearch} lang={lang} />
@@ -351,25 +360,7 @@ export default function PublicOrderPage() {
             </div>
           )}
           <div className="flex-1" />
-          {!normalizedSearch && <SocialFooter links={menu.location.links} lang={lang} padForCart={false} />}
-          {/* Корзина на начальном экране — иконкой в углу (end = левый в RTL),
-              вместо нижней панели; бейдж с числом позиций, тап → чекаут */}
-          {cartCount > 0 && (
-            <button
-              key={bumpSeq}
-              onClick={() => setView('checkout')}
-              aria-label={t(lang, 'pubShowItems')}
-              className={`fixed top-4 end-4 z-30 w-12 h-12 rounded-full bg-gray-900 text-white ring-1 ring-white/30 flex items-center justify-center shadow-lg shadow-black/25 active:scale-[0.94] transition-all ${bumping ? 'cart-bump' : ''}`}
-            >
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path d="M6 8h12l-1 11a2 2 0 0 1-2 1.8H9A2 2 0 0 1 7 19L6 8Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-                <path d="M9 8V6.5a3 3 0 0 1 6 0V8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-              </svg>
-              <span className="absolute -top-1 -end-1 min-w-5 h-5 px-1 rounded-full bg-white text-gray-900 text-xs font-bold flex items-center justify-center tabular-nums">
-                {cartCount}
-              </span>
-            </button>
-          )}
+          {!normalizedSearch && <SocialFooter links={menu.location.links} lang={lang} padForCart={cartCount > 0} />}
         </>
       )}
 
@@ -392,42 +383,15 @@ export default function PublicOrderPage() {
         )
       })()}
 
-      {view === 'menu' && activeCat && (
-        <>
-          {cartCount > 0 && (
-            // Панель прижата к низу колонки (max-w-lg, не на всю ширину экрана);
-            // лёгкий градиент-подложка только под кнопкой, без сплошной белой
-            // полосы поверх фона-фото. Сама кнопка — общий стиль CTA гостевых
-            // страниц (h-14 rounded-2xl, как чекаут и бронь).
-            // На начальном экране (без категории) панель не показываем —
-            // там корзина живёт иконкой в углу (см. hero-блок выше)
-            <div className="fixed bottom-0 inset-x-0 pointer-events-none">
-              <div className="max-w-lg mx-auto p-4 bg-gradient-to-t from-black/25 to-transparent">
-              <button
-                key={bumpSeq}
-                onClick={() => setView('checkout')}
-                className={`pointer-events-auto w-full h-14 rounded-2xl bg-gray-900 text-white ps-2 pe-5 flex items-center gap-3 active:scale-[0.98] transition-all shadow-lg shadow-black/15 ${bumping ? 'cart-bump' : ''}`}
-              >
-                <span className="w-10 h-10 shrink-0 rounded-xl bg-white text-gray-900 font-bold flex items-center justify-center tabular-nums">
-                  {cartCount}
-                </span>
-                <span className="font-bold">{t(lang, 'pubShowItems')}</span>
-                {/* Сумма к краю (на RTL — левому). dir="ltr" (знак ₪ слева от
-                    числа) — на внутреннем span: на одном элементе с ms-auto он
-                    разворачивал логический отступ, и сумма липла к тексту */}
-                <span className="ms-auto font-bold text-lg tabular-nums">
-                  <span dir="ltr">
-                    ₪{(cartTotal / 100).toLocaleString('he-IL', {
-                      minimumFractionDigits: cartTotal % 100 === 0 ? 0 : 2,
-                      maximumFractionDigits: 2,
-                    })}
-                  </span>
-                </span>
-              </button>
-              </div>
-            </div>
-          )}
-        </>
+      {view === 'menu' && cartCount > 0 && (
+        <CartBar
+          key={bumpSeq}
+          lang={lang}
+          count={cartCount}
+          total={cartTotal}
+          bumping={bumping}
+          onOpen={() => setView('checkout')}
+        />
       )}
 
       {view === 'checkout' && (
@@ -469,7 +433,6 @@ export default function PublicOrderPage() {
         />
       )}
     </Shell>
-    </>
   )
 }
 
@@ -610,6 +573,82 @@ function usePrefersReducedMotion(): boolean {
   return reduced
 }
 
+function MenuSkeleton({ lang }: { lang: Lang }) {
+  return (
+    <div aria-busy="true" aria-label={t(lang, 'loading')} className="px-4 py-6 motion-reduce:[&_*]:animate-none">
+      <div className="h-24 rounded-3xl bg-gray-200 animate-pulse" />
+      <div className="h-12 mt-4 rounded-2xl bg-gray-200 animate-pulse" />
+      <div className="grid grid-cols-2 gap-3 mt-4">
+        {[0, 1, 2, 3, 4, 5].map((item) => (
+          <div key={item} className="aspect-[4/3] rounded-2xl bg-gray-200 animate-pulse" />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function PickupContextPill({ lang, type, requiresChoice }: {
+  lang: Lang
+  type: PublicOrderType
+  requiresChoice: boolean
+}) {
+  const fulfilment = requiresChoice
+    ? t(lang, 'pubChooseAtCheckout')
+    : t(lang, type === 'delivery'
+      ? 'pubDeliveryContext'
+      : type === 'here'
+        ? 'pubCounterHere'
+        : 'pubCounterTakeaway')
+
+  return (
+    <div className="mb-3 min-h-12 rounded-2xl bg-white/90 ring-1 ring-black/10 shadow-sm px-4 py-3 flex items-center gap-3">
+      <span className="w-9 h-9 rounded-xl bg-gray-900 text-white flex items-center justify-center shrink-0" aria-hidden>
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+          <path d="M5 9h14l-1 11H6L5 9Z" strokeLinejoin="round" />
+          <path d="M8 9V7a4 4 0 0 1 8 0v2" strokeLinecap="round" />
+        </svg>
+      </span>
+      <span className="min-w-0">
+        <span className="block text-xs font-semibold text-gray-500">{t(lang, 'pubFulfilment')}</span>
+        <span className="block font-bold text-gray-900 truncate">{fulfilment}</span>
+      </span>
+      <span className="ms-auto text-xs font-bold text-gray-700 bg-gray-100 rounded-full px-3 py-1.5 shrink-0">
+        {t(lang, 'pubNoOnlinePayment')}
+      </span>
+    </div>
+  )
+}
+
+function CartBar({ lang, count, total, bumping, onOpen }: {
+  lang: Lang
+  count: number
+  total: number
+  bumping: boolean
+  onOpen: () => void
+}) {
+  return (
+    <div className="fixed bottom-0 inset-x-0 z-30 pointer-events-none">
+      <div
+        className="max-w-lg mx-auto px-4 pt-6 bg-gradient-to-t from-black/30 via-black/10 to-transparent"
+        style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))' }}
+      >
+        <button
+          type="button"
+          onClick={onOpen}
+          aria-label={`${t(lang, 'pubShowItems')}: ${count}, ${formatMoney(total, lang)}`}
+          className={`pointer-events-auto w-full min-h-14 rounded-2xl bg-gray-900 text-white ps-2 pe-5 flex items-center gap-3 active:scale-[0.98] transition-all shadow-xl shadow-black/20 ${bumping ? 'cart-bump' : ''}`}
+        >
+          <span className="w-10 h-10 shrink-0 rounded-xl bg-white text-gray-900 font-black flex items-center justify-center tabular-nums" aria-live="polite">
+            {count}
+          </span>
+          <span className="font-bold">{t(lang, 'pubShowItems')}</span>
+          <span className="ms-auto font-black text-lg tabular-nums" dir="ltr">{formatMoney(total, lang)}</span>
+        </button>
+      </div>
+    </div>
+  )
+}
+
 /**
  * Подвал главного экрана: Instagram / Facebook / отзыв в Google.
  * Ссылки настраиваются в кассе (Настройки → Обслуживание → Онлайн-заказы);
@@ -732,7 +771,7 @@ function CategoryChips({ categories, activeCat, onSelect }: {
           key={c.id}
           data-active={c.id === activeCat || undefined}
           onClick={() => onSelect(c.id)}
-          className={`public-menu-category-chip h-10 px-4 rounded-full text-sm font-semibold whitespace-nowrap transition-all active:scale-[0.96] shrink-0 ${
+          className={`public-menu-category-chip h-11 px-4 rounded-full text-sm font-semibold whitespace-nowrap transition-all active:scale-[0.96] shrink-0 ${
             c.id === activeCat ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600'
           }`}
         >
@@ -876,6 +915,13 @@ function ItemConfigSheet({ item, lang, isRtl, onClose, onAdd }: {
     return initial
   })
   const [qty, setQty] = useState(1)
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [onClose])
 
   const variant = item.variants.find((v) => v.id === variantId) ?? null
   const base = variant?.price ?? item.price
@@ -914,6 +960,9 @@ function ItemConfigSheet({ item, lang, isRtl, onClose, onAdd }: {
     <div dir={isRtl ? 'rtl' : 'ltr'} className="fixed inset-0 z-20 flex items-end justify-center bg-black/40" onClick={onClose}>
       <div
         className="relative w-full max-w-lg bg-white rounded-t-3xl max-h-[85vh] flex flex-col overflow-hidden"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="public-item-sheet-title"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Крестик — плавающей кнопкой в верхнем углу карточки (над фото).
@@ -922,7 +971,8 @@ function ItemConfigSheet({ item, lang, isRtl, onClose, onAdd }: {
         <button
           onClick={onClose}
           aria-label={t(lang, 'close')}
-          className="absolute top-3 start-3 z-10 w-10 h-10 rounded-full bg-black/10 text-gray-700 font-bold flex items-center justify-center active:scale-[0.94] transition-all"
+          autoFocus
+          className="absolute top-3 start-3 z-10 w-11 h-11 rounded-full bg-black/10 text-gray-700 font-bold flex items-center justify-center active:scale-[0.94] transition-all"
         >
           ✕
         </button>
@@ -932,7 +982,7 @@ function ItemConfigSheet({ item, lang, isRtl, onClose, onAdd }: {
           <img src={item.image_url} alt="" className="w-full h-52 object-contain bg-white pt-3 shrink-0" />
         )}
         <div className="px-6 pt-5 pb-3 shrink-0">
-          <h3 className="text-lg font-bold text-gray-900">{item.name}</h3>
+          <h3 id="public-item-sheet-title" className="text-lg font-bold text-gray-900">{item.name}</h3>
           {item.description && <p className="text-sm text-gray-500 mt-1 leading-snug">{item.description}</p>}
         </div>
 
@@ -1044,6 +1094,7 @@ function CheckoutScreen({
   const [address, setAddress] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showValidation, setShowValidation] = useState(false)
   // client_uuid создаётся один раз на попытку оформления: ретрай после
   // сбоя сети не создаст дубликат (идемпотентность submit_online_order)
   const clientUuid = useMemo(() => crypto.randomUUID(), [])
@@ -1054,9 +1105,24 @@ function CheckoutScreen({
   const contactOk = isTableOrder || (name.trim().length > 0 && phoneDigits.length >= 9)
   const timeOk = isTableOrder || asap || time !== ''
   const valid = cart.length > 0 && contactOk && timeOk && addressOk
+  const validationText = !name.trim() && !isTableOrder
+    ? t(lang, 'pubErrName')
+    : phoneDigits.length < 9 && !isTableOrder
+      ? t(lang, 'pubErrPhone')
+      : !addressOk
+        ? t(lang, 'pubErrAddress')
+        : !timeOk
+          ? t(lang, 'pubErrTime')
+          : cart.length === 0
+            ? t(lang, 'pubErrEmptyCart')
+            : null
 
   async function submit() {
-    if (!valid || busy) return
+    if (!valid) {
+      setShowValidation(true)
+      return
+    }
+    if (busy) return
     setBusy(true)
     setError(null)
     try {
@@ -1099,7 +1165,48 @@ function CheckoutScreen({
   }
 
   return (
-    <div className="px-4 pb-8 pt-4">
+    <div className="px-4 pb-10 pt-4">
+      <div className="mb-4">
+        <h1 className="text-2xl font-black text-gray-900">{t(lang, 'pubCart')}</h1>
+        <p className="text-sm text-gray-500 mt-1">
+          {t(lang, isTableOrder ? 'pubTableCheckoutHint' : 'pubCounterCheckoutHint')}
+        </p>
+      </div>
+
+      {isTableOrder && tableContext ? (
+        <div className="mb-4 rounded-2xl bg-emerald-50 text-emerald-900 px-4 py-4 flex items-center gap-3">
+          <span className="w-10 h-10 rounded-xl bg-white text-emerald-800 flex items-center justify-center font-black shrink-0">
+            {tableContext.label}
+          </span>
+          <span>
+            <span className="block text-xs font-semibold text-emerald-700">{t(lang, 'pubOrderingFor')}</span>
+            <span className="block font-bold">
+              {t(lang, 'pubTable')} {tableContext.label}
+              {tableContext.zone ? ` · ${tableContext.zone}` : ''}
+            </span>
+          </span>
+          <span className="ms-auto text-xs font-bold rounded-full bg-white/80 px-3 py-1.5">
+            {t(lang, 'pubPayLater')}
+          </span>
+        </div>
+      ) : (
+        <div className="mb-4 rounded-2xl bg-gray-100 text-gray-900 px-4 py-4 flex items-center gap-3">
+          <span className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shrink-0" aria-hidden>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <path d="M4 8h16v12H4V8Z" strokeLinejoin="round" />
+              <path d="M7 4h10l2 4H5l2-4Z" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </span>
+          <span>
+            <span className="block text-xs font-semibold text-gray-500">{t(lang, 'pubFulfilment')}</span>
+            <span className="block font-bold">{t(lang, 'pubCounterCheckout')}</span>
+          </span>
+          <span className="ms-auto text-xs font-bold rounded-full bg-white px-3 py-1.5">
+            {t(lang, 'pubPayLater')}
+          </span>
+        </div>
+      )}
+
       <div className="space-y-2">
         {cart.map((l) => (
           <div key={l.key} className="flex items-center gap-3 rounded-2xl bg-white border border-gray-200 shadow-sm px-4 py-3">
@@ -1129,54 +1236,6 @@ function CheckoutScreen({
         {t(lang, isTableOrder ? 'pubPayAtTable' : 'pubPayAtPickup')}
       </p>
 
-      {isTableOrder && tableContext && (
-        <div className="mt-5 rounded-2xl bg-emerald-50 text-emerald-900 px-4 py-4 flex items-center gap-3">
-          <span className="w-10 h-10 rounded-xl bg-white text-emerald-800 flex items-center justify-center font-black shrink-0">
-            {tableContext.label}
-          </span>
-          <span>
-            <span className="block text-xs font-semibold text-emerald-700">{t(lang, 'pubOrderingFor')}</span>
-            <span className="block font-bold">
-              {t(lang, 'pubTable')} {tableContext.label}
-              {tableContext.zone ? ` · ${tableContext.zone}` : ''}
-            </span>
-          </span>
-        </div>
-      )}
-
-      {recommendations.length > 0 && (
-        <section className="mt-6">
-          <h2 className="text-lg font-bold text-gray-900 mb-3">{t(lang, 'pubAlsoTry')}</h2>
-          <div className="flex gap-3 overflow-x-auto pb-2 snap-x [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {recommendations.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => onRecommend(item)}
-                className="w-36 min-h-44 shrink-0 snap-start rounded-2xl overflow-hidden bg-white border border-gray-200 shadow-sm text-start active:scale-[0.98] transition-all"
-              >
-                {item.image_url ? (
-                  <img src={item.image_url} alt="" className="w-full h-24 object-contain bg-gray-50" />
-                ) : (
-                  <span className="block w-full h-24 bg-gray-100" />
-                )}
-                <span className="block px-3 pt-2 text-sm font-bold text-gray-900 line-clamp-2">
-                  {item.name}
-                </span>
-                <span className="flex items-center justify-between gap-2 px-3 pb-3 pt-1">
-                  <span className="text-sm font-semibold text-gray-700" dir="ltr">
-                    {formatMoney(item.price, lang)}
-                  </span>
-                  <span className="w-8 h-8 rounded-full bg-gray-900 text-white flex items-center justify-center text-lg font-bold" aria-hidden>
-                    +
-                  </span>
-                </span>
-              </button>
-            ))}
-          </div>
-        </section>
-      )}
-
       {/* Тип заказа (055): показываем вопрос только если вариантов >1 */}
       {!isTableOrder && orderTypes.length > 1 && (
         <>
@@ -1193,33 +1252,61 @@ function CheckoutScreen({
 
       {/* Адрес доставки — обязателен только для доставки */}
       {orderType === 'delivery' && (
-        <input
-          className="w-full h-12 mt-3 rounded-xl border border-gray-200 px-4 text-base focus:outline-none focus:border-gray-900"
-          placeholder={t(lang, 'pubAddress')}
-          value={address}
-          onChange={(e) => setAddress(e.target.value)}
-        />
+        <label className="block mt-4">
+          <span className="block text-sm font-bold text-gray-900 mb-2">
+            {t(lang, 'pubAddress')} <span className="text-gray-500">· {t(lang, 'pubRequired')}</span>
+          </span>
+          <input
+            className={`w-full h-12 rounded-xl border px-4 text-base focus:outline-none focus:ring-2 focus:ring-gray-900/20 ${
+              showValidation && !addressOk ? 'border-rose-500' : 'border-gray-200 focus:border-gray-900'
+            }`}
+            placeholder={t(lang, 'pubAddressPlaceholder')}
+            value={address}
+            aria-invalid={showValidation && !addressOk}
+            onChange={(e) => setAddress(e.target.value)}
+          />
+        </label>
       )}
 
       {!isTableOrder && (
         <>
           <h2 className="text-lg font-bold text-gray-900 mt-6 mb-3">{t(lang, 'pubContact')}</h2>
           <div className="space-y-3">
-            <input
-              className="w-full h-12 rounded-xl border border-gray-200 px-4 text-base focus:outline-none focus:border-gray-900"
-              placeholder={t(lang, 'pubYourName')}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
-            <input
-              className="w-full h-12 rounded-xl border border-gray-200 px-4 text-base focus:outline-none focus:border-gray-900"
-              placeholder={t(lang, 'pubPhone')}
-              type="tel"
-              dir="ltr"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-            />
+            <label className="block">
+              <span className="block text-sm font-semibold text-gray-700 mb-2">
+                {t(lang, 'pubYourName')} <span className="text-gray-500">· {t(lang, 'pubRequired')}</span>
+              </span>
+              <input
+                className={`w-full h-12 rounded-xl border px-4 text-base focus:outline-none focus:ring-2 focus:ring-gray-900/20 ${
+                  showValidation && !name.trim() ? 'border-rose-500' : 'border-gray-200 focus:border-gray-900'
+                }`}
+                autoComplete="name"
+                value={name}
+                aria-invalid={showValidation && !name.trim()}
+                onChange={(e) => setName(e.target.value)}
+              />
+            </label>
+            <label className="block">
+              <span className="block text-sm font-semibold text-gray-700 mb-2">
+                {t(lang, 'pubPhone')} <span className="text-gray-500">· {t(lang, 'pubRequired')}</span>
+              </span>
+              <input
+                className={`w-full h-12 rounded-xl border px-4 text-base focus:outline-none focus:ring-2 focus:ring-gray-900/20 ${
+                  showValidation && phoneDigits.length < 9 ? 'border-rose-500' : 'border-gray-200 focus:border-gray-900'
+                }`}
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel"
+                dir="ltr"
+                value={phone}
+                aria-invalid={showValidation && phoneDigits.length < 9}
+                onChange={(e) => setPhone(e.target.value)}
+              />
+              <span className="block text-xs text-gray-500 mt-2">{t(lang, 'pubPhoneHint')}</span>
+            </label>
 
+            <div>
+              <span className="block text-sm font-semibold text-gray-700 mb-2">{t(lang, 'pubPickupTime')}</span>
             <div className="flex flex-wrap gap-2">
               <Chip active={asap} onClick={() => setAsap(true)}>
                 {t(lang, 'pubAsap')}
@@ -1233,31 +1320,73 @@ function CheckoutScreen({
                   type="time"
                   className="h-11 rounded-xl border border-gray-200 px-3 text-base focus:outline-none focus:border-gray-900"
                   value={time}
+                  aria-invalid={showValidation && !timeOk}
                   onChange={(e) => setTime(e.target.value)}
                 />
               )}
+            </div>
             </div>
           </div>
         </>
       )}
 
-      <input
-        className="w-full h-12 mt-3 rounded-xl border border-gray-200 px-4 text-base focus:outline-none focus:border-gray-900"
-        placeholder={t(lang, 'pubNote')}
-        value={note}
-        onChange={(e) => setNote(e.target.value)}
-      />
+      <label className="block mt-5">
+        <span className="block text-sm font-semibold text-gray-700 mb-2">
+          {t(lang, 'pubNote')} <span className="text-gray-500">· {t(lang, 'pubOptional')}</span>
+        </span>
+        <input
+          className="w-full h-12 rounded-xl border border-gray-200 px-4 text-base focus:outline-none focus:border-gray-900 focus:ring-2 focus:ring-gray-900/20"
+          placeholder={t(lang, 'pubNotePlaceholder')}
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+        />
+      </label>
 
       {error && <div className="mt-4 rounded-2xl bg-red-50 text-red-600 text-sm font-semibold px-4 py-3">{error}</div>}
+      {showValidation && validationText && (
+        <div role="alert" className="mt-4 rounded-2xl bg-rose-50 text-rose-700 text-sm font-semibold px-4 py-3">
+          {validationText}
+        </div>
+      )}
       {!isOpen && <div className="mt-4 rounded-2xl bg-amber-50 text-amber-800 text-sm font-semibold px-4 py-3">{t(lang, 'pubClosed')}</div>}
 
       <button
-        disabled={!valid || busy || !isOpen}
+        disabled={busy || !isOpen}
         onClick={submit}
-        className="w-full h-14 mt-4 rounded-2xl bg-gray-900 text-white font-bold disabled:opacity-40 active:scale-[0.98] transition-all"
+        className="w-full min-h-14 mt-4 rounded-2xl bg-gray-900 text-white px-5 font-bold disabled:opacity-40 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
       >
-        {busy ? t(lang, 'pubSubmitting') : `${t(lang, 'pubSubmit')} · ${formatMoney(total, lang)}`}
+        <span>{busy ? t(lang, 'pubSubmitting') : t(lang, isTableOrder ? 'pubSubmitTable' : 'pubSubmitCounter')}</span>
+        {!busy && <span aria-hidden>·</span>}
+        {!busy && <span dir="ltr">{formatMoney(total, lang)}</span>}
       </button>
+      <p className="text-center text-xs text-gray-500 mt-2">{t(lang, 'pubNoOnlinePaymentHint')}</p>
+
+      {recommendations.length > 0 && (
+        <section className="mt-8 pt-6 border-t border-gray-200">
+          <h2 className="text-lg font-bold text-gray-900 mb-3">{t(lang, 'pubAlsoTry')}</h2>
+          <div className="flex gap-3 overflow-x-auto pb-2 snap-x [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {recommendations.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => onRecommend(item)}
+                className="w-36 min-h-44 shrink-0 snap-start rounded-2xl overflow-hidden bg-white border border-gray-200 shadow-sm text-start active:scale-[0.98] transition-all"
+              >
+                {item.image_url ? (
+                  <img src={item.image_url} alt="" className="w-full h-24 object-contain bg-gray-50" />
+                ) : (
+                  <span className="block w-full h-24 bg-gray-100" />
+                )}
+                <span className="block px-3 pt-2 text-sm font-bold text-gray-900 line-clamp-2">{item.name}</span>
+                <span className="flex items-center justify-between gap-2 px-3 pb-3 pt-1">
+                  <span className="text-sm font-semibold text-gray-700" dir="ltr">{formatMoney(item.price, lang)}</span>
+                  <span className="w-8 h-8 rounded-full bg-gray-900 text-white flex items-center justify-center text-lg font-bold" aria-hidden>+</span>
+                </span>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   )
 }
@@ -1317,9 +1446,10 @@ function StatusScreen({ lang, clientUuid, onNewOrder }: {
   if (status.status === 'new') {
     return (
       <CenterCard>
-        <div className="w-10 h-10 mx-auto rounded-full border-4 border-gray-200 border-t-gray-900 animate-spin" />
+        <div className="w-10 h-10 mx-auto rounded-full border-4 border-gray-200 border-t-gray-900 animate-spin motion-reduce:animate-none" />
         <p className="text-xl font-bold text-gray-900 mt-5">{t(lang, 'pubWaiting')}</p>
         <p className="text-sm text-gray-500 mt-2">{t(lang, 'pubWaitingHint')}</p>
+        <StatusSteps lang={lang} active={0} />
       </CenterCard>
     )
   }
@@ -1339,6 +1469,7 @@ function StatusScreen({ lang, clientUuid, onNewOrder }: {
     <CenterCard>
       <p className="text-sm font-bold text-gray-500 uppercase tracking-wide">{t(lang, 'pubOrderNumber')}</p>
       <p className="text-6xl font-black tabular-nums text-gray-900 mt-2">#{status.daily_number}</p>
+      <StatusSteps lang={lang} active={isDone ? 2 : 1} />
       {/* Таймер в стиле Wolt (061): пока заказ готовится — обратный отсчёт
           до decided_at + prep_max. Готов → просто «Заказ выдан». */}
       {!isDone && status.decided_at && (status.prep_max ?? 0) > 0 && (
@@ -1353,15 +1484,48 @@ function StatusScreen({ lang, clientUuid, onNewOrder }: {
       </p>
       <p className="text-sm text-gray-500 mt-2">
         {isDone
-          ? t(lang, 'pubDoneHint')
+          ? t(lang, status.table_label ? 'pubDoneTableHint' : 'pubDoneCounterHint')
           : status.table_label
             ? `${t(lang, 'pubTableAcceptedHint')} ${status.table_label}.`
-            : t(lang, 'pubShowNumber')}
+            : t(lang, 'pubCounterAcceptedHint')}
       </p>
       <p className="text-lg font-bold tabular-nums text-gray-900 mt-3" dir="ltr">{formatMoney(status.total, lang)}</p>
       {/* Пока заказ не выдан — вторичная, чтобы случайно не потерять экран с номером */}
       <NewOrderBtn lang={lang} onClick={onNewOrder} secondary={!isDone} />
     </CenterCard>
+  )
+}
+
+function StatusSteps({ lang, active }: { lang: Lang; active: 0 | 1 | 2 }) {
+  const steps = [
+    t(lang, 'pubStepSent'),
+    t(lang, 'pubStepAccepted'),
+    t(lang, 'pubStepReady'),
+  ]
+
+  return (
+    <ol className="mt-7 flex items-start" aria-label={t(lang, 'pubOrderProgress')}>
+      {steps.map((label, index) => (
+        <li key={label} className="flex-1 min-w-0 relative">
+          {index > 0 && (
+            <span
+              className={`absolute top-4 end-1/2 w-full h-0.5 ${index <= active ? 'bg-gray-900' : 'bg-gray-200'}`}
+              aria-hidden
+            />
+          )}
+          <span className={`relative z-[1] w-8 h-8 mx-auto rounded-full flex items-center justify-center text-xs font-black ${
+            index <= active ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-500'
+          }`}>
+            {index < active ? '✓' : index + 1}
+          </span>
+          <span className={`block mt-2 px-1 text-xs font-semibold ${
+            index <= active ? 'text-gray-900' : 'text-gray-500'
+          }`}>
+            {label}
+          </span>
+        </li>
+      ))}
+    </ol>
   )
 }
 
