@@ -1,10 +1,12 @@
--- pgTAP: продуктовые модули организации и digital-only онбординг (100).
+-- pgTAP: продуктовые модули организации и digital-only онбординг (100, 104).
 --
--- Проверяется контракт Phase 1 standalone digital products:
+-- Проверяется контракт продуктовых модулей и безопасного провижионинга:
 --   * organization_products закрыта на запись клиентам, чтение — своя org;
 --   * bootstrap_digital_org создаёт org/точку/членство БЕЗ PIN, staff
 --     и устройства, пишет в app_metadata только org_id;
---   * device-путь bootstrap_org сеет все модули (нет регрессии POS);
+--   * онбординги НЕ выдают entitlement'ы (104): device-путь фиксирует
+--     заявку на 'pos', digital-путь — заявки на выбранные модули;
+--     браузерный список продуктов не активирует доступ;
 --   * submit_online_order / submit_reservation отклоняют организацию
 --     без модуля кодом module_disabled, причём ДО settings-тумблеров;
 --   * организация с модулем проходит проверку и падает дальше по
@@ -12,7 +14,7 @@
 -- JWT-клеймы подменяются только внутри локальной транзакции теста.
 
 BEGIN;
-SELECT plan(28);
+SELECT plan(30);
 
 -- ── Структура и доступ ───────────────────────────────────────
 SELECT has_table('organization_products');
@@ -60,7 +62,7 @@ INSERT INTO auth.users (id, email) VALUES
   ('52000000-0000-4000-8000-000000000002', 'owner@cafe.example'),   -- digital-владелец
   ('52000000-0000-4000-8000-000000000003', 'second@cafe.example');  -- invalid_products
 
--- ── Device-путь: bootstrap_org сеет все четыре модуля ────────
+-- ── Device-путь: организация без entitlement'ов + заявка pos ─
 SELECT set_config(
   'request.jwt.claims',
   '{"sub":"52000000-0000-4000-8000-000000000001","role":"authenticated"}',
@@ -71,9 +73,15 @@ SELECT bootstrap_org('Cafe POS', 'Main', 'Boss', '1234') AS res;
 
 SELECT is(
   (SELECT COUNT(*)::int FROM organization_products
-   WHERE org_id = (SELECT (res ->> 'org_id')::uuid FROM _pos) AND is_active),
-  4,
-  'device-онбординг получает все четыре модуля'
+   WHERE org_id = (SELECT (res ->> 'org_id')::uuid FROM _pos)),
+  0,
+  'device-онбординг НЕ выдаёт entitlement''ы (провижионинг только оператором)'
+);
+SELECT is(
+  (SELECT status FROM product_activation_requests
+   WHERE org_id = (SELECT (res ->> 'org_id')::uuid FROM _pos) AND product = 'pos'),
+  'pending',
+  'device-онбординг фиксирует pending-заявку на pos'
 );
 
 -- ── Digital-путь: без PIN, staff и устройства ────────────────
@@ -89,14 +97,20 @@ WITH r AS (
 )
 SELECT (res ->> 'org_id')::uuid      AS org_id,
        (res ->> 'location_id')::uuid AS location_id,
-       res -> 'products'             AS products
+       res -> 'requested_products'   AS products
 FROM r;
 
 SELECT is(
-  (SELECT array_agg(product ORDER BY product) FROM organization_products
-   WHERE org_id = (SELECT org_id FROM _digital) AND is_active),
+  (SELECT COUNT(*)::int FROM organization_products
+   WHERE org_id = (SELECT org_id FROM _digital)),
+  0,
+  'браузерный список продуктов НЕ активирует entitlement''ы (104)'
+);
+SELECT is(
+  (SELECT array_agg(product ORDER BY product) FROM product_activation_requests
+   WHERE org_id = (SELECT org_id FROM _digital) AND status = 'pending'),
   ARRAY['menu'],
-  'digital-org получает только запрошенные digital-модули; pos отброшен'
+  'digital-онбординг фиксирует заявки только на digital-модули; pos отброшен'
 );
 SELECT is(
   (SELECT role FROM organization_members
@@ -121,8 +135,8 @@ SELECT ok(
   'location_id в JWT digital-владельца НЕ пишется (семантика устройства)'
 );
 SELECT ok(
-  (SELECT org_has_product(org_id, 'menu') FROM _digital),
-  'org_has_product видит купленный модуль'
+  NOT (SELECT org_has_product(org_id, 'menu') FROM _digital),
+  'pending-заявка не является entitlement''ом: org_has_product = false'
 );
 SELECT ok(
   NOT (SELECT org_has_product(org_id, 'pos') FROM _digital),
@@ -164,8 +178,8 @@ SELECT is(
 );
 SELECT is(
   (SELECT get_backoffice_context() -> 'products'),
-  '["menu"]'::jsonb,
-  'контекст бэкофиса отдаёт модули организации'
+  '[]'::jsonb,
+  'контекст бэкофиса без выданных модулей — пустой список (заявка ≠ доступ)'
 );
 SELECT is(
   (SELECT (get_backoffice_context() -> 'counts' ->> 'staff')::int),
@@ -174,8 +188,8 @@ SELECT is(
 );
 SELECT is(
   (SELECT COUNT(*)::int FROM organization_products),
-  1,
-  'RLS: клиент видит только модули своей организации'
+  0,
+  'RLS: клиент не видит модули чужих организаций (у своей их нет)'
 );
 
 RESET ROLE;
