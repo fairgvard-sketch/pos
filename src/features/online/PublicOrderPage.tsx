@@ -24,6 +24,10 @@ import {
  */
 
 const ACTIVE_KEY = 'kassa-public-active' // {clientUuid, locId} — текущая заявка
+const BRANDED_HERO_VIDEOS: Record<string, string> = {
+  // Developer showcase account: uploaded settings still take precedence.
+  'fe2eebf0-65e3-45b4-a81f-331359d71955': '/brand/bulochka/hero.mp4',
+}
 
 /** «~20–35 мин» / «~20 мин» / '' — вилка приготовления для гостя (061) */
 function formatPrepRange(lang: Lang, min: number, max: number): string {
@@ -197,20 +201,10 @@ export default function PublicOrderPage() {
   }
 
   function openItem(item: PublicItem) {
-    // Витрина (100): тап по товару всегда открывает карточку с описанием —
-    // добавления в корзину нет.
-    if (isViewOnlyMenu(menu?.location)) {
-      setConfigItem(item)
-      return
-    }
-    if (item.variants.length === 0 && item.modifier_groups.length === 0) {
-      addLine({
-        itemId: item.id, name: item.name, variantId: null, variantName: null,
-        modIds: [], modNames: [], unitPrice: item.price,
-      })
-    } else {
-      setConfigItem(item)
-    }
+    // Карточка товара — часть витрины: любой товар сначала раскрывается
+    // крупно с фото, описанием и ценой. Это сохраняет предсказуемый UX и
+    // не добавляет простые позиции в корзину неожиданно по тапу по карточке.
+    setConfigItem(item)
   }
 
   // ── Экран статуса активной заявки ──────────────────────────
@@ -269,7 +263,6 @@ export default function PublicOrderPage() {
       : requestedType && orderTypes.includes(requestedType)
       ? requestedType
       : orderTypes[0] ?? 'takeaway'
-
   return (
     <Shell
       isRtl={isRtl}
@@ -277,7 +270,7 @@ export default function PublicOrderPage() {
       logo={menu.location.logo_url}
       hero={view === 'menu' && !activeCat}
       headerImg={menu.location.header_url}
-      heroVideo={menu.location.hero_video_url}
+      heroVideo={menu.location.hero_video_url ?? BRANDED_HERO_VIDEOS[locId] ?? null}
       bgImg={menuBackground}
       // Возврат в шапке: из чекаута → к меню, из категории → к плиткам
       onBack={
@@ -311,7 +304,7 @@ export default function PublicOrderPage() {
         // Главный экран: сетка плиток фикс. пропорции (aspect-4/3 — ряды ровные),
         // распорка flex-1 толкает подвал к низу экрана при коротком меню
         <>
-          <div className="px-4 mt-4">
+          <div className="public-menu-home-tools px-4">
             {menu.order_context?.kind === 'table' ? (
               <OrderContextPill
                 label={menu.order_context.label}
@@ -358,21 +351,22 @@ export default function PublicOrderPage() {
               )}
             </div>
           ) : (
-            <div className="px-4 mt-4 grid grid-cols-2 gap-3">
-              {menu.categories.map((cat) => {
+            <div className="public-menu-category-grid px-4 mt-4">
+              {menu.categories.map((cat, index) => {
                 // Обложка плитки (080): своя картинка категории, иначе фото первого товара
                 const cover = cat.cover_url ?? cat.items.find((i) => i.image_url)?.image_url
                 return (
                   <button
                     key={cat.id}
                     onClick={() => setActiveCat(cat.id)}
-                    className="relative aspect-[4/3] rounded-2xl overflow-hidden bg-gray-200 ring-1 ring-black/10 shadow-sm active:scale-[0.98] transition-all text-start"
+                    className={`public-menu-category-card${index === 0 ? ' is-featured' : ''}`}
                   >
                     {cover && <CategoryCover src={cover} />}
-                    {/* Градиент снизу (стиль Wolt): фото видно целиком, подпись
-                        всегда лежит на тёмном — читаема на любой картинке товара */}
-                    <span className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
-                    <span className="absolute inset-x-0 bottom-0 p-3 text-white text-lg font-bold leading-tight [text-shadow:0_1px_4px_rgba(0,0,0,0.5)]">{cat.name}</span>
+                    <span className="public-menu-category-shade" />
+                    <span className="public-menu-category-copy">
+                      <strong>{cat.name}</strong>
+                      <small>{cat.items.length}</small>
+                    </span>
                   </button>
                 )
               })}
@@ -390,11 +384,20 @@ export default function PublicOrderPage() {
           <>
             {/* Чипы быстрого перехода между категориями (возврат к плиткам — стрелка в шапке) */}
             <CategoryChips categories={menu.categories} activeCat={activeCat} onSelect={setActiveCat} />
-            <div className="px-4 pb-32">
-              <h2 className="public-menu-section-title text-lg font-bold text-gray-900 mt-5 mb-3">{cat.name}</h2>
-              <div className="space-y-2">
+            <div className="public-menu-products-section px-4 pb-32">
+              <div className="public-menu-section-heading">
+                <h2 className="public-menu-section-title">{cat.name}</h2>
+                <span className="public-menu-section-count">{cat.items.length}</span>
+              </div>
+              <div className="public-menu-product-grid">
                 {cat.items.map((item) => (
-                  <ItemRow key={item.id} item={item} lang={lang} onTap={() => openItem(item)} />
+                  <ItemRow
+                    key={item.id}
+                    item={item}
+                    lang={lang}
+                    layout="grid"
+                    onTap={() => openItem(item)}
+                  />
                 ))}
               </div>
             </div>
@@ -483,6 +486,13 @@ function Shell({ isRtl, title, logo, hero, headerImg, heroVideo, bgImg, onBack, 
 }) {
   const hasBg = !!bgImg
   const reducedMotion = usePrefersReducedMotion()
+  const hasHeroMedia = !!heroVideo || !!headerImg
+  const openMenu = () => {
+    document.getElementById('public-menu-content')?.scrollIntoView({
+      behavior: reducedMotion ? 'auto' : 'smooth',
+      block: 'start',
+    })
+  }
   return (
     // ВАЖНО (iOS Safari): не вешать overflow-x-clip на корень — clip на
     // предке ломает position:fixed у потомков (иконка корзины и нижняя
@@ -494,56 +504,54 @@ function Shell({ isRtl, title, logo, hero, headerImg, heroVideo, bgImg, onBack, 
       dir={isRtl ? 'rtl' : 'ltr'}
       className={`public-menu-shell min-h-screen ${hasBg ? 'bg-transparent' : 'bg-[#eceef1]'}`}
     >
-      <div className={`relative max-w-lg mx-auto min-h-screen flex flex-col ${hasBg ? '' : 'bg-white'}`}>
+      <div className={`public-menu-frame relative mx-auto min-h-screen flex flex-col ${hasBg ? '' : 'bg-white'}`}>
         {hero ? (
-          headerImg || heroVideo ? (
-            // Hero: autoplay-видео (если задано), иначе фото. headerImg служит
-            // poster/fallback, поверх — название на контрастном скриме.
-            <header
-              className="relative shrink-0"
-              style={{
-                height: `calc(${heroVideo ? '13rem' : '8rem'} + env(safe-area-inset-top))`,
-              }}
-            >
-              {heroVideo ? (
-                <video
-                  key={heroVideo}
-                  src={heroVideo}
-                  poster={headerImg ?? undefined}
-                  autoPlay={!reducedMotion}
-                  muted
-                  loop
-                  playsInline
-                  preload={reducedMotion ? 'none' : 'metadata'}
-                  aria-hidden="true"
-                  className="absolute inset-0 w-full h-full object-cover bg-gray-900"
-                />
+          <header className={`public-menu-hero${hasHeroMedia ? ' has-media' : ' is-brand-only'}`}>
+            {heroVideo ? (
+              <video
+                key={heroVideo}
+                src={heroVideo}
+                poster={headerImg ?? undefined}
+                autoPlay={!reducedMotion}
+                muted
+                loop
+                playsInline
+                preload={reducedMotion ? 'none' : 'metadata'}
+                aria-hidden="true"
+                className="public-menu-hero-media"
+              />
+            ) : headerImg ? (
+              <img
+                src={headerImg}
+                alt=""
+                className="public-menu-hero-media"
+              />
+            ) : null}
+            <span className="public-menu-hero-scrim" />
+            <div className="public-menu-hero-brand">
+              {logo ? (
+                <img src={logo} alt="" className="public-menu-hero-logo" />
               ) : (
-                <img src={headerImg ?? ''} alt="" className="absolute inset-0 w-full h-full object-cover" />
+                <span className="public-menu-hero-monogram" aria-hidden>
+                  {(title ?? '').slice(0, 1)}
+                </span>
               )}
-              <span className="absolute inset-0 bg-black/35" />
-              {/* Логотип на баннере не дублируем — сам баннер уже брендирован.
-                  Название — чистой типографикой поверх скрима + акцентная черта. */}
-              <div className="absolute inset-0 flex flex-col items-center justify-center px-4 pointer-events-none">
-                <h1 className="font-display text-[52px] font-extrabold text-white leading-[0.95] tracking-tight text-center [text-shadow:0_2px_12px_rgba(0,0,0,0.5),0_1px_2px_rgba(0,0,0,0.5)]">
-                  {title ?? ''}
-                </h1>
-              </div>
-            </header>
-          ) : (
-          <header
-            className="relative px-6 pb-5 text-center"
-            style={{ paddingTop: 'calc(2.25rem + env(safe-area-inset-top))' }}
-          >
-            <h1 className={`relative font-display text-[52px] font-extrabold leading-[0.95] tracking-tight ${
-              hasBg
-                ? 'text-white [text-shadow:0_2px_12px_rgba(0,0,0,0.5),0_1px_2px_rgba(0,0,0,0.5)]'
-                : 'text-gray-900'
-            }`}>
-              {title ?? ''}
-            </h1>
+            </div>
+            <div className="public-menu-hero-copy">
+              <h1 className="font-display">{title ?? ''}</h1>
+            </div>
+            <button
+              type="button"
+              className="public-menu-hero-scroll"
+              onClick={openMenu}
+              aria-label="פתיחת התפריט"
+            >
+              <span>לתפריט</span>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="m6 9 6 6 6-6" />
+              </svg>
+            </button>
           </header>
-          )
         ) : (
           <header
             className="public-menu-compact-header sticky top-0 z-10 bg-white border-b border-gray-100 px-4 flex items-center justify-center relative"
@@ -573,7 +581,12 @@ function Shell({ isRtl, title, logo, hero, headerImg, heroVideo, bgImg, onBack, 
             </span>
           </header>
         )}
-        <div className="flex-1 flex flex-col">{children}</div>
+        <div
+          id={hero ? 'public-menu-content' : undefined}
+          className={`flex-1 flex flex-col${hero ? ' public-menu-content-after-hero' : ''}`}
+        >
+          {children}
+        </div>
       </div>
     </div>
   )
@@ -596,7 +609,7 @@ function usePrefersReducedMotion(): boolean {
 function MenuSkeleton({ lang }: { lang: Lang }) {
   return (
     <div aria-busy="true" aria-label={t(lang, 'loading')} className="px-4 py-6 motion-reduce:[&_*]:animate-none">
-      <div className="h-24 rounded-3xl bg-gray-200 animate-pulse" />
+      <div className="h-72 rounded-[2rem] bg-gray-200 animate-pulse" />
       <div className="h-12 mt-4 rounded-2xl bg-gray-200 animate-pulse" />
       <div className="grid grid-cols-2 gap-3 mt-4">
         {[0, 1, 2, 3, 4, 5].map((item) => (
@@ -649,7 +662,7 @@ function CartBar({ lang, count, total, bumping, onOpen }: {
   return (
     <div className="fixed bottom-0 inset-x-0 z-30 pointer-events-none">
       <div
-        className="max-w-lg mx-auto px-4 pt-6 bg-gradient-to-t from-black/30 via-black/10 to-transparent"
+        className="public-menu-frame mx-auto px-4 pt-6 bg-gradient-to-t from-black/30 via-black/10 to-transparent"
         style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))' }}
       >
         <button
@@ -879,31 +892,43 @@ function SocialFooter({ links, lang, padForCart }: {
  * цена. Без фото — плейсхолдер с первой буквой названия,
  * чтобы список не «прыгал» по выравниванию.
  */
-function ItemRow({ item, lang, onTap }: { item: PublicItem; lang: Lang; onTap: () => void }) {
+function ItemRow({ item, lang, onTap, layout = 'row' }: {
+  item: PublicItem
+  lang: Lang
+  onTap: () => void
+  layout?: 'row' | 'grid'
+}) {
   const prices = item.variants.length > 0 ? item.variants.map((v) => v.price) : [item.price]
   const minPrice = Math.min(...prices)
   const hasRange = new Set(prices).size > 1
   return (
     <button
       onClick={onTap}
-      className="public-menu-item-card w-full rounded-2xl bg-white border border-gray-200 shadow-sm hover:bg-gray-50 active:scale-[0.99] transition-all flex items-center gap-3 p-3 text-start"
+      className={`public-menu-item-card is-${layout}`}
     >
-      {item.image_url ? (
-        <img src={item.image_url} alt="" loading="lazy" className="w-16 h-16 rounded-xl object-cover shrink-0 bg-white" />
-      ) : (
-        <span className="w-16 h-16 rounded-xl bg-white text-gray-300 text-2xl font-bold shrink-0 flex items-center justify-center">
-          {item.name.slice(0, 1)}
-        </span>
-      )}
-      <span className="flex-1 min-w-0">
-        <span className="public-menu-item-primary block font-semibold text-gray-900 leading-snug">{item.name}</span>
-        {item.description && (
-          <span className="public-menu-item-muted block text-xs text-gray-500 mt-0.5 leading-snug line-clamp-2">{item.description}</span>
+      <span className="public-menu-item-media">
+        {item.image_url ? (
+          <img src={item.image_url} alt="" loading="lazy" />
+        ) : (
+          <span className="public-menu-item-placeholder" aria-hidden>
+            {item.name.slice(0, 1)}
+          </span>
         )}
-        <span className="public-menu-item-primary block text-sm font-semibold text-gray-900 mt-1 tabular-nums">
-          {hasRange && <span className="public-menu-item-muted text-gray-500 font-normal">{t(lang, 'pubFrom')} </span>}
-          {/* dir=ltr: цена не пляшет в bidi-контексте ивритских названий */}
-          <span dir="ltr">{formatMoney(minPrice, lang)}</span>
+      </span>
+      <span className="public-menu-item-body">
+        <strong className="public-menu-item-primary">{item.name}</strong>
+        {item.description && (
+          <span className="public-menu-item-muted">{item.description}</span>
+        )}
+        <span className="public-menu-item-footer">
+          <span className="public-menu-item-price">
+            {hasRange && <span className="public-menu-item-price-prefix">{t(lang, 'pubFrom')} </span>}
+            {/* dir=ltr: цена не пляшет в bidi-контексте ивритских названий */}
+            <span dir="ltr">{formatMoney(minPrice, lang)}</span>
+          </span>
+          <span className="public-menu-item-action" aria-hidden>
+            {item.variants.length > 0 || item.modifier_groups.length > 0 ? '⋯' : '+'}
+          </span>
         </span>
       </span>
     </button>
@@ -941,8 +966,13 @@ function ItemConfigSheet({ item, lang, isRtl, viewOnly = false, onClose, onAdd }
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onClose()
     }
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
     window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
+    return () => {
+      document.body.style.overflow = previousOverflow
+      window.removeEventListener('keydown', onKeyDown)
+    }
   }, [onClose])
 
   const variant = item.variants.find((v) => v.id === variantId) ?? null
@@ -979,9 +1009,13 @@ function ItemConfigSheet({ item, lang, isRtl, viewOnly = false, onClose, onAdd }
   }
 
   return (
-    <div dir={isRtl ? 'rtl' : 'ltr'} className="fixed inset-0 z-20 flex items-end justify-center bg-black/40" onClick={onClose}>
+    <div
+      dir={isRtl ? 'rtl' : 'ltr'}
+      className="public-menu-item-overlay fixed inset-0 z-40 flex items-end justify-center"
+      onClick={onClose}
+    >
       <div
-        className="relative w-full max-w-lg bg-white rounded-t-3xl max-h-[85vh] flex flex-col overflow-hidden"
+        className="public-menu-item-sheet relative w-full bg-white overflow-hidden"
         role="dialog"
         aria-modal="true"
         aria-labelledby="public-item-sheet-title"
@@ -994,21 +1028,32 @@ function ItemConfigSheet({ item, lang, isRtl, viewOnly = false, onClose, onAdd }
           onClick={onClose}
           aria-label={t(lang, 'close')}
           autoFocus
-          className="absolute top-3 start-3 z-10 w-11 h-11 rounded-full bg-black/10 text-gray-700 font-bold flex items-center justify-center active:scale-[0.94] transition-all"
+          className="public-menu-item-close"
         >
           ✕
         </button>
-        {item.image_url && (
-          // Фото целиком, без кропа: снимки каталога — студийные на белом,
-          // object-cover в низкой широкой шапке оставлял крупный обрезок
-          <img src={item.image_url} alt="" className="w-full h-52 object-contain bg-white pt-3 shrink-0" />
-        )}
-        <div className="px-6 pt-5 pb-3 shrink-0">
-          <h3 id="public-item-sheet-title" className="text-lg font-bold text-gray-900">{item.name}</h3>
-          {item.description && <p className="text-sm text-gray-500 mt-1 leading-snug">{item.description}</p>}
+
+        <div className="public-menu-item-detail-hero">
+          {item.image_url ? (
+            <img src={item.image_url} alt="" className="public-menu-item-detail-image" />
+          ) : (
+            <span className="public-menu-item-detail-placeholder" aria-hidden>
+              {item.name.slice(0, 1)}
+            </span>
+          )}
+          <span className="public-menu-item-detail-fade" />
+          <div className="public-menu-item-detail-copy">
+            <h3 id="public-item-sheet-title">{item.name}</h3>
+            <div className="public-menu-item-detail-price" dir="ltr">
+              {formatMoney(unit, lang)}
+            </div>
+          </div>
         </div>
 
-        <div className="px-6 overflow-y-auto space-y-5 pb-4">
+        <div className="public-menu-item-options">
+          {item.description && (
+            <p className="public-menu-item-detail-description">{item.description}</p>
+          )}
           {item.variants.length > 0 && (
             <div className="flex gap-2 flex-wrap">
               {item.variants.map((v) => (
@@ -1039,7 +1084,7 @@ function ItemConfigSheet({ item, lang, isRtl, viewOnly = false, onClose, onAdd }
         </div>
 
         {!viewOnly && (
-        <div className="p-4 border-t border-gray-100 shrink-0">
+        <div className="public-menu-item-submit">
           {/* Количество + добавление — одна полоса: степпер слева, кнопка справа */}
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1 shrink-0">
@@ -1189,8 +1234,8 @@ function CheckoutScreen({
   }
 
   return (
-    <div className="px-4 pb-10 pt-4">
-      <div className="mb-4">
+    <div className="public-menu-checkout px-4 pb-10 pt-5">
+      <div className="public-menu-checkout-intro">
         <h1 className="text-2xl font-black text-gray-900">{t(lang, 'pubCart')}</h1>
         <p className="text-sm text-gray-500 mt-1">
           {t(lang, isTableOrder ? 'pubTableCheckoutHint' : 'pubCounterCheckoutHint')}
@@ -1198,7 +1243,7 @@ function CheckoutScreen({
       </div>
 
       {isTableOrder && tableContext ? (
-        <div className="mb-4 rounded-2xl bg-emerald-50 text-emerald-900 px-4 py-4 flex items-center gap-3">
+        <div className="public-menu-checkout-fulfilment bg-emerald-50 text-emerald-900">
           <span className="w-10 h-10 rounded-xl bg-white text-emerald-800 flex items-center justify-center font-black shrink-0">
             {tableContext.label}
           </span>
@@ -1214,7 +1259,7 @@ function CheckoutScreen({
           </span>
         </div>
       ) : (
-        <div className="mb-4 rounded-2xl bg-gray-100 text-gray-900 px-4 py-4 flex items-center gap-3">
+        <div className="public-menu-checkout-fulfilment bg-gray-100 text-gray-900">
           <span className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shrink-0" aria-hidden>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
               <path d="M4 8h16v12H4V8Z" strokeLinejoin="round" />
@@ -1231,34 +1276,38 @@ function CheckoutScreen({
         </div>
       )}
 
-      <div className="space-y-2">
-        {cart.map((l) => (
-          <div key={l.key} className="flex items-center gap-3 rounded-2xl bg-white border border-gray-200 shadow-sm px-4 py-3">
-            <div className="flex-1 min-w-0">
-              <div className="font-semibold text-gray-900 text-sm">{l.name}</div>
-              {(l.variantName || l.modNames.length > 0) && (
-                <div className="text-xs text-gray-500 mt-0.5">{[l.variantName, ...l.modNames].filter(Boolean).join(' · ')}</div>
-              )}
+      <section className="public-menu-checkout-card public-menu-cart-card">
+        <div>
+          {cart.map((l) => (
+            <div key={l.key} className="public-menu-cart-line">
+              <div className="flex-1 min-w-0">
+                <div className="font-semibold text-gray-900 text-sm">{l.name}</div>
+                {(l.variantName || l.modNames.length > 0) && (
+                  <div className="text-xs text-gray-500 mt-0.5">{[l.variantName, ...l.modNames].filter(Boolean).join(' · ')}</div>
+                )}
+              </div>
+              <div className="flex items-center gap-1 shrink-0">
+                <Stepper onClick={() => onQty(l.key, l.qty - 1)}>−</Stepper>
+                <span className="w-8 text-center font-bold tabular-nums text-sm text-gray-900">{l.qty}</span>
+                <Stepper onClick={() => onQty(l.key, l.qty + 1)}>+</Stepper>
+              </div>
+              <span className="w-20 text-end tabular-nums font-semibold text-sm text-gray-900 shrink-0">
+                <span dir="ltr">{formatMoney(l.unitPrice * l.qty, lang)}</span>
+              </span>
             </div>
-            <div className="flex items-center gap-1 shrink-0">
-              <Stepper onClick={() => onQty(l.key, l.qty - 1)}>−</Stepper>
-              <span className="w-8 text-center font-bold tabular-nums text-sm text-gray-900">{l.qty}</span>
-              <Stepper onClick={() => onQty(l.key, l.qty + 1)}>+</Stepper>
-            </div>
-            <span className="w-20 text-end tabular-nums font-semibold text-sm text-gray-900 shrink-0">
-              <span dir="ltr">{formatMoney(l.unitPrice * l.qty, lang)}</span>
-            </span>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
 
-      <div className="flex items-center justify-between mt-4 px-1">
-        <span className="font-bold text-gray-900">{t(lang, 'pubTotal')}</span>
-        <span className="font-black text-xl tabular-nums text-gray-900" dir="ltr">{formatMoney(total, lang)}</span>
-      </div>
-      <p className="text-xs text-gray-500 mt-1 px-1">
-        {t(lang, isTableOrder ? 'pubPayAtTable' : 'pubPayAtPickup')}
-      </p>
+        <div className="public-menu-cart-total">
+          <span className="font-bold text-gray-900">{t(lang, 'pubTotal')}</span>
+          <span className="font-black text-xl tabular-nums text-gray-900" dir="ltr">{formatMoney(total, lang)}</span>
+        </div>
+        <p className="text-xs text-gray-500 mt-1">
+          {t(lang, isTableOrder ? 'pubPayAtTable' : 'pubPayAtPickup')}
+        </p>
+      </section>
+
+      <section className="public-menu-checkout-card public-menu-checkout-form">
 
       {/* Тип заказа (055): показываем вопрос только если вариантов >1 */}
       {!isTableOrder && orderTypes.length > 1 && (
@@ -1365,6 +1414,7 @@ function CheckoutScreen({
           onChange={(e) => setNote(e.target.value)}
         />
       </label>
+      </section>
 
       {error && <div className="mt-4 rounded-2xl bg-red-50 text-red-600 text-sm font-semibold px-4 py-3">{error}</div>}
       {showValidation && validationText && (

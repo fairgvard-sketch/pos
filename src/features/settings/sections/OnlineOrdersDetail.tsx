@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import QRCode from 'qrcode'
-import { uploadItemImage } from '../../menu/api'
+import { uploadHeroVideo, uploadItemImage } from '../../menu/api'
 import { useLangStore } from '../../../store/langStore'
 import { useDeviceStore } from '../../../store/deviceStore'
 import { t } from '../../../lib/i18n'
@@ -245,12 +245,11 @@ export default function OnlineOrdersDetail({ location }: { location: Location | 
             url={settings.online_orders?.header_url ?? null}
             onChange={(v) => update({ online_orders: { header_url: v } })}
           />
-          <LinkField
+          <VideoField
             label={t(lang, 'onlineVideoLabel')}
             hint={t(lang, 'onlineVideoHint')}
-            placeholder="https://cdn.example.com/hero.mp4"
-            value={settings.online_orders?.hero_video_url ?? ''}
-            onSave={(v) => update({ online_orders: { hero_video_url: v || null } })}
+            url={settings.online_orders?.hero_video_url ?? null}
+            onChange={(v) => update({ online_orders: { hero_video_url: v } })}
           />
           <BackgroundPresetField
             label={t(lang, 'onlineImgBg')}
@@ -405,6 +404,116 @@ export function ImageField({ label, hint, url, onChange, hidePreviewWhenEmpty = 
           const f = e.target.files?.[0]
           if (f) upload.mutate(f)
           e.target.value = ''
+        }}
+      />
+    </div>
+  )
+}
+
+const HERO_VIDEO_MAX_BYTES = 30 * 1024 * 1024
+const HERO_VIDEO_TYPES = new Set(['video/mp4', 'video/webm'])
+
+/** Hero-видео: загрузка файла является основным сценарием, прямая ссылка —
+ *  дополнительным. MOV с камеры сначала нужно экспортировать в MP4, иначе
+ *  ролик не гарантированно воспроизводится на Android и в десктопных браузерах. */
+function VideoField({ label, hint, url, onChange }: {
+  label: string
+  hint: string
+  url: string | null
+  onChange: (url: string | null) => void
+}) {
+  const lang = useLangStore((s) => s.lang)
+  const fileRef = useRef<HTMLInputElement>(null)
+  const upload = useMutation({
+    mutationFn: (file: File) => {
+      if (!HERO_VIDEO_TYPES.has(file.type)) {
+        throw new Error(t(lang, 'onlineVideoFormatError'))
+      }
+      if (file.size > HERO_VIDEO_MAX_BYTES) {
+        throw new Error(t(lang, 'onlineVideoSizeError'))
+      }
+      return uploadHeroVideo(file)
+    },
+    onSuccess: (publicUrl) => onChange(publicUrl),
+    onError: (error) => toast.error((error as Error).message),
+  })
+
+  return (
+    <div className="rounded-2xl border border-gray-200 bg-gray-50/70 p-3">
+      <div className="text-xs font-bold text-gray-500 uppercase tracking-wide">{label}</div>
+      <p className="text-xs text-gray-500 mt-0.5">{hint}</p>
+
+      {url ? (
+        <video
+          key={url}
+          src={url}
+          muted
+          loop
+          playsInline
+          controls
+          preload="metadata"
+          className="mt-3 aspect-[9/16] max-h-72 w-full rounded-xl bg-gray-900 object-cover"
+        />
+      ) : (
+        <button
+          type="button"
+          onClick={() => fileRef.current?.click()}
+          className="mt-3 flex min-h-36 w-full flex-col items-center justify-center rounded-xl border border-dashed border-gray-300 bg-white px-4 text-center active:scale-[0.99] transition-transform"
+        >
+          <span className="flex h-11 w-11 items-center justify-center rounded-full bg-gray-900 text-white" aria-hidden>
+            <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 16V4m0 0L8 8m4-4 4 4" />
+              <path d="M5 14v5h14v-5" />
+            </svg>
+          </span>
+          <span className="mt-2 text-sm font-bold text-gray-900">{t(lang, 'uploadVideo')}</span>
+          <span className="mt-1 text-xs text-gray-500">MP4 · WebM · 30 MB</span>
+        </button>
+      )}
+
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button
+          type="button"
+          className="btn-secondary h-11 px-4"
+          disabled={upload.isPending}
+          onClick={() => fileRef.current?.click()}
+        >
+          {upload.isPending
+            ? t(lang, 'loading')
+            : url
+              ? t(lang, 'replaceVideo')
+              : t(lang, 'uploadVideo')}
+        </button>
+        {url && (
+          <button type="button" className="btn-ghost h-11 px-3" onClick={() => onChange(null)}>
+            {t(lang, 'removeVideo')}
+          </button>
+        )}
+      </div>
+
+      <details className="mt-3 border-t border-gray-200 pt-3">
+        <summary className="cursor-pointer text-xs font-semibold text-gray-600">
+          {t(lang, 'onlineVideoLinkOption')}
+        </summary>
+        <div className="mt-3">
+          <LinkField
+            label={t(lang, 'onlineVideoLinkLabel')}
+            placeholder="https://cdn.example.com/hero.mp4"
+            value={url ?? ''}
+            onSave={(value) => onChange(value || null)}
+          />
+        </div>
+      </details>
+
+      <input
+        ref={fileRef}
+        type="file"
+        accept="video/mp4,video/webm,.mp4,.webm"
+        className="hidden"
+        onChange={(event) => {
+          const file = event.target.files?.[0]
+          if (file) upload.mutate(file)
+          event.target.value = ''
         }}
       />
     </div>

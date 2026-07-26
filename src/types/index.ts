@@ -86,7 +86,7 @@ export interface LocationSettings {
     // Оформление главного экрана гостевой страницы (фото в Storage)
     /** Баннер-шапка сверху; логотип и название накладываются поверх */
     header_url?: string | null
-    /** Прямая ссылка на MP4/WebM для декоративного autoplay hero. */
+    /** Публичный URL загруженного или внешнего MP4/WebM для autoplay hero. */
     hero_video_url?: string | null
     /** Фон главного экрана; шапка и плитки — поверх */
     background_url?: string | null

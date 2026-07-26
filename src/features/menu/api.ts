@@ -107,6 +107,28 @@ export async function uploadItemImage(file: File): Promise<string> {
   return supabase.storage.from('menu-images').getPublicUrl(path).data.publicUrl
 }
 
+/** Hero-видео публичного меню. Видео не перекодируется в браузере, поэтому
+ *  интерфейс принимает только web-форматы, одинаково работающие на iOS и
+ *  Android. Уникальное имя позволяет безопасно кешировать файл на год. */
+export async function uploadHeroVideo(file: File): Promise<string> {
+  const { org_id } = await ctx()
+  const extensionByType: Record<string, string> = {
+    'video/mp4': 'mp4',
+    'video/webm': 'webm',
+  }
+  const ext = extensionByType[file.type]
+  if (!ext) throw new Error('Only MP4 and WebM videos are supported')
+
+  const path = `${org_id}/hero-videos/${crypto.randomUUID()}.${ext}`
+  const { error } = await supabase.storage.from('menu-images').upload(path, file, {
+    cacheControl: '31536000',
+    contentType: file.type,
+    upsert: false,
+  })
+  if (error) throw new Error(error.message)
+  return supabase.storage.from('menu-images').getPublicUrl(path).data.publicUrl
+}
+
 /** Поля товара для RPC save_menu_item (064). Пустые числа/строки — как есть. */
 function itemPayload(input: ItemInput): Record<string, unknown> {
   return {
