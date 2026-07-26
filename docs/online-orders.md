@@ -122,6 +122,23 @@ https://pos-self-sigma.vercel.app/order/<location_id>?table=<public_token>&sourc
 встроенном термопринтере. Владелец новой точки включает онлайн-заказы
 сам, без разработчика: завёл меню → распечатал QR → повесил на стойку.
 
+### Чистая витрина без модуля заказов (100)
+
+Организация с модулем `menu`, но без `online_orders` (ANGLE Menu без
+POS/заказов) получает ту же гостевую страницу в режиме витрины:
+`public-menu` отдаёт `location.modules.online_orders=false`, страница
+скрывает корзину, чекаут, пилл типа заказа и баннеры «закрыто/пауза»
+(смен у digital-only организации не бывает — вечное «закрыто» вводило бы
+гостя в заблуждение). Тап по товару всегда открывает карточку с
+описанием и ценами, без добавления в корзину. Старые клиенты без поля
+`modules` работают как раньше. Хелпер — `isViewOnlyMenu` в
+`src/features/online/publicApi.ts`.
+
+Для встраивания меню в сайт ресторана `vercel.json` задаёт явную
+frame-политику: `/order/*` и `/reserve/*` отдают
+`Content-Security-Policy: frame-ancestors *` (страницу можно класть в
+iframe любого сайта), остальные маршруты POS — `frame-ancestors 'self'`.
+
 Там же — соцссылки (Instagram / Facebook / отзыв в Google): хранятся в
 `locations.settings.online_orders`, `public-menu` отдаёт их в
 `location.links`, гостевая страница показывает кнопки в подвале главного

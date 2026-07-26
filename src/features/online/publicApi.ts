@@ -55,6 +55,12 @@ export interface PublicMenu {
     logo_url?: string | null
     currency: string
     is_open: boolean
+    /**
+     * Модули организации (100). online_orders=false — организация без модуля
+     * заказов: страница работает чистой витриной (без корзины, чекаута и
+     * статуса приёма). Отсутствие поля (старая edge function) = заказ доступен.
+     */
+    modules?: { online_orders?: boolean }
     /** false = приём сейчас не идёт: выключен (051) или пауза (054) */
     accepting?: boolean
     /** Пауза с кассы (054): ISO-время, когда приём возобновится */
@@ -86,6 +92,15 @@ export interface PublicMenu {
   /** Просроченный/неверный table-token: меню доступно, но заказ не привязан к столу. */
   context_error?: 'invalid_table' | 'table_ordering_disabled' | null
   categories: { id: string; name: string; cover_url?: string | null; items: PublicItem[] }[]
+}
+
+/**
+ * Витрина без заказа (100): организация без модуля online_orders.
+ * Отсутствие поля modules (старая edge function) = заказ доступен —
+ * поведение существующих клиентов не меняется.
+ */
+export function isViewOnlyMenu(location: PublicMenu['location'] | undefined): boolean {
+  return location?.modules?.online_orders === false
 }
 
 /** Осмысленная ошибка публичного API: code — ключ для перевода гостю */

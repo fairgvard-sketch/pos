@@ -69,17 +69,20 @@ Deno.serve(async (req) => {
   if (locRes.error || !locRes.data) return json({ error: 'invalid_location' }, 404)
   if (catRes.error) return json({ error: 'menu_failed' }, 502)
 
-  // Модуль организации (100): публичная витрина требует entitlement `menu`.
+  // Модули организации (100): публичная витрина требует entitlement `menu`.
   // module_disabled ≠ invalid_location: модуль не подключён, точка существует.
+  // online_orders читаем тем же запросом: без него страница — чистая витрина
+  // (без корзины и статуса приёма), см. modules в ответе.
   const entRes = await supabase
     .from('organization_products')
-    .select('id')
+    .select('product')
     .eq('org_id', (locRes.data as { org_id: string }).org_id)
-    .eq('product', 'menu')
+    .in('product', ['menu', 'online_orders'])
     .eq('is_active', true)
-    .limit(1)
   if (entRes.error) return json({ error: 'menu_failed' }, 502)
-  if ((entRes.data ?? []).length === 0) return json({ error: 'module_disabled' }, 404)
+  const activeProducts = new Set((entRes.data ?? []).map((r) => (r as { product: string }).product))
+  if (!activeProducts.has('menu')) return json({ error: 'module_disabled' }, 404)
+  const orderingModuleOn = activeProducts.has('online_orders')
 
   const bySort = (a: { sort_order: number }, b: { sort_order: number }) => a.sort_order - b.sort_order
 
@@ -201,6 +204,10 @@ Deno.serve(async (req) => {
         logo_url: locRes.data.logo_url ?? null,
         currency: locRes.data.currency,
         is_open: (shiftRes.data ?? []).length > 0,
+        // Модули организации (100): online_orders=false — витрина без заказа
+        // (меню видно всегда, независимо от смены POS). Старые клиенты поле
+        // игнорируют — поведение не меняется.
+        modules: { online_orders: orderingModuleOn },
         // Тумблер 051 + пауза 054: false = заявки сейчас не принимаются
         accepting: onlineSettings?.enabled !== false && !pausedUntil,
         // Пауза с кассы: когда приём возобновится (null = паузы нет)

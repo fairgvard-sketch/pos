@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { t, formatTime, type Lang } from '../../lib/i18n'
 import { formatMoney } from '../../lib/money'
 import {
-  fetchPublicMenu, fetchPublicStatus, submitPublicOrder, PublicApiError,
+  fetchPublicMenu, fetchPublicStatus, submitPublicOrder, PublicApiError, isViewOnlyMenu,
   type PublicItem, type PublicMenu, type PublicStatus, type PublicOrderType,
 } from './publicApi'
 import { parsePublicOrderQuery } from './orderContext'
@@ -197,6 +197,12 @@ export default function PublicOrderPage() {
   }
 
   function openItem(item: PublicItem) {
+    // Витрина (100): тап по товару всегда открывает карточку с описанием —
+    // добавления в корзину нет.
+    if (isViewOnlyMenu(menu?.location)) {
+      setConfigItem(item)
+      return
+    }
     if (item.variants.length === 0 && item.modifier_groups.length === 0) {
       addLine({
         itemId: item.id, name: item.name, variantId: null, variantName: null,
@@ -250,6 +256,10 @@ export default function PublicOrderPage() {
       </Shell>
     )
   }
+  // Организация без модуля online_orders (100): чистая витрина. Меню видно
+  // всегда — без корзины, чекаута и баннеров «закрыто/пауза» (смены у
+  // menu-only организации не бывает, вечное «закрыто» — ложь для гостя).
+  const viewOnly = isViewOnlyMenu(menu.location)
   const orderTypes = menu.location.order_types ?? ['here', 'takeaway']
   const tableContext = menu.order_context?.kind === 'table' ? menu.order_context : null
   const requestedType = queryContext.requestedType
@@ -277,7 +287,7 @@ export default function PublicOrderPage() {
       }
       backLabel={t(lang, 'back')}
     >
-      {menu.location.accepting === false ? (
+      {viewOnly ? null : menu.location.accepting === false ? (
         <div className="mx-4 mt-4 rounded-2xl bg-amber-50 text-amber-800 text-sm font-semibold px-4 py-3">
           {/* Пауза с кассы (054) — говорим, когда приём вернётся */}
           {menu.location.paused_until
@@ -289,7 +299,7 @@ export default function PublicOrderPage() {
           {t(lang, 'pubClosed')}
         </div>
       )}
-      {menu.context_error && (
+      {!viewOnly && menu.context_error && (
         <div className="mx-4 mt-4 rounded-2xl bg-rose-50 text-rose-800 text-sm font-semibold px-4 py-3">
           {t(lang, menu.context_error === 'table_ordering_disabled'
             ? 'pubTableOrderingDisabled'
@@ -308,7 +318,7 @@ export default function PublicOrderPage() {
                 zone={menu.order_context.zone}
                 lang={lang}
               />
-            ) : (
+            ) : viewOnly ? null : (
               <PickupContextPill
                 lang={lang}
                 type={initialOrderType}
@@ -434,6 +444,7 @@ export default function PublicOrderPage() {
           item={configItem}
           lang={lang}
           isRtl={isRtl}
+          viewOnly={viewOnly}
           onClose={() => setConfigItem(null)}
           onAdd={(line) => {
             addLine(line)
@@ -900,10 +911,12 @@ function ItemRow({ item, lang, onTap }: { item: PublicItem; lang: Lang; onTap: (
 }
 
 /** Конфигуратор позиции: размер, модификаторы (min/max по группе), количество */
-function ItemConfigSheet({ item, lang, isRtl, onClose, onAdd }: {
+function ItemConfigSheet({ item, lang, isRtl, viewOnly = false, onClose, onAdd }: {
   item: PublicItem
   lang: Lang
   isRtl: boolean
+  /** Витрина без модуля заказов (100): карточка только показывает состав/цену */
+  viewOnly?: boolean
   onClose: () => void
   onAdd: (line: Omit<CartLine, 'key' | 'qty'>) => void
 }) {
@@ -1025,6 +1038,7 @@ function ItemConfigSheet({ item, lang, isRtl, onClose, onAdd }: {
 
         </div>
 
+        {!viewOnly && (
         <div className="p-4 border-t border-gray-100 shrink-0">
           {/* Количество + добавление — одна полоса: степпер слева, кнопка справа */}
           <div className="flex items-center gap-3">
@@ -1063,6 +1077,7 @@ function ItemConfigSheet({ item, lang, isRtl, onClose, onAdd }: {
             </button>
           </div>
         </div>
+        )}
       </div>
     </div>
   )
