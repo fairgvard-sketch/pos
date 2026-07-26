@@ -225,10 +225,20 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     background-size: cover;
   }
 
-  @supports (height: 100dvh) {
+  /* Именно lvh, не dvh: dvh — высота при РАЗВЁРНУТЫХ панелях Safari, она
+     МЕНЬШЕ видимой области, пока панель свёрнута, и под hero пробивалась
+     полоса фона. lvh — максимальная высота вьюпорта, поэтому hero всегда
+     перекрывает экран, а излишек срезается overflow: hidden. */
+  @supports (height: 100lvh) {
     .public-menu-hero {
-      height: 100dvh;
-      min-height: 100dvh;
+      height: 100lvh;
+      min-height: 100lvh;
+    }
+
+    /* Низ hero теперь уходит под панель Safari, поэтому кнопку «התחל»
+       поднимаем на разницу lvh−dvh — иначе она прячется за панелью. */
+    .public-menu-hero-scroll {
+      bottom: calc(1.4rem + env(safe-area-inset-bottom) + (100lvh - 100dvh));
     }
   }
 
