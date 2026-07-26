@@ -90,6 +90,7 @@ supabase test db
 | `staff` | сотрудники без доступного клиенту `pin_hash` |
 | `staff_sessions` | короткоживущая серверная PIN-сессия и права |
 | `organization_members` | веб-идентичности бэкофиса (088), PIN здесь не хранится |
+| `organization_products` | продуктовые модули организации (100): `menu`/`online_orders`/`reservations`/`pos` |
 
 ### Каталог
 
@@ -338,6 +339,40 @@ auth-аккаунты с валидным `org_id` в `app_metadata`, чтобы
 владельца и деактивировать членства устройств.
 
 Инварианты закреплены в `supabase/tests/backoffice_members.test.sql`.
+
+## Продуктовые модули организации (100)
+
+ANGLE продаёт модули независимо: `menu`, `online_orders`, `reservations`,
+`pos` — организация включает любую комбинацию. Ентитлменты хранятся в
+`organization_products` и enforced СЕРВЕРОМ, а не видимостью навигации:
+
+- `org_has_product(org, product)` — единая проверка; публичные мутации
+  `submit_online_order` и `submit_reservation` отклоняют организацию без
+  модуля кодом `module_disabled` ДО settings-тумблеров (`module_disabled`
+  «модуль не подключён» ≠ `disabled` «владелец выключил приём»). Витрину
+  меню гейтит Edge Function `public-menu` (модуль `menu` → 404
+  `module_disabled`);
+- клиентам доступен только SELECT своей организации (RLS по
+  `auth_org_id()`); провижионинг — оператором/миграцией, биллинга в MVP нет;
+- бэкфилл 100 выдал все четыре модуля каждой существующей организации —
+  нулевая регрессия; `bootstrap_org` (device-путь) сеет полный набор новым
+  POS-организациям;
+- `bootstrap_digital_org(org, location, owner_name, products[])` —
+  digital-only онбординг: email/пароль-владелец создаёт организацию, точку,
+  owner-членство в `organization_members` и выбранные модули БЕЗ PIN,
+  staff-строки и устройства. Self-serve только digital-модули (`pos`
+  отбрасывается и провижионится вручную). В `app_metadata` пишется только
+  `org_id`: `location_id` в JWT — маркер устройства, веб-контур (091/096)
+  адресует точку параметром. После вызова клиент обязан обновить JWT
+  (refresh session), как и в device-потоке;
+- `get_backoffice_context` дополнительно отдаёт `products` — модульная
+  навигация кабинета (Phase 5) строится по нему, но авторизацией остаётся
+  серверная проверка.
+
+Привилегированные POS-RPC модулями пока не гейтятся: у всех существующих
+организаций все модули есть, полное гейтирование — фазы 3–5 плана
+standalone digital products. Инварианты закреплены в
+`supabase/tests/organization_products.test.sql`.
 
 ## Ключевые RPC
 

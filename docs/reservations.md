@@ -31,7 +31,9 @@ Instant-режим
 - **Тумблер default = ВЫКЛЮЧЕНО** (`locations.settings->reservations->enabled`,
   отсутствие ключа = выкл — в отличие от online_orders). Включается:
   Настройки → Обслуживание → «Бронирование». Enforced на сервере
-  (`submit_reservation` → код `disabled`).
+  (`submit_reservation` → код `disabled`; организация без модуля
+  `reservations` отклоняется раньше кодом `module_disabled` — см.
+  «Продуктовые модули» в `database.md`).
 - **Открытая смена не нужна** ни для заявки, ни для подтверждения — бронь
   обычно на будущую дату. Вместо «часов приёма» окно времени:
   `NOW()+30 мин … NOW()+30 дней` (код `invalid_time`).

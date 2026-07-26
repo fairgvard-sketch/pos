@@ -43,7 +43,7 @@ Deno.serve(async (req) => {
 
   const [locRes, shiftRes, catRes] = await Promise.all([
     // Наружу — только флаг онлайн-заказов, НЕ весь settings (там права ролей)
-    supabase.from('locations').select('id, name, currency, receipt_business_name, logo_url, display_name:settings->>display_name, online_settings:settings->online_orders').eq('id', loc).maybeSingle(),
+    supabase.from('locations').select('id, org_id, name, currency, receipt_business_name, logo_url, display_name:settings->>display_name, online_settings:settings->online_orders').eq('id', loc).maybeSingle(),
     supabase.from('shifts').select('id').eq('location_id', loc).eq('status', 'open').limit(1),
     supabase
       .from('menu_categories')
@@ -68,6 +68,18 @@ Deno.serve(async (req) => {
 
   if (locRes.error || !locRes.data) return json({ error: 'invalid_location' }, 404)
   if (catRes.error) return json({ error: 'menu_failed' }, 502)
+
+  // Модуль организации (100): публичная витрина требует entitlement `menu`.
+  // module_disabled ≠ invalid_location: модуль не подключён, точка существует.
+  const entRes = await supabase
+    .from('organization_products')
+    .select('id')
+    .eq('org_id', (locRes.data as { org_id: string }).org_id)
+    .eq('product', 'menu')
+    .eq('is_active', true)
+    .limit(1)
+  if (entRes.error) return json({ error: 'menu_failed' }, 502)
+  if ((entRes.data ?? []).length === 0) return json({ error: 'module_disabled' }, 404)
 
   const bySort = (a: { sort_order: number }, b: { sort_order: number }) => a.sort_order - b.sort_order
 
