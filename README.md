@@ -37,6 +37,7 @@ Kassa — веб-касса для specialty coffee, кофеен и пекар�
 | [Бэкапы и восстановление](docs/backups.md) | PITR, логический дамп `db:dump`, runbook восстановления и журнал прогонов |
 | [Онлайн-заказы](docs/online-orders.md) | гостевой сценарий и настройка приёма заказов |
 | [Бронирование](docs/reservations.md) | ручные заявки, live-доступность и мгновенное подтверждение |
+| [Standalone-продукты](docs/standalone-products.md) | ANGLE Menu/Orders/Reserve без POS: модули, режимы, деплой и пилот-чеклист |
 | [Smoke-test T2](docs/t2-smoke-test.md) | обязательный ручной прогон на реальном терминале |
 | [План Cardcom](docs/cardcom-plan.md) | будущая EMV-интеграция и текущие ограничения |
 | [Соответствие требованиям Израиля](docs/israel-compliance.md) | официальные источники, матрица пробелов, cash guard, Uniform Format и release-gates |
