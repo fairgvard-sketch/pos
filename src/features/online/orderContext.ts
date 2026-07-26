@@ -24,16 +24,18 @@ const CHANNELS = new Set<PublicOrderChannel>([
 const DEFAULT_PUBLIC_APP_ORIGIN = 'https://menu.angle.co.il'
 
 /**
- * Канонический домен гостевых продуктов. На localhost оставляем текущий
- * origin, чтобы QR можно было проверять без production-домена.
+ * Канонический домен гостевых продуктов во всех сборках, включая локальный
+ * бэкофис: QR, скопированная ссылка и печатный флаер всегда должны совпадать
+ * с production. Для отдельного локального стенда origin можно явно
+ * переопределить через VITE_PUBLIC_MENU_ORIGIN.
  */
-export function publicAppOrigin(currentOrigin = window.location.origin): string {
+export function publicAppOrigin(): string {
   const configured = import.meta.env.VITE_PUBLIC_MENU_ORIGIN?.trim()
-  const candidate = configured || (import.meta.env.PROD ? DEFAULT_PUBLIC_APP_ORIGIN : currentOrigin)
+  const candidate = configured || DEFAULT_PUBLIC_APP_ORIGIN
   try {
     return new URL(candidate).origin
   } catch {
-    return import.meta.env.PROD ? DEFAULT_PUBLIC_APP_ORIGIN : currentOrigin
+    return DEFAULT_PUBLIC_APP_ORIGIN
   }
 }
 

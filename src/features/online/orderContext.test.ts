@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   parsePublicOrderQuery,
+  publicAppOrigin,
   publicOrderUrl,
   publicReservationUrl,
 } from './orderContext'
@@ -34,6 +35,10 @@ describe('parsePublicOrderQuery', () => {
 })
 
 describe('publicOrderUrl', () => {
+  it('uses the canonical menu domain for backoffice links', () => {
+    expect(publicAppOrigin()).toBe('https://menu.angle.co.il')
+  })
+
   it('creates a stable counter QR URL', () => {
     expect(publicOrderUrl('https://pos.example', 'loc-1', { channel: 'counter_qr' }))
       .toBe('https://pos.example/order/loc-1?source=counter_qr')
