@@ -139,6 +139,34 @@ frame-политику: `/order/*` и `/reserve/*` отдают
 `Content-Security-Policy: frame-ancestors *` (страницу можно класть в
 iframe любого сайта), остальные маршруты POS — `frame-ancestors 'self'`.
 
+### Standalone-режим без POS (101)
+
+«Точка принимает заказы» отделено от «на кассе открыта смена»:
+
+- `online_fulfilment_mode(org, settings)` — режим обслуживания:
+  `pos` (как раньше, смена обязательна, приёмка на кассе) или
+  `standalone` (веб-инбокс кабинета). Явная настройка
+  `settings.online_orders.fulfilment`; дефолт — по модулю `pos`.
+- Доступность standalone-точки: тумблер + пауза + недельное расписание
+  `settings.online_orders.hours` (`{"0":[["08:00","16:00"]],…}`, ключ —
+  день недели, 0=воскресенье, локальное время точки, окна через полночь
+  поддержаны; нет ключа — всегда открыто, день без окон — закрыт).
+  Проверяет `online_hours_open` и в `submit_online_order`, и в
+  `public-menu` (`is_open` гостя больше не зависит от смен).
+- Жизненный цикл standalone: `new → accepted → preparing → ready →
+  completed` (+ `rejected` из new, `cancelled` из активных).
+  Переводы — `set_online_order_status_web`: только owner/manager-членство,
+  только standalone-режим, заявки с `order_id` неприкасаемы — веб не
+  трогает финансовый контур POS; атрибуция в `decided_by_member`.
+- POS-режим не изменился: `accept_online_order` конвертирует заявку в
+  настоящий заказ со сменой и PIN-сессией, как раньше.
+- Гостевой статус-экран понимает оба цикла; у standalone-заявки нет
+  номера дня (`daily_number` только у POS-заказа).
+
+pgTAP: `standalone_online_orders.test.sql`. Веб-инбокс живёт в репо
+`anglesite` (раздел Orders), realtime-подписка использует публикацию и
+RLS-чтение из 050.
+
 Там же — соцссылки (Instagram / Facebook / отзыв в Google): хранятся в
 `locations.settings.online_orders`, `public-menu` отдаёт их в
 `location.links`, гостевая страница показывает кнопки в подвале главного

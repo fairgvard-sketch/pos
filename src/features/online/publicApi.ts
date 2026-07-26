@@ -174,7 +174,12 @@ export async function submitPublicOrder(payload: SubmitPayload): Promise<SubmitR
 }
 
 export interface PublicStatus {
-  status: 'new' | 'accepted' | 'rejected'
+  /**
+   * new/accepted/rejected — исходный цикл (050, POS-приёмка).
+   * preparing/ready/completed/cancelled — standalone-цикл веб-инбокса (101):
+   * заявка обслуживается в кабинете, POS-заказа (order_id) не существует.
+   */
+  status: 'new' | 'accepted' | 'preparing' | 'ready' | 'completed' | 'rejected' | 'cancelled'
   reject_reason: string | null
   total: number
   daily_number: number | null

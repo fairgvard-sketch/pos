@@ -1478,9 +1478,10 @@ function StatusScreen({ lang, clientUuid, onNewOrder }: {
     )
   }
 
-  // accepted
+  // Принятые: POS-цикл судит по order_status настоящего заказа,
+  // standalone-цикл (101) — по статусу самой заявки (order_id нет).
   const os = status.order_status
-  if (os === 'voided') {
+  if (os === 'voided' || status.status === 'cancelled') {
     return (
       <CenterCard>
         <p className="text-2xl font-black text-gray-900">{t(lang, 'pubCancelledTitle')}</p>
@@ -1489,10 +1490,16 @@ function StatusScreen({ lang, clientUuid, onNewOrder }: {
     )
   }
   const isDone = os === 'paid' || os === 'fulfilled'
+    || status.status === 'ready' || status.status === 'completed'
   return (
     <CenterCard>
-      <p className="text-sm font-bold text-gray-500 uppercase tracking-wide">{t(lang, 'pubOrderNumber')}</p>
-      <p className="text-6xl font-black tabular-nums text-gray-900 mt-2">#{status.daily_number}</p>
+      {/* Номер дня есть только у POS-заказа; standalone-заявка живёт без него */}
+      {status.daily_number != null && (
+        <>
+          <p className="text-sm font-bold text-gray-500 uppercase tracking-wide">{t(lang, 'pubOrderNumber')}</p>
+          <p className="text-6xl font-black tabular-nums text-gray-900 mt-2">#{status.daily_number}</p>
+        </>
+      )}
       <StatusSteps lang={lang} active={isDone ? 2 : 1} />
       {/* Таймер в стиле Wolt (061): пока заказ готовится — обратный отсчёт
           до decided_at + prep_max. Готов → просто «Заказ выдан». */}

@@ -43,7 +43,7 @@ Deno.serve(async (req) => {
 
   const [locRes, shiftRes, catRes] = await Promise.all([
     // Наружу — только флаг онлайн-заказов, НЕ весь settings (там права ролей)
-    supabase.from('locations').select('id, org_id, name, currency, receipt_business_name, logo_url, display_name:settings->>display_name, online_settings:settings->online_orders').eq('id', loc).maybeSingle(),
+    supabase.from('locations').select('id, org_id, name, currency, timezone, receipt_business_name, logo_url, display_name:settings->>display_name, online_settings:settings->online_orders').eq('id', loc).maybeSingle(),
     supabase.from('shifts').select('id').eq('location_id', loc).eq('status', 'open').limit(1),
     supabase
       .from('menu_categories')
@@ -77,7 +77,7 @@ Deno.serve(async (req) => {
     .from('organization_products')
     .select('product')
     .eq('org_id', (locRes.data as { org_id: string }).org_id)
-    .in('product', ['menu', 'online_orders'])
+    .in('product', ['menu', 'online_orders', 'pos'])
     .eq('is_active', true)
   if (entRes.error) return json({ error: 'menu_failed' }, 502)
   const activeProducts = new Set((entRes.data ?? []).map((r) => (r as { product: string }).product))
@@ -142,6 +142,27 @@ Deno.serve(async (req) => {
     }
   }).online_settings
 
+  // Режим обслуживания (101): standalone-точка живёт без смен — открытость
+  // для гостя решает недельное расписание (online_hours_open в БД), а не
+  // открытая смена POS. Явная настройка fulfilment сильнее дефолта по модулю.
+  const fulfilmentSetting = (locRes.data as {
+    online_settings?: { fulfilment?: string }
+  }).online_settings?.fulfilment
+  const fulfilment =
+    fulfilmentSetting === 'pos' || fulfilmentSetting === 'standalone'
+      ? fulfilmentSetting
+      : activeProducts.has('pos') ? 'pos' : 'standalone'
+  let isOpen = (shiftRes.data ?? []).length > 0
+  if (fulfilment === 'standalone') {
+    const hoursRes = await supabase.rpc('online_hours_open', {
+      p_settings: { online_orders: (locRes.data as { online_settings?: unknown }).online_settings ?? {} },
+      p_tz: (locRes.data as { timezone?: string }).timezone ?? '',
+    })
+    // Ошибка проверки расписания не прячет меню: считаем точку открытой,
+    // submit_online_order всё равно проверит расписание сервером.
+    isOpen = hoursRes.error ? true : hoursRes.data === true
+  }
+
   // Пауза с кассы (054): истёкшая метка = паузы нет (снимается сама)
   const pausedUntil =
     onlineSettings?.paused_until && Date.parse(onlineSettings.paused_until) > Date.now()
@@ -203,7 +224,7 @@ Deno.serve(async (req) => {
           locRes.data.name,
         logo_url: locRes.data.logo_url ?? null,
         currency: locRes.data.currency,
-        is_open: (shiftRes.data ?? []).length > 0,
+        is_open: isOpen,
         // Модули организации (100): online_orders=false — витрина без заказа
         // (меню видно всегда, независимо от смены POS). Старые клиенты поле
         // игнорируют — поведение не меняется.
