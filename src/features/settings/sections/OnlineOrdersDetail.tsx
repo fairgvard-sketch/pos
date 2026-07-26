@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import QRCode from 'qrcode'
 import { uploadItemImage } from '../../menu/api'
@@ -9,6 +9,8 @@ import { t } from '../../../lib/i18n'
 import { hasSilentPrintPath } from '../../../lib/escpos'
 import { printCanvasWithRetry } from '../../receipt/printFailure'
 import { renderQrFlyerCanvas } from '../../receipt/printCanvas'
+import { fetchTables } from '../../tables/api'
+import { publicOrderUrl } from '../../online/orderContext'
 import { useLocationSettings } from '../useLocationSettings'
 import { Group, ToggleRow } from '../ui'
 import {
@@ -31,7 +33,25 @@ export default function OnlineOrdersDetail({ location }: { location: Location | 
   const printMode = useDeviceStore((s) => s.printMode)
   const { settings, update } = useLocationSettings(location)
   const enabled = settings.online_orders?.enabled !== false
-  const url = location ? `${window.location.origin}/order/${location.id}` : ''
+  const url = location
+    ? publicOrderUrl(window.location.origin, location.id, { channel: 'counter_qr' })
+    : ''
+  const { data: allTables = [] } = useQuery({
+    queryKey: ['tables'],
+    queryFn: fetchTables,
+    enabled: !!location,
+  })
+  const tables = location
+    ? allTables.filter((table) => table.location_id === location.id)
+    : []
+  const [selectedTableId, setSelectedTableId] = useState('')
+  const selectedTable =
+    tables.find((table) => table.id === selectedTableId) ?? tables[0] ?? null
+  const tableUrl = location && selectedTable
+    ? publicOrderUrl(window.location.origin, location.id, {
+        tableToken: selectedTable.public_token,
+      })
+    : ''
 
   // Типы заказа для гостя (055). Отсутствие ключа = дефолт here+takeaway.
   const orderTypes = settings.online_orders?.order_types ?? ['here', 'takeaway']
@@ -47,19 +67,25 @@ export default function OnlineOrdersDetail({ location }: { location: Location | 
 
   // QR-превью на экране
   const qrRef = useRef<HTMLCanvasElement>(null)
+  const tableQrRef = useRef<HTMLCanvasElement>(null)
   useEffect(() => {
     if (qrRef.current && url) {
       QRCode.toCanvas(qrRef.current, url, { width: 176, margin: 1 }).catch(() => {})
     }
   }, [url])
+  useEffect(() => {
+    if (tableQrRef.current && tableUrl) {
+      QRCode.toCanvas(tableQrRef.current, tableUrl, { width: 176, margin: 1 }).catch(() => {})
+    }
+  }, [tableUrl])
 
-  async function copyLink() {
+  async function copyLink(value: string) {
     try {
       // Chrome 52 (T2) не знает clipboard API — fallback через execCommand
-      if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(url)
+      if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(value)
       else {
         const ta = document.createElement('textarea')
-        ta.value = url
+        ta.value = value
         document.body.appendChild(ta)
         ta.select()
         document.execCommand('copy')
@@ -71,11 +97,12 @@ export default function OnlineOrdersDetail({ location }: { location: Location | 
     }
   }
 
-  async function printQr() {
+  async function printQr(targetUrl: string, caption = QR_FLYER_CAPTION) {
     if (!location) return
     const qr = document.createElement('canvas')
-    await QRCode.toCanvas(qr, url, { width: 400, margin: 2 })
-    const makeFlyer = () => renderQrFlyerCanvas(location.receipt_business_name || location.name, qr, QR_FLYER_CAPTION)
+    await QRCode.toCanvas(qr, targetUrl, { width: 400, margin: 2 })
+    const makeFlyer = () =>
+      renderQrFlyerCanvas(location.receipt_business_name || location.name, qr, caption)
     const allowRawbt = printMode === 'rawbt'
     if (hasSilentPrintPath(allowRawbt)) {
       const ok = await printCanvasWithRetry(makeFlyer, allowRawbt)
@@ -128,7 +155,7 @@ export default function OnlineOrdersDetail({ location }: { location: Location | 
             onFocus={(e) => e.target.select()}
             className="input flex-1 min-w-0 text-xs text-gray-600"
           />
-          <button className="btn-secondary h-11 px-4 shrink-0" onClick={copyLink}>
+          <button className="btn-secondary h-11 px-4 shrink-0" onClick={() => copyLink(url)}>
             {t(lang, 'copyAction')}
           </button>
         </div>
@@ -136,11 +163,70 @@ export default function OnlineOrdersDetail({ location }: { location: Location | 
           <canvas ref={qrRef} className="rounded-lg border border-gray-100 shrink-0" />
           <div className="min-w-0">
             <p className="text-xs text-gray-500">{t(lang, 'qrHint')}</p>
-            <button className="btn-secondary h-11 px-4 mt-3" onClick={printQr}>
+            <button className="btn-secondary h-11 px-4 mt-3" onClick={() => printQr(url)}>
               {t(lang, 'printQrAction')}
             </button>
           </div>
         </div>
+      </div>
+      <div className="px-4 py-4 border-t border-gray-100">
+        <div className="text-sm font-semibold text-gray-900">{t(lang, 'onlineTableQrTitle')}</div>
+        <p className="text-xs text-gray-500 mt-0.5">{t(lang, 'onlineTableQrHint')}</p>
+        {selectedTable ? (
+          <>
+            <label className="block mt-3">
+              <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">
+                {t(lang, 'onlineTableSelect')}
+              </span>
+              <select
+                value={selectedTable.id}
+                onChange={(event) => setSelectedTableId(event.target.value)}
+                className="input w-full h-12 mt-1"
+              >
+                {tables.map((table) => (
+                  <option key={table.id} value={table.id}>
+                    {t(lang, 'onlineTable')} {table.label}
+                    {table.zone ? ` · ${table.zone}` : ''}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="flex items-center gap-4 mt-4">
+              <canvas ref={tableQrRef} className="rounded-lg border border-gray-100 shrink-0" />
+              <div className="min-w-0 flex-1">
+                <div className="font-bold text-gray-900">
+                  {t(lang, 'onlineTable')} {selectedTable.label}
+                </div>
+                {selectedTable.zone && (
+                  <div className="text-xs text-gray-500 mt-0.5">{selectedTable.zone}</div>
+                )}
+                <div className="flex flex-wrap gap-2 mt-3">
+                  <button
+                    className="btn-secondary h-11 px-4"
+                    onClick={() => copyLink(tableUrl)}
+                  >
+                    {t(lang, 'copyAction')}
+                  </button>
+                  <button
+                    className="btn-secondary h-11 px-4"
+                    onClick={() =>
+                      printQr(
+                        tableUrl,
+                        `שולחן ${selectedTable.label} — סרקו להזמנה`
+                      )
+                    }
+                  >
+                    {t(lang, 'printQrAction')}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className="mt-3 rounded-2xl bg-gray-50 px-4 py-4 text-sm text-gray-500">
+            {t(lang, 'noTablesYet')}
+          </div>
+        )}
       </div>
       <div className="px-4 py-3 border-t border-gray-100">
         <div className="text-sm font-semibold text-gray-900">{t(lang, 'onlineDesignTitle')}</div>
@@ -158,6 +244,13 @@ export default function OnlineOrdersDetail({ location }: { location: Location | 
             hint={t(lang, 'onlineImgHeaderHint')}
             url={settings.online_orders?.header_url ?? null}
             onChange={(v) => update({ online_orders: { header_url: v } })}
+          />
+          <LinkField
+            label={t(lang, 'onlineVideoLabel')}
+            hint={t(lang, 'onlineVideoHint')}
+            placeholder="https://cdn.example.com/hero.mp4"
+            value={settings.online_orders?.hero_video_url ?? ''}
+            onSave={(v) => update({ online_orders: { hero_video_url: v || null } })}
           />
           <BackgroundPresetField
             label={t(lang, 'onlineImgBg')}
@@ -367,8 +460,9 @@ export function TextField({ label, hint, placeholder, value, onSave, multiline, 
 }
 
 /** URL-поле с сохранением на blur; голый домен дополняется https:// */
-export function LinkField({ label, placeholder, value, onSave }: {
+export function LinkField({ label, hint, placeholder, value, onSave }: {
   label: string
+  hint?: string
   placeholder: string
   value: string
   onSave: (v: string) => void
@@ -397,6 +491,7 @@ export function LinkField({ label, placeholder, value, onSave }: {
           if (v !== value) onSave(v)
         }}
       />
+      {hint && <p className="text-xs text-gray-500 mt-1">{hint}</p>}
     </label>
   )
 }

@@ -70,9 +70,9 @@ export default function OnlineOrdersPage() {
         printKitchenTicket(
           {
             dailyNumber: res.daily_number,
-            orderType: 'takeaway',
+            orderType: o.order_type,
             customerName: o.customer_name,
-            tableLabel: '',
+            tableLabel: o.table_label ?? '',
             staffName: staff?.name ?? '',
             deviceName,
             lines: o.items.map((l) => ({
@@ -182,8 +182,15 @@ export default function OnlineOrdersPage() {
 
   const canVoid = can(staff?.role, 'void_order', location?.settings, staff?.role_perms)
   const fresh = orders.filter((o) => o.status === 'new')
-  const awaiting = orders.filter((o) => o.status === 'accepted' && o.order?.status === 'open')
-  const done = orders.filter((o) => !fresh.includes(o) && !awaiting.includes(o))
+  const atTables = orders.filter((o) =>
+    o.status === 'accepted' && o.order?.status === 'open' && !!o.table_id
+  )
+  const awaiting = orders.filter((o) =>
+    o.status === 'accepted' && o.order?.status === 'open' && !o.table_id
+  )
+  const done = orders.filter((o) =>
+    !fresh.includes(o) && !awaiting.includes(o) && !atTables.includes(o)
+  )
 
   return (
     <div dir={isRtl ? 'rtl' : 'ltr'} className="h-screen bg-[#eceef1] flex gap-3 p-3 overflow-hidden">
@@ -317,6 +324,20 @@ export default function OnlineOrdersPage() {
                 </Section>
               )}
 
+              {atTables.length > 0 && (
+                <Section title={t(lang, 'onlineAtTables')}>
+                  {atTables.map((o) => (
+                    <div key={o.id} className="card p-4">
+                      <OrderHead o={o} lang={lang} nowTs={nowTs} number={o.order!.daily_number} />
+                      <Items o={o} lang={lang} />
+                      <div className="mt-3 min-h-12 rounded-2xl bg-emerald-50 text-emerald-800 px-4 flex items-center text-sm font-bold">
+                        {t(lang, 'onlineTableOrderOpen')}
+                      </div>
+                    </div>
+                  ))}
+                </Section>
+              )}
+
               {done.length > 0 && (
                 <Section title={t(lang, 'onlineFinished')}>
                   {done.map((o) => (
@@ -400,7 +421,9 @@ function OrderHead({ o, lang, nowTs, number }: { o: OnlineOrder; lang: 'ru' | 'h
         <div className="flex items-baseline gap-2">
           {number !== undefined && <span className="text-xl font-black tabular-nums text-gray-900">#{number}</span>}
           <span className="font-bold text-gray-900 truncate">{o.customer_name}</span>
-          <span className="text-sm text-gray-500 tabular-nums" dir="ltr">{o.customer_phone}</span>
+          {o.customer_phone && (
+            <span className="text-sm text-gray-500 tabular-nums" dir="ltr">{o.customer_phone}</span>
+          )}
         </div>
         <div className="text-sm text-gray-500 mt-1 flex items-center gap-2 flex-wrap">
           <span>
@@ -409,8 +432,12 @@ function OrderHead({ o, lang, nowTs, number }: { o: OnlineOrder; lang: 'ru' | 'h
               {o.pickup_at ? `${t(lang, 'onlinePickupAt')} ${formatTime(o.pickup_at, lang)}` : t(lang, 'onlineAsap')}
             </span>
           </span>
-          <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-700">
-            {t(lang, o.order_type === 'here' ? 'onlineTypeHere' : o.order_type === 'delivery' ? 'onlineTypeDelivery' : 'onlineTypeTakeaway')}
+          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${
+            o.table_label ? 'bg-emerald-50 text-emerald-800' : 'bg-gray-100 text-gray-700'
+          }`}>
+            {o.table_label
+              ? `${t(lang, 'onlineTable')} ${o.table_label}`
+              : t(lang, o.order_type === 'here' ? 'onlineTypeHere' : o.order_type === 'delivery' ? 'onlineTypeDelivery' : 'onlineTypeTakeaway')}
           </span>
         </div>
         {o.order_type === 'delivery' && o.delivery_address && (

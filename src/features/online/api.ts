@@ -28,6 +28,10 @@ export interface OnlineOrder {
   order_type: 'here' | 'takeaway' | 'delivery'
   /** Адрес доставки — только при order_type='delivery' */
   delivery_address: string | null
+  /** Проверенный сервером стол из QR-контекста (099). */
+  table_id: string | null
+  table_label: string | null
+  order_channel: 'link' | 'counter_qr' | 'table_qr' | 'website' | 'social'
   items: OnlineOrderLine[]
   subtotal: number
   total: number
@@ -63,7 +67,7 @@ export interface AcceptResult {
   duplicate: boolean
 }
 
-/** Принять заявку: создаёт настоящий заказ (takeaway, source='site') → очередь бариста */
+/** Принять заявку: counter-заказ или дозаказ в счёт стола → очередь бариста. */
 export async function acceptOnlineOrder(onlineId: string, staffId: string): Promise<AcceptResult> {
   const { data, error } = await supabase.rpc('accept_online_order', {
     p_online_id: onlineId,

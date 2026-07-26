@@ -86,6 +86,8 @@ export interface LocationSettings {
     // Оформление главного экрана гостевой страницы (фото в Storage)
     /** Баннер-шапка сверху; логотип и название накладываются поверх */
     header_url?: string | null
+    /** Прямая ссылка на MP4/WebM для декоративного autoplay hero. */
+    hero_video_url?: string | null
     /** Фон главного экрана; шапка и плитки — поверх */
     background_url?: string | null
     /** Название в шапке гостевой страницы (062); пусто/null = имя точки/чека */
@@ -249,6 +251,8 @@ export interface TableZone {
 
 export interface Table {
   id: string
+  /** Непрозрачный токен публичного QR (099); не использовать внутренний id в URL. */
+  public_token: string
   org_id: string
   location_id: string
   label: string

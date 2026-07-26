@@ -1,7 +1,7 @@
 /**
  * public-menu — публичное меню для страницы онлайн-заказа (050).
  *
- * GET ?loc=<location_id>
+ * GET ?loc=<location_id>&table=<opaque_table_token?>
  *   → { location: { id, name, currency, is_open }, categories: [...] }
  *
  * Анонимные гости сайта ≠ authenticated-устройства кассы: анон-ключ
@@ -33,6 +33,7 @@ Deno.serve(async (req) => {
   if (req.method !== 'GET') return json({ error: 'method_not_allowed' }, 405)
 
   const loc = new URL(req.url).searchParams.get('loc') ?? ''
+  const tableToken = new URL(req.url).searchParams.get('table')
   if (!UUID_RE.test(loc)) return json({ error: 'invalid_location' }, 400)
 
   const supabase = createClient(
@@ -110,6 +111,7 @@ Deno.serve(async (req) => {
   const onlineSettings = (locRes.data as {
     online_settings?: {
       enabled?: boolean
+      table_ordering_enabled?: boolean
       paused_until?: string | null
       prep_minutes?: number | null
       prep_min?: number | null
@@ -118,6 +120,7 @@ Deno.serve(async (req) => {
       facebook?: string | null
       google_review?: string | null
       header_url?: string | null
+      hero_video_url?: string | null
       background_url?: string | null
       display_name?: string | null
       order_types?: string[]
@@ -141,6 +144,35 @@ Deno.serve(async (req) => {
   // старый prep_minutes (054) читаем как min=max. 0/0 = не показывать.
   const prepMin = onlineSettings?.prep_min ?? onlineSettings?.prep_minutes ?? null
   const prepMax = onlineSettings?.prep_max ?? onlineSettings?.prep_minutes ?? null
+
+  let orderContext: { kind: 'table'; label: string; zone: string | null } | null = null
+  let contextError: 'invalid_table' | 'table_ordering_disabled' | null = null
+  if (tableToken) {
+    if (!UUID_RE.test(tableToken)) {
+      contextError = 'invalid_table'
+    } else {
+      const tableRes = await supabase
+        .from('tables')
+        .select('label, zone, status, is_active')
+        .eq('location_id', loc)
+        .eq('public_token', tableToken)
+        .maybeSingle()
+      const table = tableRes.data as {
+        label: string
+        zone: string | null
+        status: string
+        is_active: boolean
+      } | null
+
+      if (tableRes.error || !table || !table.is_active) {
+        contextError = 'invalid_table'
+      } else if (table.status === 'disabled' || onlineSettings?.table_ordering_enabled === false) {
+        contextError = 'table_ordering_disabled'
+      } else {
+        orderContext = { kind: 'table', label: table.label, zone: table.zone }
+      }
+    }
+  }
 
   return json(
     {
@@ -168,6 +200,7 @@ Deno.serve(async (req) => {
         order_types: enabledTypes,
         // Оформление главного экрана: баннер-шапка и фон (Настройки → Онлайн-заказы)
         header_url: onlineSettings?.header_url || null,
+        hero_video_url: onlineSettings?.hero_video_url || null,
         background_url: onlineSettings?.background_url || null,
         // Соцссылки подвала гостевой страницы (Настройки → Обслуживание → Онлайн-заказы)
         links: {
@@ -176,6 +209,8 @@ Deno.serve(async (req) => {
           google_review: onlineSettings?.google_review || null,
         },
       },
+      order_context: orderContext,
+      context_error: contextError,
       categories,
     },
     200,

@@ -30,9 +30,10 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 // Ошибки, которые БД кидает осознанно — отдаём гостю как код, не 500
 const KNOWN_ERRORS = [
-  'disabled', 'closed', 'rate_limited', 'busy', 'invalid_location', 'invalid_name',
+  'disabled', 'paused', 'closed', 'rate_limited', 'busy', 'invalid_location', 'invalid_name',
   'invalid_phone', 'invalid_pickup', 'invalid_items', 'item_unavailable',
-  'invalid_client_uuid', 'invalid_order_type', 'invalid_address', 'not_found',
+  'invalid_client_uuid', 'invalid_order_type', 'invalid_address', 'invalid_table',
+  'table_ordering_disabled', 'invalid_order_channel', 'not_found',
 ]
 
 function errorCode(message: string): string {
@@ -72,16 +73,23 @@ Deno.serve(async (req) => {
     return json({ error: 'bad_request' }, 400)
   }
 
-  const { loc, client_uuid, name, phone, pickup_at, note, items, order_type, delivery_address } = body as {
+  const {
+    loc, client_uuid, name, phone, pickup_at, note, items, order_type,
+    delivery_address, table_token, order_channel,
+  } = body as {
     loc?: string; client_uuid?: string; name?: string; phone?: string
     pickup_at?: string | null; note?: string | null; items?: unknown
     order_type?: string; delivery_address?: string | null
+    table_token?: string | null; order_channel?: string
   }
   if (!UUID_RE.test(loc ?? '') || !UUID_RE.test(client_uuid ?? '')) {
     return json({ error: 'bad_request' }, 400)
   }
   if (typeof name !== 'string' || typeof phone !== 'string' || !Array.isArray(items)) {
     return json({ error: 'bad_request' }, 400)
+  }
+  if (table_token != null && !UUID_RE.test(table_token)) {
+    return json({ error: 'invalid_table' }, 400)
   }
 
   const { data, error } = await supabase.rpc('submit_online_order', {
@@ -94,6 +102,8 @@ Deno.serve(async (req) => {
     p_note: note ?? null,
     p_order_type: typeof order_type === 'string' ? order_type : 'takeaway',
     p_delivery_address: typeof delivery_address === 'string' ? delivery_address : null,
+    p_table_token: table_token ?? null,
+    p_order_channel: typeof order_channel === 'string' ? order_channel : 'link',
   })
 
   if (error) {

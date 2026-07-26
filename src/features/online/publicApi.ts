@@ -66,6 +66,8 @@ export interface PublicMenu {
     order_types?: ('here' | 'takeaway' | 'delivery')[]
     /** Баннер-шапка главного экрана; логотип и название — поверх */
     header_url?: string | null
+    /** Декоративное видео hero: autoplay + muted + loop, poster = header_url. */
+    hero_video_url?: string | null
     /** Фон главного экрана; шапка накладывается поверх */
     background_url?: string | null
     /** Соцссылки подвала — настраиваются в кассе, пусто = не показывать */
@@ -75,6 +77,14 @@ export interface PublicMenu {
       google_review?: string | null
     }
   }
+  /** Проверенный сервером контекст QR конкретного стола. */
+  order_context?: {
+    kind: 'table'
+    label: string
+    zone: string | null
+  } | null
+  /** Просроченный/неверный table-token: меню доступно, но заказ не привязан к столу. */
+  context_error?: 'invalid_table' | 'table_ordering_disabled' | null
   categories: { id: string; name: string; cover_url?: string | null; items: PublicItem[] }[]
 }
 
@@ -100,8 +110,10 @@ export async function parseError(res: Response): Promise<never> {
   throw new PublicApiError(code, detail)
 }
 
-export async function fetchPublicMenu(locId: string): Promise<PublicMenu> {
-  const res = await fetch(`${FN_BASE}/public-menu?loc=${encodeURIComponent(locId)}`, { headers })
+export async function fetchPublicMenu(locId: string, tableToken?: string | null): Promise<PublicMenu> {
+  const params = new URLSearchParams({ loc: locId })
+  if (tableToken) params.set('table', tableToken)
+  const res = await fetch(`${FN_BASE}/public-menu?${params.toString()}`, { headers })
   if (!res.ok) await parseError(res)
   return res.json()
 }
@@ -117,6 +129,10 @@ export interface SubmitPayload {
   note: string | null
   order_type: PublicOrderType
   delivery_address: string | null
+  /** Непрозрачный токен из QR; сервер сам разрешает его в table_id/label. */
+  table_token: string | null
+  /** Атрибуция без влияния на права и цены. */
+  order_channel: 'link' | 'counter_qr' | 'table_qr' | 'website' | 'social'
   items: {
     menu_item_id: string
     variant_id: string | null
@@ -151,6 +167,9 @@ export interface PublicStatus {
   order_status: string | null
   /** Тип заказа гостя (055) */
   order_type?: PublicOrderType
+  /** Стол из проверенного QR-контекста; null для стойки/навынос/доставки. */
+  table_label?: string | null
+  order_channel?: 'link' | 'counter_qr' | 'table_qr' | 'website' | 'social'
   created_at: string
   /** Момент принятия заказа кассой (061), ISO — старт таймера у гостя */
   decided_at?: string | null
