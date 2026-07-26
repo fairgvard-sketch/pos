@@ -122,10 +122,16 @@ https://pos-self-sigma.vercel.app/order/<location_id>?table=<public_token>&sourc
 встроенном термопринтере. Владелец новой точки включает онлайн-заказы
 сам, без разработчика: завёл меню → распечатал QR → повесил на стойку.
 
-### Чистая витрина без модуля заказов (100)
+### Чистая витрина без модуля заказов (100, capability-гейты 105)
 
-Организация с модулем `menu`, но без `online_orders` (ANGLE Menu без
-POS/заказов) получает ту же гостевую страницу в режиме витрины:
+С 105 витрину и корзину гейтят capabilities (`org_public_menu_gates`):
+`public_menu` дают и ANGLE Menu, и ANGLE Orders (без покупки Menu);
+корзина/приём/статус заявки — `online_orders`. Отказ — стабильный
+`module_disabled` до settings-тумблеров; `get_online_order_status` —
+защищённое чтение (закрывается вместе с продуктом).
+
+Организация с capability `public_menu`, но без `online_orders` (ANGLE
+Menu без POS/заказов) получает ту же гостевую страницу в режиме витрины:
 `public-menu` отдаёт `location.modules.online_orders=false`, страница
 скрывает корзину, чекаут, пилл типа заказа и баннеры «закрыто/пауза»
 (смен у digital-only организации не бывает — вечное «закрыто» вводило бы

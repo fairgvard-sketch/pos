@@ -131,6 +131,14 @@ chunk.
 RLS получает scope через `auth_org_id()` и `auth_location_id()`. Это основная
 граница tenant-изоляции. Во frontend нет и не должно быть `service_role`.
 
+Касса — потребитель продукта `pos`, а не неявный владелец всех модулей
+(103–105): рабочие экраны обёрнуты `PosGuard` (рядом со `SchemaGuard` в
+`ProtectedRoute`) — организация без действующего entitlement `pos` видит
+экран «ANGLE POS не активирован». Блокирует только уверенный отрицательный
+ответ `org_has_capability('pos_operate')`; офлайн/сбой сети не блокируют —
+настоящая граница остаётся в серверных гейтах RPC (`module_disabled`).
+Подробности модели — `docs/standalone-products.md`.
+
 ### Сотрудник
 
 Сотрудник вводит четырёхзначный PIN. `verify_staff_pin()` проверяет bcrypt-хеш

@@ -90,7 +90,10 @@ supabase test db
 | `staff` | сотрудники без доступного клиенту `pin_hash` |
 | `staff_sessions` | короткоживущая серверная PIN-сессия и права |
 | `organization_members` | веб-идентичности бэкофиса (088), PIN здесь не хранится |
-| `organization_products` | продуктовые модули организации (100): `menu`/`online_orders`/`reservations`/`pos` |
+| `organization_products` | entitlement'ы организации (100, lifecycle 103): `menu`/`online_orders`/`reservations`/`pos` |
+| `product_catalog` | реестр продаваемых продуктов (103): primary/add-on/активность |
+| `product_capabilities` | какая техническая возможность входит в какой продукт (103) |
+| `product_activation_requests` | заявки на активацию продукта (104): интерес, не доступ |
 
 ### Каталог
 
@@ -340,39 +343,72 @@ auth-аккаунты с валидным `org_id` в `app_metadata`, чтобы
 
 Инварианты закреплены в `supabase/tests/backoffice_members.test.sql`.
 
-## Продуктовые модули организации (100)
+## Продукты, capabilities и entitlements (100, 103–105)
 
-ANGLE продаёт модули независимо: `menu`, `online_orders`, `reservations`,
-`pos` — организация включает любую комбинацию. Ентитлменты хранятся в
-`organization_products` и enforced СЕРВЕРОМ, а не видимостью навигации:
+ANGLE продаёт четыре продукта независимо: `pos`, `menu`, `online_orders`,
+`reservations` — любой может быть первым продуктом организации, любой
+добавляется позже как add-on. Модель разделяет продукт (что куплено),
+capability (что технически разрешено), entitlement (что выдано
+организации) и операционную настройку (тумблеры владельца).
 
-- `org_has_product(org, product)` — единая проверка; публичные мутации
-  `submit_online_order` и `submit_reservation` отклоняют организацию без
-  модуля кодом `module_disabled` ДО settings-тумблеров (`module_disabled`
-  «модуль не подключён» ≠ `disabled` «владелец выключил приём»). Витрину
-  меню гейтит Edge Function `public-menu` (модуль `menu` → 404
+- `product_catalog` (103) — реестр продуктов (`can_be_primary`/
+  `can_be_addon`/`is_active`); деактивация продукта в реестре гасит его
+  entitlement'ы целиком (fail closed);
+- `product_capabilities` (103) — карта возможностей: `catalog_manage`,
+  `public_menu`, `online_orders`, `orders_desk`, `public_reservations`,
+  `reservations_desk`, `pos_operate`, `pos_reports`. ANGLE Orders включает
+  `public_menu` без покупки Menu; POS даёт `catalog_manage`, но не
+  `public_menu`;
+- `organization_products` + lifecycle (103): `status`
+  (active/trialing/suspended/expired), `source`
+  (developer/manual/trial/subscription), `starts_at`/`expires_at`,
+  `metadata`. Просрочка оценивается в момент запроса; данные при
+  отключении не удаляются;
+- `org_has_product(org, product)` — прямая проверка выданного продукта
+  (с 103 учитывает lifecycle); `org_has_capability(org, capability)` —
+  производная проверка для гейтов; `require_org_capability(cap)` — гейт
+  текущей организации (ошибка `module_disabled`). Неизвестные ключи —
+  FALSE (fail closed);
+- `orgs.account_type` (103): `customer`/`developer`/`demo`.
+  Developer-организация несёт все продукты бессрочно строками
+  `source='developer'`, защищёнными триггером
+  (`app.allow_developer_grant_change` — осознанный обход). Runtime email
+  не проверяет;
+- провижионинг (104) — ТОЛЬКО оператор: `grant_org_product` /
+  `revoke_org_product` (EXECUTE только у service_role). Онбординги
+  продукты НЕ выдают: `bootstrap_org` фиксирует заявку на `pos`,
+  `bootstrap_digital_org` — заявки на выбранные digital-модули
+  (`product_activation_requests`); браузерный список — интерес, не доступ.
+  `request_product_activation` — заявка владельца/менеджера из кабинета;
+  `attach_device_to_org` — операторский апгрейд digital → POS без второй
+  организации. Процедуры — `docs/standalone-products.md`;
+- гейты (105): `submit_online_order`/`get_online_order_status` —
+  `online_orders`; `submit_reservation`/`reservation_availability`/
+  `get_reservation_status` — `public_reservations`;
+  `set_online_order_status_web` — `orders_desk`;
+  `set_reservation_status_web` — `reservations_desk`; `open_shift` и
+  обёртки горячего потока (`place_order`, `pay_order`,
+  `open_or_get_table_order`, `append_to_order`) — `pos_operate`;
+  `sales_report` — `pos_reports`; `save_menu_item`/`reorder_menu` —
+  `catalog_manage` (приём rename→`*_impl`+обёртка). Гейт стоит ДО
+  settings-тумблеров: `module_disabled` «продукт не подключён» ≠
+  `disabled` «владелец выключил приём». Закрытие смены и `uf_export_*`
+  сознательно не гейтятся. Витрину гейтит Edge `public-menu` через
+  `org_public_menu_gates` (capability `public_menu` → 404
   `module_disabled`);
 - клиентам доступен только SELECT своей организации (RLS по
-  `auth_org_id()`); провижионинг — оператором/миграцией, биллинга в MVP нет;
-- бэкфилл 100 выдал все четыре модуля каждой существующей организации —
-  нулевая регрессия; `bootstrap_org` (device-путь) сеет полный набор новым
-  POS-организациям;
-- `bootstrap_digital_org(org, location, owner_name, products[])` —
-  digital-only онбординг: email/пароль-владелец создаёт организацию, точку,
-  owner-членство в `organization_members` и выбранные модули БЕЗ PIN,
-  staff-строки и устройства. Self-serve только digital-модули (`pos`
-  отбрасывается и провижионится вручную). В `app_metadata` пишется только
-  `org_id`: `location_id` в JWT — маркер устройства, веб-контур (091/096)
-  адресует точку параметром. После вызова клиент обязан обновить JWT
-  (refresh session), как и в device-потоке;
-- `get_backoffice_context` дополнительно отдаёт `products` — модульная
-  навигация кабинета (Phase 5) строится по нему, но авторизацией остаётся
-  серверная проверка.
+  `auth_org_id()`); реестр и карта capabilities читаются любой
+  authenticated-ролью (глобальный справочник);
+- бэкфилл 100 выдал все четыре продукта каждой существовавшей
+  организации — для них гейты no-op;
+- `get_backoffice_context` (105) отдаёт effective `products`,
+  `capabilities`, `account_type`, `product_requests` (pending-заявки) и
+  `product_sources` — навигация кабинета строится по capabilities, но
+  авторизацией остаётся серверная проверка.
 
-Привилегированные POS-RPC модулями пока не гейтятся: у всех существующих
-организаций все модули есть, полное гейтирование — фазы 3–5 плана
-standalone digital products. Инварианты закреплены в
-`supabase/tests/organization_products.test.sql`.
+Инварианты: `organization_products.test.sql`,
+`product_capability_model.test.sql`, `secure_provisioning.test.sql`,
+`entitlement_matrix.test.sql`.
 
 ## Ключевые RPC
 

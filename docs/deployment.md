@@ -136,6 +136,10 @@ Service worker обновляется автоматически. `lazyWithRetry
 - [ ] для fiscal/payment изменений выполнены применимые gates из [israel-compliance.md](israel-compliance.md);
 - [ ] ru/he и RTL проверены;
 - [ ] пройден [smoke-test T2](t2-smoke-test.md);
+- [ ] при изменении продуктов/entitlement'ов (103–105) пройден блок
+  «Продуктовая модель» из [standalone-products.md](standalone-products.md):
+  действующие организации работают, developer-бейдж на месте, ручной
+  grant/revoke ведёт себя как задокументировано;
 - [ ] версия WebView и модель терминала записаны в результат проверки;
 - [ ] после frontend-деплоя `ops_fleet` показывает новую `app_version` и
   свежий `last_seen_at` на боевых устройствах.
