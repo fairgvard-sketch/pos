@@ -22,29 +22,16 @@ export default defineConfig({
     VitePWA({
       // SW обновляется сам, без диалогов — касса всегда на свежей версии
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'icons.svg'],
-      manifest: {
-        name: 'Angle — POS',
-        short_name: 'Angle',
-        description: 'POS для кофеен и пекарен',
-        lang: 'ru',
-        // Тач-касса, альбомная ориентация. standalone (не fullscreen!):
-        // браузерный UI скрыт, но системная навигация Android (назад/домой)
-        // остаётся — иначе с терминала нельзя свернуть кассу.
-        display: 'standalone',
-        orientation: 'landscape',
-        background_color: '#eceef1',
-        theme_color: '#111827',
-        icons: [
-          { src: 'pwa-192.png', sizes: '192x192', type: 'image/png' },
-          { src: 'pwa-512.png', sizes: '512x512', type: 'image/png' },
-          { src: 'pwa-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
-        ],
-      },
+      includeAssets: ['favicon.svg', 'icons.svg', 'manifest.webmanifest', 'install-manifest.js'],
+      // Манифест выбирается синхронно в install-manifest.js:
+      // внутренние маршруты получают статический POS manifest, /order/:locId —
+      // динамический manifest конкретной точки/стола. Плагин не должен вставлять
+      // второй <link rel="manifest"> с start_url="/".
+      manifest: false,
       workbox: {
         // Кэшируем весь бандл (уровень A): при коротком обрыве приложение
         // грузится из кэша и не белеет. Данные Supabase — офлайн-очередь фазы 7.
-        globPatterns: ['**/*.{js,css,html,svg,woff,woff2}'],
+        globPatterns: ['**/*.{js,css,html,svg,webmanifest,woff,woff2}'],
         navigateFallback: '/index.html',
         cleanupOutdatedCaches: true,
       },

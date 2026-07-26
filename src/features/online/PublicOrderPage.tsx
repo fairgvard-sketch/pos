@@ -9,6 +9,7 @@ import {
 } from './publicApi'
 import { parsePublicOrderQuery } from './orderContext'
 import { readPublicCart, writePublicCart } from './publicCart'
+import { updateInstalledMenuName } from './menuManifest'
 import {
   menuBackgroundThemeColor,
   menuBackgroundUsesDarkUi,
@@ -84,6 +85,14 @@ export default function PublicOrderPage() {
     staleTime: 30_000,
   })
   const menuBackground = resolveMenuBackgroundUrl(menu?.location.background_url)
+  const installedMenuName = menu?.location.business_name || menu?.location.name
+  useEffect(() => {
+    if (!installedMenuName) return
+    const previousTitle = document.title
+    document.title = installedMenuName
+    updateInstalledMenuName(installedMenuName)
+    return () => { document.title = previousTitle }
+  }, [installedMenuName])
 
   // Safari рисует safe-area и rubber-band из canvas документа. Поэтому
   // единственный экземпляр изображения живёт на <html>: он продолжается

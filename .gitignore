@@ -46,3 +46,7 @@ supabase/.branches/
 
 # Логические дампы прода (npm run db:dump) — PIN-хэши и данные гостей
 backups/
+
+# Локальная привязка и переменные Vercel (не коммитятся)
+.vercel/
+.env.local
