@@ -125,8 +125,43 @@ export async function parseError(res: Response): Promise<never> {
   throw new PublicApiError(code, detail)
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/**
+ * Слаг → location_id (106). Публичные ссылки бывают двух видов:
+ * /order/<uuid> с напечатанных QR-наклеек столов и /order/bulochka с
+ * флаера. Резолвим на клиенте, чтобы Edge Functions продолжали принимать
+ * только UUID — иначе проверку слага пришлось бы дублировать в трёх
+ * функциях и во всех местах, где они валидируют loc.
+ *
+ * Результат кэшируется на время жизни вкладки: locId участвует в ключах
+ * корзины и localStorage, повторный резолв на каждый рендер не нужен.
+ */
+const slugCache = new Map<string, string>()
+
+export async function resolveLocationId(locIdOrSlug: string): Promise<string> {
+  if (UUID_RE.test(locIdOrSlug)) return locIdOrSlug
+
+  const cached = slugCache.get(locIdOrSlug)
+  if (cached) return cached
+
+  const res = await fetch(`${FN_BASE.replace('/functions/v1', '')}/rest/v1/rpc/resolve_location_slug`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ p_slug: locIdOrSlug }),
+  })
+  if (!res.ok) throw new PublicApiError('invalid_location')
+
+  const id = (await res.json()) as string | null
+  if (!id || !UUID_RE.test(id)) throw new PublicApiError('invalid_location')
+
+  slugCache.set(locIdOrSlug, id)
+  return id
+}
+
 export async function fetchPublicMenu(locId: string, tableToken?: string | null): Promise<PublicMenu> {
-  const params = new URLSearchParams({ loc: locId })
+  const resolved = await resolveLocationId(locId)
+  const params = new URLSearchParams({ loc: resolved })
   if (tableToken) params.set('table', tableToken)
   const res = await fetch(`${FN_BASE}/public-menu?${params.toString()}`, { headers })
   if (!res.ok) await parseError(res)
@@ -164,10 +199,13 @@ export interface SubmitResult {
 }
 
 export async function submitPublicOrder(payload: SubmitPayload): Promise<SubmitResult> {
+  // loc приходит из URL и может быть слагом (106); submit_online_order
+  // принимает только UUID. Резолв берётся из кэша, заполненного меню.
+  const loc = await resolveLocationId(payload.loc)
   const res = await fetch(`${FN_BASE}/public-order`, {
     method: 'POST',
     headers,
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ ...payload, loc }),
   })
   if (!res.ok) await parseError(res)
   return res.json()

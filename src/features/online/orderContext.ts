@@ -68,12 +68,22 @@ export function parsePublicOrderQuery(search: string): PublicOrderQueryContext {
   return { tableToken, requestedType: tableToken ? 'here' : requestedType, channel }
 }
 
+/**
+ * Слаг точки (106), если владелец его задал: /order/bulochka вместо
+ * /order/<uuid>. UUID остаётся рабочим входом — на столах уже наклеены QR
+ * со старыми ссылками, и ломать их нельзя.
+ */
 export function publicOrderUrl(
   origin: string,
   locationId: string,
-  options: { tableToken?: string | null; channel?: PublicOrderChannel; mode?: PublicOrderType } = {},
+  options: {
+    tableToken?: string | null
+    channel?: PublicOrderChannel
+    mode?: PublicOrderType
+    slug?: string | null
+  } = {},
 ): string {
-  const url = new URL(`/order/${locationId}`, origin)
+  const url = new URL(`/order/${options.slug || locationId}`, origin)
   if (options.tableToken) {
     url.searchParams.set('table', options.tableToken)
     url.searchParams.set('source', 'table_qr')
@@ -84,6 +94,10 @@ export function publicOrderUrl(
   return url.toString()
 }
 
-export function publicReservationUrl(origin: string, locationId: string): string {
-  return new URL(`/reserve/${locationId}`, origin).toString()
+export function publicReservationUrl(
+  origin: string,
+  locationId: string,
+  slug?: string | null,
+): string {
+  return new URL(`/reserve/${slug || locationId}`, origin).toString()
 }

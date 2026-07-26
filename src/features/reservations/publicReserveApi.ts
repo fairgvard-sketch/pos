@@ -4,7 +4,7 @@
  * прямого доступа к таблицам у гостя нет, всё решает сервер.
  */
 
-import { parseError } from '../online/publicApi'
+import { parseError, resolveLocationId } from '../online/publicApi'
 
 const FN_BASE = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`
 const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -58,7 +58,8 @@ export interface ReserveInfo {
 }
 
 export async function fetchReserveInfo(locId: string): Promise<ReserveInfo> {
-  const res = await fetch(`${FN_BASE}/public-reserve?loc=${encodeURIComponent(locId)}`, { headers })
+  const loc = await resolveLocationId(locId)
+  const res = await fetch(`${FN_BASE}/public-reserve?loc=${encodeURIComponent(loc)}`, { headers })
   if (!res.ok) await parseError(res)
   return res.json()
 }
@@ -105,7 +106,7 @@ export interface AvailabilityResult {
 export async function fetchAvailability(
   locId: string, date: string, party: number, zoneId?: string | null,
 ): Promise<AvailabilityResult> {
-  const qs = new URLSearchParams({ loc: locId, date, party: String(party) })
+  const qs = new URLSearchParams({ loc: await resolveLocationId(locId), date, party: String(party) })
   if (zoneId) qs.set('zone', zoneId)
   const res = await fetch(`${FN_BASE}/public-reserve?${qs}`, { headers })
   if (!res.ok) await parseError(res)
@@ -113,10 +114,12 @@ export async function fetchAvailability(
 }
 
 export async function submitPublicReservation(payload: ReservePayload): Promise<ReserveResult> {
+  // loc из URL может быть слагом (106); create_reservation принимает UUID.
+  const loc = await resolveLocationId(payload.loc)
   const res = await fetch(`${FN_BASE}/public-reserve`, {
     method: 'POST',
     headers,
-    body: JSON.stringify({ action: 'submit', ...payload }),
+    body: JSON.stringify({ action: 'submit', ...payload, loc }),
   })
   if (!res.ok) await parseError(res)
   return res.json()

@@ -51,11 +51,34 @@ describe('publicOrderUrl', () => {
       mode: 'delivery',
     })).toBe(`https://pos.example/order/loc-1?table=${TABLE_TOKEN}&source=table_qr`)
   })
+
+  it('prefers the human-readable slug over the location id', () => {
+    expect(publicOrderUrl('https://menu.angle.co.il', 'fe2eebf0-65e3-45b4-a81f-331359d71955', {
+      slug: 'bulochka',
+    })).toBe('https://menu.angle.co.il/order/bulochka')
+  })
+
+  it('keeps the slug on printed table QR links', () => {
+    expect(publicOrderUrl('https://menu.angle.co.il', 'loc-1', {
+      slug: 'bulochka',
+      tableToken: TABLE_TOKEN,
+    })).toBe(`https://menu.angle.co.il/order/bulochka?table=${TABLE_TOKEN}&source=table_qr`)
+  })
+
+  it('falls back to the id when no slug is configured', () => {
+    expect(publicOrderUrl('https://menu.angle.co.il', 'loc-1', { slug: null }))
+      .toBe('https://menu.angle.co.il/order/loc-1')
+  })
 })
 
 describe('publicReservationUrl', () => {
   it('creates a reservation URL on the selected public origin', () => {
     expect(publicReservationUrl('https://menu.angle.co.il', 'loc-1'))
       .toBe('https://menu.angle.co.il/reserve/loc-1')
+  })
+
+  it('prefers the slug when the owner configured one', () => {
+    expect(publicReservationUrl('https://menu.angle.co.il', 'loc-1', 'bulochka'))
+      .toBe('https://menu.angle.co.il/reserve/bulochka')
   })
 })

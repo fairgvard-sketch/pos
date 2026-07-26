@@ -72,18 +72,37 @@
 ## Ссылка для гостей
 
 ```
-https://pos-self-sigma.vercel.app/order/<location_id>?source=counter_qr
-https://pos-self-sigma.vercel.app/order/<location_id>?table=<public_token>&source=table_qr
+https://menu.angle.co.il/order/<slug|location_id>?source=counter_qr
+https://menu.angle.co.il/order/<slug|location_id>?table=<public_token>&source=table_qr
 ```
 
 Обе ссылки генерируются в кассе и веб-кабинете ANGLE. Токены столов вручную
 собирать не нужно.
 
+### Слаг точки (106)
+
+Первый сегмент после `/order/` — либо `location_id`, либо человекочитаемый
+слаг: `menu.angle.co.il/order/bulochka`. UUID остаётся полноправным входом,
+потому что QR со старыми ссылками уже наклеены на столы; слаг — только
+дополнительный вход, а не замена.
+
+- Владелец задаёт слаг в бэкофисе → `set_location_slug` (право `manage`,
+  capability `public_menu`). Пустая строка снимает слаг.
+- Занятость и формат проверяет БД: уникальный индекс на `location_slugs`,
+  CHECK на формат и таблица `reserved_slugs` со служебными именами.
+- Гость резолвит слаг через `resolve_location_slug` — единственную функцию,
+  доступную анону. Она отдаёт только `location_id`; витрину по нему выдаёт
+  `public-menu` со своими capability-гейтами.
+- Edge Functions продолжают принимать **только UUID**: резолв делает фронт
+  в `publicApi.resolveLocationId` до вызова API. Это сознательно — иначе
+  проверку слага пришлось бы дублировать в `public-menu`, `public-order` и
+  `public-reserve` во всех местах, где они валидируют `loc`.
+
 ## Что где в коде
 
 | Слой | Файлы |
 |------|-------|
-| Миграции | `supabase/migrations/050_online_orders.sql`, `099_qr_table_ordering.sql` |
+| Миграции | `supabase/migrations/050_online_orders.sql`, `099_qr_table_ordering.sql`, `106_location_slugs.sql` |
 | Edge Functions | `supabase/functions/public-menu/`, `supabase/functions/public-order/` |
 | Экран кассы | `src/features/online/OnlineOrdersPage.tsx` + `api.ts` (маршрут `/online`) |
 | Бейдж/звонок | `src/components/AppSidebar.tsx` (пункт «Онлайн», подписка realtime) |
