@@ -10,7 +10,7 @@ import { hasSilentPrintPath } from '../../../lib/escpos'
 import { printCanvasWithRetry } from '../../receipt/printFailure'
 import { renderQrFlyerCanvas } from '../../receipt/printCanvas'
 import { fetchTables } from '../../tables/api'
-import { publicOrderUrl } from '../../online/orderContext'
+import { publicAppOrigin, publicOrderUrl } from '../../online/orderContext'
 import { useLocationSettings } from '../useLocationSettings'
 import { Group, ToggleRow } from '../ui'
 import {
@@ -34,7 +34,7 @@ export default function OnlineOrdersDetail({ location }: { location: Location | 
   const { settings, update } = useLocationSettings(location)
   const enabled = settings.online_orders?.enabled !== false
   const url = location
-    ? publicOrderUrl(window.location.origin, location.id, { channel: 'counter_qr' })
+    ? publicOrderUrl(publicAppOrigin(), location.id, { channel: 'counter_qr' })
     : ''
   const { data: allTables = [] } = useQuery({
     queryKey: ['tables'],
@@ -48,7 +48,7 @@ export default function OnlineOrdersDetail({ location }: { location: Location | 
   const selectedTable =
     tables.find((table) => table.id === selectedTableId) ?? tables[0] ?? null
   const tableUrl = location && selectedTable
-    ? publicOrderUrl(window.location.origin, location.id, {
+    ? publicOrderUrl(publicAppOrigin(), location.id, {
         tableToken: selectedTable.public_token,
       })
     : ''

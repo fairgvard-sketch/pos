@@ -31,6 +31,8 @@ interface Window {
   KassaAndroid?: KassaAndroidBridge
   /** Колбэк результата печати от нативного моста (регистрирует printJobs.ts) */
   __kassaPrintResult?: (jobId: string, status: KassaPrintStatus, message: string | null) => void
+  /** Ранний выбор manifest до загрузки React: pos | menu. */
+  __ANGLE_APP_SURFACE__?: 'pos' | 'menu'
 }
 
 /** Версия приложения — из package.json через define в vite.config.ts */

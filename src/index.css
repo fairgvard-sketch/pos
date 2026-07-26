@@ -128,6 +128,18 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     max-width: 32rem;
   }
 
+  .public-menu-shell.min-h-screen,
+  .public-menu-frame.min-h-screen {
+    min-height: 100vh;
+  }
+
+  @supports (height: 100dvh) {
+    .public-menu-shell.min-h-screen,
+    .public-menu-frame.min-h-screen {
+      min-height: 100dvh;
+    }
+  }
+
   body {
     margin: 0;
     background: #f8f9fb;
@@ -203,7 +215,7 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   .public-menu-hero {
     position: relative;
     isolation: isolate;
-    height: 100svh;
+    height: 100vh;
     min-height: 36rem;
     overflow: hidden;
     flex-shrink: 0;
@@ -211,6 +223,13 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     background-image: var(--public-menu-background-image);
     background-position: center;
     background-size: cover;
+  }
+
+  @supports (height: 100dvh) {
+    .public-menu-hero {
+      height: 100dvh;
+      min-height: 100dvh;
+    }
   }
 
   .public-menu-hero-media {
@@ -418,8 +437,9 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   }
 
   .public-menu-item-card.is-grid .public-menu-item-media img {
-    padding: .35rem;
-    transform: scale(1.18);
+    object-fit: cover;
+    padding: 0;
+    transform: scale(1.48);
   }
 
   .public-menu-item-card:active .public-menu-item-media img {
@@ -427,7 +447,7 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   }
 
   .public-menu-item-card.is-grid:active .public-menu-item-media img {
-    transform: scale(1.22);
+    transform: scale(1.53);
   }
 
   .public-menu-item-placeholder {
@@ -733,8 +753,8 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   .public-menu-cart-media img {
     width: 100%;
     height: 100%;
-    object-fit: contain;
-    transform: scale(1.48);
+    object-fit: cover;
+    transform: scale(1.72);
     filter: drop-shadow(0 7px 8px rgb(17 24 39 / 12%));
   }
 
@@ -1053,7 +1073,8 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   }
 
   .public-menu-checkout-recommendations.is-large .public-menu-checkout-recommendation-media img {
-    object-fit: contain;
+    object-fit: cover;
+    transform: scale(1.18);
     filter: drop-shadow(0 10px 12px rgb(17 24 39 / 12%));
   }
 

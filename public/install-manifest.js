@@ -2,7 +2,9 @@
   var guestMatch = window.location.pathname.match(
     /^\/order\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/?$/i
   )
-  var href = '/manifest.webmanifest'
+  var href = window.__ANGLE_APP_SURFACE__ === 'menu'
+    ? '/menu.webmanifest'
+    : '/manifest.webmanifest'
 
   if (guestMatch) {
     var incoming = new URLSearchParams(window.location.search)

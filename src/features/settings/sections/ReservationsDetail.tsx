@@ -11,6 +11,7 @@ import { useLocationSettings } from '../useLocationSettings'
 import { Group, ToggleRow } from '../ui'
 import { ImageField, TextField, LinkField } from './OnlineOrdersDetail'
 import { formatMoney, parseMoney } from '../../../lib/money'
+import { publicAppOrigin, publicReservationUrl } from '../../online/orderContext'
 import type { Location, LocationSettings } from '../../../types'
 
 /** Подпись на QR-флаере брони — для гостей, поэтому всегда иврит */
@@ -29,7 +30,7 @@ export default function ReservationsDetail({ location }: { location: Location | 
   // Отсутствие ключа = ВЫКЛЮЧЕНО (в отличие от online_orders)
   const enabled = settings.reservations?.enabled === true
   const rsv = settings.reservations ?? {}
-  const url = location ? `${window.location.origin}/reserve/${location.id}` : ''
+  const url = location ? publicReservationUrl(publicAppOrigin(), location.id) : ''
 
   const qrRef = useRef<HTMLCanvasElement>(null)
   useEffect(() => {

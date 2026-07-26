@@ -11,8 +11,9 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <!-- До загрузки React выбираем ровно один manifest. Safari загружает его
          во время разбора страницы, поэтому guest/POS нельзя переключать позже. -->
+    <script>window.__ANGLE_APP_SURFACE__ = '__ANGLE_APP_SURFACE_VALUE__'</script>
     <script src="/install-manifest.js"></script>
-    <title>Angle — POS</title>
+    <title>__ANGLE_APP_TITLE__</title>
   </head>
   <body>
     <div id="root"></div>

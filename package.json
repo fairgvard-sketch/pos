@@ -12,7 +12,9 @@
   ],
   "scripts": {
     "dev": "vite",
+    "dev:menu": "VITE_APP_SURFACE=menu vite",
     "build": "tsc -b && vite build",
+    "build:menu": "tsc -b && VITE_APP_SURFACE=menu vite build",
     "check:bundle": "node scripts/check-bundle-size.mjs",
     "check:schema": "node scripts/check-schema-version.mjs",
     "lint": "eslint src scripts",

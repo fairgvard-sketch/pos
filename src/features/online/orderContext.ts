@@ -21,6 +21,21 @@ const CHANNELS = new Set<PublicOrderChannel>([
   'website',
   'social',
 ])
+const DEFAULT_PUBLIC_APP_ORIGIN = 'https://menu.angle.co.il'
+
+/**
+ * Канонический домен гостевых продуктов. На localhost оставляем текущий
+ * origin, чтобы QR можно было проверять без production-домена.
+ */
+export function publicAppOrigin(currentOrigin = window.location.origin): string {
+  const configured = import.meta.env.VITE_PUBLIC_MENU_ORIGIN?.trim()
+  const candidate = configured || (import.meta.env.PROD ? DEFAULT_PUBLIC_APP_ORIGIN : currentOrigin)
+  try {
+    return new URL(candidate).origin
+  } catch {
+    return import.meta.env.PROD ? DEFAULT_PUBLIC_APP_ORIGIN : currentOrigin
+  }
+}
 
 /**
  * Контекст гостевой ссылки не считается доверенным — это только UX-подсказка.
@@ -65,4 +80,8 @@ export function publicOrderUrl(
     if (options.channel && options.channel !== 'link') url.searchParams.set('source', options.channel)
   }
   return url.toString()
+}
+
+export function publicReservationUrl(origin: string, locationId: string): string {
+  return new URL(`/reserve/${locationId}`, origin).toString()
 }
