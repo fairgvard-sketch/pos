@@ -77,11 +77,12 @@ export default function PublicOrderPage() {
 
   const [cart, setCart] = useState<CartLine[]>(() => readPublicCart(locId))
   const [view, setView] = useState<'menu' | 'checkout'>('menu')
+  const [checkoutStage, setCheckoutStage] = useState<'cart' | 'payment'>('cart')
+  const [hasStarted, setHasStarted] = useState(false)
   const [configItem, setConfigItem] = useState<PublicItem | null>(null)
-  const [search, setSearch] = useState('')
   // null = экран плиток категорий; id = экран позиций категории
   const [activeCat, setActiveCat] = useState<string | null>(null)
-  useEffect(() => { window.scrollTo(0, 0) }, [activeCat, view])
+  useEffect(() => { window.scrollTo(0, 0) }, [activeCat, view, checkoutStage])
 
   const { data: menu, isLoading, isError } = useQuery({
     queryKey: ['public_menu', locId, queryContext.tableToken],
@@ -126,17 +127,6 @@ export default function PublicOrderPage() {
   const cartTotal = cart.reduce((s, l) => s + l.unitPrice * l.qty, 0)
   useEffect(() => { writePublicCart(locId, cart) }, [locId, cart])
 
-  const normalizedSearch = search.trim().toLocaleLowerCase()
-  const searchResults = useMemo(() => {
-    if (!menu || !normalizedSearch) return []
-    return menu.categories.flatMap((category) =>
-      category.items
-        .filter((item) =>
-          `${item.name} ${item.description ?? ''}`.toLocaleLowerCase().includes(normalizedSearch)
-        )
-        .map((item) => ({ item, categoryName: category.name }))
-    )
-  }, [menu, normalizedSearch])
   const recommendations = useMemo(() => {
     if (!menu || cart.length === 0) return []
     const cartIds = new Set(cart.map((line) => line.itemId))
@@ -154,6 +144,12 @@ export default function PublicOrderPage() {
       .filter((item) => !cartIds.has(item.id) && !crossCategory.some((candidate) => candidate.id === item.id))
     return [...crossCategory, ...fallback].slice(0, 3)
   }, [menu, cart])
+  const itemImages = useMemo<Record<string, string | null>>(
+    () => Object.fromEntries(
+      menu?.categories.flatMap((category) => category.items.map((item) => [item.id, item.image_url ?? null])) ?? []
+    ),
+    [menu]
+  )
 
   // Пульс кнопки корзины при добавлении товара: key={bumpSeq} перезапускает
   // CSS-анимацию на каждом добавлении. bumping гаснет по таймауту (не по
@@ -198,6 +194,8 @@ export default function PublicOrderPage() {
     setActiveUuid(null)
     setCart([])
     setView('menu')
+    setHasStarted(false)
+    setActiveCat(null)
   }
 
   function openItem(item: PublicItem) {
@@ -268,115 +266,25 @@ export default function PublicOrderPage() {
       isRtl={isRtl}
       title={menu.location.business_name || menu.location.name}
       logo={menu.location.logo_url}
-      hero={view === 'menu' && !activeCat}
+      hero={view === 'menu' && !activeCat && !hasStarted}
       headerImg={menu.location.header_url}
       heroVideo={menu.location.hero_video_url ?? BRANDED_HERO_VIDEOS[locId] ?? null}
       bgImg={menuBackground}
-      // Возврат в шапке: из чекаута → к меню, из категории → к плиткам
+      onHeroStart={() => {
+        setHasStarted(true)
+        setActiveCat(menu.categories[0]?.id ?? null)
+      }}
+      // Возврат в шапке: из оплаты → к корзине, из корзины → к меню.
+      // На экране меню категории переключаются чипами, отдельного экрана плиток нет.
       onBack={
-        view === 'checkout' ? () => setView('menu')
-        : activeCat ? () => setActiveCat(null)
+        view === 'checkout'
+          ? checkoutStage === 'payment'
+            ? () => setCheckoutStage('cart')
+            : () => setView('menu')
         : undefined
       }
       backLabel={t(lang, 'back')}
     >
-      {viewOnly ? null : menu.location.accepting === false ? (
-        <div className="mx-4 mt-4 rounded-2xl bg-amber-50 text-amber-800 text-sm font-semibold px-4 py-3">
-          {/* Пауза с кассы (054) — говорим, когда приём вернётся */}
-          {menu.location.paused_until
-            ? `${t(lang, 'pubPausedUntil')} ${formatTime(menu.location.paused_until, lang)}`
-            : t(lang, 'pubPaused')}
-        </div>
-      ) : !menu.location.is_open && (
-        <div className="mx-4 mt-4 rounded-2xl bg-amber-50 text-amber-800 text-sm font-semibold px-4 py-3">
-          {t(lang, 'pubClosed')}
-        </div>
-      )}
-      {!viewOnly && menu.context_error && (
-        <div className="mx-4 mt-4 rounded-2xl bg-rose-50 text-rose-800 text-sm font-semibold px-4 py-3">
-          {t(lang, menu.context_error === 'table_ordering_disabled'
-            ? 'pubTableOrderingDisabled'
-            : 'pubTableQrExpired')}
-        </div>
-      )}
-
-      {view === 'menu' && !activeCat && (
-        // Главный экран: сетка плиток фикс. пропорции (aspect-4/3 — ряды ровные),
-        // распорка flex-1 толкает подвал к низу экрана при коротком меню
-        <>
-          <div className="public-menu-home-tools px-4">
-            {menu.order_context?.kind === 'table' ? (
-              <OrderContextPill
-                label={menu.order_context.label}
-                zone={menu.order_context.zone}
-                lang={lang}
-              />
-            ) : viewOnly ? null : (
-              <PickupContextPill
-                lang={lang}
-                type={initialOrderType}
-                requiresChoice={orderTypes.length > 1}
-              />
-            )}
-            <SearchField value={search} onChange={setSearch} lang={lang} />
-          </div>
-
-          {normalizedSearch ? (
-            <div className="px-4 mt-4 pb-24">
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="text-sm font-bold text-gray-600">
-                  {t(lang, 'pubSearchResults')} · {searchResults.length}
-                </h2>
-                <button
-                  type="button"
-                  onClick={() => setSearch('')}
-                  className="h-11 px-4 rounded-xl text-sm font-semibold text-gray-600 bg-white/90 ring-1 ring-black/10 active:scale-[0.97] transition-all"
-                >
-                  {t(lang, 'pubClear')}
-                </button>
-              </div>
-              {searchResults.length > 0 ? (
-                <div className="space-y-2">
-                  {searchResults.map(({ item, categoryName }) => (
-                    <div key={item.id}>
-                      <div className="text-xs font-semibold text-gray-500 mb-1 px-1">{categoryName}</div>
-                      <ItemRow item={item} lang={lang} onTap={() => openItem(item)} />
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="rounded-2xl bg-white/90 ring-1 ring-black/10 px-5 py-10 text-center text-sm font-semibold text-gray-500">
-                  {t(lang, 'pubSearchEmpty')}
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="public-menu-category-grid px-4 mt-4">
-              {menu.categories.map((cat, index) => {
-                // Обложка плитки (080): своя картинка категории, иначе фото первого товара
-                const cover = cat.cover_url ?? cat.items.find((i) => i.image_url)?.image_url
-                return (
-                  <button
-                    key={cat.id}
-                    onClick={() => setActiveCat(cat.id)}
-                    className={`public-menu-category-card${index === 0 ? ' is-featured' : ''}`}
-                  >
-                    {cover && <CategoryCover src={cover} />}
-                    <span className="public-menu-category-shade" />
-                    <span className="public-menu-category-copy">
-                      <strong>{cat.name}</strong>
-                      <small>{cat.items.length}</small>
-                    </span>
-                  </button>
-                )
-              })}
-            </div>
-          )}
-          <div className="flex-1" />
-          {!normalizedSearch && <SocialFooter links={menu.location.links} lang={lang} padForCart={cartCount > 0} />}
-        </>
-      )}
-
       {view === 'menu' && activeCat && (() => {
         const cat = menu.categories.find((c) => c.id === activeCat)
         if (!cat) return null
@@ -384,7 +292,7 @@ export default function PublicOrderPage() {
           <>
             {/* Чипы быстрого перехода между категориями (возврат к плиткам — стрелка в шапке) */}
             <CategoryChips categories={menu.categories} activeCat={activeCat} onSelect={setActiveCat} />
-            <div className="public-menu-products-section px-4 pb-32">
+            <div className="public-menu-products-section px-4 pb-4">
               <div className="public-menu-section-heading">
                 <h2 className="public-menu-section-title">{cat.name}</h2>
                 <span className="public-menu-section-count">{cat.items.length}</span>
@@ -401,18 +309,22 @@ export default function PublicOrderPage() {
                 ))}
               </div>
             </div>
+            <SocialFooter links={menu.location.links} lang={lang} padForCart={cartCount > 0} />
           </>
         )
       })()}
 
-      {view === 'menu' && cartCount > 0 && (
+      {view === 'menu' && hasStarted && cartCount > 0 && (
         <CartBar
           key={bumpSeq}
           lang={lang}
           count={cartCount}
           total={cartTotal}
           bumping={bumping}
-          onOpen={() => setView('checkout')}
+          onOpen={() => {
+            setCheckoutStage('cart')
+            setView('checkout')
+          }}
         />
       )}
 
@@ -429,8 +341,28 @@ export default function PublicOrderPage() {
           tableToken={tableContext ? queryContext.tableToken : null}
           orderChannel={queryContext.channel}
           recommendations={recommendations}
+          itemImages={itemImages}
           cart={cart}
           total={cartTotal}
+          stage={checkoutStage}
+          availabilityMessage={
+            menu.location.accepting === false
+              ? menu.location.paused_until
+                ? `${t(lang, 'pubPausedUntil')} ${formatTime(menu.location.paused_until, lang)}`
+                : t(lang, 'pubPaused')
+              : !menu.location.is_open
+                ? t(lang, 'pubClosed')
+                : null
+          }
+          contextMessage={
+            menu.context_error
+              ? t(lang, menu.context_error === 'table_ordering_disabled'
+                ? 'pubTableOrderingDisabled'
+                : 'pubTableQrExpired')
+              : null
+          }
+          onAddItems={() => setView('menu')}
+          onContinue={() => setCheckoutStage('payment')}
           onQty={updateQty}
           onRecommend={openItem}
           onSubmitted={(clientUuid) => {
@@ -471,7 +403,7 @@ export default function PublicOrderPage() {
  * системной safe-area, заголовком, содержимым и подвалом. Внутри Shell нет
  * второго изображения или цветовой плёнки.
  */
-function Shell({ isRtl, title, logo, hero, headerImg, heroVideo, bgImg, onBack, backLabel, children }: {
+function Shell({ isRtl, title, logo, hero, headerImg, heroVideo, bgImg, onHeroStart, onBack, backLabel, children }: {
   isRtl: boolean
   title?: string
   logo?: string | null
@@ -479,6 +411,7 @@ function Shell({ isRtl, title, logo, hero, headerImg, heroVideo, bgImg, onBack, 
   headerImg?: string | null
   heroVideo?: string | null
   bgImg?: string | null
+  onHeroStart?: () => void
   /** Стрелка возврата в компактной шапке (не hero); заменяет in-body «Назад» */
   onBack?: () => void
   backLabel?: string
@@ -487,12 +420,6 @@ function Shell({ isRtl, title, logo, hero, headerImg, heroVideo, bgImg, onBack, 
   const hasBg = !!bgImg
   const reducedMotion = usePrefersReducedMotion()
   const hasHeroMedia = !!heroVideo || !!headerImg
-  const openMenu = () => {
-    document.getElementById('public-menu-content')?.scrollIntoView({
-      behavior: reducedMotion ? 'auto' : 'smooth',
-      block: 'start',
-    })
-  }
   return (
     // ВАЖНО (iOS Safari): не вешать overflow-x-clip на корень — clip на
     // предке ломает position:fixed у потомков (иконка корзины и нижняя
@@ -543,13 +470,10 @@ function Shell({ isRtl, title, logo, hero, headerImg, heroVideo, bgImg, onBack, 
             <button
               type="button"
               className="public-menu-hero-scroll"
-              onClick={openMenu}
-              aria-label="פתיחת התפריט"
+              onClick={onHeroStart}
+              aria-label="התחלה"
             >
-              <span>לתפריט</span>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="m6 9 6 6 6-6" />
-              </svg>
+              <span>התחל</span>
             </button>
           </header>
         ) : (
@@ -581,10 +505,7 @@ function Shell({ isRtl, title, logo, hero, headerImg, heroVideo, bgImg, onBack, 
             </span>
           </header>
         )}
-        <div
-          id={hero ? 'public-menu-content' : undefined}
-          className={`flex-1 flex flex-col${hero ? ' public-menu-content-after-hero' : ''}`}
-        >
+        <div className="flex-1 flex flex-col">
           {children}
         </div>
       </div>
@@ -616,38 +537,6 @@ function MenuSkeleton({ lang }: { lang: Lang }) {
           <div key={item} className="aspect-[4/3] rounded-2xl bg-gray-200 animate-pulse" />
         ))}
       </div>
-    </div>
-  )
-}
-
-function PickupContextPill({ lang, type, requiresChoice }: {
-  lang: Lang
-  type: PublicOrderType
-  requiresChoice: boolean
-}) {
-  const fulfilment = requiresChoice
-    ? t(lang, 'pubChooseAtCheckout')
-    : t(lang, type === 'delivery'
-      ? 'pubDeliveryContext'
-      : type === 'here'
-        ? 'pubCounterHere'
-        : 'pubCounterTakeaway')
-
-  return (
-    <div className="mb-3 min-h-12 rounded-2xl bg-white/90 ring-1 ring-black/10 shadow-sm px-4 py-3 flex items-center gap-3">
-      <span className="w-9 h-9 rounded-xl bg-gray-900 text-white flex items-center justify-center shrink-0" aria-hidden>
-        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-          <path d="M5 9h14l-1 11H6L5 9Z" strokeLinejoin="round" />
-          <path d="M8 9V7a4 4 0 0 1 8 0v2" strokeLinecap="round" />
-        </svg>
-      </span>
-      <span className="min-w-0">
-        <span className="block text-xs font-semibold text-gray-500">{t(lang, 'pubFulfilment')}</span>
-        <span className="block font-bold text-gray-900 truncate">{fulfilment}</span>
-      </span>
-      <span className="ms-auto text-xs font-bold text-gray-700 bg-gray-100 rounded-full px-3 py-1.5 shrink-0">
-        {t(lang, 'pubNoOnlinePayment')}
-      </span>
     </div>
   )
 }
@@ -705,63 +594,6 @@ function CartBar({ lang, count, total, bumping, onOpen }: {
  * чтобы drag не срабатывал как выбор категории. Активный чип сам
  * подъезжает в видимую зону.
  */
-function OrderContextPill({ label, zone, lang }: {
-  label: string
-  zone: string | null
-  lang: Lang
-}) {
-  return (
-    <div className="mb-3 min-h-12 rounded-2xl bg-white/90 ring-1 ring-black/10 shadow-sm px-4 py-3 flex items-center gap-3">
-      <span className="w-9 h-9 rounded-xl bg-gray-900 text-white flex items-center justify-center shrink-0" aria-hidden>
-        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-          <path d="M4 10h16M6 10v8M18 10v8M8 6h8l2 4H6l2-4Z" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      </span>
-      <span className="min-w-0">
-        <span className="block text-xs font-semibold text-gray-500">{t(lang, 'pubOrderingFor')}</span>
-        <span className="block font-bold text-gray-900 truncate">
-          {t(lang, 'pubTable')} {label}{zone ? ` · ${zone}` : ''}
-        </span>
-      </span>
-      <span className="ms-auto text-xs font-bold text-emerald-700 bg-emerald-50 rounded-full px-3 py-1.5">
-        {t(lang, 'pubDetected')}
-      </span>
-    </div>
-  )
-}
-
-function SearchField({ value, onChange, lang }: {
-  value: string
-  onChange: (value: string) => void
-  lang: Lang
-}) {
-  return (
-    <label className="relative block">
-      <span className="sr-only">{t(lang, 'pubSearch')}</span>
-      <svg
-        className="absolute start-4 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none"
-        width="20"
-        height="20"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        aria-hidden
-      >
-        <circle cx="11" cy="11" r="7" />
-        <path d="m20 20-3.5-3.5" strokeLinecap="round" />
-      </svg>
-      <input
-        type="search"
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        placeholder={t(lang, 'pubSearch')}
-        className="w-full h-12 rounded-2xl bg-white/95 ring-1 ring-black/10 shadow-sm ps-12 pe-4 text-base text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-900/70"
-      />
-    </label>
-  )
-}
-
 function CategoryChips({ categories, activeCat, onSelect }: {
   categories: PublicMenu['categories']
   activeCat: string
@@ -812,22 +644,6 @@ function CategoryChips({ categories, activeCat, onSelect }: {
         </button>
       ))}
     </nav>
-  )
-}
-
-function CategoryCover({ src }: { src: string }) {
-  const [contain, setContain] = useState(false)
-  return (
-    <img
-      src={src}
-      alt=""
-      loading="lazy"
-      onLoad={(e) => {
-        const img = e.currentTarget
-        if (img.naturalHeight > img.naturalWidth) setContain(true)
-      }}
-      className={`absolute inset-0 w-full h-full ${contain ? 'object-contain bg-white p-2' : 'object-cover'}`}
-    />
   )
 }
 
@@ -1128,11 +944,116 @@ function ItemConfigSheet({ item, lang, isRtl, viewOnly = false, onClose, onAdd }
   )
 }
 
-/** Корзина + форма контактов + отправка заявки */
+/** Корзина в духе delivery-приложений: позиции, быстрые количества и upsell. */
+function CartStage({
+  lang, cart, total, itemImages, recommendations,
+  onQty, onRecommend, onAddItems, onContinue,
+}: {
+  lang: Lang
+  cart: CartLine[]
+  total: number
+  itemImages: Record<string, string | null>
+  recommendations: PublicItem[]
+  onQty: (key: string, qty: number) => void
+  onRecommend: (item: PublicItem) => void
+  onAddItems: () => void
+  onContinue: () => void
+}) {
+  const cartCount = cart.reduce((sum, line) => sum + line.qty, 0)
+
+  return (
+    <div className="public-menu-checkout public-menu-cart-stage">
+      <div className="public-menu-checkout-content">
+        <div className="public-menu-checkout-intro">
+          <div>
+            <h1 className="font-display text-gray-900">{t(lang, 'pubYourOrder')}</h1>
+          </div>
+        </div>
+
+        <section className="public-menu-checkout-card public-menu-cart-card">
+          <div className="public-menu-checkout-section-title public-menu-cart-title">
+            <h2>{t(lang, 'pubYourOrder')}</h2>
+            <button type="button" onClick={onAddItems}>
+              <span aria-hidden>+</span>
+              {t(lang, 'pubAddMoreItems')}
+            </button>
+          </div>
+          <div className="public-menu-cart-lines">
+            {cart.map((line) => (
+              <div key={line.key} className="public-menu-cart-line">
+                <div className="public-menu-cart-media">
+                  {itemImages[line.itemId] ? (
+                    <img src={itemImages[line.itemId] ?? undefined} alt="" />
+                  ) : (
+                    <span aria-hidden>{line.name.slice(0, 1)}</span>
+                  )}
+                </div>
+                <div className="public-menu-cart-copy">
+                  <div className="public-menu-cart-name">{line.name}</div>
+                  {(line.variantName || line.modNames.length > 0) && (
+                    <div className="public-menu-cart-meta">
+                      {[line.variantName, ...line.modNames].filter(Boolean).join(' · ')}
+                    </div>
+                  )}
+                  <span className="public-menu-cart-price" dir="ltr">
+                    {formatMoney(line.unitPrice * line.qty, lang)}
+                  </span>
+                </div>
+                <div className="public-menu-cart-stepper">
+                  <Stepper onClick={() => onQty(line.key, line.qty - 1)}>−</Stepper>
+                  <span>{line.qty}</span>
+                  <Stepper onClick={() => onQty(line.key, line.qty + 1)}>+</Stepper>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="public-menu-cart-total">
+            <span>{t(lang, 'pubTotal')}</span>
+            <strong dir="ltr">{formatMoney(total, lang)}</strong>
+          </div>
+        </section>
+
+        {recommendations.length > 0 && (
+          <section className="public-menu-checkout-recommendations is-large">
+            <h2>{t(lang, 'pubAlsoTry')}</h2>
+            <div>
+              {recommendations.map((item) => (
+                <button key={item.id} type="button" onClick={() => onRecommend(item)}>
+                  <span className="public-menu-checkout-recommendation-media">
+                    {item.image_url ? <img src={item.image_url} alt="" /> : <span />}
+                    <span className="public-menu-checkout-recommendation-add" aria-hidden>+</span>
+                  </span>
+                  <span className="public-menu-checkout-recommendation-copy">
+                    <small dir="ltr">{formatMoney(item.price, lang)}</small>
+                    <strong>{item.name}</strong>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
+
+        <div className="public-menu-checkout-spacer" aria-hidden />
+      </div>
+
+      <div className="public-menu-checkout-submitbar is-cart">
+        <button type="button" onClick={onContinue} className="public-menu-checkout-submit">
+          <span className="public-menu-checkout-submit-count">{cartCount}</span>
+          <span>{t(lang, 'pubContinueToPayment')}</span>
+          <strong dir="ltr">{formatMoney(total, lang)}</strong>
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/** Способ получения + контакты + подтверждение заявки */
 function CheckoutScreen({
   lang, locId, isOpen, prepMin, prepMax, orderTypes, initialOrderType,
-  tableContext, tableToken, orderChannel, recommendations, cart, total,
-  onQty, onRecommend, onSubmitted,
+  tableContext, tableToken, orderChannel, recommendations, itemImages, cart, total,
+  availabilityMessage, contextMessage, stage,
+  onAddItems, onContinue, onQty, onRecommend, onSubmitted,
 }: {
   lang: Lang
   locId: string
@@ -1146,8 +1067,14 @@ function CheckoutScreen({
   tableToken: string | null
   orderChannel: 'link' | 'counter_qr' | 'table_qr' | 'website' | 'social'
   recommendations: PublicItem[]
+  itemImages: Record<string, string | null>
   cart: CartLine[]
   total: number
+  availabilityMessage: string | null
+  contextMessage: string | null
+  stage: 'cart' | 'payment'
+  onAddItems: () => void
+  onContinue: () => void
   onQty: (key: string, qty: number) => void
   onRecommend: (item: PublicItem) => void
   onSubmitted: (clientUuid: string) => void
@@ -1233,234 +1160,231 @@ function CheckoutScreen({
     }
   }
 
+  const cartCount = cart.reduce((sum, line) => sum + line.qty, 0)
+  if (stage === 'cart') {
+    return (
+      <CartStage
+        lang={lang}
+        cart={cart}
+        total={total}
+        itemImages={itemImages}
+        recommendations={recommendations}
+        onQty={onQty}
+        onRecommend={onRecommend}
+        onAddItems={onAddItems}
+        onContinue={onContinue}
+      />
+    )
+  }
+
+  const orderTypeLabel = t(
+    lang,
+    orderType === 'here' ? 'pubTypeHere' : orderType === 'delivery' ? 'pubTypeDelivery' : 'pubTypeTakeaway'
+  )
+
   return (
-    <div className="public-menu-checkout px-4 pb-10 pt-5">
-      <div className="public-menu-checkout-intro">
-        <h1 className="text-2xl font-black text-gray-900">{t(lang, 'pubCart')}</h1>
-        <p className="text-sm text-gray-500 mt-1">
-          {t(lang, isTableOrder ? 'pubTableCheckoutHint' : 'pubCounterCheckoutHint')}
-        </p>
-      </div>
-
-      {isTableOrder && tableContext ? (
-        <div className="public-menu-checkout-fulfilment bg-emerald-50 text-emerald-900">
-          <span className="w-10 h-10 rounded-xl bg-white text-emerald-800 flex items-center justify-center font-black shrink-0">
-            {tableContext.label}
-          </span>
-          <span>
-            <span className="block text-xs font-semibold text-emerald-700">{t(lang, 'pubOrderingFor')}</span>
-            <span className="block font-bold">
-              {t(lang, 'pubTable')} {tableContext.label}
-              {tableContext.zone ? ` · ${tableContext.zone}` : ''}
-            </span>
-          </span>
-          <span className="ms-auto text-xs font-bold rounded-full bg-white/80 px-3 py-1.5">
-            {t(lang, 'pubPayLater')}
-          </span>
-        </div>
-      ) : (
-        <div className="public-menu-checkout-fulfilment bg-gray-100 text-gray-900">
-          <span className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shrink-0" aria-hidden>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-              <path d="M4 8h16v12H4V8Z" strokeLinejoin="round" />
-              <path d="M7 4h10l2 4H5l2-4Z" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </span>
-          <span>
-            <span className="block text-xs font-semibold text-gray-500">{t(lang, 'pubFulfilment')}</span>
-            <span className="block font-bold">{t(lang, 'pubCounterCheckout')}</span>
-          </span>
-          <span className="ms-auto text-xs font-bold rounded-full bg-white px-3 py-1.5">
-            {t(lang, 'pubPayLater')}
-          </span>
-        </div>
-      )}
-
-      <section className="public-menu-checkout-card public-menu-cart-card">
-        <div>
-          {cart.map((l) => (
-            <div key={l.key} className="public-menu-cart-line">
-              <div className="flex-1 min-w-0">
-                <div className="font-semibold text-gray-900 text-sm">{l.name}</div>
-                {(l.variantName || l.modNames.length > 0) && (
-                  <div className="text-xs text-gray-500 mt-0.5">{[l.variantName, ...l.modNames].filter(Boolean).join(' · ')}</div>
-                )}
-              </div>
-              <div className="flex items-center gap-1 shrink-0">
-                <Stepper onClick={() => onQty(l.key, l.qty - 1)}>−</Stepper>
-                <span className="w-8 text-center font-bold tabular-nums text-sm text-gray-900">{l.qty}</span>
-                <Stepper onClick={() => onQty(l.key, l.qty + 1)}>+</Stepper>
-              </div>
-              <span className="w-20 text-end tabular-nums font-semibold text-sm text-gray-900 shrink-0">
-                <span dir="ltr">{formatMoney(l.unitPrice * l.qty, lang)}</span>
-              </span>
-            </div>
-          ))}
-        </div>
-
-        <div className="public-menu-cart-total">
-          <span className="font-bold text-gray-900">{t(lang, 'pubTotal')}</span>
-          <span className="font-black text-xl tabular-nums text-gray-900" dir="ltr">{formatMoney(total, lang)}</span>
-        </div>
-        <p className="text-xs text-gray-500 mt-1">
-          {t(lang, isTableOrder ? 'pubPayAtTable' : 'pubPayAtPickup')}
-        </p>
-      </section>
-
-      <section className="public-menu-checkout-card public-menu-checkout-form">
-
-      {/* Тип заказа (055): показываем вопрос только если вариантов >1 */}
-      {!isTableOrder && orderTypes.length > 1 && (
-        <>
-          <h2 className="text-lg font-bold text-gray-900 mt-6 mb-3">{t(lang, 'pubOrderTypeTitle')}</h2>
-          <div className="flex gap-2 flex-wrap">
-            {orderTypes.map((tp) => (
-              <Chip key={tp} active={orderType === tp} onClick={() => setOrderType(tp)}>
-                {t(lang, tp === 'here' ? 'pubTypeHere' : tp === 'delivery' ? 'pubTypeDelivery' : 'pubTypeTakeaway')}
-              </Chip>
-            ))}
+    <div className="public-menu-checkout">
+      <div className="public-menu-checkout-content">
+        <div className="public-menu-checkout-intro">
+          <div>
+            <span className="public-menu-checkout-eyebrow">{t(lang, 'pubOrderSummary')}</span>
+            <h1 className="font-display text-gray-900">{t(lang, 'pubPaymentTitle')}</h1>
+            <p className="text-sm text-gray-500 mt-2">
+              {t(lang, 'pubPaymentHint')}
+            </p>
           </div>
-        </>
-      )}
-
-      {/* Адрес доставки — обязателен только для доставки */}
-      {orderType === 'delivery' && (
-        <label className="block mt-4">
-          <span className="block text-sm font-bold text-gray-900 mb-2">
-            {t(lang, 'pubAddress')} <span className="text-gray-500">· {t(lang, 'pubRequired')}</span>
+          <span className="public-menu-checkout-count" aria-label={`${cartCount}`}>
+            <strong dir="ltr">{formatMoney(total, lang)}</strong>
           </span>
-          <input
-            className={`w-full h-12 rounded-xl border px-4 text-base focus:outline-none focus:ring-2 focus:ring-gray-900/20 ${
-              showValidation && !addressOk ? 'border-rose-500' : 'border-gray-200 focus:border-gray-900'
-            }`}
-            placeholder={t(lang, 'pubAddressPlaceholder')}
-            value={address}
-            aria-invalid={showValidation && !addressOk}
-            onChange={(e) => setAddress(e.target.value)}
-          />
-        </label>
-      )}
+        </div>
 
-      {!isTableOrder && (
-        <>
-          <h2 className="text-lg font-bold text-gray-900 mt-6 mb-3">{t(lang, 'pubContact')}</h2>
-          <div className="space-y-3">
-            <label className="block">
-              <span className="block text-sm font-semibold text-gray-700 mb-2">
-                {t(lang, 'pubYourName')} <span className="text-gray-500">· {t(lang, 'pubRequired')}</span>
-              </span>
-              <input
-                className={`w-full h-12 rounded-xl border px-4 text-base focus:outline-none focus:ring-2 focus:ring-gray-900/20 ${
-                  showValidation && !name.trim() ? 'border-rose-500' : 'border-gray-200 focus:border-gray-900'
-                }`}
-                autoComplete="name"
-                value={name}
-                aria-invalid={showValidation && !name.trim()}
-                onChange={(e) => setName(e.target.value)}
-              />
-            </label>
-            <label className="block">
-              <span className="block text-sm font-semibold text-gray-700 mb-2">
-                {t(lang, 'pubPhone')} <span className="text-gray-500">· {t(lang, 'pubRequired')}</span>
-              </span>
-              <input
-                className={`w-full h-12 rounded-xl border px-4 text-base focus:outline-none focus:ring-2 focus:ring-gray-900/20 ${
-                  showValidation && phoneDigits.length < 9 ? 'border-rose-500' : 'border-gray-200 focus:border-gray-900'
-                }`}
-                type="tel"
-                inputMode="tel"
-                autoComplete="tel"
-                dir="ltr"
-                value={phone}
-                aria-invalid={showValidation && phoneDigits.length < 9}
-                onChange={(e) => setPhone(e.target.value)}
-              />
-              <span className="block text-xs text-gray-500 mt-2">{t(lang, 'pubPhoneHint')}</span>
-            </label>
+        {contextMessage && (
+          <div className="public-menu-checkout-alert is-error" role="alert">{contextMessage}</div>
+        )}
 
-            <div>
-              <span className="block text-sm font-semibold text-gray-700 mb-2">{t(lang, 'pubPickupTime')}</span>
-            <div className="flex flex-wrap gap-2">
-              <Chip active={asap} onClick={() => setAsap(true)}>
-                {t(lang, 'pubAsap')}
-                {formatPrepRange(lang, prepMin, prepMax) && (
-                  <span dir="ltr"> · {formatPrepRange(lang, prepMin, prepMax)}</span>
-                )}
-              </Chip>
-              <Chip active={!asap} onClick={() => setAsap(false)}>{t(lang, 'pubAtTime')}</Chip>
-              {!asap && (
-                <input
-                  type="time"
-                  className="h-11 rounded-xl border border-gray-200 px-3 text-base focus:outline-none focus:border-gray-900"
-                  value={time}
-                  aria-invalid={showValidation && !timeOk}
-                  onChange={(e) => setTime(e.target.value)}
-                />
+        <section className="public-menu-checkout-card public-menu-order-card">
+          <div className="public-menu-checkout-section-title">
+            <span className="public-menu-checkout-step">1</span>
+            <h2>{t(lang, 'pubOrderTypeTitle')}</h2>
+          </div>
+
+          {isTableOrder && tableContext ? (
+            <div className="public-menu-checkout-fulfilment is-table">
+              <span className="public-menu-checkout-fulfilment-icon">{tableContext.label}</span>
+              <span className="min-w-0">
+                <small>{t(lang, 'pubOrderingFor')}</small>
+                <strong>
+                  {t(lang, 'pubTable')} {tableContext.label}
+                  {tableContext.zone ? ` · ${tableContext.zone}` : ''}
+                </strong>
+              </span>
+              <span className="public-menu-checkout-status">{t(lang, 'pubPayLater')}</span>
+            </div>
+          ) : (
+            <>
+              {orderTypes.length > 1 && (
+                <div className="public-menu-order-types">
+                  {orderTypes.map((type) => (
+                    <Chip key={type} active={orderType === type} onClick={() => setOrderType(type)}>
+                      {t(lang, type === 'here' ? 'pubTypeHere' : type === 'delivery' ? 'pubTypeDelivery' : 'pubTypeTakeaway')}
+                    </Chip>
+                  ))}
+                </div>
               )}
-            </div>
-            </div>
-          </div>
-        </>
-      )}
-
-      <label className="block mt-5">
-        <span className="block text-sm font-semibold text-gray-700 mb-2">
-          {t(lang, 'pubNote')} <span className="text-gray-500">· {t(lang, 'pubOptional')}</span>
-        </span>
-        <input
-          className="w-full h-12 rounded-xl border border-gray-200 px-4 text-base focus:outline-none focus:border-gray-900 focus:ring-2 focus:ring-gray-900/20"
-          placeholder={t(lang, 'pubNotePlaceholder')}
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-        />
-      </label>
-      </section>
-
-      {error && <div className="mt-4 rounded-2xl bg-red-50 text-red-600 text-sm font-semibold px-4 py-3">{error}</div>}
-      {showValidation && validationText && (
-        <div role="alert" className="mt-4 rounded-2xl bg-rose-50 text-rose-700 text-sm font-semibold px-4 py-3">
-          {validationText}
-        </div>
-      )}
-      {!isOpen && <div className="mt-4 rounded-2xl bg-amber-50 text-amber-800 text-sm font-semibold px-4 py-3">{t(lang, 'pubClosed')}</div>}
-
-      <button
-        disabled={busy || !isOpen}
-        onClick={submit}
-        className="w-full min-h-14 mt-4 rounded-2xl bg-gray-900 text-white px-5 font-bold disabled:opacity-40 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
-      >
-        <span>{busy ? t(lang, 'pubSubmitting') : t(lang, isTableOrder ? 'pubSubmitTable' : 'pubSubmitCounter')}</span>
-        {!busy && <span aria-hidden>·</span>}
-        {!busy && <span dir="ltr">{formatMoney(total, lang)}</span>}
-      </button>
-      <p className="text-center text-xs text-gray-500 mt-2">{t(lang, 'pubNoOnlinePaymentHint')}</p>
-
-      {recommendations.length > 0 && (
-        <section className="mt-8 pt-6 border-t border-gray-200">
-          <h2 className="text-lg font-bold text-gray-900 mb-3">{t(lang, 'pubAlsoTry')}</h2>
-          <div className="flex gap-3 overflow-x-auto pb-2 snap-x [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {recommendations.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => onRecommend(item)}
-                className="w-36 min-h-44 shrink-0 snap-start rounded-2xl overflow-hidden bg-white border border-gray-200 shadow-sm text-start active:scale-[0.98] transition-all"
-              >
-                {item.image_url ? (
-                  <img src={item.image_url} alt="" className="w-full h-24 object-contain bg-gray-50" />
-                ) : (
-                  <span className="block w-full h-24 bg-gray-100" />
-                )}
-                <span className="block px-3 pt-2 text-sm font-bold text-gray-900 line-clamp-2">{item.name}</span>
-                <span className="flex items-center justify-between gap-2 px-3 pb-3 pt-1">
-                  <span className="text-sm font-semibold text-gray-700" dir="ltr">{formatMoney(item.price, lang)}</span>
-                  <span className="w-8 h-8 rounded-full bg-gray-900 text-white flex items-center justify-center text-lg font-bold" aria-hidden>+</span>
+              <div className="public-menu-checkout-fulfilment">
+                <span className="public-menu-checkout-fulfilment-icon" aria-hidden>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                    <path d="M4 8h16v12H4V8Z" strokeLinejoin="round" />
+                    <path d="M7 4h10l2 4H5l2-4Z" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
                 </span>
-              </button>
-            ))}
+                <span className="min-w-0">
+                  <small>{t(lang, 'pubFulfilment')}</small>
+                  <strong>{orderTypeLabel}</strong>
+                </span>
+                <span className="public-menu-checkout-status">{t(lang, 'pubPayLater')}</span>
+              </div>
+            </>
+          )}
+
+          {orderType === 'delivery' && (
+            <label className="block mt-4">
+              <span className="public-menu-field-label">
+                {t(lang, 'pubAddress')} <span>· {t(lang, 'pubRequired')}</span>
+              </span>
+              <input
+                className={`public-menu-field ${
+                  showValidation && !addressOk ? 'is-invalid' : ''
+                }`}
+                placeholder={t(lang, 'pubAddressPlaceholder')}
+                value={address}
+                aria-invalid={showValidation && !addressOk}
+                onChange={(event) => setAddress(event.target.value)}
+              />
+            </label>
+          )}
+        </section>
+
+        <section className="public-menu-checkout-card public-menu-checkout-form">
+          <div className="public-menu-checkout-section-title">
+            <span className="public-menu-checkout-step">2</span>
+            <h2>{isTableOrder ? t(lang, 'pubNote') : t(lang, 'pubContact')}</h2>
+          </div>
+
+          {!isTableOrder && (
+            <div className="public-menu-checkout-fields">
+              <label>
+                <span className="public-menu-field-label">
+                  {t(lang, 'pubYourName')} <span>· {t(lang, 'pubRequired')}</span>
+                </span>
+                <input
+                  className={`public-menu-field ${
+                    showValidation && !name.trim() ? 'is-invalid' : ''
+                  }`}
+                  autoComplete="name"
+                  value={name}
+                  aria-invalid={showValidation && !name.trim()}
+                  onChange={(event) => setName(event.target.value)}
+                />
+              </label>
+              <label>
+                <span className="public-menu-field-label">
+                  {t(lang, 'pubPhone')} <span>· {t(lang, 'pubRequired')}</span>
+                </span>
+                <input
+                  className={`public-menu-field ${
+                    showValidation && phoneDigits.length < 9 ? 'is-invalid' : ''
+                  }`}
+                  type="tel"
+                  inputMode="tel"
+                  autoComplete="tel"
+                  dir="ltr"
+                  value={phone}
+                  aria-invalid={showValidation && phoneDigits.length < 9}
+                  onChange={(event) => setPhone(event.target.value)}
+                />
+                <small>{t(lang, 'pubPhoneHint')}</small>
+              </label>
+
+              <div>
+                <span className="public-menu-field-label">{t(lang, 'pubPickupTime')}</span>
+                <div className="public-menu-time-options">
+                  <Chip active={asap} onClick={() => setAsap(true)}>
+                    {t(lang, 'pubAsap')}
+                    {formatPrepRange(lang, prepMin, prepMax) && (
+                      <span dir="ltr"> · {formatPrepRange(lang, prepMin, prepMax)}</span>
+                    )}
+                  </Chip>
+                  <Chip active={!asap} onClick={() => setAsap(false)}>{t(lang, 'pubAtTime')}</Chip>
+                  {!asap && (
+                    <input
+                      type="time"
+                      className="public-menu-field is-time"
+                      value={time}
+                      aria-invalid={showValidation && !timeOk}
+                      onChange={(event) => setTime(event.target.value)}
+                    />
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          <label className="block">
+            <span className="public-menu-field-label">
+              {t(lang, 'pubNote')} <span>· {t(lang, 'pubOptional')}</span>
+            </span>
+            <input
+              className="public-menu-field"
+              placeholder={t(lang, 'pubNotePlaceholder')}
+              value={note}
+              onChange={(event) => setNote(event.target.value)}
+            />
+          </label>
+        </section>
+
+        <section className="public-menu-checkout-card public-menu-payment-card">
+          <div className="public-menu-checkout-section-title">
+            <span className="public-menu-checkout-step">3</span>
+            <h2>{t(lang, 'pubPaymentTitle')}</h2>
+          </div>
+          <div className="public-menu-payment-note">
+            <span aria-hidden>
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9">
+                <path d="M12 3 5 6v5c0 4.5 2.7 8.1 7 10 4.3-1.9 7-5.5 7-10V6l-7-3Z" strokeLinejoin="round" />
+                <path d="m9 12 2 2 4-4" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </span>
+            <span>
+              <strong>{t(lang, 'pubNoOnlinePayment')}</strong>
+              <small>{t(lang, isTableOrder ? 'pubPayAtTable' : 'pubPayAtPickup')}</small>
+            </span>
           </div>
         </section>
-      )}
+
+        <div className="public-menu-checkout-spacer" aria-hidden />
+      </div>
+
+      <div className="public-menu-checkout-submitbar">
+        {(error || (showValidation && validationText) || availabilityMessage || (!isOpen && !availabilityMessage)) && (
+          <div
+            className={`public-menu-checkout-alert ${
+              error || (showValidation && validationText) ? 'is-error' : 'is-warning'
+            }`}
+            role="alert"
+          >
+            {error || (showValidation && validationText) || availabilityMessage || t(lang, 'pubClosed')}
+          </div>
+        )}
+        <button
+          disabled={busy || !isOpen}
+          onClick={submit}
+          className="public-menu-checkout-submit"
+        >
+          <span>{busy ? t(lang, 'pubSubmitting') : t(lang, isTableOrder ? 'pubSubmitTable' : 'pubSubmitCounter')}</span>
+          {!busy && <strong dir="ltr">{formatMoney(total, lang)}</strong>}
+        </button>
+      </div>
     </div>
   )
 }
