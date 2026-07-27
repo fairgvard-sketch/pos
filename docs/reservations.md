@@ -77,7 +77,7 @@ Instant-режим
 3. **Фронтенд** — пуш в `main` (Vercel). Порядок важен: сайдбар в режиме
    столов читает `reservations` — без миграции его запрос будет падать.
 
-Ссылка для гостей: `https://pos-self-sigma.vercel.app/reserve/<location_id>`.
+Ссылка для гостей: `https://pos.angle.co.il/reserve/<location_id>`.
 QR скачивается из ANGLE → QR & reservations → Reservations.
 
 ## Настройки из бэкофиса

@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Kassa</string>
-    <!-- Стабильный production-домен Vercel (не per-deploy) -->
-    <string name="app_url">https://pos-self-sigma.vercel.app</string>
+    <!-- Собственный production-домен, а не *.vercel.app: автогенерённый адрес
+         отвязывается от проекта при пересоздании деплоя и начинает отдавать
+         404 DEPLOYMENT_NOT_FOUND — касса тогда остаётся без фронтенда.
+         Смена этого значения требует выпуска нового APK. -->
+    <string name="app_url">https://pos.angle.co.il</string>
 </resources>

@@ -12,8 +12,11 @@ Android-конфигурации требует.
 ## Окружения и идентификаторы
 
 - production Supabase project ref: `qgmnxrgtlpyqglwqmsej`;
-- production frontend: `https://pos-self-sigma.vercel.app`;
-- APK `app_url` должен указывать на этот стабильный origin;
+- production frontend: `https://pos.angle.co.il`;
+- APK `app_url` должен указывать на этот стабильный origin. Только собственный
+  домен: автогенерённый `*.vercel.app` отвязывается от проекта при
+  пересоздании деплоя и отдаёт 404 `DEPLOYMENT_NOT_FOUND`, а касса в APK
+  остаётся без фронтенда до выпуска новой сборки;
 - frontend использует только Supabase anon key.
 
 Если production URL меняется, обновите Vercel, CORS/redirect assumptions,
