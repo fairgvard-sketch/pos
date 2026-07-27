@@ -440,8 +440,15 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   /* Без искусственного зума: scale(1.48) увеличивал фото в полтора раза,
      и любое отклонение предмета от центра кадра усиливалось — у одних
      чашек срезался верх, у других донце. cover + center кадрирует по
-     центру самой фотографии, где предмет обычно и стоит. */
+     центру самой фотографии, где предмет обычно и стоит.
+     place-self:stretch обязателен: у .public-menu-item-media стоит
+     place-items:center (нужен для буквы-плейсхолдера), и grid ужимает
+     картинку до её собственного размера — у мелких файлов по краям
+     проступала подложка. */
   .public-menu-item-card.is-grid .public-menu-item-media img {
+    place-self: stretch;
+    width: 100%;
+    height: 100%;
     object-fit: cover;
     object-position: center;
     padding: 0;
