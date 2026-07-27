@@ -13,6 +13,36 @@ const headers = {
   Authorization: `Bearer ${ANON_KEY}`,
 }
 
+/**
+ * fetch с таймаутом. Без него на слабом Wi-Fi кафе запрос висит
+ * бесконечно: кнопка залипает в «отправка», и гость не знает, ушёл заказ
+ * или нет — жмёт снова или уходит.
+ *
+ * Оборванный запрос отдаётся как PublicApiError('network'), чтобы вызов
+ * не отличал таймаут от обрыва: реакция на них одна — показать ошибку и
+ * дать повторить. client_uuid переживает ретрай, дубликата не будет.
+ */
+const READ_TIMEOUT_MS = 10_000
+const WRITE_TIMEOUT_MS = 20_000
+
+async function fetchWithTimeout(
+  input: string,
+  init: RequestInit,
+  timeoutMs: number,
+): Promise<Response> {
+  // AbortSignal.timeout есть не везде (старый WebView) — свой контроллер
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    return await fetch(input, { ...init, signal: controller.signal })
+  } catch (error) {
+    // AbortError и сетевой сбой для гостя — одно и то же: «не дошло»
+    throw new PublicApiError('network', error instanceof Error ? error.message : undefined)
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 export interface PublicVariant {
   id: string
   name: string
@@ -145,11 +175,15 @@ export async function resolveLocationId(locIdOrSlug: string): Promise<string> {
   const cached = slugCache.get(locIdOrSlug)
   if (cached) return cached
 
-  const res = await fetch(`${FN_BASE.replace('/functions/v1', '')}/rest/v1/rpc/resolve_location_slug`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ p_slug: locIdOrSlug }),
-  })
+  const res = await fetchWithTimeout(
+    `${FN_BASE.replace('/functions/v1', '')}/rest/v1/rpc/resolve_location_slug`,
+    {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ p_slug: locIdOrSlug }),
+    },
+    READ_TIMEOUT_MS,
+  )
   if (!res.ok) throw new PublicApiError('invalid_location')
 
   const id = (await res.json()) as string | null
@@ -163,7 +197,7 @@ export async function fetchPublicMenu(locId: string, tableToken?: string | null)
   const resolved = await resolveLocationId(locId)
   const params = new URLSearchParams({ loc: resolved })
   if (tableToken) params.set('table', tableToken)
-  const res = await fetch(`${FN_BASE}/public-menu?${params.toString()}`, { headers })
+  const res = await fetchWithTimeout(`${FN_BASE}/public-menu?${params.toString()}`, { headers }, READ_TIMEOUT_MS)
   if (!res.ok) await parseError(res)
   return res.json()
 }
@@ -202,11 +236,17 @@ export async function submitPublicOrder(payload: SubmitPayload): Promise<SubmitR
   // loc приходит из URL и может быть слагом (106); submit_online_order
   // принимает только UUID. Резолв берётся из кэша, заполненного меню.
   const loc = await resolveLocationId(payload.loc)
-  const res = await fetch(`${FN_BASE}/public-order`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ ...payload, loc }),
-  })
+  // Запись ждём дольше чтения: оборвать отправку заказа хуже, чем
+  // подождать. Повтор безопасен — client_uuid тот же (идемпотентность).
+  const res = await fetchWithTimeout(
+    `${FN_BASE}/public-order`,
+    {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ ...payload, loc }),
+    },
+    WRITE_TIMEOUT_MS,
+  )
   if (!res.ok) await parseError(res)
   return res.json()
 }
@@ -237,7 +277,11 @@ export interface PublicStatus {
 }
 
 export async function fetchPublicStatus(clientUuid: string): Promise<PublicStatus> {
-  const res = await fetch(`${FN_BASE}/public-order?id=${encodeURIComponent(clientUuid)}`, { headers })
+  const res = await fetchWithTimeout(
+    `${FN_BASE}/public-order?id=${encodeURIComponent(clientUuid)}`,
+    { headers },
+    READ_TIMEOUT_MS,
+  )
   if (!res.ok) await parseError(res)
   return res.json()
 }

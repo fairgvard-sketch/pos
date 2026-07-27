@@ -1429,27 +1429,64 @@ function StatusScreen({ lang, clientUuid, onNewOrder }: {
 }) {
   const [status, setStatus] = useState<PublicStatus | null>(null)
   const [lost, setLost] = useState(false)
+  /** Связь пропала: показываем гостю, что статус мог устареть */
+  const [offline, setOffline] = useState(false)
+
+  /**
+   * Заказ в терминальном состоянии — дальше опрашивать нечего.
+   * Раньше опрос жил вечно: гость оставлял экран, и телефон всю ночь
+   * дёргал сервер каждые 5 секунд.
+   */
+  const finished = status !== null && (
+    status.order_status === 'paid'
+    || status.order_status === 'fulfilled'
+    || status.order_status === 'voided'
+    || status.status === 'rejected'
+    || status.status === 'cancelled'
+    || status.status === 'completed'
+  )
 
   useEffect(() => {
+    if (lost || finished) return
+
     let stopped = false
+    let timer: ReturnType<typeof setTimeout> | undefined
+
     async function poll() {
+      // В фоне не опрашиваем: вкладка скрыта — гость статус не видит
+      if (document.visibilityState !== 'visible') return
       try {
         const s = await fetchPublicStatus(clientUuid)
-        if (!stopped) {
-          setStatus(s)
-          setLost(false)
-        }
+        if (stopped) return
+        setStatus(s)
+        setLost(false)
+        setOffline(false)
       } catch (e) {
-        if (!stopped && e instanceof PublicApiError && e.code === 'not_found') setLost(true)
+        if (stopped) return
+        if (e instanceof PublicApiError && e.code === 'not_found') setLost(true)
+        // Сеть отвалилась — не молчим: прежде статус просто «замерзал»
+        else setOffline(true)
       }
     }
-    poll()
-    const id = setInterval(poll, 5000)
+
+    const loop = () => {
+      void poll()
+      timer = setTimeout(loop, 5000)
+    }
+    loop()
+
+    // Вернулись в приложение — обновляем сразу, не ждём следующего тика
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') void poll()
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+
     return () => {
       stopped = true
-      clearInterval(id)
+      if (timer) clearTimeout(timer)
+      document.removeEventListener('visibilitychange', onVisibility)
     }
-  }, [clientUuid])
+  }, [clientUuid, lost, finished])
 
   if (lost) {
     return (
@@ -1460,7 +1497,12 @@ function StatusScreen({ lang, clientUuid, onNewOrder }: {
     )
   }
   if (!status) {
-    return <CenterCard><p className="text-gray-500">{t(lang, 'loading')}</p></CenterCard>
+    // Первая загрузка без сети: «Загрузка» висела бы бесконечно
+    return (
+      <CenterCard>
+        <p className="text-gray-500">{t(lang, offline ? 'pubStatusOffline' : 'loading')}</p>
+      </CenterCard>
+    )
   }
 
   if (status.status === 'rejected') {
@@ -1499,6 +1541,10 @@ function StatusScreen({ lang, clientUuid, onNewOrder }: {
     || status.status === 'ready' || status.status === 'completed'
   return (
     <CenterCard>
+      {/* Связь пропала: статус мог устареть — прежде экран просто «замерзал» */}
+      {offline && (
+        <p className="text-xs font-semibold text-gray-500 mb-4">{t(lang, 'pubStatusOffline')}</p>
+      )}
       {/* Номер дня есть только у POS-заказа; standalone-заявка живёт без него */}
       {status.daily_number != null && (
         <>
@@ -1680,6 +1726,7 @@ function Stepper({ onClick, children }: { onClick: () => void; children: React.R
 /** Код ошибки публичного API → текст гостю */
 function publicErrorText(lang: Lang, code: string, detail?: string): string {
   switch (code) {
+    case 'network': return t(lang, 'pubErrNetwork')
     case 'disabled': return t(lang, 'pubPaused')
     case 'paused': return t(lang, 'pubPaused')
     case 'closed': return t(lang, 'pubErrClosed')
