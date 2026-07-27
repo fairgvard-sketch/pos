@@ -988,6 +988,11 @@ export const translations = {
     schemaVersions: 'Версия базы: {db} · нужна: {app}',
     posInactiveTitle: 'ANGLE POS не активирован',
     posInactiveHint: 'Продукт POS не активирован или приостановлен. Данные сохранены: после активации касса продолжит работу. Обратитесь в ANGLE.',
+    // Биллинг: пробный период и grace (108/109)
+    billingTrialDays: 'Пробный период: осталось {days} дн.',
+    billingTrialNoDays: 'Идёт пробный период',
+    billingGraceDays: 'Оплата просрочена. Касса работает ещё {days} дн.',
+    billingGraceNoDays: 'Оплата просрочена',
     catalogLoadError: 'Не удалось загрузить каталог',
     catalogLoadErrorHint: 'Проверьте соединение и повторите попытку. Если ошибка повторяется — обратитесь в поддержку.',
     // Явные состояния критических запросов (P1-7)
@@ -2401,6 +2406,11 @@ export const translations = {
     schemaVersions: 'גרסת בסיס: {db} · נדרשת: {app}',
     posInactiveTitle: 'ANGLE POS אינו פעיל',
     posInactiveHint: 'מוצר ה-POS לא הופעל או הושעה. הנתונים שמורים: לאחר ההפעלה הקופה תמשיך לעבוד. פנו ל-ANGLE.',
+    // Биллинг: пробный период и grace (108/109)
+    billingTrialDays: 'תקופת ניסיון: נותרו {days} ימים',
+    billingTrialNoDays: 'תקופת ניסיון פעילה',
+    billingGraceDays: 'התשלום באיחור. הקופה תעבוד עוד {days} ימים',
+    billingGraceNoDays: 'התשלום באיחור',
     catalogLoadError: 'טעינת הקטלוג נכשלה',
     catalogLoadErrorHint: 'בדקו את החיבור ונסו שוב. אם השגיאה חוזרת — פנו לתמיכה.',
     // Явные состояния критических запросов (P1-7)

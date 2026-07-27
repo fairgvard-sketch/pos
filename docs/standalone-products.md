@@ -50,6 +50,7 @@ app.allow_developer_grant_change = 'on'` в той же транзакции). R
 | Embed | `/order/*`, `/reserve/*` — `frame-ancestors *`; остальное `'self'` (vercel.json); сниппеты в кабинете | Phase 2 |
 | Standalone-заказы | `online_fulfilment_mode`, `online_hours_open`, цикл new→accepted→preparing→ready→completed, `set_online_order_status_web` | 101 |
 | Веб-стол хостес | терминальные `completed`/`no_show`, `set_reservation_status_web`; посаженные на кассе брони неприкасаемы | 102 |
+| Биллинг | подписки на ТОЧКУ (POS / POS+QR / QR), прайс, триал, grace 7 дней, счета, аддитивный `org_has_capability_at` — см. [docs/billing.md](billing.md) | 108–110 |
 | Кабинет | онбординг «под цель», module-aware навигация, инбокс Orders, стол Reservations, карточка модулей | репо `anglesite` |
 
 ## Инварианты

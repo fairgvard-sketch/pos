@@ -38,6 +38,7 @@ Kassa — веб-касса для specialty coffee, кофеен и пекар�
 | [Онлайн-заказы](docs/online-orders.md) | гостевой сценарий и настройка приёма заказов |
 | [Бронирование](docs/reservations.md) | ручные заявки, live-доступность и мгновенное подтверждение |
 | [Standalone-продукты](docs/standalone-products.md) | ANGLE Menu/Orders/Reserve без POS: модули, режимы, деплой и пилот-чеклист |
+| [Биллинг и подписки](docs/billing.md) | что продаётся (POS / POS+QR / QR за точку), триал, grace, счета и операторские процедуры |
 | [Smoke-test T2](docs/t2-smoke-test.md) | обязательный ручной прогон на реальном терминале |
 | [План Cardcom](docs/cardcom-plan.md) | будущая EMV-интеграция и текущие ограничения |
 | [Соответствие требованиям Израиля](docs/israel-compliance.md) | официальные источники, матрица пробелов, cash guard, Uniform Format и release-gates |
