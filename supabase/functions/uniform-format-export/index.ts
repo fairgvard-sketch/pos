@@ -4,14 +4,16 @@
  * server-side: старый WebView кассы для этого непригоден
  * (docs/israel-compliance.md).
  *
- * POST { staff_session, from: 'YYYY-MM-DD', to: 'YYYY-MM-DD' }
+ * POST { staff_session, from: 'YYYY-MM-DD', to: 'YYYY-MM-DD' }        — касса
+ * POST { location_id,  from, to }                                     — ANGLE
  *   → { ini_base64, bkmvdata_zip_base64, control_report, total_records,
  *       record_counts, business, range } | { error }
  *
- * Авторизация: запрос выполняется под JWT устройства (заголовок
- * Authorization пробрасывается в PostgREST) + staff-сессия с правом
- * 'manage' проверяется в БД (require_staff_perm). service_role здесь
- * не используется — данные скоупит RLS/auth_org_id().
+ * Авторизация: запрос выполняется под JWT вызывающего (заголовок
+ * Authorization пробрасывается в PostgREST). Кассовый путь — staff-сессия
+ * с правом 'manage' (require_staff_perm); веб-путь — членство владельца
+ * бэкофиса + явная точка (uf_export_*_web, 107). service_role здесь
+ * не используется — данные скоупит auth_org_id().
  *
  * Деплой: supabase functions deploy uniform-format-export
  */
@@ -53,16 +55,18 @@ Deno.serve(async (req) => {
   const authHeader = req.headers.get('Authorization')
   if (!authHeader) return json({ error: 'unauthorized' }, 401)
 
-  let body: { staff_session?: string; from?: string; to?: string }
+  let body: { staff_session?: string; location_id?: string; from?: string; to?: string }
   try {
     body = await req.json()
   } catch {
     return json({ error: 'bad_request' }, 400)
   }
-  const { staff_session, from, to } = body
-  if (!staff_session || !DATE_RE.test(from ?? '') || !DATE_RE.test(to ?? '')) {
+  const { staff_session, location_id, from, to } = body
+  // Кассовый путь — staff_session; веб-путь (ANGLE) — явная точка
+  if ((!staff_session && !location_id) || !DATE_RE.test(from ?? '') || !DATE_RE.test(to ?? '')) {
     return json({ error: 'bad_request' }, 400)
   }
+  const web = !staff_session
 
   // Клиент под JWT устройства: RLS и auth_org_id() работают как на кассе
   const supabase = createClient(
@@ -71,11 +75,15 @@ Deno.serve(async (req) => {
     { global: { headers: { Authorization: authHeader } } },
   )
 
-  // Реквизиты бизнеса (заодно проверяет staff-право до тяжёлой выборки)
-  const info = await supabase.rpc('uf_export_info', { p_staff_session: staff_session })
+  // Реквизиты бизнеса (заодно проверяет право до тяжёлой выборки)
+  const info = web
+    ? await supabase.rpc('uf_export_info_web', { p_location_id: location_id })
+    : await supabase.rpc('uf_export_info', { p_staff_session: staff_session })
   if (info.error) {
     const forbidden =
-      info.error.message.includes('forbidden') || info.error.message.includes('staff session')
+      info.error.message.includes('forbidden') ||
+      info.error.message.includes('staff session') ||
+      info.error.message.includes('not in organization')
     return json({ error: forbidden ? 'forbidden' : 'info_failed' }, forbidden ? 403 : 500)
   }
   const business = info.data as {
@@ -92,14 +100,23 @@ Deno.serve(async (req) => {
   let afterTs: string | null = null
   let afterId: string | null = null
   for (;;) {
-    const page = await supabase.rpc('uf_export_documents', {
-      p_staff_session: staff_session,
-      p_from: from,
-      p_to: to,
-      p_after_ts: afterTs,
-      p_after_id: afterId,
-      p_limit: PAGE_LIMIT,
-    })
+    const page = web
+      ? await supabase.rpc('uf_export_documents_web', {
+          p_location_id: location_id,
+          p_from: from,
+          p_to: to,
+          p_after_ts: afterTs,
+          p_after_id: afterId,
+          p_limit: PAGE_LIMIT,
+        })
+      : await supabase.rpc('uf_export_documents', {
+          p_staff_session: staff_session,
+          p_from: from,
+          p_to: to,
+          p_after_ts: afterTs,
+          p_after_id: afterId,
+          p_limit: PAGE_LIMIT,
+        })
     if (page.error) return json({ error: 'query_failed' }, 500)
     const rows = (page.data?.documents ?? []) as ({ kind: string; ts: string; id: string } & Record<
       string,

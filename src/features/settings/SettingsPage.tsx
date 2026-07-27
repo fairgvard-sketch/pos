@@ -14,22 +14,8 @@ import TippingDetail from './sections/TippingDetail'
 import QuickAmountsDetail from './sections/QuickAmountsDetail'
 import PayMethodsDetail from './sections/PayMethodsDetail'
 import ReceiptsSection from './sections/ReceiptsSection'
-import ServiceSection from './sections/ServiceSection'
-import ServiceModeDetail from './sections/ServiceModeDetail'
-import OnlineOrdersDetail from './sections/OnlineOrdersDetail'
-import ReservationsDetail from './sections/ReservationsDetail'
-import ShiftSection from './sections/ShiftSection'
-import LoyaltySection from './sections/LoyaltySection'
-import GuestsDetail from './sections/GuestsDetail'
-import StaffSection from './sections/StaffSection'
-import PermsDetail from './sections/PermsDetail'
 import OfflineBanner from '../../components/OfflineBanner'
-import BusinessSection from './sections/BusinessSection'
-import ReceiptDetailsDetail from './sections/ReceiptDetailsDetail'
-import InterfaceSection from './sections/InterfaceSection'
 import DeviceSection from './sections/DeviceSection'
-import ProfileDetail from './sections/ProfileDetail'
-import UfExportDetail from './sections/UfExportDetail'
 
 /** Стартовая категория — запоминаем на время сессии (возврат в настройки открывает то же место) */
 const CAT_KEY = 'kassa-settings-cat'
@@ -42,21 +28,13 @@ const DETAIL_TITLES: Record<DetailId, TranslationKey> = {
   tipping: 'tipTitle',
   'quick-amounts': 'quickAmountsTitle',
   'pay-methods': 'payMethodsTitle',
-  'service-mode': 'serviceModeTitle',
-  'online-orders': 'onlineOrders',
-  reservations: 'reservationsTitle',
-  loyalty: 'loyaltyTitle',
-  guests: 'guestsTitle',
-  perms: 'permsTitle',
-  'receipt-details': 'receiptDetailsTitle',
-  profile: 'profileTitle',
-  'uf-export': 'ufExportTitle',
 }
 
 /**
  * Настройки v2 (стиль Square): левая навигация категорий с поиском,
  * справа — строки-настройки категории или drill-down деталь с «Назад».
  * Доступ manager+ (гейт на уровне маршрута/плиток).
+ * Только device-scoped: настройки точки/бизнеса — в веб-кабинете ANGLE.
  */
 export default function SettingsPage() {
   const lang = useLangStore((s) => s.lang)
@@ -117,10 +95,9 @@ export default function SettingsPage() {
             />
           </div>
 
-          {/* Карточка-профиль заведения: тап открывает редактирование (052) */}
-          <button
-            onClick={() => go('business', 'profile')}
-            className="rounded-2xl border border-gray-100 bg-gray-50 hover:bg-gray-100 px-4 py-3 flex items-center gap-3 text-start transition-colors"
+          {/* Карточка заведения: информационная (профиль правится в ANGLE) */}
+          <div
+            className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 flex items-center gap-3 text-start"
           >
             {location?.logo_url ? (
               <img src={location.logo_url} alt="" className="w-10 h-10 rounded-full object-cover shrink-0" />
@@ -140,7 +117,7 @@ export default function SettingsPage() {
                 </span>
               )}
             </span>
-          </button>
+          </div>
 
           <div className="flex flex-col gap-0.5">
             {CATEGORIES.map((c) => {
@@ -191,15 +168,6 @@ export default function SettingsPage() {
                 {detail === 'tipping' && <TippingDetail />}
                 {detail === 'quick-amounts' && <QuickAmountsDetail />}
                 {detail === 'pay-methods' && <PayMethodsDetail />}
-                {detail === 'service-mode' && <ServiceModeDetail location={location} />}
-                {detail === 'online-orders' && <OnlineOrdersDetail location={location} />}
-                {detail === 'reservations' && <ReservationsDetail location={location} />}
-                {detail === 'loyalty' && <LoyaltySection location={location} openDetail={openDetail} />}
-                {detail === 'guests' && <GuestsDetail location={location} />}
-                {detail === 'perms' && <PermsDetail location={location} />}
-                {detail === 'receipt-details' && <ReceiptDetailsDetail location={location} />}
-                {detail === 'profile' && <ProfileDetail key={location?.id ?? 'no-loc'} location={location} />}
-                {detail === 'uf-export' && <UfExportDetail />}
               </div>
             ) : (
               // key на cat → плавная смена при переключении категории
@@ -207,13 +175,8 @@ export default function SettingsPage() {
                 <h2 className="text-xl font-black text-gray-900 mb-6">
                   {t(lang, CATEGORIES.find((c) => c.id === cat)!.label)}
                 </h2>
-                {cat === 'payments' && <PaymentsSection location={location} openDetail={openDetail} />}
-                {cat === 'receipts' && <ReceiptsSection location={location} />}
-                {cat === 'service' && <ServiceSection location={location} openDetail={openDetail} />}
-                {cat === 'shift' && <ShiftSection location={location} />}
-                {cat === 'staff' && <StaffSection openDetail={openDetail} />}
-                {cat === 'business' && <BusinessSection location={location} openDetail={openDetail} />}
-                {cat === 'interface' && <InterfaceSection location={location} />}
+                {cat === 'payments' && <PaymentsSection openDetail={openDetail} />}
+                {cat === 'receipts' && <ReceiptsSection />}
                 {cat === 'device' && <DeviceSection location={location} />}
               </div>
             )}

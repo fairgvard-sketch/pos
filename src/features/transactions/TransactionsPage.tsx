@@ -11,7 +11,7 @@ import {
   type TxFilters,
 } from './api'
 import { transactionsToCsv, downloadCsv } from './exportCsv'
-import { fetchStaffList } from '../settings/api'
+import { fetchStaffList } from '../staff/api'
 import { fetchReceipt, type Receipt } from '../receipt/api'
 import { fetchCurrentLocation } from '../auth/api'
 import { autoPrintRefundReceipt, printKitchenTicket } from '../receipt/printService'

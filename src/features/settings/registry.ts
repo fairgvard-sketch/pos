@@ -4,28 +4,20 @@ import type { TranslationKey } from '../../lib/i18n'
  * Реестр настроек v2: категории левой навигации + плоский индекс
  * строк для поиска. Клик по результату поиска ведёт в категорию
  * (и деталь, если настройка живёт в drill-down).
+ *
+ * На терминале остаются только device-scoped настройки (эта касса:
+ * оплата у стойки, печать, безопасность устройства). Всё уровня
+ * точки/бизнеса — НДС, лояльность, сотрудники, онлайн-заказы, брони,
+ * реквизиты чека, смена, UF-экспорт — живёт в веб-кабинете ANGLE.
  */
 
-export type CategoryId =
-  | 'payments'
-  | 'receipts'
-  | 'service'
-  | 'shift'
-  | 'staff'
-  | 'business'
-  | 'interface'
-  | 'device'
+export type CategoryId = 'payments' | 'receipts' | 'device'
 
-export type DetailId = 'tipping' | 'service-mode' | 'online-orders' | 'reservations' | 'loyalty' | 'guests' | 'perms' | 'receipt-details' | 'quick-amounts' | 'pay-methods' | 'profile' | 'uf-export'
+export type DetailId = 'tipping' | 'quick-amounts' | 'pay-methods'
 
 export const CATEGORIES: { id: CategoryId; label: TranslationKey }[] = [
   { id: 'payments', label: 'catPayments' },
   { id: 'receipts', label: 'catReceipts' },
-  { id: 'service', label: 'catService' },
-  { id: 'shift', label: 'catShift' },
-  { id: 'staff', label: 'catStaff' },
-  { id: 'business', label: 'catBusiness' },
-  { id: 'interface', label: 'catInterface' },
   { id: 'device', label: 'catDevice' },
 ]
 
@@ -41,45 +33,22 @@ export const SEARCH_INDEX: SearchEntry[] = [
   { cat: 'payments', detail: 'pay-methods', label: 'payMethodsTitle', hint: 'payMethodsHint' },
   { cat: 'payments', detail: 'quick-amounts', label: 'quickAmountsTitle', hint: 'quickAmountsHint' },
   { cat: 'payments', label: 'paymentSoundTitle', hint: 'paymentSoundHint' },
-  { cat: 'payments', label: 'serviceChargeTitle', hint: 'serviceChargeHint' },
   { cat: 'payments', label: 'offlinePayTitle', hint: 'offlinePayHint' },
-  { cat: 'payments', label: 'customerMgmtTitle', hint: 'customerMgmtHint' },
   { cat: 'payments', detail: 'tipping', label: 'tipTitle', hint: 'collectTipsHint' },
   { cat: 'payments', detail: 'tipping', label: 'tipPresetsTitle' },
   { cat: 'payments', detail: 'tipping', label: 'tipSmartTitle' },
-  { cat: 'payments', detail: 'loyalty', label: 'loyaltyTitle', hint: 'loyaltyHint' },
-  { cat: 'payments', detail: 'guests', label: 'guestsTitle' },
-  { cat: 'payments', label: 'vatRateTitle', hint: 'vatRateHint' },
   { cat: 'receipts', label: 'printModeTitle', hint: 'printModeHint' },
   { cat: 'receipts', label: 'autoPrintTitle', hint: 'autoPrintHint' },
   { cat: 'receipts', label: 'receiptPromptTitle', hint: 'receiptPromptHint' },
   { cat: 'receipts', label: 'kitchenTicketTitle', hint: 'kitchenTicketHint' },
-  { cat: 'receipts', label: 'printModifiersTitle', hint: 'printModifiersHint' },
-  { cat: 'receipts', label: 'receiptCopiesTitle', hint: 'receiptCopiesHint' },
-  { cat: 'service', detail: 'service-mode', label: 'serviceModeTitle', hint: 'serviceModeHint' },
-  { cat: 'service', detail: 'online-orders', label: 'onlineOrders', hint: 'onlineSettingsToggleHint' },
-  { cat: 'service', detail: 'online-orders', label: 'onlineLinkTitle', hint: 'onlineLinkHint' },
-  { cat: 'service', detail: 'reservations', label: 'reservationsTitle', hint: 'reservationsToggleHint' },
-  { cat: 'service', detail: 'reservations', label: 'reserveLinkTitle', hint: 'reserveLinkHint' },
-  { cat: 'shift', label: 'defaultFloatTitle', hint: 'defaultFloatHint' },
-  { cat: 'shift', label: 'closeReminderTitle', hint: 'closeReminderHint' },
-  { cat: 'shift', label: 'cashWarnTitle', hint: 'cashWarnHint' },
-  { cat: 'staff', label: 'staffTitle', hint: 'staffHint' },
-  { cat: 'staff', detail: 'perms', label: 'permsTitle', hint: 'permsHint' },
   { cat: 'device', label: 'autoLock', hint: 'autoLockHint' },
   { cat: 'device', label: 'lockAfterSale', hint: 'lockAfterSaleHint' },
-  { cat: 'business', detail: 'profile', label: 'profileTitle', hint: 'profileHint' },
-  { cat: 'business', detail: 'receipt-details', label: 'receiptDetailsTitle', hint: 'receiptDetailsHint' },
-  { cat: 'business', detail: 'uf-export', label: 'ufExportTitle', hint: 'ufExportSearchHint' },
-  { cat: 'business', label: 'menu', hint: 'menuAdminHint' },
-  { cat: 'business', label: 'dashboard', hint: 'dashboardHint' },
-  { cat: 'interface', path: '/settings/floor-plan', label: 'floorPlanTitle', hint: 'floorPlanSettingsHint' },
-  { cat: 'business', path: '/settings/go-live', label: 'goLiveTitle', hint: 'goLiveSearchHint' },
-  { cat: 'interface', label: 'allItemsTabTitle', hint: 'allItemsTabHint' },
-  { cat: 'interface', label: 'invEnabledTitle', hint: 'invEnabledHint' },
   { cat: 'device', label: 'deviceName', hint: 'deviceNameHint' },
   { cat: 'device', label: 'printBridgeStatus' },
   { cat: 'device', label: 'testPrint' },
   { cat: 'device', label: 'appVersion' },
+  { cat: 'device', label: 'changePassword', hint: 'devicePasswordHint' },
+  { cat: 'device', path: '/settings/floor-plan', label: 'floorPlanTitle', hint: 'floorPlanSettingsHint' },
+  { cat: 'device', path: '/settings/go-live', label: 'goLiveTitle', hint: 'goLiveSearchHint' },
   { cat: 'device', label: 'signOutDevice' },
 ]

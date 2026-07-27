@@ -30,7 +30,6 @@ import { lazyWithRetry } from './lib/lazyWithRetry'
 const HallPage = lazyWithRetry(() => import('./features/tables/HallPage'), 'HallPage')
 const FloorPlanEditorPage = lazyWithRetry(() => import('./features/tables/FloorPlanEditorPage'), 'FloorPlanEditorPage')
 const QueuePage = lazyWithRetry(() => import('./features/queue/QueuePage'), 'QueuePage')
-const MenuPage = lazyWithRetry(() => import('./features/menu/MenuPage'), 'MenuPage')
 const OnlineOrdersPage = lazyWithRetry(() => import('./features/online/OnlineOrdersPage'), 'OnlineOrdersPage')
 // Публичная страница заказа для гостей (050) — без auth, ходит в Edge Functions
 const PublicOrderPage = lazyWithRetry(() => import('./features/online/PublicOrderPage'), 'PublicOrderPage')
@@ -42,9 +41,7 @@ const TimesheetPage = lazyWithRetry(() => import('./features/timesheet/Timesheet
 const TransactionsPage = lazyWithRetry(() => import('./features/transactions/TransactionsPage'), 'TransactionsPage')
 const SettingsPage = lazyWithRetry(() => import('./features/settings/SettingsPage'), 'SettingsPage')
 const GoLivePage = lazyWithRetry(() => import('./features/golive/GoLivePage'), 'GoLivePage')
-const ReportsPage = lazyWithRetry(() => import('./features/reports/ReportsPage'), 'ReportsPage')
 const InventoryPage = lazyWithRetry(() => import('./features/inventory/InventoryPage'), 'InventoryPage')
-const DashboardPage = lazyWithRetry(() => import('./features/dashboard/DashboardPage'), 'DashboardPage')
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -234,24 +231,6 @@ export default function App() {
             }
           />
 
-          <Route
-            path="/menu"
-            element={
-              <ProtectedRoute allowedRoles={['owner', 'manager']}>
-                <MenuPage />
-              </ProtectedRoute>
-            }
-          />
-
-          <Route
-            path="/reports"
-            element={
-              <ProtectedRoute allowedRoles={['owner', 'manager']}>
-                <ReportsPage />
-              </ProtectedRoute>
-            }
-          />
-
           {/* Склад (055): без allowedRoles — журнал читается любым сотрудником,
               кнопки прихода/инвентаризации гейтятся правами точки внутри */}
           <Route
@@ -287,16 +266,6 @@ export default function App() {
             element={
               <ProtectedRoute allowedRoles={['owner', 'manager']}>
                 <FloorPlanEditorPage />
-              </ProtectedRoute>
-            }
-          />
-
-          {/* Дашборд владельца: mobile-first, выручка с телефона (049) */}
-          <Route
-            path="/dashboard"
-            element={
-              <ProtectedRoute allowedRoles={['owner', 'manager']}>
-                <DashboardPage />
               </ProtectedRoute>
             }
           />

@@ -1,10 +1,8 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, Navigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { fetchCategories, fetchItems, fetchModifierGroups, toggleItemAvailability, reorderItems } from '../menu/api'
-// Редактор товара нужен только менеджеру в режиме правки — не грузим в горячий путь
-const ItemEditor = lazy(() => import('../menu/ItemEditor'))
 import { fetchCurrentShift } from '../shift/api'
 import { fetchCurrentLocation } from '../auth/api'
 import { useCartStore, cartSubtotal, cartTotal, discountAmount, loyaltyAmount, lineUnitPrice, type CartLine, type CartMod } from '../../store/cartStore'
@@ -197,12 +195,11 @@ export default function SellPage() {
     }
   }
 
-  // ── Правка витрины (менеджер): тап по плитке — редактор товара,
-  //    long-press — перестановка (та же механика, что у ряда действий,
-  //    но по 2D-сетке). Полная админка (модификаторы, станции) — Настройки→Бизнес.
+  // ── Правка витрины (менеджер): тап по плитке — стоп-лист/возврат
+  //    в продажу, long-press — перестановка (та же механика, что у ряда
+  //    действий, но по 2D-сетке). Админка меню — веб-кабинет ANGLE.
   const isManager = staff?.role === 'owner' || staff?.role === 'manager'
   const [editMode, setEditMode] = useState(false)
-  const [editorItem, setEditorItem] = useState<MenuItem | 'new' | null>(null)
   const [dragTile, setDragTile] = useState<string | null>(null)
   // Wiggle-режим (как на iPhone): long-press включает, плитки дрожат и
   // таскаются без повторного long-press, тап по экрану выключает
@@ -665,9 +662,12 @@ export default function SellPage() {
                   data-tile-id={item.id}
                   onClick={() => {
                     if (editMode) {
-                      // Клик после drag-перестановки — не открывать редактор
+                      // Клик после drag-перестановки — не трогать стоп-лист
                       if (suppressTileClick.current) { suppressTileClick.current = false; return }
-                      setEditorItem(item)
+                      // Тап в режиме правки: снятый товар возвращаем сразу,
+                      // доступный — через подтверждение стоп-листа
+                      if (item.is_available) setStopCandidate(item)
+                      else stopItemMut.mutate({ id: item.id, available: true })
                       return
                     }
                     // Клик после long-press (стоп-лист) — не добавлять в корзину
@@ -723,18 +723,6 @@ export default function SellPage() {
                   </div>
                 </button>
               ))}
-              {/* Режим правки: плитка «+ Товар» в конце сетки */}
-              {editMode && !search.trim() && (
-                <button
-                  onClick={() => setEditorItem('new')}
-                  className="rounded-2xl border-2 border-dashed border-gray-200 min-h-[140px] p-3
-                             flex flex-col items-center justify-center text-gray-400
-                             hover:text-gray-600 hover:border-gray-300 transition-all active:scale-[0.97]"
-                >
-                  <span className="text-3xl leading-none font-light">+</span>
-                  <span className="mt-1.5 text-sm font-semibold">{t(lang, 'newItem')}</span>
-                </button>
-              )}
             </div>
           )}
         </div>
@@ -1265,23 +1253,7 @@ export default function SellPage() {
         />
       )}
 
-      {/* Редактор товара из режима правки витрины (переиспользуем админку меню) */}
-      {editorItem !== null && (
-        <div className="fixed inset-0 z-50 bg-[#eceef1] p-3 flex">
-          <Suspense fallback={null}>
-            <ItemEditor
-              key={editorItem === 'new' ? 'new' : editorItem.id}
-              item={editorItem === 'new' ? null : editorItem}
-              defaultCategoryId={activeCat ?? (activeCats[0]?.id ?? '')}
-              onSaved={() => setEditorItem(null)}
-              onDeleted={() => setEditorItem(null)}
-              onBack={() => setEditorItem(null)}
-            />
-          </Suspense>
-        </div>
-      )}
-
-      {/* Подтверждение стоп-листа: long-press по товару */}
+      {/* Подтверждение стоп-листа: long-press по товару (или тап в режиме правки) */}
       {stopCandidate && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => setStopCandidate(null)}>
           <div className="card w-full max-w-sm p-6 animate-[rise-in_0.2s_ease-out]" onClick={(e) => e.stopPropagation()}>

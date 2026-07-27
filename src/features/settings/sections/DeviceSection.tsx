@@ -1,8 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { safeUnlinkDevice, pendingOutboxCount } from '../../auth/unlink'
+import { updateDevicePassword } from '../../auth/api'
+import { supabase } from '../../../lib/supabase'
 import { useLangStore, RUSSIAN_UI_ENABLED } from '../../../store/langStore'
 import { useDeviceStore } from '../../../store/deviceStore'
 import { renderTestPrintCanvas } from '../../receipt/printCanvas'
@@ -76,6 +78,25 @@ export default function DeviceSection({ location }: { location: Location | undef
   const [confirmUnlink, setConfirmUnlink] = useState(false)
   // Число неотправленных операций фиксируем в момент открытия диалога
   const [pendingOnConfirm, setPendingOnConfirm] = useState(0)
+
+  // Аккаунт входа (email Supabase Auth) и смена его пароля — единственное
+  // место (переехало из «Профиля»: сам профиль точки теперь в ANGLE).
+  const [email, setEmail] = useState<string | null>(null)
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => setEmail(data.session?.user.email ?? null))
+  }, [])
+  const [pwOpen, setPwOpen] = useState(false)
+  const [pw1, setPw1] = useState('')
+  const [pw2, setPw2] = useState('')
+  const pwValid = pw1.length >= 6 && pw1 === pw2
+  const changePw = useMutation({
+    mutationFn: () => updateDevicePassword(pw1),
+    onSuccess: () => {
+      setPwOpen(false); setPw1(''); setPw2('')
+      toast.success(t(lang, 'passwordSaved'))
+    },
+    onError: (e) => toast.error((e as Error).message),
+  })
 
   const engine = chromeMajor()
   const bridgeReady = bridgeAvailable()
@@ -233,6 +254,60 @@ export default function DeviceSection({ location }: { location: Location | undef
           <span className="text-sm text-gray-500">{printStatus}</span>
         </InputRow>
         <NavRow label={t(lang, 'testPrint')} onClick={testPrint} />
+      </Group>
+
+      {/* Экраны, живущие на терминале: чек-лист запуска и план зала */}
+      <Group>
+        <NavRow
+          label={t(lang, 'goLiveTitle')}
+          hint={t(lang, 'goLiveSearchHint')}
+          onClick={() => navigate('/settings/go-live')}
+        />
+        {location?.service_mode === 'tables' && (
+          <NavRow
+            label={t(lang, 'floorPlanTitle')}
+            hint={t(lang, 'floorPlanSettingsHint')}
+            onClick={() => navigate('/settings/floor-plan')}
+          />
+        )}
+      </Group>
+
+      {/* Аккаунт и пароль входа устройства */}
+      <Group title={t(lang, 'devicePasswordTitle')}>
+        <InputRow label={t(lang, 'deviceAccount')}>
+          <span className="text-sm text-gray-500 truncate max-w-[220px]">{email ?? '…'}</span>
+        </InputRow>
+        <div>
+          <NavRow
+            label={t(lang, 'changePassword')}
+            hint={t(lang, 'devicePasswordHint')}
+            onClick={() => { setPwOpen((v) => !v); setPw1(''); setPw2('') }}
+          />
+          {pwOpen && (
+            <div className="px-4 pb-4 pt-1 space-y-2">
+              <input
+                type="password" className="input !py-2" autoFocus autoComplete="new-password"
+                placeholder={t(lang, 'newPassword')} value={pw1}
+                onChange={(e) => setPw1(e.target.value)}
+              />
+              <input
+                type="password" className="input !py-2" autoComplete="new-password"
+                placeholder={t(lang, 'repeatPassword')} value={pw2}
+                onChange={(e) => setPw2(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && pwValid && changePw.mutate()}
+              />
+              {pw1.length > 0 && pw1.length < 6 && <p className="text-xs text-amber-600">{t(lang, 'passwordShort')}</p>}
+              {pw2.length > 0 && pw1 !== pw2 && <p className="text-xs text-red-500">{t(lang, 'passwordMismatch')}</p>}
+              <button
+                onClick={() => changePw.mutate()}
+                disabled={!pwValid || changePw.isPending}
+                className="btn-primary !py-2.5 !px-6"
+              >
+                {t(lang, 'save')}
+              </button>
+            </div>
+          )}
+        </div>
       </Group>
 
       <Group>

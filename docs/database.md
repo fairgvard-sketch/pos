@@ -459,7 +459,10 @@ capability (что технически разрешено), entitlement (что
   заказов и возвратов периода (границы дней — по Asia/Jerusalem).
 
 Оба требуют staff-сессию с правом `manage`; вызываются Edge Function
-`uniform-format-export` под JWT устройства (не `service_role`).
+`uniform-format-export` под JWT устройства (не `service_role`). Со 107 тела
+разобраны на ядра `uf_export_*_for(location, …)`, добавлены `_web`-варианты
+для бэкофиса (членство вместо PIN, точка параметром) — UI выгрузки живёт в
+ANGLE → Locations → Fiscal export.
 
 ### Онлайн и бронь
 
@@ -532,8 +535,25 @@ capability (что технически разрешено), entitlement (что
   перенесённое в БД правило «владельца трогает только владелец»: не-владелец
   не может создать роль `owner`, повысить до неё, сменить PIN владельца или
   удалить его строку. До 093 это была ТОЛЬКО клиентская проверка
-  (`StaffSection.canEdit`), то есть менеджер мог выписать себе owner-права
-  прямым RPC. Инварианты закреплены в `supabase/tests/staff_backoffice_write.test.sql`.
+  (`StaffSection.canEdit` в POS; сам раздел с 107 живёт только в бэкофисе),
+  то есть менеджер мог выписать себе owner-права
+  прямым RPC. Инварианты закреплены в `supabase/tests/staff_backoffice_write.test.sql`;
+- `update_location_config_web(p_location_id, p_patch, p_staff_session)` (107) —
+  веб-версия `update_location_config` (044/052): колонки `locations` (имя,
+  логотип, режим обслуживания, НДС, реквизиты чека `receipt_*`, лояльность)
+  по явно выбранной точке. Ключ `settings` намеренно отвергается — JSONB
+  правится только `patch_location_settings_web` с поключевым merge, чтобы
+  веб-клиент не мог перезаписать настройки целиком. Вместе со 107 из POS
+  ушли все настройки уровня точки: терминал остался device-scoped
+  (см. architecture.md), поэтому реквизиты чека в бэкофисе обязаны писаться
+  в колонки, а не в `settings.receipt` (касса печатает из колонок);
+- `uf_export_info_web`, `uf_export_documents_web` (107) — выгрузка Единого
+  формата 1.31 из бэкофиса: те же данные, что кассовые `uf_export_*` (073),
+  но точка приходит параметром и право даёт членство. Тела 073 разобраны на
+  ядра `uf_export_*_for(location, …)` (клиентским ролям недоступны) + тонкие
+  обёртки; Edge Function `uniform-format-export` принимает `location_id`
+  без `staff_session` и зовёт `_web`-варианты. Инварианты — в
+  `supabase/tests/backoffice_location_config.test.sql`.
 
 ### Телеметрия (074)
 

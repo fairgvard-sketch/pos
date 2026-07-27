@@ -19,7 +19,7 @@ import type { IconName } from './Icon'
 import OfflineBadge from './OfflineBadge'
 import ShiftOverdueBadge from './ShiftOverdueBadge'
 
-export type SidebarPage = 'sell' | 'hall' | 'queue' | 'online' | 'reservations' | 'transactions' | 'shift' | 'inventory' | 'timesheet' | 'menu' | 'analytics' | 'settings'
+export type SidebarPage = 'sell' | 'hall' | 'queue' | 'online' | 'reservations' | 'transactions' | 'shift' | 'inventory' | 'timesheet' | 'settings'
 
 /** Общий сайдбар кассы: навигация, часы, сотрудник */
 export default function AppSidebar({ active }: { active: SidebarPage }) {
@@ -184,13 +184,10 @@ export default function AppSidebar({ active }: { active: SidebarPage }) {
           can(staff.role, 'stock_receive', location?.settings, staff.role_perms) && (
           <SideLink active={active === 'inventory'} label={t(lang, 'inventory')} iconName="note" onClick={() => navigate('/inventory')} />
         )}
-        {/* Менеджерский блок отделён. Редкие экраны из сайдбара убраны:
-            Табель — со страницы Смены, Меню — правка витрины на экране продажи
-            (полная админка в Настройках → Бизнес), Дашборд — тоже там. */}
+        {/* Менеджерский блок отделён. Витрина правится на экране продажи
+            (стоп-лист/порядок); админка меню, отчёты и настройки точки —
+            в веб-кабинете ANGLE. На терминале — только настройки кассы. */}
         {isManager && <div className="my-2 border-t border-gray-100" />}
-        {isManager && (
-          <SideLink active={active === 'analytics'} label={t(lang, 'reports')} iconName="analytics" onClick={() => navigate('/reports')} />
-        )}
         {isManager && (
           <SideLink active={active === 'settings'} label={t(lang, 'settings')} iconName="settings" onClick={() => navigate('/settings')} />
         )}

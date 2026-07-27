@@ -30,7 +30,8 @@ Instant-режим
 
 - **Тумблер default = ВЫКЛЮЧЕНО** (`locations.settings->reservations->enabled`,
   отсутствие ключа = выкл — в отличие от online_orders). Включается:
-  Настройки → Обслуживание → «Бронирование». Enforced на сервере
+  ANGLE → QR & reservations → Reservations (со 107 настройки канала живут
+  только в бэкофисе). Enforced на сервере
   (`submit_reservation` → код `disabled`; организация без capability
   `public_reservations` отклоняется раньше кодом `module_disabled`, тот же
   гейт стоит на `reservation_availability` и `get_reservation_status`,
@@ -62,7 +63,7 @@ Instant-режим
 | Клиент гостя | `src/features/reservations/publicReserveApi.ts` |
 | Бейдж + звонок | `src/components/AppSidebar.tsx` (+ `src/lib/sound.ts`) |
 | Подсветка зала | `src/features/tables/HallPage.tsx` (`['reservations_today']`) |
-| Настройки | `src/features/settings/sections/ServiceSection.tsx` → `ReservationsBlock` |
+| Настройки | ANGLE `backoffice/src/QrChannels.jsx` → `ReserveTab` (со 107 — только бэкофис) |
 
 ## Деплой (строго по порядку!)
 
@@ -77,7 +78,7 @@ Instant-режим
    столов читает `reservations` — без миграции его запрос будет падать.
 
 Ссылка для гостей: `https://pos-self-sigma.vercel.app/reserve/<location_id>`.
-QR-флаер печатается из Настройки → Обслуживание → Бронирование.
+QR скачивается из ANGLE → QR & reservations → Reservations.
 
 ## Настройки из бэкофиса
 
@@ -161,7 +162,7 @@ curl "$FN/public-reserve?id=<CLIENT_UUID>" -H "apikey: $ANON" -H "Authorization:
 | Гость `PublicReservePage` | занятые слоты дизейбл/зачёркнуты, «Забронировать сейчас», мгновенное подтверждение |
 | Касса `TableEditSheet` | поле «мест» + тумблер «можно объединять» |
 | Касса `ReservationsPage` | CRM-бейдж гостя (постоянный/отмены) + бейдж «Авто» |
-| Настройки `ReservationsDetail` → `InstantBlock` | тумблеры instant/combine, длительность/буфер, депозит-плейсхолдер |
+| ANGLE `QrChannels.jsx` → `ReserveTab` | тумблеры instant/combine, длительность/буфер, депозит |
 
 ### Модель доступности
 
@@ -186,9 +187,10 @@ curl "$FN/public-reserve?id=<CLIENT_UUID>" -H "apikey: $ANON" -H "Authorization:
    --project-ref qgmnxrgtlpyqglwqmsej` (нужен новый availability-эндпоинт).
 3. **Фронтенд** — пуш в `main` (Vercel).
 
-Включение у кафе: Настройки → Обслуживание → Бронирование → «Мгновенное
-подтверждение». Обязательно проставить **число мест** у столов (иначе движок
-считает по дефолту 2) в конструкторе `Настройки → План зала`.
+Включение у кафе: ANGLE → QR & reservations → Reservations → «Instant
+confirmation». Обязательно проставить **число мест** у столов (иначе движок
+считает по дефолту 2) в конструкторе плана зала на кассе
+(`Настройки → Устройство → План зала`).
 
 ### Известные ограничения
 

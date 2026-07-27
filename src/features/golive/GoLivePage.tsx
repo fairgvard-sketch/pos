@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { fetchCurrentLocation } from '../auth/api'
 import { fetchItems } from '../menu/api'
-import { fetchStaffList } from '../settings/api'
+import { fetchStaffList } from '../staff/api'
 import { checkSchemaVersion, MIN_SCHEMA_VERSION } from '../../lib/schemaVersion'
 import { goLiveConfirmed, goLiveGaps, GAP_LABELS } from './checks'
 import { useLocationSettings } from '../settings/useLocationSettings'
@@ -183,8 +183,6 @@ export default function GoLivePage() {
               label={t(lang, 'goLiveCatalog')}
               value={itemsCount !== null ? String(itemsCount) : undefined}
               hint={t(lang, 'goLiveCatalogHint')}
-              action={itemsCount === 0 ? () => navigate('/menu') : undefined}
-              actionLabel={itemsCount === 0 ? t(lang, 'goLiveOpen') : undefined}
             />
           </Card>
 
