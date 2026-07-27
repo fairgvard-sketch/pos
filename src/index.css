@@ -1063,6 +1063,12 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     overflow: visible;
   }
 
+  /* Телефон: 4 карточки (2 ряда по 2). Список приходит из шести — лишние
+     прячем здесь, чтобы поворот экрана не требовал пересчёта данных. */
+  .public-menu-checkout-recommendations.is-large > div > button:nth-child(n + 5) {
+    display: none;
+  }
+
   .public-menu-checkout-recommendations.is-large button {
     position: relative;
     display: flex;
@@ -1625,6 +1631,15 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     .public-menu-frame,
     .public-menu-checkout-submitbar {
       max-width: 48rem;
+    }
+
+    /* Планшет: 3 колонки и все 6 карточек — два полных ряда */
+    .public-menu-checkout-recommendations.is-large > div {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .public-menu-checkout-recommendations.is-large > div > button:nth-child(n + 5) {
+      display: flex;
     }
 
     .public-menu-product-grid,

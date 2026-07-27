@@ -142,7 +142,10 @@ export default function PublicOrderPage() {
     const fallback = menu.categories
       .flatMap((category) => category.items)
       .filter((item) => !cartIds.has(item.id) && !crossCategory.some((candidate) => candidate.id === item.id))
-    return [...crossCategory, ...fallback].slice(0, 3)
+    // 6 — максимум для планшета (2 ряда по 3). На телефоне лишние
+    // скрываются в CSS: при повороте экрана ряд перестраивается сам,
+    // без пересчёта списка.
+    return [...crossCategory, ...fallback].slice(0, 6)
   }, [menu, cart])
   const itemImages = useMemo<Record<string, string | null>>(
     () => Object.fromEntries(
