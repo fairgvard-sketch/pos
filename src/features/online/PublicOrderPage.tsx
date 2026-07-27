@@ -553,17 +553,21 @@ function CartBar({ lang, count, total, bumping, onOpen }: {
         className="public-menu-frame mx-auto px-4 pt-6 bg-gradient-to-t from-black/30 via-black/10 to-transparent"
         style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))' }}
       >
+        {/* Та же вёрстка, что и у кнопки перехода к оплате
+            (.public-menu-checkout-submit): space-between прижимает сумму
+            к краю, счётчик — белый квадрат. Иначе две нижние кнопки
+            гостевого сценария выглядят как из разных приложений. */}
         <button
           type="button"
           onClick={onOpen}
           aria-label={`${t(lang, 'pubShowItems')}: ${count}, ${formatMoney(total, lang)}`}
-          className={`pointer-events-auto w-full min-h-14 rounded-2xl bg-gray-900 text-white ps-2 pe-4 flex items-center gap-3 active:scale-[0.98] transition-all shadow-xl shadow-black/20 ${bumping ? 'cart-bump' : ''}`}
+          className={`public-menu-checkout-submit pointer-events-auto ${bumping ? 'cart-bump' : ''}`}
         >
-          <span className="w-10 h-10 shrink-0 rounded-xl bg-white text-gray-900 font-black flex items-center justify-center tabular-nums" aria-live="polite">
+          <span className="public-menu-checkout-submit-count" aria-live="polite">
             {count}
           </span>
-          <span className="font-bold">{t(lang, 'pubShowItems')}</span>
-          <span className="ms-auto font-black text-lg tabular-nums" dir="ltr">{formatMoney(total, lang)}</span>
+          <span>{t(lang, 'pubShowItems')}</span>
+          <strong dir="ltr">{formatMoney(total, lang)}</strong>
         </button>
       </div>
     </div>

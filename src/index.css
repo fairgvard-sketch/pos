@@ -1185,7 +1185,10 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     align-items: center;
     justify-content: space-between;
     gap: 1rem;
-    padding: .55rem 1.15rem;
+    /* Боковое поле малое: сумма и счётчик должны стоять у самого края
+       кнопки, а не отступать от него — иначе сумма читается как
+       «посередине». Не 0, чтобы счётчик не упирался в скругление. */
+    padding: .55rem .7rem;
     border-radius: 1.15rem;
     background: #111827;
     box-shadow: 0 12px 30px rgb(17 24 39 / 22%);
@@ -1209,16 +1212,20 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     font-variant-numeric: tabular-nums;
   }
 
+  /* Белый квадрат со скруглением, а не полупрозрачный круг: на тёмной
+     кнопке количество должно читаться сразу, это главный счётчик корзины. */
   .public-menu-checkout-submit-count {
     display: grid;
-    width: 2.15rem;
-    height: 2.15rem;
+    width: 2.5rem;
+    height: 2.5rem;
     flex-shrink: 0;
     place-items: center;
-    border-radius: 999px;
-    background: rgb(255 255 255 / 14%);
-    font-size: .78rem;
-    font-weight: 850;
+    border-radius: .75rem;
+    background: #fff;
+    color: #111827;
+    font-size: .95rem;
+    font-weight: 900;
+    font-variant-numeric: tabular-nums;
   }
 
   .public-menu-checkout-alert {
