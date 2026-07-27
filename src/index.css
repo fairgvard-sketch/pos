@@ -437,10 +437,14 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     transition: transform 220ms ease;
   }
 
+  /* Без искусственного зума: scale(1.48) увеличивал фото в полтора раза,
+     и любое отклонение предмета от центра кадра усиливалось — у одних
+     чашек срезался верх, у других донце. cover + center кадрирует по
+     центру самой фотографии, где предмет обычно и стоит. */
   .public-menu-item-card.is-grid .public-menu-item-media img {
     object-fit: cover;
+    object-position: center;
     padding: 0;
-    transform: scale(1.48);
   }
 
   .public-menu-item-card:active .public-menu-item-media img {
@@ -448,7 +452,7 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   }
 
   .public-menu-item-card.is-grid:active .public-menu-item-media img {
-    transform: scale(1.53);
+    transform: scale(1.03);
   }
 
   .public-menu-item-placeholder {
@@ -498,12 +502,6 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     font-size: .9rem;
     font-weight: 800;
     font-variant-numeric: tabular-nums;
-  }
-
-  .public-menu-item-price-prefix {
-    color: #9ca3af;
-    font-size: .72rem;
-    font-weight: 500;
   }
 
   .public-menu-item-action {

@@ -34,6 +34,21 @@ export function formatMoney(agorot: Agorot, lang: Lang): string {
 }
 
 /**
+ * Надбавка со знаком: "+₪ 2". Знак ВНУТРИ изоляции — иначе он остаётся
+ * нейтральным символом, и в ивритском окружении bidi-алгоритм уводит его
+ * к названию модификатора, отрывая от суммы.
+ */
+export function formatMoneyDelta(agorot: Agorot, lang: Lang): string {
+  const sign = agorot < 0 ? '−' : '+'
+  const shekels = Math.abs(agorot) / 100
+  const num = shekels.toLocaleString(lang === 'he' ? 'he-IL' : 'ru-RU', {
+    minimumFractionDigits: Math.abs(agorot) % 100 === 0 ? 0 : 2,
+    maximumFractionDigits: 2,
+  })
+  return `${LRI}${sign}₪ ${num}${PDI}`
+}
+
+/**
  * То же "₪ 12.50", но БЕЗ bidi-изоляторов — для строк, которые уходят за
  * пределы нашего UI: текст чека в WhatsApp, печать, экспорт. Там
  * управляющие символы не отрабатывают как разметка и могут показаться

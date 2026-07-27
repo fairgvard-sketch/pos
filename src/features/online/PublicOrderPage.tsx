@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { t, formatTime, type Lang } from '../../lib/i18n'
-import { formatMoney } from '../../lib/money'
+import { formatMoney, formatMoneyDelta } from '../../lib/money'
 import {
   fetchPublicMenu, fetchPublicStatus, submitPublicOrder, PublicApiError, isViewOnlyMenu,
   type PublicItem, type PublicMenu, type PublicStatus, type PublicOrderType,
@@ -717,7 +717,6 @@ function ItemRow({ item, lang, onTap, layout = 'row' }: {
 }) {
   const prices = item.variants.length > 0 ? item.variants.map((v) => v.price) : [item.price]
   const minPrice = Math.min(...prices)
-  const hasRange = new Set(prices).size > 1
   return (
     <button
       onClick={onTap}
@@ -739,7 +738,6 @@ function ItemRow({ item, lang, onTap, layout = 'row' }: {
         )}
         <span className="public-menu-item-footer">
           <span className="public-menu-item-price">
-            {hasRange && <span className="public-menu-item-price-prefix">{t(lang, 'pubFrom')} </span>}
             {/* dir=ltr: цена не пляшет в bidi-контексте ивритских названий */}
             <span dir="ltr">{formatMoney(minPrice, lang)}</span>
           </span>
@@ -891,7 +889,13 @@ function ItemConfigSheet({ item, lang, isRtl, viewOnly = false, onClose, onAdd }
                 {g.modifiers.map((m) => (
                   <Chip key={m.id} active={selected.has(m.id)} onClick={() => toggleMod(g.id, m.id)}>
                     {m.name}
-                    {m.price_delta !== 0 && <span dir="ltr"> +{formatMoney(m.price_delta, lang)}</span>}
+                    {/* Надбавка одной изолированной группой «+₪ 2»: знак
+                        внутри изоляции, иначе в ивритском окружении он
+                        отрывается от суммы. Отступ margin'ом — пробел на
+                        границе направлений съедается, и цена липла к имени. */}
+                    {m.price_delta !== 0 && (
+                      <span className="ms-1.5">{formatMoneyDelta(m.price_delta, lang)}</span>
+                    )}
                   </Chip>
                 ))}
               </div>
