@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import RouteErrorBoundary from './components/RouteErrorBoundary'
 import SuspenseFallback from './components/ui/SuspenseFallback'
+import UpdateToast from './components/UpdateToast'
 import { lazyWithRetry } from './lib/lazyWithRetry'
 
 const PublicOrderPage = lazyWithRetry(
@@ -57,6 +58,9 @@ export default function PublicApp() {
             </Routes>
           </Suspense>
         </RouteErrorBoundary>
+        {/* Гость с иконки на домашнем экране почти не перезагружает
+            страницу — без этого он месяцами видел бы старое меню */}
+        <UpdateToast />
       </BrowserRouter>
     </QueryClientProvider>
   )

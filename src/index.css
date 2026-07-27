@@ -1803,6 +1803,51 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
 ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
 
+/* ── Плашка обновления ────────────────────────────────────── */
+/* Одна строка внизу: ничего не перехватывает и не блокирует ввод.
+   z-index ниже модалок, но выше контента. */
+.app-update-toast {
+  position: fixed;
+  z-index: 60;
+  inset-inline: 1rem;
+  bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  max-width: 30rem;
+  margin: 0 auto;
+  align-items: center;
+  gap: .75rem;
+  padding: .75rem 1rem;
+  border: 1px solid rgb(17 24 39 / 8%);
+  border-radius: 1rem;
+  background: #111827;
+  color: #fff;
+  font-size: .875rem;
+  font-weight: 600;
+  box-shadow: 0 12px 30px rgb(17 24 39 / 24%);
+}
+
+.app-update-toast__action {
+  margin-inline-start: auto;
+  padding: .4rem .9rem;
+  border: 0;
+  border-radius: 999px;
+  background: #fff;
+  color: #111827;
+  font-size: .8125rem;
+  font-weight: 800;
+}
+
+.app-update-toast__close {
+  width: 1.75rem;
+  height: 1.75rem;
+  flex-shrink: 0;
+  border: 0;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 14%);
+  color: #fff;
+  font-size: .75rem;
+}
+
 /* ── Print (термолента 80мм) ──────────────────────────────── */
 @media print {
   @page { size: 80mm auto; margin: 0; }

@@ -1,3 +1,5 @@
+/// <reference types="vite-plugin-pwa/client" />
+
 /**
  * JS-мост APK-обёртки для Sunmi (android/ в этом репо).
  * Присутствует только когда касса открыта внутри нашего Android-приложения.
