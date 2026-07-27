@@ -1123,7 +1123,7 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
 
   /* Фон непрозрачный: под панелью оплаты не должно просвечивать меню
      (как в Wolt). Верхний край не режется линией — над панелью лежит
-     градиентная растушёвка (::before), в которую контент уходит плавно. */
+     короткая растушёвка (::before), снимающая резкий стык. */
   .public-menu-checkout-submitbar {
     position: fixed;
     z-index: 30;
@@ -1146,9 +1146,17 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     right: 0;
     left: 0;
     bottom: 100%;
-    height: 2.5rem;
+    height: .75rem;
     pointer-events: none;
-    background: linear-gradient(to top, #fff 12%, rgb(255 255 255 / 0%));
+    /* Едва заметная растушёвка: только чтобы снять резкий стык панели с
+       контентом. Непрозрачным белый остаётся у самой кромки, дальше быстро
+       уходит в ноль через мягкую середину — полосой не читается. */
+    background: linear-gradient(
+      to top,
+      #fff 0%,
+      rgb(255 255 255 / 45%) 40%,
+      rgb(255 255 255 / 0%) 100%
+    );
   }
 
   .public-menu-checkout-submitbar.is-cart {
@@ -1575,7 +1583,12 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   /* Растушёвка повторяет фон панели, иначе над тёмной панелью висит
      светлая полоса от базового градиента. */
   html.public-menu-dark .public-menu-checkout-submitbar::before {
-    background: linear-gradient(to top, #18181b 12%, rgb(24 24 27 / 0%));
+    background: linear-gradient(
+      to top,
+      #18181b 0%,
+      rgb(24 24 27 / 45%) 40%,
+      rgb(24 24 27 / 0%) 100%
+    );
   }
 
   html.public-menu-dark .public-menu-payment-note strong {
