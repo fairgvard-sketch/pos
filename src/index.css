@@ -1207,10 +1207,12 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     align-items: center;
     justify-content: space-between;
     gap: 1rem;
-    /* Боковое поле малое: сумма и счётчик должны стоять у самого края
-       кнопки, а не отступать от него — иначе сумма читается как
-       «посередине». Не 0, чтобы счётчик не упирался в скругление. */
-    padding: .55rem .7rem;
+    /* Поле у счётчика маленькое: у него своя заливка, лишний воздух
+       оторвал бы его от края. Отступ со стороны суммы задаётся не здесь,
+       а на самой сумме (margin-inline-end ниже) — сокращённый padding
+       перебивает логические свойства после минификации, а физические
+       стороны развернулись бы в RTL. */
+    padding: .55rem;
     border-radius: 1.15rem;
     background: #111827;
     box-shadow: 0 12px 30px rgb(17 24 39 / 22%);
@@ -1229,6 +1231,9 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   }
 
   .public-menu-checkout-submit strong {
+    /* Воздух между суммой и краем кнопки. Логическое свойство: в RTL
+       сумма у левого края, в LTR — у правого. */
+    margin-inline-end: .55rem;
     font-size: 1rem;
     font-weight: 800;
     font-variant-numeric: tabular-nums;
