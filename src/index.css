@@ -1285,7 +1285,11 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   .public-menu-item-close {
     position: absolute;
     z-index: 12;
-    top: calc(.8rem + env(safe-area-inset-top));
+    /* Небольшой фиксированный отступ вместо .8rem + полная safe-area:
+       шит перекрывает экран целиком, и с запасом на всю чёлку крестик
+       уезжал к середине фото. Второй аргумент env() — fallback для
+       движков без поддержки (Chrome 52 на T2), иначе правило отбросится. */
+    top: max(.6rem, env(safe-area-inset-top, 0px));
     inset-inline-start: .8rem;
     display: grid;
     width: 2.85rem;
