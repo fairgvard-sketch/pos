@@ -1803,6 +1803,56 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
 ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
 
+/* ── «Вы ещё здесь?» (киоск-режим) ────────────────────────── */
+/* Единственное перекрытие в гостевом сценарии: вопрос обязан быть
+   замечен. Без backdrop-blur — правило проекта для частых overlay. */
+.public-menu-idle {
+  position: fixed;
+  z-index: 70;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: rgb(17 24 39 / 55%);
+}
+
+.public-menu-idle-card {
+  width: 100%;
+  max-width: 22rem;
+  padding: 1.75rem 1.5rem;
+  border-radius: 1.5rem;
+  background: #fff;
+  text-align: center;
+  box-shadow: 0 24px 60px rgb(17 24 39 / 28%);
+}
+
+.public-menu-idle-card h2 {
+  margin: 0;
+  color: #111827;
+  font-size: 1.375rem;
+  font-weight: 800;
+  letter-spacing: -.02em;
+}
+
+.public-menu-idle-card p {
+  margin: .5rem 0 0;
+  color: #6b7280;
+  font-size: .9375rem;
+}
+
+.public-menu-idle-card button {
+  width: 100%;
+  min-height: 3rem;
+  margin-top: 1.5rem;
+  border: 0;
+  border-radius: 1rem;
+  background: #111827;
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 800;
+}
+
 /* ── Плашка обновления ────────────────────────────────────── */
 /* Одна строка внизу: ничего не перехватывает и не блокирует ввод.
    z-index ниже модалок, но выше контента. */

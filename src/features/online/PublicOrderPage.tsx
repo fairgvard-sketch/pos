@@ -8,6 +8,8 @@ import {
   type PublicItem, type PublicMenu, type PublicStatus, type PublicOrderType,
 } from './publicApi'
 import { parsePublicOrderQuery } from './orderContext'
+import { useIdleReset } from './useIdleReset'
+import StillHereDialog from './StillHereDialog'
 import { readPublicCart, writePublicCart } from './publicCart'
 import { updateInstalledMenuName } from './menuManifest'
 import {
@@ -83,6 +85,23 @@ export default function PublicOrderPage() {
   // null = экран плиток категорий; id = экран позиций категории
   const [activeCat, setActiveCat] = useState<string | null>(null)
   useEffect(() => { window.scrollTo(0, 0) }, [activeCat, view, checkoutStage])
+
+  /**
+   * Киоск-режим: планшет на столе не должен хранить заказ ушедшего гостя.
+   * Возврат на hero с полной очисткой корзины.
+   *
+   * Кроме экрана статуса: там номер готовящегося заказа, и выбросить с
+   * него — значит лишить гостя единственного способа узнать свой номер.
+   */
+  const resetToStart = () => {
+    setCart([])
+    setConfigItem(null)
+    setActiveCat(null)
+    setCheckoutStage('cart')
+    setView('menu')
+    setHasStarted(false)
+  }
+  const { countdown, stayActive } = useIdleReset(!activeUuid, resetToStart)
 
   const { data: menu, isLoading, isError } = useQuery({
     queryKey: ['public_menu', locId, queryContext.tableToken],
@@ -388,6 +407,10 @@ export default function PublicOrderPage() {
             setConfigItem(null)
           }}
         />
+      )}
+
+      {countdown !== null && (
+        <StillHereDialog lang={lang} secondsLeft={countdown} onStay={stayActive} />
       )}
     </Shell>
   )
