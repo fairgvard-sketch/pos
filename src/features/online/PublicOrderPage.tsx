@@ -1000,14 +1000,19 @@ function CartStage({
                       {[line.variantName, ...line.modNames].filter(Boolean).join(' · ')}
                     </div>
                   )}
-                  <span className="public-menu-cart-price" dir="ltr">
+                </div>
+                {/* Сумма над степпером одной колонкой: раньше она стояла
+                    под названием, а количество — отдельно справа, и строка
+                    читалась разрозненно. */}
+                <div className="public-menu-cart-controls">
+                  <span className="public-menu-cart-price">
                     {formatMoney(line.unitPrice * line.qty, lang)}
                   </span>
-                </div>
-                <div className="public-menu-cart-stepper">
-                  <Stepper onClick={() => onQty(line.key, line.qty - 1)}>−</Stepper>
-                  <span>{line.qty}</span>
-                  <Stepper onClick={() => onQty(line.key, line.qty + 1)}>+</Stepper>
+                  <div className="public-menu-cart-stepper">
+                    <Stepper onClick={() => onQty(line.key, line.qty - 1)}>−</Stepper>
+                    <span>{line.qty}</span>
+                    <Stepper onClick={() => onQty(line.key, line.qty + 1)}>+</Stepper>
+                  </div>
                 </div>
               </div>
             ))}

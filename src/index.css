@@ -763,8 +763,14 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     font-weight: 800;
   }
 
+  /* Название по центру строки: раньше текст прижимался к верху колонки,
+     а фото и степпер стояли по центру — блоки не выстраивались в линию. */
   .public-menu-cart-copy {
+    display: flex;
     min-width: 0;
+    flex-direction: column;
+    justify-content: center;
+    align-self: stretch;
   }
 
   .public-menu-cart-name {
@@ -786,9 +792,17 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     white-space: nowrap;
   }
 
+  /* Сумма и количество — одной колонкой: сумма сверху, «− 1 +» под ней.
+     Раньше цена жила в текстовом блоке, а степпер стоял отдельно, и
+     строка выглядела разрозненной. */
+  .public-menu-cart-controls {
+    display: grid;
+    justify-items: center;
+    gap: .45rem;
+  }
+
   .public-menu-cart-price {
     display: block;
-    margin-top: .45rem;
     color: #565b64;
     font-size: .78rem;
     font-weight: 750;
