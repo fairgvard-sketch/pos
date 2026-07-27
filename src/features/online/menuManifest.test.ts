@@ -48,6 +48,25 @@ describe('buildMenuManifest', () => {
     expect(JSON.stringify(manifest)).not.toContain('evil.example')
   })
 
+  it('builds an install identity from a human-readable slug (106)', () => {
+    const manifest = buildMenuManifest(new URLSearchParams({ loc: 'bulochka', name: 'בולוצ׳קה' }))
+
+    expect(manifest).toMatchObject({
+      id: '/order/bulochka',
+      start_url: '/order/bulochka',
+      name: 'בולוצ׳קה',
+      scope: '/order/',
+    })
+  })
+
+  it('rejects slugs that do not match the location_slugs format', () => {
+    // Дефис по краям, верхний регистр, спецсимволы и обход пути — всё это
+    // попало бы прямо в start_url установленного приложения.
+    for (const loc of ['-abc', 'abc-', 'AbCd', 'a', 'ab..cd', 'a/b', 'a'.repeat(41)]) {
+      expect(buildMenuManifest(new URLSearchParams({ loc }))).toBeNull()
+    }
+  })
+
   it('rejects an invalid location and drops invalid optional values', () => {
     expect(buildMenuManifest(new URLSearchParams({ loc: '../setup' }))).toBeNull()
 
@@ -71,7 +90,8 @@ describe('buildMenuManifest', () => {
       name: 'Coffee',
     })
 
-    const invalid = GET(new Request('https://pos.example/api/menu-manifest?loc=bad'))
+    // Не 'bad': короткое слово из латиницы — это валидный слаг точки (106)
+    const invalid = GET(new Request('https://pos.example/api/menu-manifest?loc=..%2Fsetup'))
     expect(invalid.status).toBe(400)
     expect(invalid.headers.get('cache-control')).toBe('no-store')
   })

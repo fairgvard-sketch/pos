@@ -1,4 +1,8 @@
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+/** Тот же формат, что и CHECK location_slugs_format в 106: строчные
+ *  латиница/цифры/дефис, дефис не с краю, 3–40 символов. Слаг подставляется
+ *  в start_url, поэтому проверяется так же строго, как UUID. */
+const SLUG_RE = /^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$/
 const MODES = new Set(['here', 'takeaway', 'delivery'])
 const SOURCES = new Set(['link', 'counter_qr', 'table_qr', 'website', 'social'])
 
@@ -43,8 +47,10 @@ function cleanName(value: string | null): string {
  * и закрытые наборы mode/source. Так manifest нельзя превратить в open redirect.
  */
 export function buildMenuManifest(params: URLSearchParams): MenuWebManifest | null {
+  // Публичная ссылка бывает и /order/<uuid>, и /order/<slug> (106).
+  // Оба варианта попадают в start_url как есть, поэтому оба валидируются.
   const locationId = params.get('loc')?.trim() ?? ''
-  if (!UUID_RE.test(locationId)) return null
+  if (!UUID_RE.test(locationId) && !SLUG_RE.test(locationId)) return null
 
   const rawTable = params.get('table')?.trim() ?? ''
   const tableToken = UUID_RE.test(rawTable) ? rawTable : null
