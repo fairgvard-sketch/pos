@@ -118,6 +118,11 @@ Service worker обновляется автоматически. `lazyWithRetry
 
 Новый APK нужен, если изменилось что-то в `android/`, включая `app_url`.
 
+`app_url` зашивается в сборку намертво: если origin недоступен, установленная
+касса остаётся без фронтенда, и починить это можно только новым APK. Перед
+выпуском workflow сам прогоняет `npm run check:appurl` (https, не `*.vercel.app`,
+origin отвечает 200) — эту же проверку можно запустить локально.
+
 1. Увеличьте `versionCode` и `versionName`.
 2. Запустите GitHub Actions → `Android APK` → `Run workflow`.
 3. Используйте артефакт `kassa-sunmi-apk-release`.

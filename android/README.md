@@ -9,11 +9,18 @@ UI/логика остаются вебом: деплой на Vercel обнов
 
 ## Перед сборкой
 
-В `app/src/main/res/values/strings.xml` замени `app_url` на URL деплоя:
+В `app/src/main/res/values/strings.xml` укажи `app_url` — собственный
+production-домен:
 
 ```xml
-<string name="app_url">https://твой-проект.vercel.app</string>
+<string name="app_url">https://pos.angle.co.il</string>
 ```
+
+Только собственный домен, не автогенерённый `*.vercel.app`: такой адрес
+отвязывается от проекта при пересоздании деплоя и начинает отдавать 404
+`DEPLOYMENT_NOT_FOUND`. Установленный APK при этом остаётся без фронтенда,
+и починить это можно лишь выпуском новой сборки. Схема обязательно `https`
+(`usesCleartextTraffic="false"`).
 
 ## Сборка
 

@@ -21,6 +21,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # app_url зашивается в APK намертво: если origin мёртв, установленная
+      # касса остаётся без фронтенда до следующей сборки. Проверяем ДО неё.
+      - name: Check app_url
+        run: node scripts/check-app-url.mjs
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -64,6 +69,10 @@ jobs:
       HAS_SIGNING: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
     steps:
       - uses: actions/checkout@v4
+
+      # Тем более для release: этот APK ставится на боевые терминалы.
+      - name: Check app_url
+        run: node scripts/check-app-url.mjs
 
       - uses: actions/setup-java@v4
         with:
