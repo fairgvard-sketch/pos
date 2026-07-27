@@ -7,7 +7,12 @@ import {
   type PosEntitlement,
 } from './posEntitlement'
 
-const inDays = (d: number) => new Date(Date.now() + d * 86_400_000).toISOString()
+/**
+ * Дата через d суток. Плюс минута: daysUntil округляет вниз (Math.floor),
+ * а Date.now() внутри неё вызывается на доли секунды позже, чем здесь —
+ * ровно d суток превращались в d−0.000001 и тест падал на «9 вместо 8».
+ */
+const inDays = (d: number) => new Date(Date.now() + d * 86_400_000 + 60_000).toISOString()
 
 const posState = (state: string, accessUntil?: string | null) => ({
   products: [{ product: 'pos', state, access_until: accessUntil ?? null }],

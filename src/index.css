@@ -586,25 +586,6 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     text-transform: uppercase;
   }
 
-  .public-menu-checkout-count {
-    display: inline-flex;
-    min-width: 3.4rem;
-    height: 3.4rem;
-    flex-shrink: 0;
-    align-items: center;
-    justify-content: center;
-    gap: .4rem;
-    border: 1px solid rgb(17 24 39 / 8%);
-    border-radius: 999px;
-    background: rgb(255 255 255 / 76%);
-    box-shadow: 0 9px 24px rgb(32 26 18 / 8%);
-    color: #111827;
-    font-size: .9rem;
-    font-weight: 800;
-    -webkit-backdrop-filter: blur(10px);
-    backdrop-filter: blur(10px);
-  }
-
   .public-menu-checkout-fulfilment {
     display: flex;
     align-items: center;
@@ -808,11 +789,15 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     gap: .45rem;
   }
 
+  /* Сумма — главное в строке: крупнее счётчика и основным цветом.
+     Была .78rem серым при количестве .8rem чёрным — вес читался
+     наоборот. Иерархия задаётся размером и цветом текста, не декором. */
   .public-menu-cart-price {
     display: block;
-    color: #565b64;
-    font-size: .78rem;
-    font-weight: 750;
+    color: #111827;
+    font-size: 1.05rem;
+    font-weight: 800;
+    letter-spacing: -.01em;
     font-variant-numeric: tabular-nums;
   }
 
@@ -833,11 +818,13 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     font-size: 1rem;
   }
 
+  /* Количество вторично по отношению к сумме: тот же размер, но
+     приглушённый цвет — иначе счётчик перетягивал внимание. */
   .public-menu-cart-stepper > span {
-    color: #111827;
+    color: #565b64;
     text-align: center;
     font-size: .8rem;
-    font-weight: 800;
+    font-weight: 750;
     font-variant-numeric: tabular-nums;
   }
 
@@ -1576,11 +1563,11 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   }
 
   html.public-menu-dark .public-menu-checkout-intro h1,
-  html.public-menu-dark .public-menu-checkout-count,
   html.public-menu-dark .public-menu-checkout-section-title h2,
   html.public-menu-dark .public-menu-cart-name,
   html.public-menu-dark .public-menu-cart-total,
-  html.public-menu-dark .public-menu-cart-stepper > span,
+  /* Цена белая, счётчик — нет: в тёмной теме держим ту же иерархию */
+  html.public-menu-dark .public-menu-cart-price,
   html.public-menu-dark .public-menu-checkout-fulfilment strong,
   html.public-menu-dark .public-menu-field,
   html.public-menu-dark .public-menu-checkout-recommendations h2,
@@ -1588,7 +1575,6 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     color: #fff;
   }
 
-  html.public-menu-dark .public-menu-checkout-count,
   html.public-menu-dark .public-menu-checkout-fulfilment,
   html.public-menu-dark .public-menu-field,
   html.public-menu-dark .public-menu-checkout-recommendations button {

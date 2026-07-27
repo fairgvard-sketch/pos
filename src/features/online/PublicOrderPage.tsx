@@ -1173,7 +1173,6 @@ function CheckoutScreen({
     }
   }
 
-  const cartCount = cart.reduce((sum, line) => sum + line.qty, 0)
   if (stage === 'cart') {
     return (
       <CartStage
@@ -1206,9 +1205,6 @@ function CheckoutScreen({
               {t(lang, 'pubPaymentHint')}
             </p>
           </div>
-          <span className="public-menu-checkout-count" aria-label={`${cartCount}`}>
-            <strong dir="ltr">{formatMoney(total, lang)}</strong>
-          </span>
         </div>
 
         {contextMessage && (

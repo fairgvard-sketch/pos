@@ -46,11 +46,11 @@ describe('formatMoney: символ валюты слева', () => {
     expect(bare(formatMoneyList([1000, 1200, 1400], 'he'))).toBe('₪ 10/12/14')
   })
 
-  it('надбавка модификатора: знак внутри изоляции, рядом с суммой', () => {
-    expect(bare(formatMoneyDelta(200, 'he'))).toBe('+₪ 2')
-    expect(bare(formatMoneyDelta(-150, 'he'))).toBe('−₪ 1.50')
-    // Знак должен быть ВНУТРИ группы, иначе иврит уведёт его к названию
-    expect(formatMoneyDelta(200, 'he')).toBe('⁦+₪ 2⁩')
+  it('надбавка модификатора: знак после числа и отделён от него', () => {
+    expect(bare(formatMoneyDelta(200, 'he'))).toBe('₪ 2\u00a0+')
+    expect(bare(formatMoneyDelta(-150, 'he'))).toBe('₪ 1.50\u00a0−')
+    // Знак ВНУТРИ группы, иначе иврит уведёт его к названию модификатора
+    expect(formatMoneyDelta(200, 'he')).toBe('⁦₪ 2\u00a0+⁩')
   })
 })
 

@@ -34,9 +34,10 @@ export function formatMoney(agorot: Agorot, lang: Lang): string {
 }
 
 /**
- * Надбавка со знаком: "+₪ 2". Знак ВНУТРИ изоляции — иначе он остаётся
- * нейтральным символом, и в ивритском окружении bidi-алгоритм уводит его
- * к названию модификатора, отрывая от суммы.
+ * Надбавка модификатора: "₪ 2 +" — знак ПОСЛЕ числа и отделён от него.
+ * Вся группа внутри изоляции: иначе нейтральный «+» в ивритском
+ * окружении отрывается от суммы и уходит к названию модификатора.
+ * Пробел неразрывный: обычный на границе направлений схлопывается.
  */
 export function formatMoneyDelta(agorot: Agorot, lang: Lang): string {
   const sign = agorot < 0 ? '−' : '+'
@@ -45,7 +46,7 @@ export function formatMoneyDelta(agorot: Agorot, lang: Lang): string {
     minimumFractionDigits: Math.abs(agorot) % 100 === 0 ? 0 : 2,
     maximumFractionDigits: 2,
   })
-  return `${LRI}${sign}₪ ${num}${PDI}`
+  return `${LRI}₪ ${num}\u00a0${sign}${PDI}`
 }
 
 /**

@@ -2543,7 +2543,7 @@ export const translations = {
     pubTableQrExpired: 'קוד ה־QR של השולחן אינו בתוקף. סרקו שוב את הקוד שעל השולחן או הזמינו ללא שיוך.',
     pubTableOrderingDisabled: 'הזמנות לשולחן זה אינן זמינות כרגע. אפשר להזמין ללא שיוך לשולחן.',
     pubOrderTypeTitle: 'איך תרצו לקבל?',
-    pubTypeHere: 'כאן',
+    pubTypeHere: 'לשבת',
     pubTypeTakeaway: 'לקחת',
     pubTypeDelivery: 'משלוח',
     pubAddress: 'כתובת למשלוח',
