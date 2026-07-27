@@ -1,5 +1,50 @@
 import { describe, it, expect } from 'vitest'
-import { parseMoney, percentOf, splitEvenly, roundTipToWholeTotal } from './money'
+import {
+  parseMoney,
+  percentOf,
+  splitEvenly,
+  roundTipToWholeTotal,
+  formatMoney,
+  formatMoneyPlain,
+  formatMoneyList,
+} from './money'
+
+/**
+ * Позиция ₪ раньше зависела от dir контейнера: в LTR-блоках выходило
+ * "12 ₪", в RTL — "₪ 12". Формат задаётся функцией, поэтому и проверяется
+ * здесь, а не глазами на каждом экране.
+ */
+describe('formatMoney: символ валюты слева', () => {
+  /** Строка без bidi-изоляторов — их позиция проверяется отдельно */
+  const bare = (s: string) => s.replace(/[⁦-⁩]/g, '')
+
+  it('ставит ₪ перед суммой в обоих языках', () => {
+    expect(bare(formatMoney(1250, 'he'))).toBe('₪ 12.50')
+    expect(bare(formatMoney(1250, 'ru'))).toBe('₪ 12,50')
+  })
+
+  it('целые суммы без дробной части', () => {
+    expect(bare(formatMoney(1200, 'he'))).toBe('₪ 12')
+    expect(bare(formatMoney(0, 'he'))).toBe('₪ 0')
+  })
+
+  it('изолирует группу, чтобы ивритский текст не переставил символ', () => {
+    const s = formatMoney(1200, 'he')
+    expect(s.startsWith('⁦')).toBe(true)
+    expect(s.endsWith('⁩')).toBe(true)
+  })
+
+  it('formatMoneyPlain — тот же порядок, но без управляющих символов', () => {
+    // Уходит в WhatsApp и печать: изоляторы там показались бы мусором
+    const s = formatMoneyPlain(1250, 'he')
+    expect(s).toBe('₪ 12.50')
+    expect(/[⁦-⁩]/.test(s)).toBe(false)
+  })
+
+  it('список сумм — один символ в начале', () => {
+    expect(bare(formatMoneyList([1000, 1200, 1400], 'he'))).toBe('₪ 10/12/14')
+  })
+})
 
 describe('parseMoney', () => {
   it('парсит целые и дробные шекели в агороты', () => {

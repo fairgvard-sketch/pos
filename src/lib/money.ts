@@ -7,16 +7,48 @@ import type { Lang } from './i18n'
  */
 export type Agorot = number
 
-/** 1250 агорот → "12.50 ₪" */
+/**
+ * Символ шекеля всегда СЛЕВА от суммы: "₪ 12.50".
+ *
+ * Раньше он стоял справа, и позиция зависела от контекста — в блоках с
+ * dir="ltr" строка рисовалась как "12 ₪", а в RTL bidi-алгоритм переносил
+ * символ влево. Одна и та же сумма выглядела по-разному на соседних
+ * экранах. Порядок задаём здесь, а не отдаётся на откуп направлению
+ * контейнера.
+ *
+ * U+2066 (LRI) … U+2069 (PDI) изолируют группу: внутри порядок
+ * фиксированный, снаружи она ведёт себя как единый нейтральный символ и
+ * не «растаскивается» окружающим ивритским текстом.
+ */
+const LRI = '⁦'
+const PDI = '⁩'
+
+/** 1250 агорот → "₪ 12.50" */
 export function formatMoney(agorot: Agorot, lang: Lang): string {
   const shekels = agorot / 100
-  return `${shekels.toLocaleString(lang === 'he' ? 'he-IL' : 'ru-RU', {
+  const num = shekels.toLocaleString(lang === 'he' ? 'he-IL' : 'ru-RU', {
     minimumFractionDigits: agorot % 100 === 0 ? 0 : 2,
     maximumFractionDigits: 2,
-  })} ₪`
+  })
+  return `${LRI}₪ ${num}${PDI}`
 }
 
-/** Список сумм → "10/12/14 ₪" (символ валюты один раз в конце) */
+/**
+ * То же "₪ 12.50", но БЕЗ bidi-изоляторов — для строк, которые уходят за
+ * пределы нашего UI: текст чека в WhatsApp, печать, экспорт. Там
+ * управляющие символы не отрабатывают как разметка и могут показаться
+ * получателю мусором.
+ */
+export function formatMoneyPlain(agorot: Agorot, lang: Lang): string {
+  const shekels = agorot / 100
+  const num = shekels.toLocaleString(lang === 'he' ? 'he-IL' : 'ru-RU', {
+    minimumFractionDigits: agorot % 100 === 0 ? 0 : 2,
+    maximumFractionDigits: 2,
+  })
+  return `₪ ${num}`
+}
+
+/** Список сумм → "₪ 10/12/14" (символ валюты один раз в начале) */
 export function formatMoneyList(agorotList: Agorot[], lang: Lang): string {
   const locale = lang === 'he' ? 'he-IL' : 'ru-RU'
   const nums = agorotList.map((a) =>
@@ -25,7 +57,7 @@ export function formatMoneyList(agorotList: Agorot[], lang: Lang): string {
       maximumFractionDigits: 2,
     })
   )
-  return `${nums.join('/')} ₪`
+  return `${LRI}₪ ${nums.join('/')}${PDI}`
 }
 
 /** Пользовательский ввод "12.50" → 1250 агорот */

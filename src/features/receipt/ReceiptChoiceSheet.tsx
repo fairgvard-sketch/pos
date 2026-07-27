@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useLangStore } from '../../store/langStore'
 import { useDeviceStore } from '../../store/deviceStore'
 import { t, formatDate, type Lang } from '../../lib/i18n'
-import { formatMoney } from '../../lib/money'
+import { formatMoneyPlain } from '../../lib/money'
 import type { Location } from '../../types'
 import { fetchReceipt, type Receipt } from './api'
 import { autoPrintReceipt, autoPrintLocalReceipt } from './printService'
@@ -37,14 +37,14 @@ function buildReceiptText(r: Receipt, location: Location | undefined, lang: Lang
   out.push('—'.repeat(16))
   for (const l of r.lines) {
     const name = l.variant_name ? `${l.name} · ${l.variant_name}` : l.name
-    out.push(`${l.qty}× ${name}  ${formatMoney(l.line_total, lang)}`)
+    out.push(`${l.qty}× ${name}  ${formatMoneyPlain(l.line_total, lang)}`)
     for (const m of l.modifiers) out.push(`   + ${m.name}`)
   }
   out.push('—'.repeat(16))
-  if (r.discount_amount > 0) out.push(`${t(lang, 'discount')}: -${formatMoney(r.discount_amount, lang)}`)
-  if (r.loyalty_discount > 0) out.push(`${t(lang, 'loyaltyLabel')}: -${formatMoney(r.loyalty_discount, lang)}`)
-  out.push(`${t(lang, 'toPay')}: ${formatMoney(r.total, lang)}`)
-  out.push(`${t(lang, 'vatIncl')} ${r.vat_rate}%: ${formatMoney(r.vat_amount, lang)}`)
+  if (r.discount_amount > 0) out.push(`${t(lang, 'discount')}: -${formatMoneyPlain(r.discount_amount, lang)}`)
+  if (r.loyalty_discount > 0) out.push(`${t(lang, 'loyaltyLabel')}: -${formatMoneyPlain(r.loyalty_discount, lang)}`)
+  out.push(`${t(lang, 'toPay')}: ${formatMoneyPlain(r.total, lang)}`)
+  out.push(`${t(lang, 'vatIncl')} ${r.vat_rate}%: ${formatMoneyPlain(r.vat_amount, lang)}`)
   if (location?.receipt_footer) out.push(location.receipt_footer)
   return out.join('\n')
 }
