@@ -10,6 +10,8 @@ import {
 import { parsePublicOrderQuery } from './orderContext'
 import { useIdleReset } from './useIdleReset'
 import StillHereDialog from './StillHereDialog'
+import { reconcileCart } from './reconcileCart'
+import { pickupTimeToIso } from './pickupTime'
 import { readPublicCart, writePublicCart } from './publicCart'
 import { updateInstalledMenuName } from './menuManifest'
 import {
@@ -108,6 +110,29 @@ export default function PublicOrderPage() {
     queryFn: () => fetchPublicMenu(locId, queryContext.tableToken),
     staleTime: 30_000,
   })
+  /**
+   * Сверка восстановленной корзины с меню. Корзина живёт до 6 часов и
+   * хранит снапшот цен: товар мог подорожать или исчезнуть. Сервер это
+   * поймает сам, но гость узнал бы на последнем шаге — после заполнения
+   * контактов. Поэтому правим сразу и сообщаем, что изменилось.
+   */
+  const [cartNotice, setCartNotice] = useState<string | null>(null)
+  const reconciledFor = useRef<PublicMenu | null>(null)
+  useEffect(() => {
+    if (!menu || reconciledFor.current === menu) return
+    reconciledFor.current = menu
+    setCart((current) => {
+      if (current.length === 0) return current
+      const { lines, removed, repriced } = reconcileCart(current, menu)
+      if (removed.length > 0) {
+        setCartNotice(t(lang, 'pubCartRemoved').replace('{items}', removed.join(', ')))
+      } else if (repriced) {
+        setCartNotice(t(lang, 'pubCartRepriced'))
+      }
+      return removed.length > 0 || repriced ? lines : current
+    })
+  }, [menu, lang])
+
   const menuBackground = resolveMenuBackgroundUrl(menu?.location.background_url)
   const installedMenuName = menu?.location.business_name || menu?.location.name
   useEffect(() => {
@@ -407,6 +432,17 @@ export default function PublicOrderPage() {
             setConfigItem(null)
           }}
         />
+      )}
+
+      {/* Корзина изменилась после сверки с меню — говорим об этом сразу,
+          а не даём гостю дойти до оплаты со старой суммой */}
+      {cartNotice && (
+        <div className="public-menu-cart-notice" role="status">
+          <span>{cartNotice}</span>
+          <button type="button" onClick={() => setCartNotice(null)} aria-label={t(lang, 'close')}>
+            ✕
+          </button>
+        </div>
       )}
 
       {countdown !== null && (
@@ -1160,11 +1196,7 @@ function CheckoutScreen({
     try {
       let pickupIso: string | null = null
       if (!isTableOrder && !asap && time) {
-        const [h, m] = time.split(':').map(Number)
-        const d = new Date()
-        d.setHours(h, m, 0, 0)
-        // Время сегодняшнего дня; прошедшее сервер трактует как «как можно скорее»
-        pickupIso = d.toISOString()
+        pickupIso = pickupTimeToIso(time)
       }
       await submitPublicOrder({
         loc: locId,

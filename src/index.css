@@ -1803,6 +1803,42 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
 ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
 
+/* ── Корзина изменилась после сверки с меню ───────────────── */
+/* Не модалка: сообщение информирующее, а не блокирующее — гость
+   продолжает работать с меню. Над нижней панелью корзины. */
+.public-menu-cart-notice {
+  position: fixed;
+  z-index: 50;
+  inset-inline: 1rem;
+  bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  max-width: 30rem;
+  margin: 0 auto;
+  align-items: center;
+  gap: .75rem;
+  padding: .75rem 1rem;
+  border: 1px solid rgb(180 83 9 / 18%);
+  border-radius: 1rem;
+  background: #fffbeb;
+  color: #78350f;
+  font-size: .8125rem;
+  font-weight: 600;
+  line-height: 1.35;
+  box-shadow: 0 10px 26px rgb(120 53 15 / 14%);
+}
+
+.public-menu-cart-notice button {
+  width: 1.75rem;
+  height: 1.75rem;
+  flex-shrink: 0;
+  margin-inline-start: auto;
+  border: 0;
+  border-radius: 999px;
+  background: rgb(120 53 15 / 10%);
+  color: #78350f;
+  font-size: .75rem;
+}
+
 /* ── «Вы ещё здесь?» (киоск-режим) ────────────────────────── */
 /* Единственное перекрытие в гостевом сценарии: вопрос обязан быть
    замечен. Без backdrop-blur — правило проекта для частых overlay. */
