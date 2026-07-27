@@ -548,28 +548,26 @@ function CartBar({ lang, count, total, bumping, onOpen }: {
   onOpen: () => void
 }) {
   return (
-    <div className="fixed bottom-0 inset-x-0 z-30 pointer-events-none">
-      <div
-        className="public-menu-frame mx-auto px-4 pt-6 bg-gradient-to-t from-black/30 via-black/10 to-transparent"
-        style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))' }}
+    // Панель та же, что на чекауте: сплошная белая полоса, а не плавающая
+    // кнопка на градиенте. Плитки меню не должны просвечивать под оплатой —
+    // иначе на скролле под кнопкой ползёт каша из фото и цен.
+    <div className="public-menu-checkout-submitbar is-cart">
+      {/* Та же вёрстка, что и у кнопки перехода к оплате
+          (.public-menu-checkout-submit): space-between прижимает сумму
+          к краю, счётчик — белый квадрат. Иначе две нижние кнопки
+          гостевого сценария выглядят как из разных приложений. */}
+      <button
+        type="button"
+        onClick={onOpen}
+        aria-label={`${t(lang, 'pubShowItems')}: ${count}, ${formatMoney(total, lang)}`}
+        className={`public-menu-checkout-submit ${bumping ? 'cart-bump' : ''}`}
       >
-        {/* Та же вёрстка, что и у кнопки перехода к оплате
-            (.public-menu-checkout-submit): space-between прижимает сумму
-            к краю, счётчик — белый квадрат. Иначе две нижние кнопки
-            гостевого сценария выглядят как из разных приложений. */}
-        <button
-          type="button"
-          onClick={onOpen}
-          aria-label={`${t(lang, 'pubShowItems')}: ${count}, ${formatMoney(total, lang)}`}
-          className={`public-menu-checkout-submit pointer-events-auto ${bumping ? 'cart-bump' : ''}`}
-        >
-          <span className="public-menu-checkout-submit-count" aria-live="polite">
-            {count}
-          </span>
-          <span>{t(lang, 'pubShowItems')}</span>
-          <strong dir="ltr">{formatMoney(total, lang)}</strong>
-        </button>
-      </div>
+        <span className="public-menu-checkout-submit-count" aria-live="polite">
+          {count}
+        </span>
+        <span>{t(lang, 'pubShowItems')}</span>
+        <strong dir="ltr">{formatMoney(total, lang)}</strong>
+      </button>
     </div>
   )
 }
