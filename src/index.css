@@ -236,9 +236,15 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     }
 
     /* Низ hero теперь уходит под панель Safari, поэтому кнопку «התחל»
-       поднимаем на разницу lvh−dvh — иначе она прячется за панелью. */
+       поднимаем на разницу lvh−dvh — иначе она прячется за панелью.
+       Название сдвигается тем же слагаемым, иначе просвет над кнопкой
+       съедается и заголовок наезжает на неё. */
     .public-menu-hero-scroll {
-      bottom: calc(1.4rem + env(safe-area-inset-bottom) + (100lvh - 100dvh));
+      bottom: calc(4.5rem + env(safe-area-inset-bottom) + (100lvh - 100dvh));
+    }
+
+    .public-menu-hero.has-media .public-menu-hero-copy {
+      bottom: calc(8.7rem + env(safe-area-inset-bottom) + (100lvh - 100dvh));
     }
   }
 
@@ -320,7 +326,7 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
 
   .public-menu-hero.has-media .public-menu-hero-copy {
     top: auto;
-    bottom: calc(5.6rem + env(safe-area-inset-bottom));
+    bottom: calc(8.7rem + env(safe-area-inset-bottom));
     transform: none;
   }
 
@@ -335,7 +341,7 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     position: absolute;
     z-index: 2;
     left: 50%;
-    bottom: calc(1.4rem + env(safe-area-inset-bottom));
+    bottom: calc(4.5rem + env(safe-area-inset-bottom));
     transform: translateX(-50%);
     display: flex;
     min-width: 11rem;
@@ -373,21 +379,6 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     font-weight: 800;
     line-height: 1;
     letter-spacing: -.035em;
-  }
-
-  .public-menu-section-count {
-    display: grid;
-    min-width: 2rem;
-    height: 2rem;
-    place-items: center;
-    border: 1px solid rgb(17 24 39 / 10%);
-    border-radius: 999px;
-    background: rgb(255 255 255 / 72%);
-    color: #6b7280;
-    font-size: .75rem;
-    font-weight: 750;
-    -webkit-backdrop-filter: blur(10px);
-    backdrop-filter: blur(10px);
   }
 
   .public-menu-product-grid {
@@ -1494,12 +1485,6 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     font-weight: 700;
     -webkit-backdrop-filter: blur(8px);
     backdrop-filter: blur(8px);
-  }
-
-  html.public-menu-dark .public-menu-section-count {
-    border-color: rgb(255 255 255 / 14%);
-    background: rgb(255 255 255 / 10%);
-    color: rgb(255 255 255 / 65%);
   }
 
   html.public-menu-dark .public-menu-item-price {

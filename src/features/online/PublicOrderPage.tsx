@@ -295,7 +295,6 @@ export default function PublicOrderPage() {
             <div className="public-menu-products-section px-4 pb-4">
               <div className="public-menu-section-heading">
                 <h2 className="public-menu-section-title">{cat.name}</h2>
-                <span className="public-menu-section-count">{cat.items.length}</span>
               </div>
               <div className="public-menu-product-grid">
                 {cat.items.map((item) => (
@@ -558,7 +557,7 @@ function CartBar({ lang, count, total, bumping, onOpen }: {
           type="button"
           onClick={onOpen}
           aria-label={`${t(lang, 'pubShowItems')}: ${count}, ${formatMoney(total, lang)}`}
-          className={`pointer-events-auto w-full min-h-14 rounded-2xl bg-gray-900 text-white ps-2 pe-5 flex items-center gap-3 active:scale-[0.98] transition-all shadow-xl shadow-black/20 ${bumping ? 'cart-bump' : ''}`}
+          className={`pointer-events-auto w-full min-h-14 rounded-2xl bg-gray-900 text-white ps-2 pe-4 flex items-center gap-3 active:scale-[0.98] transition-all shadow-xl shadow-black/20 ${bumping ? 'cart-bump' : ''}`}
         >
           <span className="w-10 h-10 shrink-0 rounded-xl bg-white text-gray-900 font-black flex items-center justify-center tabular-nums" aria-live="polite">
             {count}
@@ -1470,7 +1469,7 @@ function StatusScreen({ lang, clientUuid, onNewOrder }: {
       {/* Номер дня есть только у POS-заказа; standalone-заявка живёт без него */}
       {status.daily_number != null && (
         <>
-          <p className="text-sm font-bold text-gray-500 uppercase tracking-wide">{t(lang, 'pubOrderNumber')}</p>
+          <p className="text-sm font-bold text-gray-900 uppercase tracking-wide">{t(lang, 'pubOrderNumber')}</p>
           <p className="text-6xl font-black tabular-nums text-gray-900 mt-2">#{status.daily_number}</p>
         </>
       )}
@@ -1609,7 +1608,11 @@ function NewOrderBtn({ lang, onClick, secondary }: { lang: Lang; onClick: () => 
     <button
       onClick={onClick}
       className={`mt-6 h-12 px-6 rounded-2xl font-bold active:scale-[0.98] transition-all ${
-        secondary ? 'border border-gray-300 text-gray-900' : 'bg-gray-900 text-white'
+        // Пока заказ готовится кнопка вторичная (см. вызов), но выделена
+        // заливкой, а не тонкой рамкой — рамка терялась на белом фоне.
+        secondary
+          ? 'bg-gray-100 border border-gray-300 text-gray-900'
+          : 'bg-gray-900 text-white shadow-lg shadow-black/20'
       }`}
     >
       {t(lang, 'pubNewOrder')}
