@@ -11,7 +11,7 @@ import { parsePublicOrderQuery } from './orderContext'
 import { useIdleReset } from './useIdleReset'
 import StillHereDialog from './StillHereDialog'
 import { reconcileCart } from './reconcileCart'
-import { buildPickupSlots, type Hours, type PickupSlot } from './pickupSlots'
+import { buildPickupSlots, type Hours } from './pickupSlots'
 import { readPublicCart, writePublicCart } from './publicCart'
 import { updateInstalledMenuName } from './menuManifest'
 import {
@@ -1419,28 +1419,33 @@ function CheckoutScreen({
                   slots.length === 0 ? (
                     <p className="public-menu-time-empty">{t(lang, 'pubNoSlots')}</p>
                   ) : (
-                    <div
-                      className={`public-menu-slots ${
+                    /* Селектор, а не сетка кнопок: у полного дня работы слотов
+                       под сотню, и плитка занимала несколько экранов. Родной
+                       select открывает колесо выбора на телефоне. */
+                    <select
+                      className={`public-menu-field is-select ${
                         showValidation && !timeOk ? 'is-invalid' : ''
                       }`}
+                      value={activeSlot}
+                      aria-invalid={showValidation && !timeOk}
+                      onChange={(event) => setSlotIso(event.target.value)}
                     >
+                      <option value="">{t(lang, 'pubPickSlot')}</option>
                       {todaySlots.length > 0 && (
-                        <SlotGroup
-                          title={t(lang, 'pubSlotsToday')}
-                          slots={todaySlots}
-                          selected={activeSlot}
-                          onSelect={setSlotIso}
-                        />
+                        <optgroup label={t(lang, 'pubSlotsToday')}>
+                          {todaySlots.map((slot) => (
+                            <option key={slot.iso} value={slot.iso}>{slot.label}</option>
+                          ))}
+                        </optgroup>
                       )}
                       {tomorrowSlots.length > 0 && (
-                        <SlotGroup
-                          title={t(lang, 'pubSlotsTomorrow')}
-                          slots={tomorrowSlots}
-                          selected={activeSlot}
-                          onSelect={setSlotIso}
-                        />
+                        <optgroup label={t(lang, 'pubSlotsTomorrow')}>
+                          {tomorrowSlots.map((slot) => (
+                            <option key={slot.iso} value={slot.iso}>{slot.label}</option>
+                          ))}
+                        </optgroup>
                       )}
-                    </div>
+                    </select>
                   )
                 )}
               </div>
@@ -1800,39 +1805,6 @@ function Chip({ active, onClick, children, disabled = false }: {
     >
       {children}
     </button>
-  )
-}
-
-/**
- * Слоты одного дня: заголовок «Сегодня»/«Завтра» и сетка времён (112).
- *
- * Время всегда LTR — часы читаются одинаково в обеих локалях, а на иврите
- * «19:45» не должно переворачиваться.
- */
-function SlotGroup({ title, slots, selected, onSelect }: {
-  title: string
-  slots: PickupSlot[]
-  selected: string
-  onSelect: (iso: string) => void
-}) {
-  return (
-    <div className="public-menu-slot-group">
-      <span className="public-menu-slot-day">{title}</span>
-      <div className="public-menu-slot-grid">
-        {slots.map((slot) => (
-          <button
-            key={slot.iso}
-            type="button"
-            dir="ltr"
-            aria-pressed={slot.iso === selected}
-            onClick={() => onSelect(slot.iso)}
-            className={`public-menu-slot ${slot.iso === selected ? 'is-selected' : ''}`}
-          >
-            {slot.label}
-          </button>
-        ))}
-      </div>
-    </div>
   )
 }
 

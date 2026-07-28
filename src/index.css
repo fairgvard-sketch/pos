@@ -928,52 +928,21 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     border-color: #f43f5e;
   }
 
-  /* Слоты времени заказа (112): выбор из окна работы вместо свободного
-     ввода. Сетка авто-заполняется — на узком телефоне 3 колонки, шире 4–5. */
-  .public-menu-slots {
-    margin-top: .75rem;
-    display: grid;
-    gap: .85rem;
-  }
-
-  .public-menu-slots.is-invalid .public-menu-slot {
-    border-color: #f43f5e;
-  }
-
-  .public-menu-slot-day {
-    display: block;
-    margin-bottom: .4rem;
-    color: #9a9ca1;
-    font-size: .68rem;
-    font-weight: 600;
-  }
-
-  .public-menu-slot-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(4.25rem, 1fr));
-    gap: .4rem;
-  }
-
-  .public-menu-slot {
-    height: 2.75rem;
-    border: 1px solid #e5e7eb;
-    border-radius: .85rem;
-    background: #fff;
-    color: #374151;
-    font-size: .82rem;
-    font-weight: 600;
+  /* Время заказа (112) — селектор: у полного дня работы слотов под сотню,
+     плиткой они занимали несколько экранов. Стрелку рисуем фоном, потому
+     что appearance: none у .public-menu-field убирает системную. */
+  .public-menu-field.is-select {
+    margin-top: .6rem;
+    padding-inline-end: 2.4rem;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%236b7280' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right .95rem center;
     font-variant-numeric: tabular-nums;
-    transition: transform .12s ease, background-color .12s ease;
   }
 
-  .public-menu-slot:active {
-    transform: scale(.96);
-  }
-
-  .public-menu-slot.is-selected {
-    border-color: #111827;
-    background: #111827;
-    color: #fff;
+  /* В RTL стрелка уезжает к левому краю вместе с направлением текста */
+  :lang(he) .public-menu-field.is-select {
+    background-position: left .95rem center;
   }
 
   .public-menu-time-empty {
@@ -997,9 +966,15 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     gap: .45rem;
   }
 
+  /* Два чипа делят ряд поровну: у «как можно скорее» подпись с вилкой
+     времени готовки, и он выдавливал «ко времени» на вторую строку. */
   .public-menu-time-options > button {
+    flex: 1 1 0;
+    min-width: 0;
     height: 2.75rem;
+    padding-inline: .7rem;
     border-radius: .85rem;
+    font-size: .82rem;
   }
 
   .public-menu-checkout-recommendations {
