@@ -183,22 +183,20 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
                 0 8px 18px rgb(0 0 0 / 20%);
   }
 
-  /* Активная категория: зелёный контур ANGLE. Фирменный #7CDF4E на белом
-     даёт контраст всего 1.68:1 при норме 3:1 для границ — тонкая линия
-     была бы почти не видна, поэтому берём его же темнее (3.02:1).
-     Заливка остаётся белой: цветной фон спорил бы с чёрной кнопкой
-     корзины за роль главного действия. */
+  /* Выбранное состояние — контур фирменным near-black #111827, тем же,
+     что у кнопки главного действия. Отличие от неё в заливке, а не в
+     цвете: у кнопки цвет сплошной, здесь только рамка. */
   .public-menu-category-chip-active,
   .public-menu-chip-active {
-    box-shadow: inset 0 0 0 1.5px #4fa828, 0 1px 2px rgb(16 24 40 / 6%);
+    box-shadow: inset 0 0 0 1.5px #111827, 0 1px 2px rgb(16 24 40 / 6%);
   }
 
-  /* Выбранный чип на тёмном фоне витрины: контур ярче, заливка прозрачная —
-     белая карточка формы там не используется. */
+  /* Выбранный чип на тёмном фоне витрины: там near-black не читается,
+     контур белый, заливка полупрозрачная. */
   html.public-menu-dark .public-menu-chip-active {
     background: rgb(255 255 255 / 8%);
     color: #fff;
-    box-shadow: inset 0 0 0 1.5px #7cdf4e;
+    box-shadow: inset 0 0 0 1.5px rgb(255 255 255 / 85%);
   }
 
   html.public-menu-dark .public-menu-category-chip:not([data-active='true']) {
@@ -967,6 +965,139 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   /* В RTL стрелка уезжает к левому краю вместе с направлением текста */
   :lang(he) .public-menu-field.is-select {
     background-position: left .95rem center;
+  }
+
+  /* ── Барабан выбора времени (112) ──────────────────────────
+     Кнопка-поле выглядит как select, но открывает шторку с колёсами. */
+  .public-menu-field.is-picker {
+    display: flex;
+    align-items: center;
+    text-align: start;
+    font-weight: 600;
+  }
+
+  .public-menu-picker-overlay {
+    background: rgb(16 18 22 / 45%);
+  }
+
+  .public-menu-picker-sheet {
+    width: min(100%, 32rem);
+    padding: .5rem 1.15rem calc(1.15rem + env(safe-area-inset-bottom, 0px));
+    border-radius: 1.5rem 1.5rem 0 0;
+    background: #fff;
+  }
+
+  .public-menu-picker-grabber {
+    display: block;
+    width: 2.6rem;
+    height: .28rem;
+    margin: .1rem auto .6rem;
+    border-radius: 999px;
+    background: #d8dade;
+  }
+
+  .public-menu-picker-head {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.9rem;
+  }
+
+  .public-menu-picker-head h3 {
+    margin: 0;
+    color: #111827;
+    font-size: 1.05rem;
+    font-weight: 800;
+  }
+
+  .public-menu-picker-close {
+    position: absolute;
+    inset-inline-start: 0;
+    display: grid;
+    width: 2.4rem;
+    height: 2.4rem;
+    place-items: center;
+    border-radius: 999px;
+    background: #f2f3f5;
+    color: #4b5563;
+    font-size: .95rem;
+  }
+
+  /* Два колеса в ряд; высота = 5 строк по 44px (см. ROW_H/VISIBLE в
+     PickupTimeSheet.tsx — значения обязаны совпадать). */
+  .public-menu-picker-wheels {
+    position: relative;
+    display: flex;
+    gap: .5rem;
+    margin: .4rem 0 1rem;
+    height: 220px;
+  }
+
+  /* Подсветка центральной строки — под колёсами, чтобы не ловить события */
+  .public-menu-wheel-highlight {
+    position: absolute;
+    top: 88px;
+    right: 0;
+    left: 0;
+    height: 44px;
+    border-radius: .8rem;
+    background: #f4f5f7;
+    pointer-events: none;
+  }
+
+  .public-menu-wheel {
+    position: relative;
+    z-index: 1;
+    flex: 1 1 0;
+    min-width: 0;
+    height: 100%;
+    overflow-y: auto;
+    scroll-snap-type: y mandatory;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    outline: none;
+  }
+
+  .public-menu-wheel::-webkit-scrollbar { display: none; }
+
+  /* Полстроки сверху и снизу: первая и последняя позиции доезжают до центра */
+  .public-menu-wheel-pad {
+    height: 88px;
+  }
+
+  .public-menu-wheel-row {
+    display: flex;
+    height: 44px;
+    align-items: center;
+    justify-content: center;
+    scroll-snap-align: center;
+    color: #9ca3af;
+    font-size: 1rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    transition: color .15s ease, transform .15s ease;
+    cursor: pointer;
+  }
+
+  .public-menu-wheel-row.is-active {
+    color: #111827;
+    font-size: 1.12rem;
+    font-weight: 800;
+  }
+
+  .public-menu-picker-confirm {
+    width: 100%;
+    min-height: 3.4rem;
+    border-radius: 1.15rem;
+    background: #111827;
+    color: #fff;
+    font-size: 1.02rem;
+    font-weight: 800;
+  }
+
+  .public-menu-picker-confirm:disabled {
+    opacity: .38;
   }
 
   .public-menu-time-empty {

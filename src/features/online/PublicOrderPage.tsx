@@ -12,6 +12,7 @@ import { useIdleReset } from './useIdleReset'
 import StillHereDialog from './StillHereDialog'
 import { reconcileCart } from './reconcileCart'
 import { buildPickupSlots, type Hours } from './pickupSlots'
+import PickupTimeSheet from './PickupTimeSheet'
 import { readPublicCart, writePublicCart } from './publicCart'
 import { updateInstalledMenuName } from './menuManifest'
 import {
@@ -704,8 +705,8 @@ function CategoryChips({ categories, activeCat, onSelect }: {
           /* Активная категория — НЕ чёрная заливка: чёрный на гостевой
              странице зарезервирован за главным действием (корзина, оплата).
              Навигация лишь отмечает «вы здесь», поэтому активный чип светлый
-             с зелёным контуром ANGLE. В тёмной теме он белый — там иерархия
-             соблюдалась изначально (см. .public-menu-dark в CSS). */
+             с контуром фирменного near-black. В тёмной теме он белый — там
+             иерархия соблюдалась изначально (см. .public-menu-dark в CSS). */
           className={`public-menu-category-chip h-11 px-4 rounded-full text-sm font-semibold whitespace-nowrap transition-all active:scale-[0.96] shrink-0 ${
             c.id === activeCat
               /* Без shadow-sm: утилита Tailwind задаёт то же box-shadow и
@@ -1202,13 +1203,12 @@ function CheckoutScreen({
     () => buildPickupSlots(hours, timezone ?? undefined, new Date(slotsNow)),
     [hours, timezone, slotsNow]
   )
-  const todaySlots = slots.filter((slot) => slot.day === 'today')
-  const tomorrowSlots = slots.filter((slot) => slot.day === 'tomorrow')
   // Слот, выбранный ранее, мог уехать в прошлое, пока гость заполнял форму.
   // Считаем его недействительным по факту, без setState в эффекте: выбор
   // просто перестаёт подсвечиваться, а отправка блокируется валидацией.
-  const slotStillValid = slots.some((slot) => slot.iso === slotIso)
-  const activeSlot = slotStillValid ? slotIso : ''
+  const selectedSlot = slots.find((slot) => slot.iso === slotIso) ?? null
+  const activeSlot = selectedSlot ? slotIso : ''
+  const [pickerOpen, setPickerOpen] = useState(false)
 
   const addressOk = orderType !== 'delivery' || address.trim().length > 0
   const contactOk = isTableOrder || (name.trim().length > 0 && phoneDigits.length >= 9)
@@ -1437,33 +1437,22 @@ function CheckoutScreen({
                   slots.length === 0 ? (
                     <p className="public-menu-time-empty">{t(lang, 'pubNoSlots')}</p>
                   ) : (
-                    /* Селектор, а не сетка кнопок: у полного дня работы слотов
-                       под сотню, и плитка занимала несколько экранов. Родной
-                       select открывает колесо выбора на телефоне. */
-                    <select
-                      className={`public-menu-field is-select ${
+                    /* Барабан, а не select: слотов у полного дня под сотню,
+                       и системный список гость листал без ощущения «дня».
+                       В шторке день и время разведены по колёсам. */
+                    <button
+                      type="button"
+                      className={`public-menu-field is-select is-picker ${
                         showValidation && !timeOk ? 'is-invalid' : ''
                       }`}
-                      value={activeSlot}
+                      aria-haspopup="dialog"
                       aria-invalid={showValidation && !timeOk}
-                      onChange={(event) => setSlotIso(event.target.value)}
+                      onClick={() => setPickerOpen(true)}
                     >
-                      <option value="">{t(lang, 'pubPickSlot')}</option>
-                      {todaySlots.length > 0 && (
-                        <optgroup label={t(lang, 'pubSlotsToday')}>
-                          {todaySlots.map((slot) => (
-                            <option key={slot.iso} value={slot.iso}>{slot.label}</option>
-                          ))}
-                        </optgroup>
-                      )}
-                      {tomorrowSlots.length > 0 && (
-                        <optgroup label={t(lang, 'pubSlotsTomorrow')}>
-                          {tomorrowSlots.map((slot) => (
-                            <option key={slot.iso} value={slot.iso}>{slot.label}</option>
-                          ))}
-                        </optgroup>
-                      )}
-                    </select>
+                      {selectedSlot
+                        ? `${t(lang, selectedSlot.day === 'today' ? 'pubSlotsToday' : 'pubSlotsTomorrow')} · ${selectedSlot.label}`
+                        : t(lang, 'pubPickSlot')}
+                    </button>
                   )
                 )}
               </div>
@@ -1536,6 +1525,16 @@ function CheckoutScreen({
           {busy ? t(lang, 'pubSubmitting') : t(lang, isTableOrder ? 'pubSubmitTable' : 'pubSubmitCounter')}
         </button>
       </div>
+
+      {pickerOpen && (
+        <PickupTimeSheet
+          lang={lang}
+          slots={slots}
+          value={activeSlot}
+          onCancel={() => setPickerOpen(false)}
+          onConfirm={(iso) => { setSlotIso(iso); setPickerOpen(false) }}
+        />
+      )}
     </div>
   )
 }
@@ -1828,10 +1827,10 @@ function Chip({ active, onClick, children, disabled = false }: {
     <button
       onClick={onClick}
       disabled={disabled}
-      /* Выбранный чип — светлый с зелёным контуром ANGLE, а не чёрная
-         заливка: чёрный на гостевой странице принадлежит главному действию
-         (кнопка отправки заказа). Раньше тип заказа, время и модификаторы
-         были такими же чёрными и спорили с ней за внимание. */
+      /* Выбранный чип — светлый с контуром, а не сплошная чёрная заливка:
+         заливка принадлежит главному действию (кнопка отправки заказа).
+         Раньше тип заказа, время и модификаторы были такими же чёрными
+         и спорили с ней за внимание. */
       className={`h-11 px-4 rounded-xl text-sm font-semibold transition-all active:scale-[0.96] ${
         active
           ? 'public-menu-chip-active bg-white text-gray-900'
