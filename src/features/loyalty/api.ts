@@ -63,6 +63,35 @@ export async function createGuest(phone: string, name: string): Promise<Guest> {
   return data as Guest
 }
 
+/** Последние заказы гостя — для карточки в разделе «Гости» (113) */
+export interface GuestOrder {
+  id: string
+  daily_number: number
+  total: number
+  status: string
+  created_at: string
+}
+
+export async function fetchGuestOrders(guestId: string): Promise<GuestOrder[]> {
+  const { data, error } = await supabase
+    .from('orders')
+    .select('id, daily_number, total, status, created_at')
+    .eq('guest_id', guestId)
+    .order('created_at', { ascending: false })
+    .limit(20)
+  if (error) throw new Error(error.message)
+  return data as GuestOrder[]
+}
+
+/** Переименовать гостя (телефон — ключ лояльности, его не меняем) */
+export async function renameGuest(guestId: string, name: string): Promise<void> {
+  const { error } = await supabase
+    .from('guests')
+    .update({ name: name.trim() || null })
+    .eq('id', guestId)
+  if (error) throw new Error(error.message)
+}
+
 export type LoyaltySettings = Pick<
   Location,
   'loyalty_mode' | 'loyalty_stamps_goal' | 'loyalty_points_percent' | 'loyalty_points_min_redeem'

@@ -60,6 +60,48 @@ export async function fetchOnlineOrders(): Promise<OnlineOrder[]> {
   return data as OnlineOrder[]
 }
 
+/** Глубина истории на вкладке «История» */
+export type HistoryPeriod = 'today' | '7d' | '30d'
+
+/** Начало периода: 'today' — с полуночи, остальные — скользящее окно суток */
+export function historySince(period: HistoryPeriod, now = new Date()): string {
+  if (period === 'today') {
+    const d = new Date(now)
+    d.setHours(0, 0, 0, 0)
+    return d.toISOString()
+  }
+  const days = period === '7d' ? 7 : 30
+  return new Date(now.getTime() - days * 24 * 3600_000).toISOString()
+}
+
+/**
+ * История заявок за период (вкладка «История»): все статусы, новые
+ * сверху. Поиск по имени/телефону — на сервере, чтобы лимит не срезал
+ * совпадения за пределами первой страницы.
+ */
+export async function fetchOnlineHistory(
+  period: HistoryPeriod,
+  search = '',
+): Promise<OnlineOrder[]> {
+  let req = supabase
+    .from('online_orders')
+    .select('*, order:order_id ( id, status, daily_number, total )')
+    .gte('created_at', historySince(period))
+
+  const q = search.trim()
+  if (q) {
+    // Телефон хранится одними цифрами — ищем по ним, иначе по имени
+    const digits = q.replace(/\D/g, '')
+    req = digits.length >= 3
+      ? req.like('customer_phone', `%${digits}%`)
+      : req.ilike('customer_name', `%${q}%`)
+  }
+
+  const { data, error } = await req.order('created_at', { ascending: false }).limit(200)
+  if (error) throw new Error(error.message)
+  return data as OnlineOrder[]
+}
+
 export interface AcceptResult {
   order_id: string
   daily_number: number

@@ -5,19 +5,21 @@ import type { TranslationKey } from '../../lib/i18n'
  * строк для поиска. Клик по результату поиска ведёт в категорию
  * (и деталь, если настройка живёт в drill-down).
  *
- * На терминале остаются только device-scoped настройки (эта касса:
- * оплата у стойки, печать, безопасность устройства). Всё уровня
- * точки/бизнеса — НДС, лояльность, сотрудники, онлайн-заказы, брони,
- * реквизиты чека, смена, UF-экспорт — живёт в веб-кабинете ANGLE.
+ * На терминале остаются device-scoped настройки (эта касса: оплата у
+ * стойки, печать, безопасность устройства) плюс лояльность: программу
+ * правят прямо за кассой, где ею и пользуются (113). Остальное уровня
+ * точки/бизнеса — НДС, сотрудники, онлайн-заказы, брони, реквизиты
+ * чека, смена, UF-экспорт — живёт в веб-кабинете ANGLE.
  */
 
-export type CategoryId = 'payments' | 'receipts' | 'device'
+export type CategoryId = 'payments' | 'receipts' | 'loyalty' | 'device'
 
 export type DetailId = 'tipping' | 'quick-amounts' | 'pay-methods'
 
 export const CATEGORIES: { id: CategoryId; label: TranslationKey }[] = [
   { id: 'payments', label: 'catPayments' },
   { id: 'receipts', label: 'catReceipts' },
+  { id: 'loyalty', label: 'tabLoyalty' },
   { id: 'device', label: 'catDevice' },
 ]
 
@@ -41,6 +43,11 @@ export const SEARCH_INDEX: SearchEntry[] = [
   { cat: 'receipts', label: 'autoPrintTitle', hint: 'autoPrintHint' },
   { cat: 'receipts', label: 'receiptPromptTitle', hint: 'receiptPromptHint' },
   { cat: 'receipts', label: 'kitchenTicketTitle', hint: 'kitchenTicketHint' },
+  { cat: 'loyalty', label: 'loyaltyTitle', hint: 'loyaltyHint' },
+  { cat: 'loyalty', label: 'stampsGoalLabel', hint: 'stampsGoalHint' },
+  { cat: 'loyalty', label: 'pointsPercentLabel', hint: 'pointsPercentHint' },
+  { cat: 'loyalty', label: 'minRedeemLabel' },
+  { cat: 'loyalty', path: '/guests', label: 'guestsTitle', hint: 'guestsSearchHint' },
   { cat: 'device', label: 'autoLock', hint: 'autoLockHint' },
   { cat: 'device', label: 'lockAfterSale', hint: 'lockAfterSaleHint' },
   { cat: 'device', label: 'deviceName', hint: 'deviceNameHint' },

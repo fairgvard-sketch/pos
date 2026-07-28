@@ -4,7 +4,7 @@ import toast from 'react-hot-toast'
 import { useLangStore } from '../../store/langStore'
 import { useAuthStore } from '../../store/authStore'
 import { useDeviceStore } from '../../store/deviceStore'
-import { t, formatTime, formatElapsed, type TranslationKey } from '../../lib/i18n'
+import { t, formatDate, formatTime, formatElapsed, type TranslationKey } from '../../lib/i18n'
 import { formatMoney } from '../../lib/money'
 import { can } from '../../lib/perms'
 import { playPaymentChime } from '../../lib/sound'
@@ -15,10 +15,11 @@ import PaymentSheet from '../sell/PaymentSheet'
 import ReceiptChoiceSheet from '../receipt/ReceiptChoiceSheet'
 import { autoPrintReceipt, printKitchenTicket } from '../receipt/printService'
 import AppSidebar from '../../components/AppSidebar'
+import { TabSwitch, HistoryFilters } from '../../components/HistoryTabs'
 import {
-  fetchOnlineOrders, fetchOnlineStats, acceptOnlineOrder, rejectOnlineOrder,
+  fetchOnlineOrders, fetchOnlineHistory, fetchOnlineStats, acceptOnlineOrder, rejectOnlineOrder,
   setOnlinePause, setOnlinePrepRange,
-  type OnlineOrder,
+  type OnlineOrder, type HistoryPeriod,
 } from './api'
 import type { Location, LocationSettings } from '../../types'
 
@@ -43,6 +44,24 @@ export default function OnlineOrdersPage() {
   const { data: orders = [] } = useQuery({ queryKey: ['online_orders'], queryFn: fetchOnlineOrders })
   const { data: location } = useQuery({ queryKey: ['current_location'], queryFn: fetchCurrentLocation })
   const { data: stats } = useQuery({ queryKey: ['online_stats'], queryFn: fetchOnlineStats, staleTime: 60_000 })
+
+  // ── Вкладка «История» (113): прошлые заявки за период + поиск ──
+  const [tab, setTab] = useState<'active' | 'history'>('active')
+  const [period, setPeriod] = useState<HistoryPeriod>('today')
+  const [search, setSearch] = useState('')
+  // Ввод не дёргает сеть на каждую букву — запрос идёт по debounce
+  const [searchQ, setSearchQ] = useState('')
+  useEffect(() => {
+    const id = setTimeout(() => setSearchQ(search), 300)
+    return () => clearTimeout(id)
+  }, [search])
+
+  const { data: history = [], isFetching: historyLoading } = useQuery({
+    queryKey: ['online_history', period, searchQ],
+    queryFn: () => fetchOnlineHistory(period, searchQ),
+    enabled: tab === 'history',
+    placeholderData: (prev) => prev,
+  })
 
   // Realtime-подписки здесь нет: AppSidebar (смонтирован на этом экране)
   // уже подписан на online_orders и инвалидирует ['online_orders']
@@ -200,8 +219,14 @@ export default function OnlineOrdersPage() {
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
           <div className="flex items-center gap-3 min-w-0">
             <h1 className="text-xl font-bold text-gray-900">{t(lang, 'onlineOrders')}</h1>
+            <TabSwitch
+              value={tab}
+              onChange={setTab}
+              activeLabel={t(lang, 'tabActive')}
+              historyLabel={t(lang, 'tabHistory')}
+            />
             {/* Статус приёма и время приготовления — кликабельные пилюли (Square) */}
-            {location && (
+            {tab === 'active' && location && (
               <button
                 onClick={() => setStateSheet('pause')}
                 className="h-11 px-4 rounded-full border border-gray-200 hover:border-gray-400 flex items-center gap-2 active:scale-[0.97] transition-all shrink-0"
@@ -219,7 +244,7 @@ export default function OnlineOrdersPage() {
                 <Chevron />
               </button>
             )}
-            {location && enabled && (
+            {tab === 'active' && location && enabled && (
               <button
                 onClick={() => setStateSheet('prep')}
                 className="h-11 px-4 rounded-full border border-gray-200 hover:border-gray-400 flex items-center gap-2 active:scale-[0.97] transition-all shrink-0"
@@ -246,7 +271,17 @@ export default function OnlineOrdersPage() {
         </div>
 
         <div className="flex-1 overflow-y-auto p-6">
-          {orders.length === 0 ? (
+          {tab === 'history' ? (
+            <HistoryPanel
+              lang={lang}
+              period={period}
+              onPeriod={setPeriod}
+              search={search}
+              onSearch={setSearch}
+              loading={historyLoading}
+              rows={history}
+            />
+          ) : orders.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-center">
               <p className="font-bold text-gray-900">{t(lang, 'onlineEmpty')}</p>
               <p className="text-sm text-gray-500 mt-1">{t(lang, 'onlineEmptyHint')}</p>
@@ -395,6 +430,60 @@ export default function OnlineOrdersPage() {
         />
       )}
     </div>
+  )
+}
+
+/** История онлайн-заявок: фильтры + плоский список, свежие сверху */
+function HistoryPanel({
+  lang, period, onPeriod, search, onSearch, loading, rows,
+}: {
+  lang: 'ru' | 'he'
+  period: HistoryPeriod
+  onPeriod: (p: HistoryPeriod) => void
+  search: string
+  onSearch: (v: string) => void
+  loading: boolean
+  rows: OnlineOrder[]
+}) {
+  return (
+    <>
+      <HistoryFilters
+        lang={lang} period={period} onPeriod={onPeriod} search={search} onSearch={onSearch}
+      />
+      {rows.length === 0 ? (
+        <p className="text-sm text-gray-500 text-center pt-12">
+          {loading ? t(lang, 'loading') : t(lang, 'historyEmpty')}
+        </p>
+      ) : (
+        <div className="space-y-2 max-w-3xl">
+          {rows.map((o) => (
+            <div key={o.id} className="card p-4 flex items-center gap-3">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-baseline gap-2 flex-wrap">
+                  {o.order && (
+                    <span className="font-black tabular-nums text-gray-900">#{o.order.daily_number}</span>
+                  )}
+                  <span className="text-sm font-semibold text-gray-900 truncate">
+                    {o.customer_name?.trim() || t(lang, 'onlineGuestOrder')}
+                  </span>
+                  {o.customer_phone && (
+                    <span className="text-xs text-gray-500 tabular-nums" dir="ltr">{o.customer_phone}</span>
+                  )}
+                </div>
+                <div className="text-xs text-gray-500 mt-1 tabular-nums">
+                  {formatDate(o.created_at, lang)}
+                  {o.reject_reason ? ` · ${o.reject_reason}` : ''}
+                </div>
+              </div>
+              <span className="text-sm font-bold text-gray-900 tabular-nums shrink-0">
+                {formatMoney(o.order?.total ?? o.total, lang)}
+              </span>
+              <DoneBadge o={o} lang={lang} />
+            </div>
+          ))}
+        </div>
+      )}
+    </>
   )
 }
 

@@ -36,6 +36,7 @@ const PublicOrderPage = lazyWithRetry(() => import('./features/online/PublicOrde
 const ReservationsPage = lazyWithRetry(() => import('./features/reservations/ReservationsPage'), 'ReservationsPage')
 // Публичная страница брони стола (053) — без auth, ходит в Edge Functions
 const PublicReservePage = lazyWithRetry(() => import('./features/reservations/PublicReservePage'), 'PublicReservePage')
+const GuestsPage = lazyWithRetry(() => import('./features/loyalty/GuestsPage'), 'GuestsPage')
 const ShiftPage = lazyWithRetry(() => import('./features/shift/ShiftPage'), 'ShiftPage')
 const TimesheetPage = lazyWithRetry(() => import('./features/timesheet/TimesheetPage'), 'TimesheetPage')
 const TransactionsPage = lazyWithRetry(() => import('./features/transactions/TransactionsPage'), 'TransactionsPage')
@@ -266,6 +267,15 @@ export default function App() {
             element={
               <ProtectedRoute allowedRoles={['owner', 'manager']}>
                 <FloorPlanEditorPage />
+              </ProtectedRoute>
+            }
+          />
+          {/* Гости лояльности (113): список, баланс, история покупок */}
+          <Route
+            path="/guests"
+            element={
+              <ProtectedRoute allowedRoles={['owner', 'manager']}>
+                <GuestsPage />
               </ProtectedRoute>
             }
           />

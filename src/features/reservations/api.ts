@@ -1,4 +1,7 @@
 import { supabase } from '../../lib/supabase'
+import { historySince, type HistoryPeriod } from '../online/api'
+
+export type { HistoryPeriod }
 
 export type ReservationStatus = 'new' | 'confirmed' | 'rejected' | 'cancelled'
 
@@ -66,6 +69,33 @@ export async function fetchReservations(): Promise<Reservation[]> {
     .or(`status.eq.new,reserved_at.gte.${startOfToday.toISOString()}`)
     .order('reserved_at', { ascending: true })
     .limit(200)
+  if (error) throw new Error(error.message)
+  return data as Reservation[]
+}
+
+/**
+ * История броней за период (вкладка «История»): все статусы, включая
+ * прошедшие дни, свежие сверху. Поиск по имени/телефону — на сервере,
+ * чтобы лимит не срезал совпадения за пределами первой страницы.
+ */
+export async function fetchReservationHistory(
+  period: HistoryPeriod,
+  search = '',
+): Promise<Reservation[]> {
+  let req = supabase
+    .from('reservations')
+    .select('*, table:table_id ( id, label ), zone:table_zones!reservations_zone_fk ( id, name )')
+    .gte('reserved_at', historySince(period))
+
+  const q = search.trim()
+  if (q) {
+    const digits = q.replace(/\D/g, '')
+    req = digits.length >= 3
+      ? req.like('customer_phone', `%${digits}%`)
+      : req.ilike('customer_name', `%${q}%`)
+  }
+
+  const { data, error } = await req.order('reserved_at', { ascending: false }).limit(200)
   if (error) throw new Error(error.message)
   return data as Reservation[]
 }

@@ -14,6 +14,7 @@ import TippingDetail from './sections/TippingDetail'
 import QuickAmountsDetail from './sections/QuickAmountsDetail'
 import PayMethodsDetail from './sections/PayMethodsDetail'
 import ReceiptsSection from './sections/ReceiptsSection'
+import LoyaltySection from './sections/LoyaltySection'
 import OfflineBanner from '../../components/OfflineBanner'
 import DeviceSection from './sections/DeviceSection'
 
@@ -177,6 +178,7 @@ export default function SettingsPage() {
                 </h2>
                 {cat === 'payments' && <PaymentsSection openDetail={openDetail} />}
                 {cat === 'receipts' && <ReceiptsSection />}
+                {cat === 'loyalty' && <LoyaltySection location={location} />}
                 {cat === 'device' && <DeviceSection location={location} />}
               </div>
             )}

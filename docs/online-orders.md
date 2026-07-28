@@ -104,7 +104,7 @@ https://menu.angle.co.il/order/<slug|location_id>?table=<public_token>&source=ta
 
 | Слой | Файлы |
 |------|-------|
-| Миграции | `supabase/migrations/050_online_orders.sql`, `099_qr_table_ordering.sql`, `106_location_slugs.sql` |
+| Миграции | `supabase/migrations/050_online_orders.sql`, `099_qr_table_ordering.sql`, `106_location_slugs.sql`, `113_online_order_loyalty.sql` |
 | Edge Functions | `supabase/functions/public-menu/`, `supabase/functions/public-order/` |
 | Экран кассы | `src/features/online/OnlineOrdersPage.tsx` + `api.ts` (маршрут `/online`) |
 | Бейдж/звонок | `src/components/AppSidebar.tsx` (пункт «Онлайн», подписка realtime) |
@@ -120,6 +120,22 @@ https://menu.angle.co.il/order/<slug|location_id>?table=<public_token>&source=ta
 - «Оплатить» при получении — обычный PaymentSheet (наличные/карта/кошельки,
   смешанная), чек — как всегда («Как выдать чек?» / автопечать).
 - «Отменить» принятый (гость передумал) — право `void_order`, остаток вернётся.
+- Вкладка «История» (113): прошлые заявки за период (сегодня / 7 / 30 дней) с
+  поиском по имени и телефону. Активный экран по-прежнему показывает только
+  новые и решённые за сутки — горячий поток не удлиняется.
+
+### Лояльность в онлайн-заказах (113)
+
+`accept_online_order` находит гостя по `customer_phone` заявки (телефон
+нормализуется к одним цифрам, как в 031) и проставляет `orders.guest_id`.
+Начисление не меняется: штампы и баллы даёт `pay_order` (046) в момент
+оплаты по `guest_id`. Правила:
+
+- гость заводится только при включённой программе (`loyalty_mode <> 'off'`);
+- имя из заявки не затирает уточнённое кассиром (`COALESCE`);
+- ручная привязка гостя на открытом счёте стола приоритетнее автоматической;
+- награда (бесплатный напиток / списание баллов) по-прежнему выбирается
+  кассиром через `apply_loyalty` — автоматически ничего не списывается.
 
 ## Отложено осознанно
 

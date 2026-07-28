@@ -5,15 +5,17 @@ import toast from 'react-hot-toast'
 import { useLangStore } from '../../store/langStore'
 import { useAuthStore } from '../../store/authStore'
 import { useCartStore } from '../../store/cartStore'
-import { t, formatTime, formatElapsed, type Lang } from '../../lib/i18n'
+import { t, formatDate, formatTime, formatElapsed, type Lang } from '../../lib/i18n'
 import { fetchTables } from '../tables/api'
 import { fetchCurrentLocation } from '../auth/api'
 import AppSidebar from '../../components/AppSidebar'
 import {
-  fetchReservations, acceptReservation, rejectReservation, setReservationTable, seatReservation,
+  fetchReservations, fetchReservationHistory, acceptReservation, rejectReservation,
+  setReservationTable, seatReservation,
   createReservation, fetchGuestHistory, type CreateReservationInput,
-  type Reservation,
+  type Reservation, type HistoryPeriod,
 } from './api'
+import { TabSwitch, HistoryFilters } from '../../components/HistoryTabs'
 import type { Table } from '../../types'
 
 /**
@@ -36,6 +38,24 @@ export default function ReservationsPage() {
 
   // Ручная бронь (060): форма создания открыта
   const [creating, setCreating] = useState(false)
+
+  // ── Вкладка «История» (113): прошедшие брони за период + поиск ──
+  const [tab, setTab] = useState<'active' | 'history'>('active')
+  const [period, setPeriod] = useState<HistoryPeriod>('today')
+  const [search, setSearch] = useState('')
+  // Ввод не дёргает сеть на каждую букву — запрос идёт по debounce
+  const [searchQ, setSearchQ] = useState('')
+  useEffect(() => {
+    const id = setTimeout(() => setSearchQ(search), 300)
+    return () => clearTimeout(id)
+  }, [search])
+
+  const { data: pastRes = [], isFetching: pastLoading } = useQuery({
+    queryKey: ['reservation_history', period, searchQ],
+    queryFn: () => fetchReservationHistory(period, searchQ),
+    enabled: tab === 'history',
+    placeholderData: (prev) => prev,
+  })
 
   // Realtime-подписки здесь нет: AppSidebar (смонтирован на этом экране)
   // уже подписан на reservations и инвалидирует ['reservations']
@@ -139,7 +159,13 @@ export default function ReservationsPage() {
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
           <div className="flex items-center gap-3">
             <h1 className="text-xl font-bold text-gray-900">{t(lang, 'reservationsTitle')}</h1>
-            {today.length > 0 && (
+            <TabSwitch
+              value={tab}
+              onChange={setTab}
+              activeLabel={t(lang, 'tabActive')}
+              historyLabel={t(lang, 'tabHistory')}
+            />
+            {tab === 'active' && today.length > 0 && (
               <span className="badge-blue tabular-nums">{today.length} {t(lang, 'resTodayCount')}</span>
             )}
           </div>
@@ -149,7 +175,43 @@ export default function ReservationsPage() {
         </div>
 
         <div className="flex-1 overflow-y-auto p-6">
-          {reservations.length === 0 ? (
+          {tab === 'history' ? (
+            <>
+              <HistoryFilters
+                lang={lang} period={period} onPeriod={setPeriod}
+                search={search} onSearch={setSearch}
+              />
+              {pastRes.length === 0 ? (
+                <p className="text-sm text-gray-500 text-center pt-12">
+                  {pastLoading ? t(lang, 'loading') : t(lang, 'historyEmpty')}
+                </p>
+              ) : (
+                <div className="space-y-2 max-w-3xl">
+                  {pastRes.map((r) => (
+                    <div key={r.id} className="card p-4 flex items-center gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-baseline gap-2 flex-wrap">
+                          <span className="font-bold tabular-nums text-gray-900">
+                            {formatDate(r.reserved_at, lang)}
+                          </span>
+                          <span className="text-sm font-semibold text-gray-900 truncate">{r.customer_name}</span>
+                          {r.customer_phone && (
+                            <span className="text-xs text-gray-500 tabular-nums" dir="ltr">{r.customer_phone}</span>
+                          )}
+                        </div>
+                        <div className="text-xs text-gray-500 mt-1">
+                          {r.party_size} {t(lang, 'resGuestsShort')}
+                          {r.table ? ` · ${t(lang, 'tableLabel')} ${r.table.label}` : ''}
+                          {r.reject_reason ? ` · ${r.reject_reason}` : ''}
+                        </div>
+                      </div>
+                      <HistoryBadge r={r} lang={lang} />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          ) : reservations.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-center">
               <p className="font-bold text-gray-900">{t(lang, 'resEmpty')}</p>
               <p className="text-sm text-gray-500 mt-1">{t(lang, 'resEmptyHint')}</p>
