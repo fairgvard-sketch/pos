@@ -928,10 +928,59 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     border-color: #f43f5e;
   }
 
-  .public-menu-field.is-time {
-    width: auto;
-    min-width: 8rem;
+  /* Слоты времени заказа (112): выбор из окна работы вместо свободного
+     ввода. Сетка авто-заполняется — на узком телефоне 3 колонки, шире 4–5. */
+  .public-menu-slots {
+    margin-top: .75rem;
+    display: grid;
+    gap: .85rem;
+  }
+
+  .public-menu-slots.is-invalid .public-menu-slot {
+    border-color: #f43f5e;
+  }
+
+  .public-menu-slot-day {
+    display: block;
+    margin-bottom: .4rem;
+    color: #9a9ca1;
+    font-size: .68rem;
+    font-weight: 600;
+  }
+
+  .public-menu-slot-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(4.25rem, 1fr));
+    gap: .4rem;
+  }
+
+  .public-menu-slot {
     height: 2.75rem;
+    border: 1px solid #e5e7eb;
+    border-radius: .85rem;
+    background: #fff;
+    color: #374151;
+    font-size: .82rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    transition: transform .12s ease, background-color .12s ease;
+  }
+
+  .public-menu-slot:active {
+    transform: scale(.96);
+  }
+
+  .public-menu-slot.is-selected {
+    border-color: #111827;
+    background: #111827;
+    color: #fff;
+  }
+
+  .public-menu-time-empty {
+    margin-top: .6rem;
+    color: #9a9ca1;
+    font-size: .75rem;
+    line-height: 1.4;
   }
 
   .public-menu-checkout-fields label > small {

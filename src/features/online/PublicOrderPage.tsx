@@ -11,7 +11,7 @@ import { parsePublicOrderQuery } from './orderContext'
 import { useIdleReset } from './useIdleReset'
 import StillHereDialog from './StillHereDialog'
 import { reconcileCart } from './reconcileCart'
-import { pickupTimeToIso } from './pickupTime'
+import { buildPickupSlots, type Hours, type PickupSlot } from './pickupSlots'
 import { readPublicCart, writePublicCart } from './publicCart'
 import { updateInstalledMenuName } from './menuManifest'
 import {
@@ -381,6 +381,8 @@ export default function PublicOrderPage() {
           isOpen={menu.location.is_open && menu.location.accepting !== false}
           prepMin={menu.location.prep_min ?? 0}
           prepMax={menu.location.prep_max ?? 0}
+          hours={menu.location.hours ?? null}
+          timezone={menu.location.timezone ?? null}
           orderTypes={tableContext ? ['here'] : orderTypes}
           initialOrderType={initialOrderType}
           tableContext={tableContext}
@@ -1122,7 +1124,7 @@ function CartStage({
 
 /** Способ получения + контакты + подтверждение заявки */
 function CheckoutScreen({
-  lang, locId, isOpen, prepMin, prepMax, orderTypes, initialOrderType,
+  lang, locId, isOpen, prepMin, prepMax, hours, timezone, orderTypes, initialOrderType,
   tableContext, tableToken, orderChannel, recommendations, itemImages, cart, total,
   availabilityMessage, contextMessage, stage,
   onAddItems, onContinue, onQty, onRecommend, onSubmitted,
@@ -1133,6 +1135,10 @@ function CheckoutScreen({
   /** Время приготовления — вилка мин–макс (061): 0/0 = не показывать */
   prepMin: number
   prepMax: number
+  /** Часы работы точки (112): null = приём в любое время */
+  hours: Hours | null
+  /** Таймзона точки — слоты строятся в ней, а не в зоне телефона гостя */
+  timezone: string | null
   orderTypes: PublicOrderType[]
   initialOrderType: PublicOrderType
   tableContext: PublicMenu['order_context']
@@ -1154,7 +1160,9 @@ function CheckoutScreen({
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
   const [asap, setAsap] = useState(true)
-  const [time, setTime] = useState('')
+  // Выбранный слот — ISO-момент, а не «HH:MM»: время уже посчитано в
+  // таймзоне точки, повторно интерпретировать его на клиенте не нужно.
+  const [slotIso, setSlotIso] = useState('')
   const [note, setNote] = useState('')
   // Тип заказа: первый включённый по умолчанию. Если включён один —
   // вопрос не показываем (нечего выбирать).
@@ -1169,9 +1177,29 @@ function CheckoutScreen({
 
   const phoneDigits = phone.replace(/\D/g, '')
   const isTableOrder = tableContext?.kind === 'table' && !!tableToken
+
+  // Слоты внутри часов работы (112). Пересчитываются раз в минуту: пока
+  // гость заполняет форму, ближайший слот может стать прошедшим.
+  const [slotsNow, setSlotsNow] = useState(() => Date.now())
+  useEffect(() => {
+    const timer = setInterval(() => setSlotsNow(Date.now()), 60_000)
+    return () => clearInterval(timer)
+  }, [])
+  const slots = useMemo(
+    () => buildPickupSlots(hours, timezone ?? undefined, new Date(slotsNow)),
+    [hours, timezone, slotsNow]
+  )
+  const todaySlots = slots.filter((slot) => slot.day === 'today')
+  const tomorrowSlots = slots.filter((slot) => slot.day === 'tomorrow')
+  // Слот, выбранный ранее, мог уехать в прошлое, пока гость заполнял форму.
+  // Считаем его недействительным по факту, без setState в эффекте: выбор
+  // просто перестаёт подсвечиваться, а отправка блокируется валидацией.
+  const slotStillValid = slots.some((slot) => slot.iso === slotIso)
+  const activeSlot = slotStillValid ? slotIso : ''
+
   const addressOk = orderType !== 'delivery' || address.trim().length > 0
   const contactOk = isTableOrder || (name.trim().length > 0 && phoneDigits.length >= 9)
-  const timeOk = isTableOrder || asap || time !== ''
+  const timeOk = isTableOrder || asap || activeSlot !== ''
   const valid = cart.length > 0 && contactOk && timeOk && addressOk
   const validationText = !name.trim() && !isTableOrder
     ? t(lang, 'pubErrName')
@@ -1194,10 +1222,8 @@ function CheckoutScreen({
     setBusy(true)
     setError(null)
     try {
-      let pickupIso: string | null = null
-      if (!isTableOrder && !asap && time) {
-        pickupIso = pickupTimeToIso(time)
-      }
+      // Слот уже посчитан в таймзоне точки — берём его момент как есть
+      const pickupIso = !isTableOrder && !asap && activeSlot ? activeSlot : null
       await submitPublicOrder({
         loc: locId,
         client_uuid: clientUuid,
@@ -1379,17 +1405,44 @@ function CheckoutScreen({
                       <span dir="ltr"> · {formatPrepRange(lang, prepMin, prepMax)}</span>
                     )}
                   </Chip>
-                  <Chip active={!asap} onClick={() => setAsap(false)}>{t(lang, 'pubAtTime')}</Chip>
-                  {!asap && (
-                    <input
-                      type="time"
-                      className="public-menu-field is-time"
-                      value={time}
-                      aria-invalid={showValidation && !timeOk}
-                      onChange={(event) => setTime(event.target.value)}
-                    />
-                  )}
+                  {/* Заказ на время возможен, только если внутри часов работы
+                      есть хотя бы один свободный слот (112) */}
+                  <Chip
+                    active={!asap}
+                    disabled={slots.length === 0}
+                    onClick={() => setAsap(false)}
+                  >
+                    {t(lang, 'pubAtTime')}
+                  </Chip>
                 </div>
+                {!asap && (
+                  slots.length === 0 ? (
+                    <p className="public-menu-time-empty">{t(lang, 'pubNoSlots')}</p>
+                  ) : (
+                    <div
+                      className={`public-menu-slots ${
+                        showValidation && !timeOk ? 'is-invalid' : ''
+                      }`}
+                    >
+                      {todaySlots.length > 0 && (
+                        <SlotGroup
+                          title={t(lang, 'pubSlotsToday')}
+                          slots={todaySlots}
+                          selected={activeSlot}
+                          onSelect={setSlotIso}
+                        />
+                      )}
+                      {tomorrowSlots.length > 0 && (
+                        <SlotGroup
+                          title={t(lang, 'pubSlotsTomorrow')}
+                          slots={tomorrowSlots}
+                          selected={activeSlot}
+                          onSelect={setSlotIso}
+                        />
+                      )}
+                    </div>
+                  )
+                )}
               </div>
             </div>
           )}
@@ -1731,16 +1784,55 @@ function NewOrderBtn({ lang, onClick, secondary }: { lang: Lang; onClick: () => 
   )
 }
 
-function Chip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+function Chip({ active, onClick, children, disabled = false }: {
+  active: boolean
+  onClick: () => void
+  children: React.ReactNode
+  disabled?: boolean
+}) {
   return (
     <button
       onClick={onClick}
+      disabled={disabled}
       className={`h-11 px-4 rounded-xl text-sm font-semibold transition-all active:scale-[0.96] ${
         active ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-      }`}
+      } ${disabled ? 'opacity-40 pointer-events-none' : ''}`}
     >
       {children}
     </button>
+  )
+}
+
+/**
+ * Слоты одного дня: заголовок «Сегодня»/«Завтра» и сетка времён (112).
+ *
+ * Время всегда LTR — часы читаются одинаково в обеих локалях, а на иврите
+ * «19:45» не должно переворачиваться.
+ */
+function SlotGroup({ title, slots, selected, onSelect }: {
+  title: string
+  slots: PickupSlot[]
+  selected: string
+  onSelect: (iso: string) => void
+}) {
+  return (
+    <div className="public-menu-slot-group">
+      <span className="public-menu-slot-day">{title}</span>
+      <div className="public-menu-slot-grid">
+        {slots.map((slot) => (
+          <button
+            key={slot.iso}
+            type="button"
+            dir="ltr"
+            aria-pressed={slot.iso === selected}
+            onClick={() => onSelect(slot.iso)}
+            className={`public-menu-slot ${slot.iso === selected ? 'is-selected' : ''}`}
+          >
+            {slot.label}
+          </button>
+        ))}
+      </div>
+    </div>
   )
 }
 
@@ -1767,6 +1859,9 @@ function publicErrorText(lang: Lang, code: string, detail?: string): string {
     case 'item_unavailable': return `${t(lang, 'pubErrUnavailable')}${detail ? `: ${detail}` : ''}`
     case 'invalid_phone': return t(lang, 'pubErrPhone')
     case 'invalid_address': return t(lang, 'pubErrAddress')
+    // Выбранное время вне часов работы (112): слот мог устареть, пока
+    // гость заполнял форму, — просим выбрать заново.
+    case 'pickup_outside_hours': return t(lang, 'pubErrPickupHours')
     case 'invalid_table': return t(lang, 'pubTableQrExpired')
     case 'table_ordering_disabled': return t(lang, 'pubTableOrderingDisabled')
     default: return t(lang, 'pubErrGeneric')

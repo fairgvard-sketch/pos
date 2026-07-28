@@ -30,7 +30,7 @@ Instant-режим
 
 - **Тумблер default = ВЫКЛЮЧЕНО** (`locations.settings->reservations->enabled`,
   отсутствие ключа = выкл — в отличие от online_orders). Включается:
-  ANGLE → QR & reservations → Reservations (со 107 настройки канала живут
+  ANGLE → QR menu → Reservations (со 107 настройки канала живут
   только в бэкофисе). Enforced на сервере
   (`submit_reservation` → код `disabled`; организация без capability
   `public_reservations` отклоняется раньше кодом `module_disabled`, тот же
@@ -78,11 +78,11 @@ Instant-режим
    столов читает `reservations` — без миграции его запрос будет падать.
 
 Ссылка для гостей: `https://pos.angle.co.il/reserve/<location_id>`.
-QR скачивается из ANGLE → QR & reservations → Reservations.
+QR скачивается из ANGLE → QR menu → Reservations.
 
 ## Настройки из бэкофиса
 
-Веб-кабинет владельца (репо `anglesite`, раздел «QR & reservations») правит
+Веб-кабинет владельца (репо `anglesite`, раздел «QR menu») правит
 тот же `locations.settings.reservations` через `patch_location_settings_web`
 (091) — раздел в allow-листе и мержится поключево, кабинет шлёт дельту.
 
@@ -187,7 +187,7 @@ curl "$FN/public-reserve?id=<CLIENT_UUID>" -H "apikey: $ANON" -H "Authorization:
    --project-ref qgmnxrgtlpyqglwqmsej` (нужен новый availability-эндпоинт).
 3. **Фронтенд** — пуш в `main` (Vercel).
 
-Включение у кафе: ANGLE → QR & reservations → Reservations → «Instant
+Включение у кафе: ANGLE → QR menu → Reservations → «Instant
 confirmation». Обязательно проставить **число мест** у столов (иначе движок
 считает по дефолту 2) в конструкторе плана зала на кассе
 (`Настройки → Устройство → План зала`).
