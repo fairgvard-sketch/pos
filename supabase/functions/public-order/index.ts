@@ -29,11 +29,20 @@ const json = (body: unknown, status = 200) =>
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 // Ошибки, которые БД кидает осознанно — отдаём гостю как код, не 500
+// Порядок значим: errorCode матчит подстрокой и возвращает ПЕРВОЕ
+// совпадение, поэтому более длинные коды идут раньше своих префиксов.
 const KNOWN_ERRORS = [
+  // Время заказа вне часов работы (112) — раньше 'closed', иначе общий
+  // гейт приёма перехватил бы более точную причину.
+  'pickup_outside_hours',
+  // 'table_ordering_disabled' содержит 'disabled' как подстроку: пока он
+  // стоял ниже, гость с QR отключённого стола видел «приём приостановлен»
+  // вместо «заказ со стола отключён».
+  'table_ordering_disabled',
   'disabled', 'paused', 'closed', 'rate_limited', 'busy', 'invalid_location', 'invalid_name',
   'invalid_phone', 'invalid_pickup', 'invalid_items', 'item_unavailable',
   'invalid_client_uuid', 'invalid_order_type', 'invalid_address', 'invalid_table',
-  'table_ordering_disabled', 'invalid_order_channel', 'not_found',
+  'invalid_order_channel', 'not_found',
 ]
 
 function errorCode(message: string): string {

@@ -141,12 +141,13 @@ Deno.serve(async (req) => {
       background_url?: string | null
       display_name?: string | null
       order_types?: string[]
+      hours?: Record<string, [string, string][]> | null
     }
   }).online_settings
 
   // Режим обслуживания (101): standalone-точка живёт без смен — открытость
-  // для гостя решает недельное расписание (online_hours_open в БД), а не
-  // открытая смена POS. Явная настройка fulfilment сильнее дефолта по модулю.
+  // для гостя решает недельное расписание, а не открытая смена POS. Явная
+  // настройка fulfilment сильнее дефолта по модулю.
   const fulfilmentSetting = (locRes.data as {
     online_settings?: { fulfilment?: string }
   }).online_settings?.fulfilment
@@ -154,16 +155,19 @@ Deno.serve(async (req) => {
     fulfilmentSetting === 'pos' || fulfilmentSetting === 'standalone'
       ? fulfilmentSetting
       : gates.pos === true ? 'pos' : 'standalone'
-  let isOpen = (shiftRes.data ?? []).length > 0
-  if (fulfilment === 'standalone') {
-    const hoursRes = await supabase.rpc('online_hours_open', {
-      p_settings: { online_orders: (locRes.data as { online_settings?: unknown }).online_settings ?? {} },
-      p_tz: (locRes.data as { timezone?: string }).timezone ?? '',
-    })
-    // Ошибка проверки расписания не прячет меню: считаем точку открытой,
-    // submit_online_order всё равно проверит расписание сервером.
-    isOpen = hoursRes.error ? true : hoursRes.data === true
-  }
+
+  // Часы работы (112) — общий гейт приёма для ВСЕХ точек, включая POS:
+  // зеркало submit_online_order, иначе витрина предлагала бы заказ,
+  // который сервер отклонит. Ошибка проверки не прячет меню — считаем
+  // точку открытой, сервер всё равно проверит расписание сам.
+  const hoursRes = await supabase.rpc('online_hours_open', {
+    p_settings: { online_orders: (locRes.data as { online_settings?: unknown }).online_settings ?? {} },
+    p_tz: (locRes.data as { timezone?: string }).timezone ?? '',
+  })
+  const hoursOpen = hoursRes.error ? true : hoursRes.data === true
+  // POS дополнительно требует открытую смену: приёмка заявки живёт на кассе.
+  const shiftOpen = (shiftRes.data ?? []).length > 0
+  const isOpen = fulfilment === 'pos' ? shiftOpen && hoursOpen : hoursOpen
 
   // Пауза с кассы (054): истёкшая метка = паузы нет (снимается сама)
   const pausedUntil =
@@ -238,6 +242,11 @@ Deno.serve(async (req) => {
         // Время приготовления — вилка «готовим ~N–M мин» на странице гостя (061)
         prep_min: prepMin,
         prep_max: prepMax,
+        // Часы работы (112): недельное расписание + таймзона точки, чтобы
+        // гость выбирал время из слотов внутри окна, а не свободным вводом.
+        // null = расписание не настроено, приём в любое время.
+        hours: onlineSettings?.hours ?? null,
+        timezone: (locRes.data as { timezone?: string }).timezone ?? null,
         // Типы заказа для гостя (058): здесь / с собой / доставка
         order_types: enabledTypes,
         // Оформление главного экрана: баннер-шапка и фон (Настройки → Онлайн-заказы)
