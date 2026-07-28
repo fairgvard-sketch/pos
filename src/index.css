@@ -935,7 +935,10 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     margin-top: .85rem;
     padding: .3rem;
     border-radius: .95rem;
-    background: #f1f2f4;
+    /* Как у полей ввода: белая подложка с контуром, чтобы группа чипов
+       и поля читались одним набором элементов формы. */
+    border: 1px solid rgb(17 24 39 / 14%);
+    background: #fff;
   }
 
   .public-menu-order-types > button {
@@ -1003,23 +1006,26 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     font-weight: 600;
   }
 
+  /* Белое поле с контуром. Была тёплая бежевая заливка #f5f4f1 от старого
+     фона страницы: на холодном #f8f9fb она давала грязный жёлто-серый
+     оттенок, а контраст к фону в 2% делал границы поля неразличимыми.
+     Контур — тот же язык, что у активных чипов и кнопки возврата. */
   .public-menu-field {
     width: 100%;
     height: 3.15rem;
     appearance: none;
     padding: 0 .95rem;
-    border: 1px solid transparent;
+    border: 1px solid rgb(17 24 39 / 14%);
     border-radius: .95rem;
     outline: none;
-    background: #f5f4f1;
+    background: #fff;
     color: #111827;
     font-size: 1rem;
     transition: border-color 150ms ease, box-shadow 150ms ease, background 150ms ease;
   }
 
   .public-menu-field:focus {
-    border-color: rgb(17 24 39 / 36%);
-    background: #fff;
+    border-color: rgb(17 24 39 / 45%);
     box-shadow: 0 0 0 3px rgb(17 24 39 / 8%);
   }
 
