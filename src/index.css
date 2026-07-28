@@ -568,11 +568,12 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     display: none;
   }
 
+  /* Тот же светлый фон, что на экране товаров (body): бежевый #f3efe7
+     с градиентом делал оформление отдельным «документом», хотя это
+     продолжение того же сценария. */
   .public-menu-checkout {
     min-height: calc(100svh - 3.5rem);
-    background:
-      radial-gradient(circle at 100% 0%, rgb(255 255 255 / 92%) 0 9rem, transparent 23rem),
-      #f3efe7;
+    background: #f8f9fb;
     color: #111827;
   }
 
@@ -839,7 +840,8 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     height: 2rem;
     border: 0;
     border-radius: 999px;
-    background: #f0efec;
+    /* Нейтральный серый вместо бежевого: фон экрана больше не тёплый */
+    background: #f1f2f4;
     box-shadow: none;
     font-size: 1rem;
   }
@@ -885,7 +887,7 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     margin-top: .85rem;
     padding: .3rem;
     border-radius: .95rem;
-    background: #f1f0ed;
+    background: #f1f2f4;
   }
 
   .public-menu-order-types > button {
@@ -934,10 +936,10 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   /* «Когда приготовить» — подзаголовок блока, а не подпись поля:
      крупнее и с воздухом сверху, чтобы отделять его от контактов. */
   .public-menu-field-label.public-menu-subsection {
-    margin-top: .35rem;
-    margin-bottom: .6rem;
+    margin-top: .6rem;
+    margin-bottom: .7rem;
     color: #111827;
-    font-size: .95rem;
+    font-size: 1.15rem;
     font-weight: 800;
   }
 

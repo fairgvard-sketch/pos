@@ -1511,9 +1511,13 @@ function CheckoutScreen({
           </label>
         </section>
 
-        {/* Без заголовка: pubPaymentTitle уже стоит заголовком страницы,
-            и повторять его над строкой «оплата на месте» незачем. */}
         <section className="public-menu-checkout-card public-menu-payment-card">
+          {/* Короткое «Оплата», а не pubPaymentTitle: тот уже стоит
+              заголовком страницы. Размер общий с «когда приготовить» —
+              оба подзаголовка блоков. */}
+          <span className="public-menu-field-label public-menu-subsection">
+            {t(lang, 'payment')}
+          </span>
           <div className="public-menu-payment-note">
             <span aria-hidden>
               <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9">
