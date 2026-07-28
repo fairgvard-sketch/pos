@@ -556,6 +556,9 @@ ANGLE → Locations → Fiscal export.
   отсечены), топ-5 любимых позиций и журнал `loyalty_events`. SECURITY INVOKER:
   тело читает под RLS вызывающего (`guests_all` скоупит по `auth_org_id()`),
   новых GRANT на таблицы не выдаётся;
+  С 115 карточка отдаёт ещё `loyalty_mode` (режим точки последнего заказа):
+  `get_backoffice_context` его не содержит, а бэкофису нужно решить, показать
+  баланс штампами или деньгами — иначе точка со штампами рисовала бы «5» как ₪0.05;
 - `get_backoffice_guests(search, limit, staff_session)` (114) — список клиентов
   для ANGLE. Гейт как в 097: веб-владелец/менеджер по членству (088), иначе
   `require_staff_perm(session, 'manage')`. Гости скоупятся по org, а не по

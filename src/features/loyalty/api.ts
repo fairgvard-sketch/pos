@@ -102,6 +102,8 @@ export interface GuestCard {
   total_spent: number
   last_visit_at: string | null
   created_at: string
+  /** Режим программы точки (115) — бэкофису нужен, POS берёт из location */
+  loyalty_mode: 'off' | 'stamps' | 'points'
   orders: GuestOrder[]
   favorites: { name: string; qty: number }[]
   events: GuestEvent[]

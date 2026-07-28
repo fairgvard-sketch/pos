@@ -6,7 +6,7 @@
 -- обеспечивается RLS (SECURITY INVOKER) — проверяется в rls_scope.
 
 BEGIN;
-SELECT plan(12);
+SELECT plan(13);
 
 -- ── Функции существуют и закрыты для anon ──────────────────
 SELECT has_function('get_guest_card');
@@ -101,6 +101,17 @@ SELECT is(
      -> 'events' -> 0 ->> 'points_delta')::int,
   100,
   'журнал начислений виден в карточке'
+);
+
+-- ── Режим программы в карточке (115) ───────────────────────
+-- Бэкофис показывает баланс штампами или деньгами по этому полю
+UPDATE locations SET loyalty_mode = 'stamps'
+WHERE id = 'd1000000-0000-4000-8000-000000000001';
+
+SELECT is(
+  (get_guest_card('d2000000-0000-4000-8000-000000000001') ->> 'loyalty_mode'),
+  'stamps',
+  'карточка отдаёт режим лояльности точки'
 );
 
 SELECT * FROM finish();
