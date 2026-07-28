@@ -668,11 +668,15 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     white-space: nowrap;
   }
 
+  /* Секции оформления лежат на общем фоне страницы, как плитки меню.
+     Раньше каждая была белой карточкой с рамкой и тенью: четыре таких
+     коробки подряд читались как анкета, а не как один поток. Границу
+     между секциями держит заголовок с номером шага. */
   .public-menu-checkout-card {
-    border: 1px solid rgb(17 24 39 / 7%);
-    border-radius: 1.55rem;
-    background: #fff;
-    box-shadow: 0 13px 36px rgb(32 26 18 / 7%);
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
   }
 
   .public-menu-checkout-section-title {
@@ -732,7 +736,7 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   }
 
   .public-menu-cart-card {
-    padding: 1rem;
+    padding: 0;
   }
 
   .public-menu-cart-lines {
@@ -868,8 +872,10 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   }
 
   .public-menu-order-card {
-    margin-top: .8rem;
-    padding: 1rem;
+    /* Секции разделяет воздух, а не рамка карточки; боковых отступов нет —
+       контент идёт по краю колонки, как плитки меню. */
+    margin-top: 1.8rem;
+    padding: 0;
   }
 
   .public-menu-order-types {
@@ -894,13 +900,17 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   }
 
   .public-menu-checkout-form {
-    margin-top: .8rem;
-    padding: 1rem;
+    /* Секции разделяет воздух, а не рамка карточки; боковых отступов нет —
+       контент идёт по краю колонки, как плитки меню. */
+    margin-top: 1.8rem;
+    padding: 0;
   }
 
   .public-menu-payment-card {
-    margin-top: .8rem;
-    padding: 1rem;
+    /* Секции разделяет воздух, а не рамка карточки; боковых отступов нет —
+       контент идёт по краю колонки, как плитки меню. */
+    margin-top: 1.8rem;
+    padding: 0;
   }
 
   .public-menu-payment-card .public-menu-payment-note {
@@ -919,6 +929,23 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     color: #353942;
     font-size: .75rem;
     font-weight: 750;
+  }
+
+  /* «Когда приготовить» — подзаголовок блока, а не подпись поля:
+     крупнее и с воздухом сверху, чтобы отделять его от контактов. */
+  .public-menu-field-label.public-menu-subsection {
+    margin-top: .35rem;
+    margin-bottom: .6rem;
+    color: #111827;
+    font-size: .95rem;
+    font-weight: 800;
+  }
+
+  /* Квартира и этаж — короткие поля в одну строку */
+  .public-menu-address-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: .75rem;
   }
 
   .public-menu-field-label > span {
@@ -1313,7 +1340,9 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   .public-menu-checkout-recommendations.is-large .public-menu-checkout-recommendation-copy small {
     order: 0;
     margin: 0;
-    color: #176b68;
+    /* Цена near-black, как в плитках меню: зелёный был единственным
+       цветным элементом и выбивался из палитры. */
+    color: #111827;
     font-size: .82rem;
     font-weight: 850;
   }
@@ -1800,9 +1829,10 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
       #111113;
   }
 
+  /* Карточек больше нет — секции на общем фоне и в тёмной теме тоже */
   html.public-menu-dark .public-menu-checkout-card {
-    border-color: rgb(255 255 255 / 12%);
-    background: #1b1b1e;
+    border-color: transparent;
+    background: transparent;
   }
 
   html.public-menu-dark .public-menu-checkout-intro h1,

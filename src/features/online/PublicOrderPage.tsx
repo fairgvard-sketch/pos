@@ -104,7 +104,13 @@ export default function PublicOrderPage() {
     setView('menu')
     setHasStarted(false)
   }
-  const { countdown, stayActive } = useIdleReset(!activeUuid, resetToStart)
+  /**
+   * Киоск-таймер работает, только когда гость вошёл в меню (hasStarted).
+   * На экране приветствия сбрасывать нечего — корзина пуста, и гость там
+   * ничего не выбирал: вопрос «вы ещё здесь?» поверх заставки выглядел
+   * как ошибка и требовал ответа ни на чём.
+   */
+  const { countdown, stayActive } = useIdleReset(!activeUuid && hasStarted, resetToStart)
 
   const { data: menu, isLoading, isError } = useQuery({
     queryKey: ['public_menu', locId, queryContext.tableToken],
@@ -1181,7 +1187,12 @@ function CheckoutScreen({
   // Тип заказа: первый включённый по умолчанию. Если включён один —
   // вопрос не показываем (нечего выбирать).
   const [orderType, setOrderType] = useState<PublicOrderType>(initialOrderType)
-  const [address, setAddress] = useState('')
+  // Адрес доставки раздельными полями: одной строкой гость регулярно
+  // забывал квартиру и этаж. В submit уходит собранной строкой.
+  const [city, setCity] = useState('')
+  const [street, setStreet] = useState('')
+  const [apartment, setApartment] = useState('')
+  const [floor, setFloor] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showValidation, setShowValidation] = useState(false)
@@ -1210,7 +1221,17 @@ function CheckoutScreen({
   const activeSlot = selectedSlot ? slotIso : ''
   const [pickerOpen, setPickerOpen] = useState(false)
 
-  const addressOk = orderType !== 'delivery' || address.trim().length > 0
+  // Обязателен город и улица с домом; квартира и этаж — по желанию
+  // (частный дом их не имеет).
+  const addressOk = orderType !== 'delivery'
+    || (city.trim().length > 0 && street.trim().length > 0)
+  /** Адрес одной строкой для курьера и колонки delivery_address */
+  const composedAddress = [
+    street.trim(),
+    apartment.trim() && `${t(lang, 'pubApartment')} ${apartment.trim()}`,
+    floor.trim() && `${t(lang, 'pubFloor')} ${floor.trim()}`,
+    city.trim(),
+  ].filter(Boolean).join(', ')
   const contactOk = isTableOrder || (name.trim().length > 0 && phoneDigits.length >= 9)
   const timeOk = isTableOrder || asap || activeSlot !== ''
   const valid = cart.length > 0 && contactOk && timeOk && addressOk
@@ -1247,7 +1268,7 @@ function CheckoutScreen({
         pickup_at: pickupIso,
         note: note.trim() || null,
         order_type: orderType,
-        delivery_address: orderType === 'delivery' ? address.trim() : null,
+        delivery_address: orderType === 'delivery' ? composedAddress : null,
         table_token: isTableOrder ? tableToken : null,
         order_channel: orderChannel,
         items: cart.map((l) => ({
@@ -1283,34 +1304,24 @@ function CheckoutScreen({
     )
   }
 
-  const orderTypeLabel = t(
-    lang,
-    orderType === 'here' ? 'pubTypeHere' : orderType === 'delivery' ? 'pubTypeDelivery' : 'pubTypeTakeaway'
-  )
-
   return (
     <div className="public-menu-checkout">
       <div className="public-menu-checkout-content">
+        {/* Только заголовок: надзаголовок «сводка заказа» и подпись
+            «выберите способ получения…» дублировали то, что и так видно
+            в самих чипах ниже. */}
         <div className="public-menu-checkout-intro">
-          <div>
-            <span className="public-menu-checkout-eyebrow">{t(lang, 'pubOrderSummary')}</span>
-            <h1 className="font-display text-gray-900">{t(lang, 'pubPaymentTitle')}</h1>
-            <p className="text-sm text-gray-500 mt-2">
-              {t(lang, 'pubPaymentHint')}
-            </p>
-          </div>
+          <h1 className="font-display text-gray-900">{t(lang, 'pubPaymentTitle')}</h1>
         </div>
 
         {contextMessage && (
           <div className="public-menu-checkout-alert is-error" role="alert">{contextMessage}</div>
         )}
 
+        {/* Нумерованных заголовков шагов больше нет: «как получить» и
+            «контакты» очевидны из самих полей, а цифры превращали короткую
+            форму в анкету. */}
         <section className="public-menu-checkout-card public-menu-order-card">
-          <div className="public-menu-checkout-section-title">
-            <span className="public-menu-checkout-step">1</span>
-            <h2>{t(lang, 'pubOrderTypeTitle')}</h2>
-          </div>
-
           {isTableOrder && tableContext ? (
             <div className="public-menu-checkout-fulfilment is-table">
               <span className="public-menu-checkout-fulfilment-icon">{tableContext.label}</span>
@@ -1334,46 +1345,14 @@ function CheckoutScreen({
                   ))}
                 </div>
               )}
-              <div className="public-menu-checkout-fulfilment">
-                <span className="public-menu-checkout-fulfilment-icon" aria-hidden>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-                    <path d="M4 8h16v12H4V8Z" strokeLinejoin="round" />
-                    <path d="M7 4h10l2 4H5l2-4Z" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </span>
-                <span className="min-w-0">
-                  <small>{t(lang, 'pubFulfilment')}</small>
-                  <strong>{orderTypeLabel}</strong>
-                </span>
-                <span className="public-menu-checkout-status">{t(lang, 'pubPayLater')}</span>
-              </div>
+              {/* Блок «способ получения · без онлайн-оплаты» убран: он
+                  дословно повторял только что выбранный чип и добавлял
+                  экран прокрутки. Оплата на месте сказана в секции ниже. */}
             </>
-          )}
-
-          {orderType === 'delivery' && (
-            <label className="block mt-4">
-              <span className="public-menu-field-label">
-                {t(lang, 'pubAddress')} <span>· {t(lang, 'pubRequired')}</span>
-              </span>
-              <input
-                className={`public-menu-field ${
-                  showValidation && !addressOk ? 'is-invalid' : ''
-                }`}
-                placeholder={t(lang, 'pubAddressPlaceholder')}
-                value={address}
-                aria-invalid={showValidation && !addressOk}
-                onChange={(event) => setAddress(event.target.value)}
-              />
-            </label>
           )}
         </section>
 
         <section className="public-menu-checkout-card public-menu-checkout-form">
-          <div className="public-menu-checkout-section-title">
-            <span className="public-menu-checkout-step">2</span>
-            <h2>{isTableOrder ? t(lang, 'pubNote') : t(lang, 'pubContact')}</h2>
-          </div>
-
           {!isTableOrder && (
             <div className="public-menu-checkout-fields">
               <label>
@@ -1409,8 +1388,68 @@ function CheckoutScreen({
                 <small>{t(lang, 'pubPhoneHint')}</small>
               </label>
 
+              {/* Адрес раздельными полями и только для доставки: одной
+                  строкой гость регулярно забывал квартиру и этаж, и курьер
+                  звонил уточнять. В базу уходит собранной строкой —
+                  колонка delivery_address не меняется. */}
+              {orderType === 'delivery' && (
+                <>
+                  <label>
+                    <span className="public-menu-field-label">
+                      {t(lang, 'pubCity')} <span>· {t(lang, 'pubRequired')}</span>
+                    </span>
+                    <input
+                      className={`public-menu-field ${
+                        showValidation && !city.trim() ? 'is-invalid' : ''
+                      }`}
+                      autoComplete="address-level2"
+                      value={city}
+                      aria-invalid={showValidation && !city.trim()}
+                      onChange={(event) => setCity(event.target.value)}
+                    />
+                  </label>
+                  <label>
+                    <span className="public-menu-field-label">
+                      {t(lang, 'pubStreet')} <span>· {t(lang, 'pubRequired')}</span>
+                    </span>
+                    <input
+                      className={`public-menu-field ${
+                        showValidation && !street.trim() ? 'is-invalid' : ''
+                      }`}
+                      autoComplete="street-address"
+                      placeholder={t(lang, 'pubStreetPlaceholder')}
+                      value={street}
+                      aria-invalid={showValidation && !street.trim()}
+                      onChange={(event) => setStreet(event.target.value)}
+                    />
+                  </label>
+                  <div className="public-menu-address-row">
+                    <label>
+                      <span className="public-menu-field-label">{t(lang, 'pubApartment')}</span>
+                      <input
+                        className="public-menu-field"
+                        inputMode="numeric"
+                        value={apartment}
+                        onChange={(event) => setApartment(event.target.value)}
+                      />
+                    </label>
+                    <label>
+                      <span className="public-menu-field-label">{t(lang, 'pubFloor')}</span>
+                      <input
+                        className="public-menu-field"
+                        inputMode="numeric"
+                        value={floor}
+                        onChange={(event) => setFloor(event.target.value)}
+                      />
+                    </label>
+                  </div>
+                </>
+              )}
+
               <div>
-                <span className="public-menu-field-label">{t(lang, 'pubPickupTime')}</span>
+                <span className="public-menu-field-label public-menu-subsection">
+                  {t(lang, 'pubPickupTime')}
+                </span>
                 <div className="public-menu-time-options">
                   {/* Время готовки — отдельной строкой под подписью и не
                       жирным: в одну строку через «·» оно удлиняло чип вдвое
@@ -1472,11 +1511,9 @@ function CheckoutScreen({
           </label>
         </section>
 
+        {/* Без заголовка: pubPaymentTitle уже стоит заголовком страницы,
+            и повторять его над строкой «оплата на месте» незачем. */}
         <section className="public-menu-checkout-card public-menu-payment-card">
-          <div className="public-menu-checkout-section-title">
-            <span className="public-menu-checkout-step">3</span>
-            <h2>{t(lang, 'pubPaymentTitle')}</h2>
-          </div>
           <div className="public-menu-payment-note">
             <span aria-hidden>
               <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9">
