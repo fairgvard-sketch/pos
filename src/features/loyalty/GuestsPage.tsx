@@ -7,7 +7,7 @@ import { formatMoney } from '../../lib/money'
 import { fetchCurrentLocation } from '../auth/api'
 import AppSidebar from '../../components/AppSidebar'
 import {
-  searchGuests, fetchGuestOrders, renameGuest, formatPhone, type Guest,
+  searchGuests, fetchGuestCard, updateGuest, formatPhone, type Guest,
 } from './api'
 
 /**
@@ -40,7 +40,7 @@ export default function GuestsPage() {
 
   return (
     <div dir={isRtl ? 'rtl' : 'ltr'} className="h-screen bg-[#eceef1] flex gap-3 p-3 overflow-hidden">
-      <AppSidebar active="settings" />
+      <AppSidebar active="guests" />
 
       <main className="flex-1 min-w-0 bg-white rounded-3xl flex flex-col overflow-hidden">
         <div className="flex items-center gap-3 px-6 py-4 border-b border-gray-100 shrink-0">
@@ -110,7 +110,11 @@ export default function GuestsPage() {
   )
 }
 
-/** Карточка гостя: баланс, итоги и последние заказы; правится только имя */
+/**
+ * Карточка гостя (114): профиль, баланс, любимые позиции, заметка,
+ * заказы С СОСТАВОМ («что покупал») и журнал начислений/списаний.
+ * Всё приходит одним RPC — сервер уже склеил orders/order_items/events.
+ */
 function GuestDetailSheet({
   guest, lang, mode, stampsGoal, onClose,
 }: {
@@ -122,25 +126,44 @@ function GuestDetailSheet({
 }) {
   const qc = useQueryClient()
   const [name, setName] = useState(guest.name ?? '')
+  // Черновик заметки: null — пользователь ещё не трогал поле, показываем
+  // серверное значение. Так не нужен эффект-синхронизатор (он давал
+  // каскадный рендер) и ввод не затирается ответом сервера.
+  const [notesDraft, setNotesDraft] = useState<string | null>(null)
+  const [openOrder, setOpenOrder] = useState<string | null>(null)
+  const [tab, setTab] = useState<'orders' | 'events'>('orders')
 
-  const { data: orders = [], isFetching } = useQuery({
-    queryKey: ['guest_orders', guest.id],
-    queryFn: () => fetchGuestOrders(guest.id),
+  const { data: card, isFetching } = useQuery({
+    queryKey: ['guest_card', guest.id],
+    queryFn: () => fetchGuestCard(guest.id),
   })
 
-  const rename = useMutation({
-    mutationFn: () => renameGuest(guest.id, name),
+  const serverNotes = card?.notes ?? ''
+  const notes = notesDraft ?? serverNotes
+
+  const save = useMutation({
+    mutationFn: () => updateGuest(guest.id, { name, notes }),
     onSuccess: () => {
       toast.success(t(lang, 'saved'))
+      // Сохранённое значение снова берём с сервера
+      setNotesDraft(null)
       qc.invalidateQueries({ queryKey: ['guests'] })
+      qc.invalidateQueries({ queryKey: ['guest_card', guest.id] })
     },
     onError: (e) => toast.error((e as Error).message),
   })
 
+  const dirty = name.trim() !== (guest.name ?? '').trim()
+    || notes.trim() !== serverNotes.trim()
+
+  const orders = card?.orders ?? []
+  const favorites = card?.favorites ?? []
+  const events = card?.events ?? []
+
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center p-4" onClick={onClose}>
       <div
-        className="card w-full max-w-md p-6 max-h-[92vh] overflow-y-auto animate-[rise-in_0.2s_ease-out]"
+        className="card w-full max-w-lg p-6 max-h-[92vh] overflow-y-auto animate-[rise-in_0.2s_ease-out]"
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="text-lg font-black text-gray-900">{guest.name || formatPhone(guest.phone)}</h2>
@@ -155,38 +178,137 @@ function GuestDetailSheet({
           <Stat label={t(lang, 'guestSpent')} value={formatMoney(guest.total_spent, lang)} />
         </div>
 
+        {/* Любимые позиции — бариста сразу видит, что человек берёт обычно */}
+        {favorites.length > 0 && (
+          <div className="mt-4">
+            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">
+              {t(lang, 'guestFavorites')}
+            </h3>
+            <div className="flex flex-wrap gap-1.5">
+              {favorites.map((f) => (
+                <span key={f.name} className="badge-gray">
+                  {f.name} · <span className="tabular-nums">{f.qty}</span>
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
         <label className="block mt-4">
           <span className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">
             {t(lang, 'guestNamePh')}
           </span>
-          <div className="flex gap-2">
-            <input className="input" value={name} onChange={(e) => setName(e.target.value)} />
-            <button
-              className="btn-secondary shrink-0 !px-4"
-              disabled={rename.isPending || name.trim() === (guest.name ?? '').trim()}
-              onClick={() => rename.mutate()}
-            >
-              {t(lang, 'save')}
-            </button>
-          </div>
+          <input className="input" value={name} onChange={(e) => setName(e.target.value)} />
         </label>
 
-        <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wide mt-6 mb-2">
-          {t(lang, 'guestLastOrders')}
-        </h3>
-        {orders.length === 0 ? (
-          <p className="text-sm text-gray-500">{isFetching ? t(lang, 'loading') : t(lang, 'historyEmpty')}</p>
-        ) : (
-          <div className="space-y-1.5">
-            {orders.map((o) => (
-              <div key={o.id} className="flex items-center gap-3 rounded-xl border border-gray-100 px-3 py-2">
-                <span className="font-bold tabular-nums text-gray-900 text-sm">#{o.daily_number}</span>
-                <span className="text-xs text-gray-500 flex-1 tabular-nums">{formatDate(o.created_at, lang)}</span>
-                <span className="text-sm font-bold text-gray-900 tabular-nums">{formatMoney(o.total, lang)}</span>
+        <label className="block mt-3">
+          <span className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">
+            {t(lang, 'guestNotesLabel')}
+          </span>
+          <input
+            className="input"
+            placeholder={t(lang, 'guestNotesPh')}
+            value={notes}
+            onChange={(e) => setNotesDraft(e.target.value)}
+          />
+        </label>
+
+        <button
+          className="btn-secondary w-full mt-3"
+          disabled={save.isPending || !dirty}
+          onClick={() => save.mutate()}
+        >
+          {t(lang, 'save')}
+        </button>
+
+        {/* Заказы / движения баллов */}
+        <div className="inline-flex rounded-xl border border-gray-100 bg-gray-50 p-0.5 gap-0.5 mt-6">
+          {([['orders', 'guestLastOrders'], ['events', 'guestPointsLog']] as const).map(([v, key]) => (
+            <button
+              key={v}
+              onClick={() => setTab(v)}
+              className={`h-10 px-4 rounded-lg text-sm font-semibold transition-all whitespace-nowrap ${
+                tab === v
+                  ? 'bg-white text-gray-900 shadow-[0_1px_2px_rgba(0,0,0,0.08)]'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              {t(lang, key)}
+            </button>
+          ))}
+        </div>
+
+        <div className="mt-3">
+          {tab === 'orders' ? (
+            orders.length === 0 ? (
+              <p className="text-sm text-gray-500">{isFetching ? t(lang, 'loading') : t(lang, 'historyEmpty')}</p>
+            ) : (
+              <div className="space-y-1.5">
+                {orders.map((o) => (
+                  <div key={o.id} className="rounded-xl border border-gray-100 overflow-hidden">
+                    {/* Тап раскрывает состав заказа — «что покупал» */}
+                    <button
+                      onClick={() => setOpenOrder(openOrder === o.id ? null : o.id)}
+                      className="w-full min-h-11 flex items-center gap-3 px-3 py-2 text-start hover:bg-gray-50 transition-colors"
+                    >
+                      <span className="font-bold tabular-nums text-gray-900 text-sm">#{o.daily_number}</span>
+                      <span className="text-xs text-gray-500 flex-1 tabular-nums">{formatDate(o.created_at, lang)}</span>
+                      <span className="text-sm font-bold text-gray-900 tabular-nums">{formatMoney(o.total, lang)}</span>
+                      <span className="text-gray-400 text-xs">{openOrder === o.id ? '▴' : '▾'}</span>
+                    </button>
+                    {openOrder === o.id && (
+                      <div className="px-3 pb-2 pt-1 bg-gray-50 border-t border-gray-100 space-y-1">
+                        {o.items.length === 0 ? (
+                          <p className="text-xs text-gray-500 py-1">{t(lang, 'historyEmpty')}</p>
+                        ) : (
+                          o.items.map((it, i) => (
+                            <div key={i} className="flex items-baseline gap-2 text-xs">
+                              <span className="tabular-nums text-gray-500 shrink-0">{it.qty}×</span>
+                              <span className="flex-1 text-gray-900 truncate">
+                                {it.name}
+                                {it.variant_name && <span className="text-gray-500"> · {it.variant_name}</span>}
+                              </span>
+                              <span className="tabular-nums text-gray-900 shrink-0">
+                                {formatMoney(it.line_total, lang)}
+                              </span>
+                            </div>
+                          ))
+                        )}
+                        {o.loyalty_discount > 0 && (
+                          <div className="flex items-baseline gap-2 text-xs pt-1 border-t border-gray-200">
+                            <span className="flex-1 text-gray-500">{t(lang, 'loyaltyLabel')}</span>
+                            <span className="tabular-nums text-gray-900">
+                              −{formatMoney(o.loyalty_discount, lang)}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        )}
+            )
+          ) : events.length === 0 ? (
+            <p className="text-sm text-gray-500">{isFetching ? t(lang, 'loading') : t(lang, 'historyEmpty')}</p>
+          ) : (
+            <div className="space-y-1.5">
+              {events.map((e, i) => {
+                const delta = mode === 'stamps' ? e.stamps_delta : e.points_delta
+                const positive = delta > 0
+                return (
+                  <div key={i} className="flex items-center gap-3 rounded-xl border border-gray-100 px-3 py-2">
+                    <span className="text-xs text-gray-500 flex-1 tabular-nums">{formatDate(e.created_at, lang)}</span>
+                    <span className={`text-sm font-bold tabular-nums ${positive ? 'text-emerald-700' : 'text-gray-900'}`}>
+                      {positive ? '+' : ''}
+                      {mode === 'stamps' ? delta : formatMoney(Math.abs(delta), lang)}
+                      {mode === 'stamps' ? ` ${t(lang, 'stampsShort')}` : ''}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
 
         <button onClick={onClose} className="btn-ghost w-full mt-4">{t(lang, 'close')}</button>
       </div>

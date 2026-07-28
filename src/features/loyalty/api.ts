@@ -63,32 +63,75 @@ export async function createGuest(phone: string, name: string): Promise<Guest> {
   return data as Guest
 }
 
-/** Последние заказы гостя — для карточки в разделе «Гости» (113) */
+/** Позиция заказа в карточке гостя — «что покупал» (114) */
+export interface GuestOrderItem {
+  name: string
+  variant_name: string | null
+  qty: number
+  line_total: number
+}
+
 export interface GuestOrder {
   id: string
   daily_number: number
   total: number
   status: string
   created_at: string
+  loyalty_discount: number
+  items: GuestOrderItem[]
 }
 
-export async function fetchGuestOrders(guestId: string): Promise<GuestOrder[]> {
-  const { data, error } = await supabase
-    .from('orders')
-    .select('id, daily_number, total, status, created_at')
-    .eq('guest_id', guestId)
-    .order('created_at', { ascending: false })
-    .limit(20)
+/** Движение баллов/штампов из журнала loyalty_events (031) */
+export interface GuestEvent {
+  kind: 'earn' | 'redeem' | 'adjust'
+  stamps_delta: number
+  points_delta: number
+  created_at: string
+  order_id: string | null
+}
+
+/** Карточка гостя целиком: профиль, заказы с составом, любимое, движения */
+export interface GuestCard {
+  id: string
+  phone: string
+  name: string | null
+  notes: string | null
+  stamps: number
+  points: number
+  visits: number
+  total_spent: number
+  last_visit_at: string | null
+  created_at: string
+  orders: GuestOrder[]
+  favorites: { name: string; qty: number }[]
+  events: GuestEvent[]
+}
+
+/**
+ * Карточка гостя одним запросом (114). Состав заказов, любимые позиции и
+ * журнал начислений считает сервер — клиенту не нужно ходить по трём
+ * таблицам и склеивать их вручную.
+ */
+export async function fetchGuestCard(guestId: string): Promise<GuestCard> {
+  const { data, error } = await supabase.rpc('get_guest_card', {
+    p_guest_id: guestId,
+  })
   if (error) throw new Error(error.message)
-  return data as GuestOrder[]
+  return data as GuestCard
 }
 
-/** Переименовать гостя (телефон — ключ лояльности, его не меняем) */
-export async function renameGuest(guestId: string, name: string): Promise<void> {
-  const { error } = await supabase
-    .from('guests')
-    .update({ name: name.trim() || null })
-    .eq('id', guestId)
+/**
+ * Переименовать гостя и/или сохранить заметку. Телефон — ключ лояльности,
+ * его не меняем. Балансы правит только сервер (грант 031/114).
+ */
+export async function updateGuest(
+  guestId: string,
+  patch: { name?: string; notes?: string },
+): Promise<void> {
+  const row: Record<string, string | null> = {}
+  if (patch.name !== undefined) row.name = patch.name.trim() || null
+  if (patch.notes !== undefined) row.notes = patch.notes.trim() || null
+  const { error } = await supabase.from('guests').update(row).eq('id', guestId)
   if (error) throw new Error(error.message)
 }
 

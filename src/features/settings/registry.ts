@@ -19,7 +19,7 @@ export type DetailId = 'tipping' | 'quick-amounts' | 'pay-methods'
 export const CATEGORIES: { id: CategoryId; label: TranslationKey }[] = [
   { id: 'payments', label: 'catPayments' },
   { id: 'receipts', label: 'catReceipts' },
-  { id: 'loyalty', label: 'tabLoyalty' },
+  { id: 'loyalty', label: 'catLoyalty' },
   { id: 'device', label: 'catDevice' },
 ]
 

@@ -19,7 +19,7 @@ import type { IconName } from './Icon'
 import OfflineBadge from './OfflineBadge'
 import ShiftOverdueBadge from './ShiftOverdueBadge'
 
-export type SidebarPage = 'sell' | 'hall' | 'queue' | 'online' | 'reservations' | 'transactions' | 'shift' | 'inventory' | 'timesheet' | 'settings'
+export type SidebarPage = 'sell' | 'hall' | 'queue' | 'online' | 'reservations' | 'transactions' | 'shift' | 'inventory' | 'timesheet' | 'guests' | 'settings'
 
 /** Общий сайдбар кассы: навигация, часы, сотрудник */
 export default function AppSidebar({ active }: { active: SidebarPage }) {
@@ -188,6 +188,12 @@ export default function AppSidebar({ active }: { active: SidebarPage }) {
             (стоп-лист/порядок); админка меню, отчёты и настройки точки —
             в веб-кабинете ANGLE. На терминале — только настройки кассы. */}
         {isManager && <div className="my-2 border-t border-gray-100" />}
+        {/* Гости лояльности (113): база клиентов — визиты, покупки, баланс.
+            Пункт появляется только при включённой программе, чтобы не
+            занимать место в меню у тех, кто лояльностью не пользуется. */}
+        {isManager && (location?.loyalty_mode ?? 'off') !== 'off' && (
+          <SideLink active={active === 'guests'} label={t(lang, 'guestsTitle')} iconName="customers" onClick={() => navigate('/guests')} />
+        )}
         {isManager && (
           <SideLink active={active === 'settings'} label={t(lang, 'settings')} iconName="settings" onClick={() => navigate('/settings')} />
         )}
