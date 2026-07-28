@@ -717,8 +717,12 @@ function SocialFooter({ links, lang, padForCart }: {
   lang: Lang
   padForCart: boolean
 }) {
+  // Сплошной near-black, а не bg-black/75: полупрозрачность задумывалась
+  // под фоновое фото, но у точки без фона подвал лежит на белом — и кнопки
+  // выцветали в серый (~#404040), читаясь как выключенные рядом с чёрными
+  // «+» на карточках. Сплошной цвет одинаково работает и на фото, и на белом.
   const iconBtn =
-    'w-12 h-12 shrink-0 rounded-full bg-black/75 ring-1 ring-white/15 text-white shadow-lg shadow-black/25 flex items-center justify-center active:scale-[0.94] transition-all'
+    'w-12 h-12 shrink-0 rounded-full bg-gray-900 ring-1 ring-white/15 text-white shadow-lg shadow-black/25 flex items-center justify-center active:scale-[0.94] transition-all'
   const hasAny = !!(links?.instagram || links?.facebook || links?.google_review)
   if (!hasAny) return padForCart ? <div className="pb-24" /> : null
   return (
@@ -750,7 +754,7 @@ function SocialFooter({ links, lang, padForCart }: {
               href={links.google_review}
               target="_blank"
               rel="noopener noreferrer"
-              className="h-12 max-w-full px-5 rounded-full bg-black/75 ring-1 ring-white/15 text-sm font-semibold text-white shadow-lg shadow-black/25 flex items-center justify-center gap-2 active:scale-[0.96] transition-all"
+              className="h-12 max-w-full px-5 rounded-full bg-gray-900 ring-1 ring-white/15 text-sm font-semibold text-white shadow-lg shadow-black/25 flex items-center justify-center gap-2 active:scale-[0.96] transition-all"
             >
               <svg className="shrink-0" width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
                 <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z" />
