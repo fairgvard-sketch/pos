@@ -701,8 +701,15 @@ function CategoryChips({ categories, activeCat, onSelect }: {
           key={c.id}
           data-active={c.id === activeCat || undefined}
           onClick={() => onSelect(c.id)}
+          /* Активная категория — НЕ чёрная заливка: чёрный на гостевой
+             странице зарезервирован за главным действием (корзина, оплата).
+             Навигация лишь отмечает «вы здесь», поэтому активный чип светлый
+             с тёмным текстом и контуром. В тёмной теме он уже белый — там
+             иерархия соблюдалась изначально (см. .public-menu-dark в CSS). */
           className={`public-menu-category-chip h-11 px-4 rounded-full text-sm font-semibold whitespace-nowrap transition-all active:scale-[0.96] shrink-0 ${
-            c.id === activeCat ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600'
+            c.id === activeCat
+              ? 'bg-white text-gray-900 ring-1 ring-gray-900/25 shadow-sm'
+              : 'bg-gray-100 text-gray-600'
           }`}
         >
           {c.name}
