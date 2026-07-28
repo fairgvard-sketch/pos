@@ -704,11 +704,13 @@ function CategoryChips({ categories, activeCat, onSelect }: {
           /* Активная категория — НЕ чёрная заливка: чёрный на гостевой
              странице зарезервирован за главным действием (корзина, оплата).
              Навигация лишь отмечает «вы здесь», поэтому активный чип светлый
-             с тёмным текстом и контуром. В тёмной теме он уже белый — там
-             иерархия соблюдалась изначально (см. .public-menu-dark в CSS). */
+             с зелёным контуром ANGLE. В тёмной теме он белый — там иерархия
+             соблюдалась изначально (см. .public-menu-dark в CSS). */
           className={`public-menu-category-chip h-11 px-4 rounded-full text-sm font-semibold whitespace-nowrap transition-all active:scale-[0.96] shrink-0 ${
             c.id === activeCat
-              ? 'bg-white text-gray-900 ring-1 ring-gray-900/25 shadow-sm'
+              /* Без shadow-sm: утилита Tailwind задаёт то же box-shadow и
+                 перебивала бы зелёный контур — тень уже входит в него. */
+              ? 'public-menu-category-chip-active bg-white text-gray-900'
               : 'bg-gray-100 text-gray-600'
           }`}
         >
@@ -1410,11 +1412,16 @@ function CheckoutScreen({
               <div>
                 <span className="public-menu-field-label">{t(lang, 'pubPickupTime')}</span>
                 <div className="public-menu-time-options">
+                  {/* Время готовки — отдельной строкой под подписью и не
+                      жирным: в одну строку через «·» оно удлиняло чип вдвое
+                      и рвалось посередине («~20–» / «45 דק׳»). */}
                   <Chip active={asap} onClick={() => setAsap(true)}>
-                    {t(lang, 'pubAsap')}
-                    {formatPrepRange(lang, prepMin, prepMax) && (
-                      <span dir="ltr"> · {formatPrepRange(lang, prepMin, prepMax)}</span>
-                    )}
+                    <span className="public-menu-chip-stack">
+                      <span>{t(lang, 'pubAsap')}</span>
+                      {formatPrepRange(lang, prepMin, prepMax) && (
+                        <small dir="ltr">{formatPrepRange(lang, prepMin, prepMax)}</small>
+                      )}
+                    </span>
                   </Chip>
                   {/* Заказ на время возможен, только если внутри часов работы
                       есть хотя бы один свободный слот (112) */}
@@ -1509,13 +1516,24 @@ function CheckoutScreen({
             {error || (showValidation && validationText) || availabilityMessage || t(lang, 'pubClosed')}
           </div>
         )}
+        {/* Итог отдельной строкой над кнопкой, а не внутри неё: на финальном
+            шаге сумма — то, что гость перепроверяет перед отправкой, и она
+            должна читаться как число, а не как часть подписи кнопки. */}
+        <div className="public-menu-checkout-total">
+          <span className="public-menu-checkout-total-label">
+            <strong>{t(lang, 'pubTotal')}</strong>
+            <small>{t(lang, 'pubTotalVatNote')}</small>
+          </span>
+          <span className="public-menu-checkout-total-value" dir="ltr">
+            {formatMoney(total, lang)}
+          </span>
+        </div>
         <button
           disabled={busy || !isOpen}
           onClick={submit}
-          className="public-menu-checkout-submit"
+          className="public-menu-checkout-submit is-final"
         >
-          <span>{busy ? t(lang, 'pubSubmitting') : t(lang, isTableOrder ? 'pubSubmitTable' : 'pubSubmitCounter')}</span>
-          {!busy && <strong dir="ltr">{formatMoney(total, lang)}</strong>}
+          {busy ? t(lang, 'pubSubmitting') : t(lang, isTableOrder ? 'pubSubmitTable' : 'pubSubmitCounter')}
         </button>
       </div>
     </div>
@@ -1810,8 +1828,14 @@ function Chip({ active, onClick, children, disabled = false }: {
     <button
       onClick={onClick}
       disabled={disabled}
+      /* Выбранный чип — светлый с зелёным контуром ANGLE, а не чёрная
+         заливка: чёрный на гостевой странице принадлежит главному действию
+         (кнопка отправки заказа). Раньше тип заказа, время и модификаторы
+         были такими же чёрными и спорили с ней за внимание. */
       className={`h-11 px-4 rounded-xl text-sm font-semibold transition-all active:scale-[0.96] ${
-        active ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+        active
+          ? 'public-menu-chip-active bg-white text-gray-900'
+          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
       } ${disabled ? 'opacity-40 pointer-events-none' : ''}`}
     >
       {children}

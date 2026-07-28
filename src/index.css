@@ -183,6 +183,24 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
                 0 8px 18px rgb(0 0 0 / 20%);
   }
 
+  /* Активная категория: зелёный контур ANGLE. Фирменный #7CDF4E на белом
+     даёт контраст всего 1.68:1 при норме 3:1 для границ — тонкая линия
+     была бы почти не видна, поэтому берём его же темнее (3.02:1).
+     Заливка остаётся белой: цветной фон спорил бы с чёрной кнопкой
+     корзины за роль главного действия. */
+  .public-menu-category-chip-active,
+  .public-menu-chip-active {
+    box-shadow: inset 0 0 0 1.5px #4fa828, 0 1px 2px rgb(16 24 40 / 6%);
+  }
+
+  /* Выбранный чип на тёмном фоне витрины: контур ярче, заливка прозрачная —
+     белая карточка формы там не используется. */
+  html.public-menu-dark .public-menu-chip-active {
+    background: rgb(255 255 255 / 8%);
+    color: #fff;
+    box-shadow: inset 0 0 0 1.5px #7cdf4e;
+  }
+
   html.public-menu-dark .public-menu-category-chip:not([data-active='true']) {
     background: rgb(255 255 255 / 10%);
     color: rgb(255 255 255 / 72%);
@@ -191,6 +209,12 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   html.public-menu-dark .public-menu-category-chip[data-active='true'] {
     background: #fff;
     color: #111827;
+  }
+
+  /* На тёмном фоне сплошной белый чип уже читается как активный —
+     зелёный контур поверх него был бы лишним шумом. */
+  html.public-menu-dark .public-menu-category-chip-active {
+    box-shadow: none;
   }
 
   html.public-menu-dark .public-menu-item-card {
@@ -967,14 +991,35 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   }
 
   /* Два чипа делят ряд поровну: у «как можно скорее» подпись с вилкой
-     времени готовки, и он выдавливал «ко времени» на вторую строку. */
+     времени готовки, и он выдавливал «ко времени» на вторую строку.
+     Высота auto (min-height вместо height) — у чипа со временем две
+     строки, у соседнего одна, и оба тянутся до общей высоты ряда. */
   .public-menu-time-options > button {
     flex: 1 1 0;
     min-width: 0;
-    height: 2.75rem;
+    min-height: 2.75rem;
+    height: auto;
+    padding-block: .4rem;
     padding-inline: .7rem;
     border-radius: .85rem;
     font-size: .82rem;
+  }
+
+  /* Подпись + время готовки в две строки: время мельче и не жирное —
+     это уточнение, а не сам выбор. */
+  .public-menu-chip-stack {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: .1rem;
+    line-height: 1.25;
+  }
+
+  .public-menu-chip-stack > small {
+    color: currentColor;
+    font-size: .72rem;
+    font-weight: 500;
+    opacity: .68;
   }
 
   .public-menu-checkout-recommendations {
@@ -1256,6 +1301,49 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     font-size: .95rem;
     font-weight: 800;
     transition: transform 150ms ease, opacity 150ms ease;
+  }
+
+  /* Итог над кнопкой на финальном шаге: подпись слева, число справа. */
+  .public-menu-checkout-total {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: .7rem;
+    padding-inline: .25rem;
+  }
+
+  .public-menu-checkout-total-label {
+    display: flex;
+    flex-direction: column;
+    gap: .1rem;
+  }
+
+  .public-menu-checkout-total-label > strong {
+    color: #111827;
+    font-size: 1.05rem;
+    font-weight: 800;
+  }
+
+  .public-menu-checkout-total-label > small {
+    color: #9a9ca1;
+    font-size: .72rem;
+  }
+
+  .public-menu-checkout-total-value {
+    color: #111827;
+    font-size: 1.45rem;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.1;
+  }
+
+  /* Финальная кнопка: сумма ушла в строку итога выше, поэтому подпись
+     центрируется, а не разъезжается по краям. */
+  .public-menu-checkout-submit.is-final {
+    justify-content: center;
+    padding: .95rem;
+    font-size: 1.02rem;
   }
 
   .public-menu-checkout-submit:active {
