@@ -1442,40 +1442,41 @@ function CheckoutScreen({
         </section>
 
         <section className="public-menu-checkout-card public-menu-checkout-form">
+          {/* Поля — подчёркнутые строки без коробок: подпись работает
+              плейсхолдером и уезжает наверх, когда гость начал вводить.
+              Так форма читается списком, а не анкетой из рамок, и один
+              и тот же вид годится для «сидеть», «забрать» и доставки —
+              меняется только набор строк. */}
           {!isTableOrder && (
-            <div className="public-menu-checkout-fields">
-              <label>
-                <span className="public-menu-field-label">
-                  {t(lang, 'pubYourName')} <span>· {t(lang, 'pubRequired')}</span>
-                </span>
+            <div className="public-menu-checkout-fields is-underlined">
+              <label className={`public-menu-underline-field ${
+                showValidation && !name.trim() ? 'is-invalid' : ''
+              }`}>
                 <input
-                  className={`public-menu-field ${
-                    showValidation && !name.trim() ? 'is-invalid' : ''
-                  }`}
                   autoComplete="name"
+                  placeholder=" "
                   value={name}
                   aria-invalid={showValidation && !name.trim()}
                   onChange={(event) => setName(event.target.value)}
                 />
+                <span>{t(lang, 'pubYourName')}</span>
               </label>
-              <label>
-                <span className="public-menu-field-label">
-                  {t(lang, 'pubPhone')} <span>· {t(lang, 'pubRequired')}</span>
-                </span>
+              <label className={`public-menu-underline-field ${
+                showValidation && phoneDigits.length < 9 ? 'is-invalid' : ''
+              }`}>
                 <input
-                  className={`public-menu-field ${
-                    showValidation && phoneDigits.length < 9 ? 'is-invalid' : ''
-                  }`}
                   type="tel"
                   inputMode="tel"
                   autoComplete="tel"
                   dir="ltr"
+                  placeholder=" "
                   value={phone}
                   aria-invalid={showValidation && phoneDigits.length < 9}
                   onChange={(event) => setPhone(event.target.value)}
                 />
-                <small>{t(lang, 'pubPhoneHint')}</small>
+                <span>{t(lang, 'pubPhone')}</span>
               </label>
+              <small className="public-menu-field-hint">{t(lang, 'pubPhoneHint')}</small>
 
               {/* Адрес раздельными полями и только для доставки: одной
                   строкой гость регулярно забывал квартиру и этаж, и курьер
@@ -1483,53 +1484,49 @@ function CheckoutScreen({
                   колонка delivery_address не меняется. */}
               {orderType === 'delivery' && (
                 <>
-                  <label>
-                    <span className="public-menu-field-label">
-                      {t(lang, 'pubCity')} <span>· {t(lang, 'pubRequired')}</span>
-                    </span>
+                  <label className={`public-menu-underline-field ${
+                    showValidation && !city.trim() ? 'is-invalid' : ''
+                  }`}>
                     <input
-                      className={`public-menu-field ${
-                        showValidation && !city.trim() ? 'is-invalid' : ''
-                      }`}
                       autoComplete="address-level2"
+                      placeholder=" "
                       value={city}
                       aria-invalid={showValidation && !city.trim()}
                       onChange={(event) => setCity(event.target.value)}
                     />
+                    <span>{t(lang, 'pubCity')}</span>
                   </label>
-                  <label>
-                    <span className="public-menu-field-label">
-                      {t(lang, 'pubStreet')} <span>· {t(lang, 'pubRequired')}</span>
-                    </span>
+                  <label className={`public-menu-underline-field ${
+                    showValidation && !street.trim() ? 'is-invalid' : ''
+                  }`}>
                     <input
-                      className={`public-menu-field ${
-                        showValidation && !street.trim() ? 'is-invalid' : ''
-                      }`}
                       autoComplete="street-address"
-                      placeholder={t(lang, 'pubStreetPlaceholder')}
+                      placeholder=" "
                       value={street}
                       aria-invalid={showValidation && !street.trim()}
                       onChange={(event) => setStreet(event.target.value)}
                     />
+                    <span>{t(lang, 'pubStreet')}</span>
                   </label>
+                  {/* Квартира и этаж — короткие, в один ряд, как в референсе */}
                   <div className="public-menu-address-row">
-                    <label>
-                      <span className="public-menu-field-label">{t(lang, 'pubApartment')}</span>
+                    <label className="public-menu-underline-field">
                       <input
-                        className="public-menu-field"
                         inputMode="numeric"
+                        placeholder=" "
                         value={apartment}
                         onChange={(event) => setApartment(event.target.value)}
                       />
+                      <span>{t(lang, 'pubApartment')}</span>
                     </label>
-                    <label>
-                      <span className="public-menu-field-label">{t(lang, 'pubFloor')}</span>
+                    <label className="public-menu-underline-field">
                       <input
-                        className="public-menu-field"
                         inputMode="numeric"
+                        placeholder=" "
                         value={floor}
                         onChange={(event) => setFloor(event.target.value)}
                       />
+                      <span>{t(lang, 'pubFloor')}</span>
                     </label>
                   </div>
                 </>
@@ -1587,16 +1584,13 @@ function CheckoutScreen({
             </div>
           )}
 
-          <label className="block">
-            <span className="public-menu-field-label">
-              {t(lang, 'pubNote')} <span>· {t(lang, 'pubOptional')}</span>
-            </span>
+          <label className="public-menu-underline-field">
             <input
-              className="public-menu-field"
-              placeholder={t(lang, 'pubNotePlaceholder')}
+              placeholder=" "
               value={note}
               onChange={(event) => setNote(event.target.value)}
             />
+            <span>{t(lang, 'pubNote')}</span>
           </label>
         </section>
 
