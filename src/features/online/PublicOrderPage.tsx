@@ -378,14 +378,17 @@ export default function PublicOrderPage() {
         setHasStarted(true)
         setActiveCat(menu.categories[0]?.id ?? null)
       }}
-      // Возврат в шапке: из оплаты → к корзине, из корзины → к меню.
-      // На экране меню категории переключаются чипами, отдельного экрана плиток нет.
+      // Возврат в шапке: из оплаты → к корзине, из корзины → к меню,
+      // из меню → на заставку. Раньше на экране меню кнопки не было, и
+      // гость, вошедший через «Начать», не мог вернуться назад.
       onBack={
         view === 'checkout'
           ? checkoutStage === 'payment'
             ? () => setCheckoutStage('cart')
             : () => setView('menu')
-        : undefined
+          : hasStarted
+            ? () => { setHasStarted(false); setActiveCat(null) }
+            : undefined
       }
       backLabel={t(lang, 'back')}
     >
@@ -609,8 +612,9 @@ function Shell({ isRtl, title, logo, hero, headerImg, heroVideo, bgImg, onHeroSt
               paddingTop: 'env(safe-area-inset-top)',
             }}
           >
-            {/* У начала строки: стрелка возврата (если есть) либо логотип; название — по центру */}
-            {onBack ? (
+            {/* Возврат слева, логотип у начала строки — они на разных краях
+                и показываются вместе: кнопка не должна стирать брендинг. */}
+            {onBack && (
               <button
                 onClick={onBack}
                 aria-label={backLabel}
@@ -622,9 +626,8 @@ function Shell({ isRtl, title, logo, hero, headerImg, heroVideo, bgImg, onHeroSt
                 </svg>
                 <span>{backLabel}</span>
               </button>
-            ) : (
-              logo && <img src={logo} alt="" className="absolute start-4 w-9 h-9 rounded-full object-cover" />
             )}
+            {logo && <img src={logo} alt="" className="absolute start-4 w-9 h-9 rounded-full object-cover" />}
             <span className="public-menu-header-title font-display px-14 text-center font-bold text-xl text-gray-900 truncate">
               {title ?? ''}
             </span>

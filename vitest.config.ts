@@ -13,6 +13,14 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./src/test/setup.ts'],
+    // supabase.ts бросает на импорте без env, а тесты его тянут по цепочке
+    // api.ts/telemetry.ts. Плейсхолдеры нужны всем прогонам, не только CI:
+    // .env не в репозитории, поэтому чистый клон падал бы так же.
+    // Сеть не задействована — клиент только создаётся, запросы замоканы.
+    env: {
+      VITE_SUPABASE_URL: 'https://placeholder.supabase.co',
+      VITE_SUPABASE_ANON_KEY: 'placeholder-anon-key',
+    },
     include: [
       'src/**/*.{test,spec}.{ts,tsx}',
       // Серверная логика Единого формата (Edge Functions) — чистые функции,

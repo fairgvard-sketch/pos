@@ -765,17 +765,14 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   }
 
   /* Фото + название — зона правки состава. Кнопка прозрачная: строка
-     должна выглядеть строкой, а нажатие подсвечивается фоном. */
+     должна выглядеть строкой, а не элементом управления. */
   .public-menu-cart-edit {
     display: grid;
     grid-template-columns: 5.5rem minmax(0, 1fr);
     align-items: center;
     gap: .8rem;
     min-width: 0;
-    padding: .35rem;
-    margin: -.35rem;
     border: 0;
-    border-radius: .9rem;
     background: transparent;
     text-align: start;
     font: inherit;
@@ -783,8 +780,23 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     cursor: pointer;
   }
 
-  .public-menu-cart-edit:active {
-    background: rgb(17 24 39 / 5%);
+  /* Подсветка нажатия — на всю строку, во всю ширину колонки: палец
+     касается названия, а отзывается вся позиция целиком. Фон вынесен
+     на строку (:has), поэтому степпер не остаётся белым островом.
+     Отрицательные поля дотягивают заливку до краёв контента. */
+  .public-menu-cart-line:has(.public-menu-cart-edit:active) {
+    background: rgb(17 24 39 / 4%);
+    box-shadow: 0 0 0 .6rem rgb(17 24 39 / 4%);
+    border-radius: .35rem;
+  }
+
+  /* Фолбэк для движков без :has() (Chrome 52 на Sunmi T2): подсветка
+     остаётся хотя бы на нажатой зоне — обратная связь не теряется. */
+  @supports not selector(:has(*)) {
+    .public-menu-cart-edit:active {
+      background: rgb(17 24 39 / 5%);
+      border-radius: .9rem;
+    }
   }
 
   .public-menu-cart-media {
@@ -844,12 +856,11 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   /* Сумма и количество — одной колонкой: сумма сверху, «− 1 +» под ней.
      Раньше цена жила в текстовом блоке, а степпер стоял отдельно, и
      строка выглядела разрозненной. */
-  /* Цена прижата к внешнему краю строки, а не отцентрована по ширине
-     степпера: по центру она висела над кнопкой «−» и не выстраивалась
-     в колонку с суммами соседних строк. */
+  /* Цена ровно над числом количества: степпер симметричен («−» N «+»),
+     поэтому центр колонки совпадает с цифрой. */
   .public-menu-cart-controls {
     display: grid;
-    justify-items: end;
+    justify-items: center;
     gap: .45rem;
   }
 
