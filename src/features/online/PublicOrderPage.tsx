@@ -85,6 +85,8 @@ export default function PublicOrderPage() {
   const [checkoutStage, setCheckoutStage] = useState<'cart' | 'payment'>('cart')
   const [hasStarted, setHasStarted] = useState(false)
   const [configItem, setConfigItem] = useState<PublicItem | null>(null)
+  /** Правится строка корзины (её key), а не добавляется новая позиция */
+  const [editingKey, setEditingKey] = useState<string | null>(null)
   // null = экран плиток категорий; id = экран позиций категории
   const [activeCat, setActiveCat] = useState<string | null>(null)
   useEffect(() => { window.scrollTo(0, 0) }, [activeCat, view, checkoutStage])
@@ -205,6 +207,28 @@ export default function PublicOrderPage() {
     [menu]
   )
 
+  /** Начальный выбор для карточки, открытой правкой строки корзины */
+  const editingLine = useMemo(() => {
+    if (!editingKey) return null
+    const line = cart.find((l) => l.key === editingKey)
+    return line ? { variantId: line.variantId, modIds: line.modIds } : null
+  }, [editingKey, cart])
+
+  /**
+   * Тап по строке корзины открывает карточку товара с текущим выбором.
+   * Товар берём из меню: в строке лежит только снимок состава, а карточке
+   * нужны все варианты и группы модификаторов. Если позиция исчезла из
+   * меню, правку не открываем — сверка корзины скажет об этом отдельно.
+   */
+  function editCartLine(line: CartLine) {
+    const item = menu?.categories
+      .flatMap((category) => category.items)
+      .find((candidate) => candidate.id === line.itemId)
+    if (!item) return
+    setEditingKey(line.key)
+    setConfigItem(item)
+  }
+
   // Пульс кнопки корзины при добавлении товара: key={bumpSeq} перезапускает
   // CSS-анимацию на каждом добавлении. bumping гаснет по таймауту (не по
   // animationend: в скрытой вкладке событие не приходит, класс бы «застрял»
@@ -236,6 +260,32 @@ export default function PublicOrderPage() {
       )
       if (same) return prev.map((l) => (l.key === same.key ? { ...l, qty: l.qty + 1 } : l))
       return [...prev, { ...line, key: Math.random().toString(36).slice(2), qty: 1 }]
+    })
+  }
+
+  /**
+   * Замена строки после правки состава: количество сохраняем, а если
+   * новый состав совпал с другой строкой корзины — сливаем их, иначе
+   * получилось бы две одинаковые позиции.
+   */
+  function replaceLine(key: string, line: Omit<CartLine, 'key' | 'qty'>) {
+    setCart((prev) => {
+      const target = prev.find((l) => l.key === key)
+      if (!target) return prev
+      const twin = prev.find(
+        (l) =>
+          l.key !== key &&
+          l.itemId === line.itemId &&
+          l.variantId === line.variantId &&
+          l.modIds.length === line.modIds.length &&
+          l.modIds.every((id, i) => id === line.modIds[i])
+      )
+      if (twin) {
+        return prev
+          .filter((l) => l.key !== key)
+          .map((l) => (l.key === twin.key ? { ...l, qty: l.qty + target.qty } : l))
+      }
+      return prev.map((l) => (l.key === key ? { ...l, ...line } : l))
     })
   }
 
@@ -419,6 +469,7 @@ export default function PublicOrderPage() {
           onAddItems={() => setView('menu')}
           onContinue={() => setCheckoutStage('payment')}
           onQty={updateQty}
+          onEditLine={editCartLine}
           onRecommend={openItem}
           onSubmitted={(clientUuid) => {
             localStorage.setItem(ACTIVE_KEY, JSON.stringify({ clientUuid, locId }))
@@ -435,10 +486,14 @@ export default function PublicOrderPage() {
           lang={lang}
           isRtl={isRtl}
           viewOnly={viewOnly}
-          onClose={() => setConfigItem(null)}
+          editing={editingLine}
+          onClose={() => { setConfigItem(null); setEditingKey(null) }}
           onAdd={(line) => {
-            addLine(line)
+            // Правка строки заменяет её состав; обычный сценарий добавляет
+            if (editingKey) replaceLine(editingKey, line)
+            else addLine(line)
             setConfigItem(null)
+            setEditingKey(null)
           }}
         />
       )}
@@ -559,7 +614,7 @@ function Shell({ isRtl, title, logo, hero, headerImg, heroVideo, bgImg, onHeroSt
               <button
                 onClick={onBack}
                 aria-label={backLabel}
-                className="public-menu-back-button absolute left-2 h-11 px-4 rounded-full bg-gray-900 text-white shadow-md shadow-black/15 flex items-center gap-1.5 text-sm font-bold active:scale-[0.96] transition-all"
+                className="public-menu-back-button absolute left-2 h-11 px-4 rounded-full flex items-center gap-1.5 text-sm font-bold active:scale-[0.96] transition-all"
               >
                 {/* Пилюля возврата всегда слева (левый край экрана), стрелка смотрит влево */}
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -835,18 +890,24 @@ function ItemRow({ item, lang, onTap, layout = 'row' }: {
 }
 
 /** Конфигуратор позиции: размер, модификаторы (min/max по группе), количество */
-function ItemConfigSheet({ item, lang, isRtl, viewOnly = false, onClose, onAdd }: {
+function ItemConfigSheet({ item, lang, isRtl, viewOnly = false, editing, onClose, onAdd }: {
   item: PublicItem
   lang: Lang
   isRtl: boolean
   /** Витрина без модуля заказов (100): карточка только показывает состав/цену */
   viewOnly?: boolean
+  /** Правка строки корзины: открываем с уже выбранными вариантом и модификаторами */
+  editing?: { variantId: string | null; modIds: string[] } | null
   onClose: () => void
   onAdd: (line: Omit<CartLine, 'key' | 'qty'>) => void
 }) {
   const defaultVariant = item.variants.find((v) => v.is_default) ?? item.variants[0] ?? null
-  const [variantId, setVariantId] = useState<string | null>(defaultVariant?.id ?? null)
+  const [variantId, setVariantId] = useState<string | null>(
+    editing ? editing.variantId : defaultVariant?.id ?? null
+  )
   const [selected, setSelected] = useState<Set<string>>(() => {
+    // Правка: берём выбор гостя, а не дефолты товара
+    if (editing) return new Set(editing.modIds)
     // Дефолтные модификаторы — предвыбраны (в пределах max_select группы)
     const initial = new Set<string>()
     for (const g of item.modifier_groups) {
@@ -992,26 +1053,34 @@ function ItemConfigSheet({ item, lang, isRtl, viewOnly = false, onClose, onAdd }
         <div className="public-menu-item-submit">
           {/* Количество + добавление — одна полоса: степпер слева, кнопка справа */}
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1 shrink-0">
-              <Stepper onClick={() => setQty((q) => Math.max(1, q - 1))}>−</Stepper>
-              <span className="w-8 text-center font-bold tabular-nums text-gray-900">{qty}</span>
-              <Stepper onClick={() => setQty((q) => Math.min(99, q + 1))}>+</Stepper>
-            </div>
+            {/* При правке количество меняется степпером в самой корзине */}
+            {!editing && (
+              <div className="flex items-center gap-1 shrink-0">
+                <Stepper onClick={() => setQty((q) => Math.max(1, q - 1))}>−</Stepper>
+                <span className="w-8 text-center font-bold tabular-nums text-gray-900">{qty}</span>
+                <Stepper onClick={() => setQty((q) => Math.min(99, q + 1))}>+</Stepper>
+              </div>
+            )}
             <button
               disabled={!!missingGroup}
               onClick={() => {
                 const mods = item.modifier_groups.flatMap((g) => g.modifiers).filter((m) => selected.has(m.id))
-                for (let i = 0; i < qty; i++) {
-                  onAdd({
-                    itemId: item.id,
-                    name: item.name,
-                    variantId: variant?.id ?? null,
-                    variantName: variant?.name ?? null,
-                    modIds: mods.map((m) => m.id),
-                    modNames: mods.map((m) => m.name),
-                    unitPrice: unit,
-                  })
+                const line = {
+                  itemId: item.id,
+                  name: item.name,
+                  variantId: variant?.id ?? null,
+                  variantName: variant?.name ?? null,
+                  modIds: mods.map((m) => m.id),
+                  modNames: mods.map((m) => m.name),
+                  unitPrice: unit,
                 }
+                // Правка меняет состав одной строки, количество берётся из
+                // корзины — повторный вызов заменял бы строку многократно.
+                if (editing) {
+                  onAdd(line)
+                  return
+                }
+                for (let i = 0; i < qty; i++) onAdd(line)
               }}
               className="flex-1 min-w-0 h-14 rounded-2xl bg-gray-900 text-white font-bold disabled:opacity-40
                          active:scale-[0.98] transition-all flex items-center justify-center gap-2 px-4"
@@ -1020,8 +1089,10 @@ function ItemConfigSheet({ item, lang, isRtl, viewOnly = false, onClose, onAdd }
                 <span className="truncate">{`${t(lang, 'pubChoose')}: ${missingGroup.name}`}</span>
               ) : (
                 <>
-                  <span>{t(lang, 'pubAdd')}</span>
-                  <span className="tabular-nums" dir="ltr">{formatMoney(unit * qty, lang)}</span>
+                  <span>{t(lang, editing ? 'save' : 'pubAdd')}</span>
+                  <span className="tabular-nums" dir="ltr">
+                    {formatMoney(unit * (editing ? 1 : qty), lang)}
+                  </span>
                 </>
               )}
             </button>
@@ -1036,7 +1107,7 @@ function ItemConfigSheet({ item, lang, isRtl, viewOnly = false, onClose, onAdd }
 /** Корзина в духе delivery-приложений: позиции, быстрые количества и upsell. */
 function CartStage({
   lang, cart, total, itemImages, recommendations,
-  onQty, onRecommend, onAddItems, onContinue,
+  onQty, onEditLine, onRecommend, onAddItems, onContinue,
 }: {
   lang: Lang
   cart: CartLine[]
@@ -1044,6 +1115,8 @@ function CartStage({
   itemImages: Record<string, string | null>
   recommendations: PublicItem[]
   onQty: (key: string, qty: number) => void
+  /** Тап по строке — правка состава (вариант, модификаторы) */
+  onEditLine: (line: CartLine) => void
   onRecommend: (item: PublicItem) => void
   onAddItems: () => void
   onContinue: () => void
@@ -1070,21 +1143,32 @@ function CartStage({
           <div className="public-menu-cart-lines">
             {cart.map((line) => (
               <div key={line.key} className="public-menu-cart-line">
-                <div className="public-menu-cart-media">
-                  {itemImages[line.itemId] ? (
-                    <img src={itemImages[line.itemId] ?? undefined} alt="" />
-                  ) : (
-                    <span aria-hidden>{line.name.slice(0, 1)}</span>
-                  )}
-                </div>
-                <div className="public-menu-cart-copy">
-                  <div className="public-menu-cart-name">{line.name}</div>
-                  {(line.variantName || line.modNames.length > 0) && (
-                    <div className="public-menu-cart-meta">
-                      {[line.variantName, ...line.modNames].filter(Boolean).join(' · ')}
-                    </div>
-                  )}
-                </div>
+                {/* Фото и название — кнопка правки состава: гость, выбравший
+                    не тот размер или модификатор, чинит позицию на месте,
+                    а не удаляет и собирает заново. Степпер снаружи, иначе
+                    тап по «+/−» открывал бы карточку. */}
+                <button
+                  type="button"
+                  className="public-menu-cart-edit"
+                  onClick={() => onEditLine(line)}
+                  aria-label={`${t(lang, 'edit')}: ${line.name}`}
+                >
+                  <div className="public-menu-cart-media">
+                    {itemImages[line.itemId] ? (
+                      <img src={itemImages[line.itemId] ?? undefined} alt="" />
+                    ) : (
+                      <span aria-hidden>{line.name.slice(0, 1)}</span>
+                    )}
+                  </div>
+                  <div className="public-menu-cart-copy">
+                    <div className="public-menu-cart-name">{line.name}</div>
+                    {(line.variantName || line.modNames.length > 0) && (
+                      <div className="public-menu-cart-meta">
+                        {[line.variantName, ...line.modNames].filter(Boolean).join(' · ')}
+                      </div>
+                    )}
+                  </div>
+                </button>
                 {/* Сумма над степпером одной колонкой: раньше она стояла
                     под названием, а количество — отдельно справа, и строка
                     читалась разрозненно. */}
@@ -1147,7 +1231,7 @@ function CheckoutScreen({
   lang, locId, isOpen, prepMin, prepMax, hours, timezone, orderTypes, initialOrderType,
   tableContext, tableToken, orderChannel, recommendations, itemImages, cart, total,
   availabilityMessage, contextMessage, stage,
-  onAddItems, onContinue, onQty, onRecommend, onSubmitted,
+  onAddItems, onContinue, onQty, onEditLine, onRecommend, onSubmitted,
 }: {
   lang: Lang
   locId: string
@@ -1174,6 +1258,7 @@ function CheckoutScreen({
   onAddItems: () => void
   onContinue: () => void
   onQty: (key: string, qty: number) => void
+  onEditLine: (line: CartLine) => void
   onRecommend: (item: PublicItem) => void
   onSubmitted: (clientUuid: string) => void
 }) {
@@ -1297,6 +1382,7 @@ function CheckoutScreen({
         itemImages={itemImages}
         recommendations={recommendations}
         onQty={onQty}
+        onEditLine={onEditLine}
         onRecommend={onRecommend}
         onAddItems={onAddItems}
         onContinue={onContinue}

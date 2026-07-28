@@ -177,8 +177,19 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     text-shadow: 0 1px 8px rgb(0 0 0 / 55%);
   }
 
+  /* Возврат — вспомогательная навигация, а не главное действие: светлая
+     пилюля с контуром, как активные чипы. Сплошная чёрная заливка
+     закреплена за кнопкой отправки заказа, и раньше «назад» спорила
+     с ней за внимание, будучи единственным тёмным пятном в шапке. */
+  .public-menu-back-button {
+    background: #fff;
+    color: #111827;
+    box-shadow: inset 0 0 0 1px rgb(17 24 39 / 14%);
+  }
+
   html.public-menu-dark .public-menu-back-button {
     background: rgb(255 255 255 / 12%);
+    color: #fff;
     box-shadow: inset 0 0 0 1px rgb(255 255 255 / 15%),
                 0 8px 18px rgb(0 0 0 / 20%);
   }
@@ -746,11 +757,34 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
 
   .public-menu-cart-line {
     display: grid;
-    grid-template-columns: 5.5rem minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
     gap: .8rem;
     padding: .9rem 0;
     border-bottom: 1px solid rgb(17 24 39 / 7%);
+  }
+
+  /* Фото + название — зона правки состава. Кнопка прозрачная: строка
+     должна выглядеть строкой, а нажатие подсвечивается фоном. */
+  .public-menu-cart-edit {
+    display: grid;
+    grid-template-columns: 5.5rem minmax(0, 1fr);
+    align-items: center;
+    gap: .8rem;
+    min-width: 0;
+    padding: .35rem;
+    margin: -.35rem;
+    border: 0;
+    border-radius: .9rem;
+    background: transparent;
+    text-align: start;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+  }
+
+  .public-menu-cart-edit:active {
+    background: rgb(17 24 39 / 5%);
   }
 
   .public-menu-cart-media {
@@ -810,9 +844,12 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   /* Сумма и количество — одной колонкой: сумма сверху, «− 1 +» под ней.
      Раньше цена жила в текстовом блоке, а степпер стоял отдельно, и
      строка выглядела разрозненной. */
+  /* Цена прижата к внешнему краю строки, а не отцентрована по ширине
+     степпера: по центру она висела над кнопкой «−» и не выстраивалась
+     в колонку с суммами соседних строк. */
   .public-menu-cart-controls {
     display: grid;
-    justify-items: center;
+    justify-items: end;
     gap: .45rem;
   }
 
