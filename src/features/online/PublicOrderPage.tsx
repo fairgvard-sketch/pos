@@ -504,6 +504,14 @@ export default function PublicOrderPage() {
           viewOnly={viewOnly}
           editing={editingLine}
           onClose={() => { setConfigItem(null); setEditingKey(null) }}
+          // Удаление позиции из самой шторки правки: гость, открывший
+          // строку «передумать», ожидает найти здесь и «убрать», а не
+          // закрывать карточку и жать «−» до нуля в корзине.
+          onRemove={editingKey ? () => {
+            updateQty(editingKey, 0)
+            setConfigItem(null)
+            setEditingKey(null)
+          } : undefined}
           onAdd={(line) => {
             // Правка строки заменяет её состав; обычный сценарий добавляет
             if (editingKey) replaceLine(editingKey, line)
@@ -906,7 +914,7 @@ function ItemRow({ item, lang, onTap, layout = 'row' }: {
 }
 
 /** Конфигуратор позиции: размер, модификаторы (min/max по группе), количество */
-function ItemConfigSheet({ item, lang, isRtl, viewOnly = false, editing, onClose, onAdd }: {
+function ItemConfigSheet({ item, lang, isRtl, viewOnly = false, editing, onClose, onAdd, onRemove }: {
   item: PublicItem
   lang: Lang
   isRtl: boolean
@@ -916,6 +924,8 @@ function ItemConfigSheet({ item, lang, isRtl, viewOnly = false, editing, onClose
   editing?: { variantId: string | null; modIds: string[] } | null
   onClose: () => void
   onAdd: (line: Omit<CartLine, 'key' | 'qty'>) => void
+  /** Убрать позицию из корзины; задан только в режиме правки строки */
+  onRemove?: () => void
 }) {
   const defaultVariant = item.variants.find((v) => v.is_default) ?? item.variants[0] ?? null
   const [variantId, setVariantId] = useState<string | null>(
@@ -1076,6 +1086,20 @@ function ItemConfigSheet({ item, lang, isRtl, viewOnly = false, editing, onClose
                 <span className="w-8 text-center font-bold tabular-nums text-gray-900">{qty}</span>
                 <Stepper onClick={() => setQty((q) => Math.min(99, q + 1))}>+</Stepper>
               </div>
+            )}
+            {/* «Убрать» занимает освободившееся при правке место степпера.
+                Второстепенная по весу: удаление — не тот путь, к которому
+                стоит подталкивать пальцем, но и прятать его некуда. Высота
+                общая с «Сохранить», ширина по содержимому — сумма важнее. */}
+            {editing && onRemove && (
+              <button
+                type="button"
+                onClick={onRemove}
+                className="shrink-0 h-14 px-5 rounded-2xl border border-gray-200 bg-white
+                           text-gray-600 font-bold active:scale-[0.98] transition-all"
+              >
+                {t(lang, 'pubRemoveItem')}
+              </button>
             )}
             <button
               disabled={!!missingGroup}
