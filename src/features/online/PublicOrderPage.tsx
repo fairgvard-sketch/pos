@@ -438,7 +438,15 @@ export default function PublicOrderPage() {
         <CheckoutScreen
           lang={lang}
           locId={locId}
-          isOpen={menu.location.is_open && menu.location.accepting !== false}
+          openNow={menu.location.is_open && menu.location.accepting !== false}
+          // Предзаказ (116): закрыто сейчас — не значит «закрыто вообще».
+          // Пауза и выключенный приём запрещают и предзаказ: это ручное
+          // «мы не принимаем», а не расписание. Старая edge function поля
+          // не отдаёт — тогда поведение прежнее, по is_open.
+          canPreorder={
+            menu.location.accepting !== false
+            && (menu.location.preorder ?? menu.location.is_open)
+          }
           prepMin={menu.location.prep_min ?? 0}
           prepMax={menu.location.prep_max ?? 0}
           hours={menu.location.hours ?? null}
@@ -459,7 +467,12 @@ export default function PublicOrderPage() {
                 ? `${t(lang, 'pubPausedUntil')} ${formatTime(menu.location.paused_until, lang)}`
                 : t(lang, 'pubPaused')
               : !menu.location.is_open
-                ? t(lang, 'pubClosed')
+                // Закрыто сейчас, но предзаказ открыт (116): предупреждение
+                // объясняет, что делать («выберите время»), а не сообщает
+                // об отказе — оформление в этом состоянии доступно.
+                ? t(lang, (menu.location.preorder ?? false)
+                  ? 'pubClosedPreorder'
+                  : 'pubClosed')
                 : null
           }
           contextMessage={
@@ -1231,14 +1244,17 @@ function CartStage({
 
 /** Способ получения + контакты + подтверждение заявки */
 function CheckoutScreen({
-  lang, locId, isOpen, prepMin, prepMax, hours, timezone, orderTypes, initialOrderType,
+  lang, locId, openNow, canPreorder, prepMin, prepMax, hours, timezone, orderTypes, initialOrderType,
   tableContext, tableToken, orderChannel, recommendations, itemImages, cart, total,
   availabilityMessage, contextMessage, stage,
   onAddItems, onContinue, onQty, onEditLine, onRecommend, onSubmitted,
 }: {
   lang: Lang
   locId: string
-  isOpen: boolean
+  /** Открыто прямо сейчас: только при этом доступен заказ «как можно скорее» */
+  openNow: boolean
+  /** Приём заявок «ко времени» на будущее окно возможен (116) */
+  canPreorder: boolean
   /** Время приготовления — вилка мин–макс (061): 0/0 = не показывать */
   prepMin: number
   prepMax: number
@@ -1267,7 +1283,10 @@ function CheckoutScreen({
 }) {
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
-  const [asap, setAsap] = useState(true)
+  // Закрыто сейчас (116) — «как можно скорее» невозможно, поэтому форма
+  // сразу открывается на выборе времени: иначе гость упирался бы в
+  // заблокированную кнопку, не понимая, что предзаказ доступен.
+  const [asap, setAsap] = useState(openNow)
   // Выбранный слот — ISO-момент, а не «HH:MM»: время уже посчитано в
   // таймзоне точки, повторно интерпретировать его на клиенте не нужно.
   const [slotIso, setSlotIso] = useState('')
@@ -1322,6 +1341,13 @@ function CheckoutScreen({
   ].filter(Boolean).join(', ')
   const contactOk = isTableOrder || (name.trim().length > 0 && phoneDigits.length >= 9)
   const timeOk = isTableOrder || asap || activeSlot !== ''
+  // Что именно оформляется — заказ «на сейчас» или предзаказ (116). За столом
+  // предзаказа нет: гость сидит в зале, сервер всё равно обнулит pickup_at.
+  const isPreorder = !isTableOrder && !asap && activeSlot !== ''
+  // Отправка разрешена, если точка открыта сейчас ЛИБО это корректный
+  // предзаказ на будущее окно. Раньше здесь стоял один флаг isOpen, и
+  // закрытое заведение не принимало даже заказ на завтра.
+  const canSubmit = isPreorder ? canPreorder : openNow
   const valid = cart.length > 0 && contactOk && timeOk && addressOk
   const validationText = !name.trim() && !isTableOrder
     ? t(lang, 'pubErrName')
@@ -1540,7 +1566,9 @@ function CheckoutScreen({
                   {/* Время готовки — отдельной строкой под подписью и не
                       жирным: в одну строку через «·» оно удлиняло чип вдвое
                       и рвалось посередине («~20–» / «45 דק׳»). */}
-                  <Chip active={asap} onClick={() => setAsap(true)}>
+                  {/* «Как можно скорее» доступно только пока точка открыта:
+                      закрытому заведению такую заявку готовить некому (116) */}
+                  <Chip active={asap} disabled={!openNow} onClick={() => setAsap(true)}>
                     <span className="public-menu-chip-stack">
                       <span>{t(lang, 'pubAsap')}</span>
                       {formatPrepRange(lang, prepMin, prepMax) && (
@@ -1619,7 +1647,7 @@ function CheckoutScreen({
       </div>
 
       <div className="public-menu-checkout-submitbar">
-        {(error || (showValidation && validationText) || availabilityMessage || (!isOpen && !availabilityMessage)) && (
+        {(error || (showValidation && validationText) || availabilityMessage || (!openNow && !availabilityMessage)) && (
           <div
             className={`public-menu-checkout-alert ${
               error || (showValidation && validationText) ? 'is-error' : 'is-warning'
@@ -1642,7 +1670,7 @@ function CheckoutScreen({
           </span>
         </div>
         <button
-          disabled={busy || !isOpen}
+          disabled={busy || !canSubmit}
           onClick={submit}
           className="public-menu-checkout-submit is-final"
         >

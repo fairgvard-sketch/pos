@@ -28,6 +28,30 @@ const json = (body: unknown, status = 200, extra: Record<string, string> = {}) =
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
+const DOW: Record<string, number> = {
+  Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6,
+}
+
+/**
+ * День недели (0 = воскресенье) в таймзоне точки, а не сервера.
+ *
+ * Через Intl, а не через фиксированное смещение: в Израиле есть переход
+ * на летнее время. Ключи расписания online_orders.hours нумеруются так же.
+ */
+function todayDow(tz: string): number {
+  const zone = tz || 'Asia/Jerusalem'
+  try {
+    const weekday = new Intl.DateTimeFormat('en-US', {
+      timeZone: zone,
+      weekday: 'short',
+    }).format(new Date())
+    return DOW[weekday] ?? new Date().getDay()
+  } catch {
+    // Битая таймзона в настройках не должна ронять витрину
+    return new Date().getDay()
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   if (req.method !== 'GET') return json({ error: 'method_not_allowed' }, 405)
@@ -160,14 +184,29 @@ Deno.serve(async (req) => {
   // зеркало submit_online_order, иначе витрина предлагала бы заказ,
   // который сервер отклонит. Ошибка проверки не прячет меню — считаем
   // точку открытой, сервер всё равно проверит расписание сам.
+  const locTimezone = (locRes.data as { timezone?: string }).timezone ?? ''
   const hoursRes = await supabase.rpc('online_hours_open', {
     p_settings: { online_orders: (locRes.data as { online_settings?: unknown }).online_settings ?? {} },
-    p_tz: (locRes.data as { timezone?: string }).timezone ?? '',
+    p_tz: locTimezone,
   })
   const hoursOpen = hoursRes.error ? true : hoursRes.data === true
   // POS дополнительно требует открытую смену: приёмка заявки живёт на кассе.
   const shiftOpen = (shiftRes.data ?? []).length > 0
   const isOpen = fulfilment === 'pos' ? shiftOpen && hoursOpen : hoursOpen
+
+  // Предзаказ (116): заказ «ко времени» живёт по часам выбранного момента,
+  // а не текущего, поэтому закрытая сейчас точка всё равно принимает заявки
+  // на завтрашнее окно. Достаточно знать, есть ли впереди хоть одно окно:
+  // конкретный слот выбирает витрина (buildPickupSlots) и перепроверяет
+  // submit_online_order. Расписание не настроено = приём всегда открыт.
+  const hoursCfg = onlineSettings?.hours
+  const hasSchedule = !!hoursCfg && typeof hoursCfg === 'object'
+    && Object.keys(hoursCfg).length > 0
+  const preorderOpen = !hasSchedule || [0, 1, 2].some((offset) => {
+    const dow = (todayDow(locTimezone) + offset) % 7
+    const windows = hoursCfg![String(dow)]
+    return Array.isArray(windows) && windows.length > 0
+  })
 
   // Пауза с кассы (054): истёкшая метка = паузы нет (снимается сама)
   const pausedUntil =
@@ -231,6 +270,12 @@ Deno.serve(async (req) => {
         logo_url: locRes.data.logo_url ?? null,
         currency: locRes.data.currency,
         is_open: isOpen,
+        // Предзаказ (116): точка закрыта сейчас, но заявку «ко времени»
+        // внутри будущего окна сервер примет. Витрина по этому флагу
+        // оставляет оформление доступным вместо «приём приостановлен».
+        // false только когда расписание не даёт ни одного будущего окна
+        // либо приём выключен/на паузе — тогда заказать нельзя вообще.
+        preorder: preorderOpen,
         // Модули организации (100): online_orders=false — витрина без заказа
         // (меню видно всегда, независимо от смены POS). Старые клиенты поле
         // игнорируют — поведение не меняется.
@@ -246,7 +291,7 @@ Deno.serve(async (req) => {
         // гость выбирал время из слотов внутри окна, а не свободным вводом.
         // null = расписание не настроено, приём в любое время.
         hours: onlineSettings?.hours ?? null,
-        timezone: (locRes.data as { timezone?: string }).timezone ?? null,
+        timezone: locTimezone || null,
         // Типы заказа для гостя (058): здесь / с собой / доставка
         order_types: enabledTypes,
         // Оформление главного экрана: баннер-шапка и фон (Настройки → Онлайн-заказы)

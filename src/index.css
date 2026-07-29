@@ -844,13 +844,20 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     white-space: nowrap;
   }
 
+  /* Состав позиции (вариант + модификаторы) — то, чем один латте отличается
+     от другого в корзине, поэтому строка должна читаться, а не угадываться.
+     .7rem/#8b8b8b на телефоне пропадали: подняли до .8rem и до контраста
+     уровня text-gray-500. Перенос на две строки вместо обрезки — состав
+     из трёх модификаторов в одну строку не влезает. */
   .public-menu-cart-meta {
+    display: -webkit-box;
     overflow: hidden;
-    margin-top: .2rem;
-    color: #8b8b8b;
-    font-size: .7rem;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    margin-top: .25rem;
+    color: #6b7280;
+    font-size: .8rem;
+    line-height: 1.35;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
   }
 
   /* Сумма и количество — одной колонкой: сумма сверху, «− 1 +» под ней.
