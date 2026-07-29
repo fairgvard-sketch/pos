@@ -1088,15 +1088,16 @@ function ItemConfigSheet({ item, lang, isRtl, viewOnly = false, editing, onClose
               </div>
             )}
             {/* «Убрать» занимает освободившееся при правке место степпера.
-                Второстепенная по весу: удаление — не тот путь, к которому
-                стоит подталкивать пальцем, но и прятать его некуда. Высота
-                общая с «Сохранить», ширина по содержимому — сумма важнее. */}
+                Красная — общепринятый сигнал необратимого действия, он же
+                разводит её с «Сохранить» надёжнее серого контура. Заливку
+                не берём: сплошной красный спорил бы по весу с главной
+                кнопкой. Высота общая, ширина по содержимому — сумма важнее. */}
             {editing && onRemove && (
               <button
                 type="button"
                 onClick={onRemove}
-                className="shrink-0 h-14 px-5 rounded-2xl border border-gray-200 bg-white
-                           text-gray-600 font-bold active:scale-[0.98] transition-all"
+                className="shrink-0 h-14 px-5 rounded-2xl border border-red-200 bg-red-50
+                           text-red-600 font-bold active:scale-[0.98] transition-all"
               >
                 {t(lang, 'pubRemoveItem')}
               </button>
