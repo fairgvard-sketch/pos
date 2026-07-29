@@ -92,6 +92,28 @@ export default function PublicOrderPage() {
   useEffect(() => { window.scrollTo(0, 0) }, [activeCat, view, checkoutStage])
 
   /**
+   * Переход между экранами. Раньше контент подменялся рывком вместе со
+   * scrollTo(0,0) — без кадра перехода теряется связь «откуда я пришёл»,
+   * и каждый экран приходится перечитывать заново.
+   *
+   * key перемонтирует контейнер, поэтому анимация проигрывается на каждой
+   * смене; data-nav задаёт направление — назад контент приходит сверху.
+   */
+  const screenKey = view === 'checkout' ? `checkout:${checkoutStage}` : `menu:${activeCat ?? 'hero'}`
+  const screenDepth = view === 'checkout' ? (checkoutStage === 'payment' ? 3 : 2) : 1
+  /**
+   * Направление вычисляем синхронно со сменой глубины, а не в эффекте:
+   * эффект отработал бы уже после первого кадра нового экрана, и анимация
+   * успела бы стартовать со старым направлением. Паттерн «состояние,
+   * производное от пропса» — сравниваем с предыдущим значением в рендере.
+   */
+  const [nav, setNav] = useState({ depth: screenDepth, direction: 'forward' as 'forward' | 'back' })
+  if (nav.depth !== screenDepth) {
+    setNav({ depth: screenDepth, direction: screenDepth < nav.depth ? 'back' : 'forward' })
+  }
+  const navDirection = nav.direction
+
+  /**
    * Киоск-режим: планшет на столе не должен хранить заказ ушедшего гостя.
    * Возврат на hero с полной очисткой корзины.
    *
@@ -374,6 +396,8 @@ export default function PublicOrderPage() {
       headerImg={menu.location.header_url}
       heroVideo={menu.location.hero_video_url ?? BRANDED_HERO_VIDEOS[locId] ?? null}
       bgImg={menuBackground}
+      screenKey={screenKey}
+      navDirection={navDirection}
       onHeroStart={() => {
         setHasStarted(true)
         setActiveCat(menu.categories[0]?.id ?? null)
@@ -552,7 +576,10 @@ export default function PublicOrderPage() {
  * системной safe-area, заголовком, содержимым и подвалом. Внутри Shell нет
  * второго изображения или цветовой плёнки.
  */
-function Shell({ isRtl, title, logo, hero, headerImg, heroVideo, bgImg, onHeroStart, onBack, backLabel, children }: {
+function Shell({
+  isRtl, title, logo, hero, headerImg, heroVideo, bgImg, onHeroStart, onBack, backLabel,
+  screenKey, navDirection, children,
+}: {
   isRtl: boolean
   title?: string
   logo?: string | null
@@ -564,6 +591,10 @@ function Shell({ isRtl, title, logo, hero, headerImg, heroVideo, bgImg, onHeroSt
   /** Стрелка возврата в компактной шапке (не hero); заменяет in-body «Назад» */
   onBack?: () => void
   backLabel?: string
+  /** Меняется при смене экрана — перемонтирует контейнер, чтобы проиграть переход */
+  screenKey?: string
+  /** Назад по маршруту — контент приходит сверху, а не снизу */
+  navDirection?: 'forward' | 'back'
   children: React.ReactNode
 }) {
   const hasBg = !!bgImg
@@ -654,7 +685,11 @@ function Shell({ isRtl, title, logo, hero, headerImg, heroVideo, bgImg, onHeroSt
             </span>
           </header>
         )}
-        <div className="flex-1 flex flex-col">
+        <div
+          key={screenKey}
+          data-nav={navDirection}
+          className="public-menu-screen flex-1 flex flex-col"
+        >
           {children}
         </div>
       </div>

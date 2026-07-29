@@ -1710,6 +1710,8 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   .public-menu-item-overlay {
     align-items: stretch;
     background: #fff;
+    /* Подложка проявляется чуть быстрее шита: экран не «моргает» белым */
+    animation: sheet-fade 160ms ease-out both;
   }
 
   .public-menu-item-sheet {
@@ -1719,6 +1721,61 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     max-height: 100svh;
     flex-direction: column;
     border-radius: 0;
+    /* Выезд снизу: карточка возникала мгновенно, и это был самый резкий
+       момент маршрута. Только transform/opacity — на слабых телефонах
+       анимация остаётся на композиторе и не дёргается. */
+    animation: sheet-in 240ms cubic-bezier(.22, .61, .21, 1) both;
+  }
+
+  @keyframes sheet-fade {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  /* Смена экрана (меню → корзина → оплата) и смена категории.
+     Раньше контент подменялся рывком вместе со scrollTo(0,0): гость
+     терял связь «откуда я пришёл». Сдвиг маленький — 8px хватает,
+     чтобы уловить направление, и не создаёт ощущения ожидания.
+     Направление задаётся data-nav: вперёд (по ходу) или назад. */
+  .public-menu-screen {
+    animation: screen-in 190ms cubic-bezier(.22, .61, .21, 1) both;
+  }
+
+  .public-menu-screen[data-nav='back'] {
+    animation-name: screen-in-back;
+  }
+
+  @keyframes screen-in {
+    from {
+      opacity: 0;
+      transform: translate3d(0, 8px, 0);
+    }
+    to {
+      opacity: 1;
+      transform: translate3d(0, 0, 0);
+    }
+  }
+
+  @keyframes screen-in-back {
+    from {
+      opacity: 0;
+      transform: translate3d(0, -8px, 0);
+    }
+    to {
+      opacity: 1;
+      transform: translate3d(0, 0, 0);
+    }
+  }
+
+  @keyframes sheet-in {
+    from {
+      opacity: 0;
+      transform: translate3d(0, 6%, 0);
+    }
+    to {
+      opacity: 1;
+      transform: translate3d(0, 0, 0);
+    }
   }
 
   .public-menu-item-close {
@@ -2193,6 +2250,16 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
 @media (prefers-reduced-motion: reduce) {
   .cart-bump { animation: none; }
   .public-menu-shell * { scroll-behavior: auto !important; }
+  /* Переходы гостевого меню: гость просил отключить движение — отключаем
+     полностью, а не ускоряем. Контент при этом остаётся видимым (both в
+     animation мог бы оставить его в начальном, полупрозрачном кадре). */
+  .public-menu-screen,
+  .public-menu-item-sheet,
+  .public-menu-item-overlay {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
 }
 
 /* ── Wiggle (режим перестановки кнопок, как на iPhone) ────── */
