@@ -1711,7 +1711,7 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     align-items: stretch;
     background: #fff;
     /* Подложка проявляется чуть быстрее шита: экран не «моргает» белым */
-    animation: sheet-fade 160ms ease-out both;
+    animation: sheet-fade 100ms ease-out both;
   }
 
   .public-menu-item-sheet {
@@ -1724,7 +1724,7 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     /* Выезд снизу: карточка возникала мгновенно, и это был самый резкий
        момент маршрута. Только transform/opacity — на слабых телефонах
        анимация остаётся на композиторе и не дёргается. */
-    animation: sheet-in 240ms cubic-bezier(.22, .61, .21, 1) both;
+    animation: sheet-in 150ms cubic-bezier(.22, .61, .21, 1) both;
   }
 
   @keyframes sheet-fade {
@@ -1734,11 +1734,12 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
 
   /* Смена экрана (меню → корзина → оплата) и смена категории.
      Раньше контент подменялся рывком вместе со scrollTo(0,0): гость
-     терял связь «откуда я пришёл». Сдвиг маленький — 8px хватает,
-     чтобы уловить направление, и не создаёт ощущения ожидания.
+     терял связь «откуда я пришёл». Задача перехода — обозначить смену,
+     а не показать её: 120ms и сдвиг 8px читаются как отзывчивость,
+     всё длиннее в POS-сценарии воспринимается как ожидание.
      Направление задаётся data-nav: вперёд (по ходу) или назад. */
   .public-menu-screen {
-    animation: screen-in 190ms cubic-bezier(.22, .61, .21, 1) both;
+    animation: screen-in 120ms cubic-bezier(.22, .61, .21, 1) both;
   }
 
   .public-menu-screen[data-nav='back'] {
@@ -1770,7 +1771,7 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   @keyframes sheet-in {
     from {
       opacity: 0;
-      transform: translate3d(0, 6%, 0);
+      transform: translate3d(0, 3%, 0);
     }
     to {
       opacity: 1;
