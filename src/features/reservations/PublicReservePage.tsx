@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useQueries, useQuery } from '@tanstack/react-query'
 import { t, formatTime, type Lang } from '../../lib/i18n'
@@ -27,6 +27,23 @@ const DEF_FROM_MIN = 7 * 60
 const DEF_TO_MIN = 23 * 60 + 45
 const DEF_STEP_MIN = 15
 const DAYS_AHEAD = 30
+const RESERVE_ROUTE_MS = 320
+
+type ReserveStep = 'slot' | 'times' | 'details'
+type ReserveRoutePhase = 'idle' | 'enter'
+
+function usePrefersReducedMotion(): boolean {
+  const [reduced, setReduced] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  )
+  useEffect(() => {
+    const media = window.matchMedia('(prefers-reduced-motion: reduce)')
+    const onChange = (event: MediaQueryListEvent) => setReduced(event.matches)
+    media.addEventListener?.('change', onChange)
+    return () => media.removeEventListener?.('change', onChange)
+  }, [])
+  return reduced
+}
 
 /** 'HH:MM' → минуты от полуночи; null/мусор → fallback */
 function hmToMin(s: string | null | undefined, fallback: number): number {
@@ -114,7 +131,14 @@ export default function PublicReservePage() {
   })
 
   // Выбранный слот (шаг 1) и шаг флоу: слот → точное время → контакты
-  const [step, setStep] = useState<'slot' | 'times' | 'details'>('slot')
+  const [step, setStep] = useState<ReserveStep>('slot')
+  const reducedMotion = usePrefersReducedMotion()
+  const [routeTransition, setRouteTransition] = useState<{
+    phase: ReserveRoutePhase
+    outgoingScrollY: number
+  }>({ phase: 'idle', outgoingScrollY: 0 })
+  const routeBusy = useRef(false)
+  const routeTimer = useRef<number | undefined>(undefined)
   // Зона зала (072): пожелание гостя, null = без предпочтений. На шаге
   // точного времени зоны показываются секциями (Ontopo-стиль): у каждой
   // свой ряд времён; выбор времени в секции = бронь этой зоны. Задаётся
@@ -129,6 +153,33 @@ export default function PublicReservePage() {
     return slots.find((s) => s >= '12:00') ?? slots[0] ?? '12:00'
   })
   const [guests, setGuests] = useState(2)
+  // Контакты живут выше экранов: возврат к времени и повторный вход в
+  // детали не стирают уже набранное имя/телефон.
+  const [detailsDraft, setDetailsDraft] = useState({ name: '', phone: '', note: '' })
+  const [clientUuid, setClientUuid] = useState(() => crypto.randomUUID())
+
+  useEffect(() => () => {
+    if (routeTimer.current !== undefined) window.clearTimeout(routeTimer.current)
+  }, [])
+
+  const transitionTo = useCallback((commit: () => void) => {
+    if (routeBusy.current) return
+    if (reducedMotion) {
+      window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+      commit()
+      return
+    }
+    routeBusy.current = true
+    const outgoingScrollY = window.scrollY
+    commit()
+    setRouteTransition({ phase: 'enter', outgoingScrollY })
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+    routeTimer.current = window.setTimeout(() => {
+      routeBusy.current = false
+      routeTimer.current = undefined
+      setRouteTransition({ phase: 'idle', outgoingScrollY: 0 })
+    }, RESERVE_ROUTE_MS)
+  }, [reducedMotion])
 
   // Часы приёма из настроек точки (059): обе границы заданы → окно слотов
   // сужается, иначе дефолт 07:00–23:45. slot_min задаёт шаг.
@@ -152,7 +203,11 @@ export default function PublicReservePage() {
   // Live-доступность (063): только в instant-режиме. Множество СВОБОДНЫХ
   // времён на выбранную дату+число гостей; занятые в UI дизейблятся.
   const instant = info?.location.instant === true
-  const { data: avail } = useQuery({
+  const {
+    data: avail,
+    isPending: availabilityPending,
+    isError: availabilityError,
+  } = useQuery({
     queryKey: ['reserve_avail', locId, date, guests],
     queryFn: () => fetchAvailability(locId, date, guests),
     enabled: instant && !!info?.location.accepting,
@@ -188,16 +243,31 @@ export default function PublicReservePage() {
   }
 
   function startNew() {
-    localStorage.removeItem(ACTIVE_KEY)
-    setActiveUuid(null)
-    setStep('slot')
+    transitionTo(() => {
+      localStorage.removeItem(ACTIVE_KEY)
+      setActiveUuid(null)
+      setStep('slot')
+      setZoneId(null)
+      setDetailsDraft({ name: '', phone: '', note: '' })
+      setClientUuid(crypto.randomUUID())
+    })
   }
 
   if (activeUuid) {
     return (
-      <Shell isRtl={isRtl} info={info} lang={lang}>
-        <StatusScreen lang={lang} clientUuid={activeUuid} onNew={startNew} />
-      </Shell>
+      <>
+        <BrandSplash />
+        <Shell
+          isRtl={isRtl}
+          info={info}
+          lang={lang}
+          routeKey="status"
+          transitionPhase={routeTransition.phase}
+          outgoingScrollY={routeTransition.outgoingScrollY}
+        >
+          <StatusScreen lang={lang} clientUuid={activeUuid} onNew={startNew} />
+        </Shell>
+      </>
     )
   }
 
@@ -238,7 +308,22 @@ export default function PublicReservePage() {
   return (
     <>
       <BrandSplash />
-      <Shell isRtl={isRtl} info={info} lang={lang} hero={step === 'slot'}>
+      <Shell
+        isRtl={isRtl}
+        info={info}
+        lang={lang}
+        hero={step === 'slot'}
+        routeKey={step}
+        transitionPhase={routeTransition.phase}
+        outgoingScrollY={routeTransition.outgoingScrollY}
+        onBack={
+          step === 'times'
+            ? () => transitionTo(() => setStep('slot'))
+            : step === 'details'
+              ? () => transitionTo(() => setStep('times'))
+              : undefined
+        }
+      >
         {step === 'slot' && (
           <SlotScreen
             lang={lang}
@@ -253,10 +338,12 @@ export default function PublicReservePage() {
             timeSlots={timeSlots}
             instant={instant}
             freeTimes={freeTimes}
+            availabilityLoading={instant && availabilityPending && !avail}
+            availabilityError={instant && availabilityError}
             onDate={pickDate}
             onTime={setTime}
             onGuests={setGuests}
-            onNext={() => setStep('times')}
+            onNext={() => transitionTo(() => setStep('times'))}
           />
         )}
         {step === 'times' && (
@@ -271,11 +358,12 @@ export default function PublicReservePage() {
             freeTimes={freeTimes}
             zones={zones}
             todayStr={slotCtx.todayStr}
-            onBack={() => setStep('slot')}
             onPick={(nextTime, nextZone) => {
-              setTime(nextTime)
-              setZoneId(nextZone)
-              setStep('details')
+              transitionTo(() => {
+                setTime(nextTime)
+                setZoneId(nextZone)
+                setStep('details')
+              })
             }}
           />
         )}
@@ -290,10 +378,14 @@ export default function PublicReservePage() {
             zoneId={zoneId}
             zoneName={zoneName}
             todayStr={slotCtx.todayStr}
-            onBack={() => setStep('times')}
+            draft={detailsDraft}
+            onDraft={setDetailsDraft}
+            clientUuid={clientUuid}
             onSubmitted={(uuid) => {
-              localStorage.setItem(ACTIVE_KEY, JSON.stringify({ clientUuid: uuid, locId }))
-              setActiveUuid(uuid)
+              transitionTo(() => {
+                localStorage.setItem(ACTIVE_KEY, JSON.stringify({ clientUuid: uuid, locId }))
+                setActiveUuid(uuid)
+              })
             }}
           />
         )}
@@ -303,42 +395,124 @@ export default function PublicReservePage() {
 }
 
 /**
- * Колонка страницы. hero — фото-шапка во всю ширину (общая картинка
- * с гостевой страницей заказа), под ней ярлык/название/адрес по центру.
- * Без hero (шаг контактов, статус) — только название и адрес.
+ * Каждый шаг бронирования — самостоятельный экран целиком, включая шапку.
+ * На переходе предыдущий React-поддерево остаётся смонтированным и уезжает
+ * одновременно с новым: фото, заголовки и форма не прыгают между layout.
  */
-function Shell({ isRtl, info, lang, hero, children }: {
+/* eslint-disable react-hooks/refs -- здесь ref намеренно хранит предыдущий
+   React-снимок между двумя routeKey. Он синхронно читается только для
+   одновременного рендера outgoing/current и не управляет текущим UI. */
+function Shell({
+  isRtl, info, lang, hero, routeKey, transitionPhase = 'idle',
+  outgoingScrollY = 0, onBack, children,
+}: {
   isRtl: boolean
   info?: ReserveInfo
   lang: Lang
   hero?: boolean
+  routeKey?: string
+  transitionPhase?: ReserveRoutePhase
+  outgoingScrollY?: number
+  onBack?: () => void
   children: React.ReactNode
 }) {
   const loc = info?.location
   const title = loc?.business_name || loc?.name
+  const currentRouteKey = routeKey ?? '__static__'
+  const currentRoute = (
+    <div className="public-reserve-route-motion">
+      {hero ? (
+        <header className={`public-reserve-hero${loc?.header_url ? ' has-media' : ''}`}>
+          {loc?.header_url && (
+            <img src={loc.header_url} alt="" className="public-reserve-hero-media" />
+          )}
+          <span className="public-reserve-hero-scrim" aria-hidden />
+          <div className="public-reserve-hero-copy">
+            {!loc?.header_url && loc?.logo_url && (
+              <img src={loc.logo_url} alt="" className="public-reserve-hero-logo" />
+            )}
+            <div>{t(lang, 'rsvPageLabel')}</div>
+            <h1 className="font-display public-reserve-route-focus" tabIndex={-1}>{title ?? ''}</h1>
+            {loc?.address && <p>{loc.address}</p>}
+          </div>
+        </header>
+      ) : (
+        <header className="public-reserve-compact-header">
+          {onBack && (
+            <button
+              type="button"
+              onClick={onBack}
+              aria-label={t(lang, 'rsvBackToSlot')}
+              className="public-reserve-back-button"
+            >
+              <span className="rtl:rotate-180"><BackIcon /></span>
+            </button>
+          )}
+          <div className="public-reserve-compact-brand">
+            {loc?.logo_url && <img src={loc.logo_url} alt="" />}
+            <span>
+              <small>{t(lang, 'rsvPageLabel')}</small>
+              <strong>{title ?? ''}</strong>
+            </span>
+          </div>
+        </header>
+      )}
+      <main className="flex-1 flex flex-col">{children}</main>
+      {hero && loc && <ReserveFooter loc={loc} lang={lang} />}
+    </div>
+  )
+  const latestRoute = useRef<{ key: string; node: React.ReactNode }>({
+    key: currentRouteKey,
+    node: currentRoute,
+  })
+  const outgoingRoute = useRef<{ key: string; node: React.ReactNode } | null>(null)
+  const focusRoute = useRef(currentRouteKey)
+
+  if (latestRoute.current.key !== currentRouteKey) {
+    outgoingRoute.current = latestRoute.current
+  }
+  latestRoute.current = { key: currentRouteKey, node: currentRoute }
+  const visibleOutgoing =
+    transitionPhase === 'enter' && outgoingRoute.current?.key !== currentRouteKey
+      ? outgoingRoute.current
+      : null
+
+  useEffect(() => {
+    if (transitionPhase !== 'idle' || focusRoute.current === currentRouteKey) return
+    const timer = window.setTimeout(() => {
+      document
+        .querySelector<HTMLElement>('.public-reserve-route-layer.is-current .public-reserve-route-focus')
+        ?.focus({ preventScroll: true })
+      focusRoute.current = currentRouteKey
+    }, 0)
+    return () => window.clearTimeout(timer)
+  }, [currentRouteKey, transitionPhase])
+
   return (
-    <div dir={isRtl ? 'rtl' : 'ltr'} className="min-h-screen bg-[#eceef1]">
-      <div className="relative max-w-lg mx-auto min-h-screen flex flex-col bg-white">
-        {hero && loc?.header_url && (
-          <div className="h-48 shrink-0 overflow-hidden">
-            <img src={loc.header_url} alt="" className="w-full h-full object-cover" />
+    <div dir={isRtl ? 'rtl' : 'ltr'} className="public-reserve-shell">
+      <div
+        data-transition={transitionPhase}
+        aria-busy={transitionPhase !== 'idle'}
+        className="public-reserve-screen"
+      >
+        {visibleOutgoing && (
+          <div
+            key={visibleOutgoing.key}
+            aria-hidden="true"
+            className="public-reserve-route-layer is-outgoing"
+            style={{ insetBlockStart: -outgoingScrollY }}
+          >
+            {visibleOutgoing.node}
           </div>
         )}
-        <header className="px-6 pt-6 pb-2 text-center">
-          {hero && !loc?.header_url && loc?.logo_url && (
-            <img src={loc.logo_url} alt="" className="w-16 h-16 rounded-full object-cover mx-auto mb-3" />
-          )}
-          <div className="text-sm text-gray-500">{t(lang, 'rsvPageLabel')}</div>
-          <h1 className="font-display text-4xl font-bold leading-tight text-gray-900 mt-1">{title ?? ''}</h1>
-          {loc?.address && <p className="text-sm text-gray-500 mt-1">{loc.address}</p>}
-        </header>
-        <div className="flex-1 flex flex-col">{children}</div>
-        {/* Подвал (066): часы работы + соцсети — только на экране-лендинге */}
-        {hero && loc && <ReserveFooter loc={loc} lang={lang} />}
+        <div key={currentRouteKey} className="public-reserve-route-layer is-current">
+          {currentRoute}
+        </div>
       </div>
     </div>
   )
 }
+/* eslint-enable react-hooks/refs */
 
 /**
  * Подвал страницы брони (066): часы работы (свободный текст) и соцкнопки
@@ -401,6 +575,58 @@ function dayOptionLabel(dateStr: string, todayStr: string, lang: Lang): string {
   return `${wd} ${d.getDate()}/${d.getMonth() + 1}`
 }
 
+function ReserveProgress({ lang, step }: { lang: Lang; step: 1 | 2 | 3 }) {
+  return (
+    <div
+      className="public-reserve-progress"
+      role="progressbar"
+      aria-label={`${t(lang, 'rsvStep')} ${step} / 3`}
+      aria-valuemin={1}
+      aria-valuemax={3}
+      aria-valuenow={step}
+    >
+      {[1, 2, 3].map((value) => (
+        <span key={value} data-active={value <= step || undefined} />
+      ))}
+    </div>
+  )
+}
+
+function ReserveSelectionSummary({
+  lang, date, time, guests, todayStr, zoneName,
+}: {
+  lang: Lang
+  date: string
+  time: string
+  guests: number
+  todayStr: string
+  zoneName?: string | null
+}) {
+  return (
+    <>
+      <div className="public-reserve-selection-summary">
+        <div>
+          <span><CalendarIcon /></span>
+          <strong>{dayOptionLabel(date, todayStr, lang)}</strong>
+        </div>
+        <div>
+          <span><ClockIcon /></span>
+          <strong className="tabular-nums">{time}</strong>
+        </div>
+        <div>
+          <span><PersonIcon /></span>
+          <strong>{guests} {t(lang, 'resGuestsShort')}</strong>
+        </div>
+      </div>
+      {zoneName && (
+        <p className="public-reserve-zone-summary">
+          {t(lang, 'rsvZoneSummary')}: <strong>{zoneName}</strong>
+        </p>
+      )}
+    </>
+  )
+}
+
 /** Ячейка слот-панели: значение — текстом, под ним маленькая стрелка вниз;
  *  невидимый select растянут на всю плитку (тап везде) */
 function SlotCell({ label, children }: { label: string; children: React.ReactNode }) {
@@ -452,7 +678,11 @@ function HoursRows({ text }: { text: string }) {
   )
 }
 
-function SlotScreen({ lang, info, days, todayStr, todayHasSlots, date, time, guests, maxParty, timeSlots, instant, freeTimes, onDate, onTime, onGuests, onNext }: {
+function SlotScreen({
+  lang, info, days, todayStr, todayHasSlots, date, time, guests, maxParty,
+  timeSlots, instant, freeTimes, availabilityLoading, availabilityError,
+  onDate, onTime, onGuests, onNext,
+}: {
   lang: Lang
   info: ReserveInfo
   days: string[]
@@ -467,6 +697,8 @@ function SlotScreen({ lang, info, days, todayStr, todayHasSlots, date, time, gue
   instant: boolean
   /** Свободные времена (Set) или null, если доступность не применяется */
   freeTimes: Set<string> | null
+  availabilityLoading: boolean
+  availabilityError: boolean
   onDate: (v: string) => void
   onTime: (v: string) => void
   onGuests: (v: number) => void
@@ -494,6 +726,8 @@ function SlotScreen({ lang, info, days, todayStr, todayHasSlots, date, time, gue
   const [navOpen, setNavOpen] = useState(false)
   return (
     <div className="px-4 pb-8 flex flex-col items-center">
+      <ReserveProgress lang={lang} step={1} />
+
       {!todayHasSlots && (
         <div className="w-full mt-3 rounded-2xl bg-amber-50 text-amber-800 text-sm font-semibold px-4 py-3 text-center">
           {t(lang, 'rsvNoSlotsToday')}
@@ -540,9 +774,27 @@ function SlotScreen({ lang, info, days, todayStr, todayHasSlots, date, time, gue
         </div>
       )}
 
+      {availabilityLoading && (
+        <div className="public-reserve-availability-note" aria-live="polite">
+          <span aria-hidden />
+          {t(lang, 'rsvCheckingSlots')}
+        </div>
+      )}
+      {availabilityError && (
+        <div className="w-full mt-4 rounded-2xl bg-red-50 text-red-700 text-sm font-semibold px-4 py-3 text-center" role="alert">
+          {t(lang, 'rsvErrAvailability')}
+        </div>
+      )}
+
       <button
         onClick={onNext}
-        disabled={timeSlots.length === 0 || dayFull || timeTaken}
+        disabled={
+          timeSlots.length === 0
+          || dayFull
+          || timeTaken
+          || availabilityLoading
+          || availabilityError
+        }
         className="w-full h-14 mt-4 rounded-2xl bg-gray-900 text-white font-bold disabled:opacity-40 active:scale-[0.98] transition-all"
       >
         {instant ? t(lang, 'rsvBookNow') : t(lang, 'rsvSubmit')}
@@ -616,15 +868,29 @@ function NavChooserSheet({ lang, googleMapsUrl, wazeUrl, onClose }: {
   wazeUrl: string | null
   onClose: () => void
 }) {
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.body.style.overflow = previousOverflow
+      window.removeEventListener('keydown', onKeyDown)
+    }
+  }, [onClose])
+
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40"
+      className="public-reserve-sheet-overlay fixed inset-0 z-50 flex items-end justify-center bg-black/40"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
+      aria-label={t(lang, 'rsvNavSheetTitle')}
     >
       <div
-        className="w-full max-w-lg rounded-t-3xl bg-white px-4 pt-3 pb-6 shadow-xl"
+        className="public-reserve-sheet w-full max-w-lg rounded-t-3xl bg-white px-4 pt-3 pb-6 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-gray-200" aria-hidden="true" />
@@ -677,7 +943,7 @@ function NavChooserSheet({ lang, googleMapsUrl, wazeUrl, onClose }: {
  * зону в контакты. Без зон (или одна) — единственная секция «вся точка»
  * (zoneId=null).
  */
-function TimesScreen({ lang, locId, date, time, guests, timeSlots, instant, freeTimes, zones, todayStr, onBack, onPick }: {
+function TimesScreen({ lang, locId, date, time, guests, timeSlots, instant, freeTimes, zones, todayStr, onPick }: {
   lang: Lang
   locId: string
   date: string
@@ -691,7 +957,6 @@ function TimesScreen({ lang, locId, date, time, guests, timeSlots, instant, free
   /** Зоны зала (072); от двух зон — секция на зону, иначе одна общая */
   zones: { id: string; name: string }[]
   todayStr: string
-  onBack: () => void
   /** (время, zoneId) — zoneId=null для общей секции «без зоны» */
   onPick: (time: string, zoneId: string | null) => void
 }) {
@@ -724,20 +989,22 @@ function TimesScreen({ lang, locId, date, time, guests, timeSlots, instant, free
 
   return (
     <div className="px-4 pb-8">
-      <button
-        onClick={onBack}
-        className="mt-1 h-11 px-3 -ms-3 text-sm font-semibold text-gray-500 flex items-center gap-1 active:scale-[0.96] transition-all"
+      <ReserveProgress lang={lang} step={2} />
+      <h2
+        className="public-reserve-route-focus text-2xl font-bold text-gray-900 mt-6"
+        tabIndex={-1}
       >
-        <span className="rtl:rotate-180"><BackIcon /></span>
-        {t(lang, 'rsvBackToSlot')}
-      </button>
-
-      <h2 className="text-lg font-bold text-gray-900 mt-2">
         {instant ? t(lang, 'rsvFoundTitle') : t(lang, 'rsvPickTimeTitle')}
       </h2>
-      <p className="text-sm text-gray-500 mt-1">
-        {dayOptionLabel(date, todayStr, lang)} · {time} · {guests} {t(lang, 'resGuestsShort')}
-      </p>
+      <div className="mt-4">
+        <ReserveSelectionSummary
+          lang={lang}
+          date={date}
+          time={time}
+          guests={guests}
+          todayStr={todayStr}
+        />
+      </div>
 
       <div className="mt-5 space-y-6">
         {sections.map((s, i) => {
@@ -747,7 +1014,9 @@ function TimesScreen({ lang, locId, date, time, guests, timeSlots, instant, free
             ? freeTimes
             : (instant && q?.data
                 ? new Set(q.data.slots.filter((sl) => sl.free).map((sl) => sl.time))
-                : freeTimes)
+                : null)
+          const checking = instant && s.id !== null && q?.isPending
+          const failed = instant && s.id !== null && q?.isError
           return (
             <ZoneTimeRow
               key={s.id ?? '__any__'}
@@ -757,6 +1026,8 @@ function TimesScreen({ lang, locId, date, time, guests, timeSlots, instant, free
               time={time}
               instant={instant}
               freeTimes={secFree}
+              checking={checking}
+              failed={failed}
               onPick={(v) => onPick(v, s.id)}
             />
           )
@@ -771,15 +1042,32 @@ function TimesScreen({ lang, locId, date, time, guests, timeSlots, instant, free
  * слотов. Свободный instant-слот подписан «мгновенное подтверждение»,
  * дальний/не-instant — «по телефону», занятый — ⊘ и недоступен.
  */
-function ZoneTimeRow({ lang, zoneName, chips, time, instant, freeTimes, onPick }: {
+function ZoneTimeRow({
+  lang, zoneName, chips, time, instant, freeTimes, checking, failed, onPick,
+}: {
   lang: Lang
   zoneName: string | null
   chips: string[]
   time: string
   instant: boolean
   freeTimes: Set<string> | null
+  checking: boolean
+  failed: boolean
   onPick: (v: string) => void
 }) {
+  const stripRef = useRef<HTMLDivElement>(null)
+  useLayoutEffect(() => {
+    const requested = stripRef.current
+      ?.querySelector<HTMLElement>('[data-requested="true"]')
+    if (!requested) return
+    // scrollIntoView надёжно учитывает разные RTL-модели scrollLeft, но
+    // некоторые Safari/Chrome заодно двигают документ по вертикали.
+    // Возвращаем прежний Y синхронно, до первого paint.
+    const scrollY = window.scrollY
+    requested.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'auto' })
+    window.scrollTo({ top: scrollY, left: 0, behavior: 'auto' })
+  }, [time, chips])
+
   return (
     <section>
       {zoneName && (
@@ -788,28 +1076,39 @@ function ZoneTimeRow({ lang, zoneName, chips, time, instant, freeTimes, onPick }
           <h3 className="text-base font-bold text-gray-900">{zoneName}</h3>
         </div>
       )}
-      <div className="grid grid-cols-5 gap-2">
+      {failed && (
+        <p className="mb-3 text-sm font-semibold text-red-600" role="alert">
+          {t(lang, 'rsvErrAvailability')}
+        </p>
+      )}
+      <div ref={stripRef} className="public-reserve-time-strip">
         {chips.map((s) => {
           const current = s === time
           // instant: занят, если явно не в множестве свободных
-          const full = instant && freeTimes !== null && !freeTimes.has(s)
+          const full = failed || checking || (instant && freeTimes !== null && !freeTimes.has(s))
           // Мгновенное подтверждение — только instant + слот свободен
-          const now = instant && (freeTimes === null || freeTimes.has(s))
+          const now = instant && !checking && !failed && freeTimes !== null && freeTimes.has(s)
           return (
             <button
               key={s}
+              data-requested={current || undefined}
               onClick={() => !full && onPick(s)}
               disabled={full}
-              className={`h-16 rounded-xl flex flex-col items-center justify-center gap-0.5 active:scale-[0.96] transition-all ${
+              aria-label={`${s}${zoneName ? ` · ${zoneName}` : ''} · ${
+                checking ? t(lang, 'rsvCheckingSlots') : full ? t(lang, 'rsvSlotFull') : now ? t(lang, 'rsvInstantLabel') : t(lang, 'rsvPhoneLabel')
+              }`}
+              className={`public-reserve-time-card ${
                 full
-                  ? 'bg-gray-50 border border-gray-100 cursor-not-allowed active:scale-100'
+                  ? 'is-disabled'
                   : current
-                    ? 'bg-white border-2 border-gray-900'
-                    : 'bg-white border border-gray-200 hover:border-gray-400'
+                    ? 'is-requested'
+                    : ''
               }`}
             >
               <span className={`text-base font-bold tabular-nums ${full ? 'text-gray-300' : 'text-gray-900'}`}>{s}</span>
-              {full ? (
+              {checking ? (
+                <span className="public-reserve-time-loading" aria-hidden />
+              ) : full ? (
                 <span className="text-gray-300" aria-label={t(lang, 'rsvSlotFull')}><BlockedIcon /></span>
               ) : now ? (
                 <span className="flex items-center gap-1 text-[11px] text-gray-500 leading-none">
@@ -841,7 +1140,10 @@ function reserveErrorText(lang: Lang, code: string): string {
   }
 }
 
-function DetailsScreen({ lang, locId, date, time, guests, instant, zoneId, zoneName, todayStr, onBack, onSubmitted }: {
+function DetailsScreen({
+  lang, locId, date, time, guests, instant, zoneId, zoneName, todayStr,
+  draft, onDraft, clientUuid, onSubmitted,
+}: {
   lang: Lang
   locId: string
   date: string
@@ -853,23 +1155,33 @@ function DetailsScreen({ lang, locId, date, time, guests, instant, zoneId, zoneN
   zoneId: string | null
   zoneName: string | null
   todayStr: string
-  onBack: () => void
+  draft: { name: string; phone: string; note: string }
+  onDraft: (draft: { name: string; phone: string; note: string }) => void
+  clientUuid: string
   onSubmitted: (clientUuid: string) => void
 }) {
-  const [name, setName] = useState('')
-  const [phone, setPhone] = useState('')
-  const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  // client_uuid создаётся один раз на попытку: ретрай после сбоя сети
-  // не создаст дубликат (идемпотентность submit_reservation)
-  const clientUuid = useMemo(() => crypto.randomUUID(), [])
+  const [showValidation, setShowValidation] = useState(false)
+  const nameRef = useRef<HTMLInputElement>(null)
+  const phoneRef = useRef<HTMLInputElement>(null)
+  const { name, phone, note } = draft
 
   const phoneDigits = phone.replace(/\D/g, '')
-  const valid = name.trim().length > 0 && phoneDigits.length >= 9
+  const nameValid = name.trim().length > 0
+  const phoneValid = phoneDigits.length >= 9
+  const valid = nameValid && phoneValid
 
   async function submit() {
-    if (!valid || busy) return
+    if (busy) return
+    setShowValidation(true)
+    if (!valid) {
+      window.setTimeout(() => {
+        if (!nameValid) nameRef.current?.focus()
+        else phoneRef.current?.focus()
+      }, 0)
+      return
+    }
     // Локальное время визита; серверная граница — от +30 минут
     const [h, m] = time.split(':').map(Number)
     const at = new Date(`${date}T00:00:00`)
@@ -899,74 +1211,82 @@ function DetailsScreen({ lang, locId, date, time, guests, instant, zoneId, zoneN
     }
   }
 
-  const inputCls = 'w-full h-12 rounded-xl border border-gray-200 px-4 text-base focus:outline-none focus:border-gray-900'
-
   return (
     <div className="px-4 pb-8">
-      <button
-        onClick={onBack}
-        className="mt-1 h-11 px-3 -ms-3 text-sm font-semibold text-gray-500 flex items-center gap-1 active:scale-[0.96] transition-all"
+      <ReserveProgress lang={lang} step={3} />
+      <h2
+        className="public-reserve-route-focus text-2xl font-bold text-gray-900 mt-6"
+        tabIndex={-1}
       >
-        <span className="rtl:rotate-180"><BackIcon /></span>
-        {t(lang, 'rsvBackToSlot')}
-      </button>
+        {t(lang, 'rsvDetailsTitle')}
+      </h2>
 
-      {/* Выбранный слот — статичная сводка, менять — «назад к выбору» */}
-      <div className="rounded-2xl bg-gray-50 flex divide-x divide-gray-200 rtl:divide-x-reverse text-center mt-2">
-        <div className="flex-1 py-3">
-          <div className="flex justify-center text-gray-400"><CalendarIcon /></div>
-          <div className="font-bold text-gray-900 mt-1">{dayOptionLabel(date, todayStr, lang)}</div>
-        </div>
-        <div className="flex-1 py-3">
-          <div className="flex justify-center text-gray-400"><ClockIcon /></div>
-          <div className="font-bold text-gray-900 mt-1 tabular-nums">{time}</div>
-        </div>
-        <div className="flex-1 py-3">
-          <div className="flex justify-center text-gray-400"><PersonIcon /></div>
-          <div className="font-bold text-gray-900 mt-1">{guests} {t(lang, 'resGuestsShort')}</div>
-        </div>
+      <div className="mt-4">
+        <ReserveSelectionSummary
+          lang={lang}
+          date={date}
+          time={time}
+          guests={guests}
+          todayStr={todayStr}
+          zoneName={zoneName}
+        />
       </div>
 
-      {zoneName && (
-        <p className="text-sm text-gray-500 mt-2 text-center">
-          {t(lang, 'rsvZoneSummary')}: <span className="font-semibold text-gray-900">{zoneName}</span>
-        </p>
+      <div className="public-reserve-details-fields">
+        <label>
+          <span>{t(lang, 'rsvName')}</span>
+          <input
+            ref={nameRef}
+            autoComplete="name"
+            value={name}
+            aria-invalid={showValidation && !nameValid}
+            aria-describedby={showValidation && !nameValid ? 'reserve-name-error' : undefined}
+            onChange={(event) => onDraft({ ...draft, name: event.target.value })}
+          />
+          {showValidation && !nameValid && (
+            <small id="reserve-name-error">{t(lang, 'rsvErrName')}</small>
+          )}
+        </label>
+        <label>
+          <span>{t(lang, 'rsvPhone')}</span>
+          <input
+            ref={phoneRef}
+            type="tel"
+            inputMode="tel"
+            autoComplete="tel"
+            dir="ltr"
+            value={phone}
+            aria-invalid={showValidation && !phoneValid}
+            aria-describedby={showValidation && !phoneValid ? 'reserve-phone-error' : undefined}
+            onChange={(event) => onDraft({ ...draft, phone: event.target.value })}
+          />
+          {showValidation && !phoneValid && (
+            <small id="reserve-phone-error">{t(lang, 'rsvErrPhone')}</small>
+          )}
+        </label>
+        <label>
+          <span>{t(lang, 'rsvNote')}</span>
+          <textarea
+            rows={3}
+            maxLength={200}
+            value={note}
+            onChange={(event) => onDraft({ ...draft, note: event.target.value })}
+          />
+          <em>{note.length}/200</em>
+        </label>
+      </div>
+
+      {error && (
+        <div className="mt-4 rounded-2xl bg-red-50 text-red-700 text-sm font-semibold px-4 py-3" role="alert">
+          {error}
+        </div>
       )}
 
-      <h2 className="text-base font-bold text-gray-900 mt-6 mb-3 text-center">{t(lang, 'rsvDetailsTitle')}</h2>
-
-      <div className="space-y-3">
-        <input
-          className={inputCls}
-          placeholder={t(lang, 'rsvName')}
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
-        <input
-          className={inputCls}
-          placeholder={t(lang, 'rsvPhone')}
-          type="tel"
-          inputMode="tel"
-          dir="ltr"
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
-        />
-        <textarea
-          className="w-full rounded-xl border border-gray-200 px-4 py-3 text-base focus:outline-none focus:border-gray-900 resize-none"
-          rows={2}
-          maxLength={200}
-          placeholder={t(lang, 'rsvNote')}
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-        />
-      </div>
-
-      {error && <div className="mt-4 rounded-2xl bg-red-50 text-red-600 text-sm font-semibold px-4 py-3">{error}</div>}
-
       <button
-        disabled={!valid || busy}
+        type="button"
+        disabled={busy}
         onClick={submit}
-        className="w-full h-14 mt-4 rounded-2xl bg-gray-900 text-white font-bold disabled:opacity-40 active:scale-[0.98] transition-all"
+        className="public-reserve-primary-action"
       >
         {busy ? t(lang, 'pubSubmitting') : instant ? t(lang, 'rsvSendInstant') : t(lang, 'rsvSend')}
       </button>
@@ -1097,7 +1417,7 @@ function StatusScreen({ lang, clientUuid, onNew }: {
   if (status.status === 'new') {
     return (
       <CenterCard>
-        <div className="w-10 h-10 mx-auto rounded-full border-4 border-gray-200 border-t-gray-900 animate-spin" />
+        <div className="public-reserve-status-spinner w-10 h-10 mx-auto rounded-full border-4 border-gray-200 border-t-gray-900" />
         <p className="text-xl font-bold text-gray-900 mt-5">{t(lang, 'rsvPendingTitle')}</p>
         <p className="text-sm text-gray-500 mt-2">{t(lang, 'rsvPendingHint')}</p>
         {details}
@@ -1125,8 +1445,13 @@ function StatusScreen({ lang, clientUuid, onNew }: {
 
 function CenterCard({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex-1 flex items-center justify-center px-6 py-10">
-      <div className="text-center w-full">{children}</div>
+    <div className="flex-1 flex items-center justify-center bg-[#f8f8f7] px-4 py-8">
+      <div
+        className="text-center w-full rounded-3xl border border-gray-100 bg-white px-6 py-8 shadow-sm"
+        aria-live="polite"
+      >
+        {children}
+      </div>
     </div>
   )
 }

@@ -2369,6 +2369,520 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     outline: none;
   }
 
+  /* ── Public reservations ───────────────────────────────
+     Полный экран шага остаётся смонтированным до конца перехода. Поэтому
+     hero, форма и footer едут одним полотном, а не пересобирают layout. */
+  .public-reserve-shell {
+    min-height: 100vh;
+    background: #eceef1;
+  }
+
+  .public-reserve-screen {
+    position: relative;
+    display: flex;
+    width: 100%;
+    max-width: 32rem;
+    min-height: 100vh;
+    margin-inline: auto;
+    overflow: clip;
+    background: #fff;
+  }
+
+  .public-reserve-route-layer {
+    display: flex;
+    width: 100%;
+    min-width: 0;
+    min-height: 100%;
+    flex: 1;
+    flex-direction: column;
+  }
+
+  .public-reserve-route-layer.is-current {
+    position: relative;
+    z-index: 2;
+  }
+
+  .public-reserve-route-layer.is-outgoing {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+  }
+
+  .public-reserve-route-motion {
+    display: flex;
+    width: 100%;
+    min-height: 100vh;
+    flex: 1;
+    flex-direction: column;
+    background: #fff;
+  }
+
+  .public-reserve-screen[data-transition='enter']
+  > .public-reserve-route-layer.is-current
+  > .public-reserve-route-motion {
+    animation: public-reserve-route-enter 320ms cubic-bezier(.32, .72, 0, 1) both;
+  }
+
+  .public-reserve-screen[data-transition='enter']
+  > .public-reserve-route-layer.is-outgoing
+  > .public-reserve-route-motion {
+    animation: public-reserve-route-exit 320ms cubic-bezier(.32, .72, 0, 1) both;
+  }
+
+  @keyframes public-reserve-route-enter {
+    from {
+      transform: translate3d(-100%, 0, 0);
+    }
+    to {
+      transform: translate3d(0, 0, 0);
+    }
+  }
+
+  @keyframes public-reserve-route-exit {
+    from {
+      transform: translate3d(0, 0, 0);
+    }
+    to {
+      transform: translate3d(100%, 0, 0);
+    }
+  }
+
+  .public-reserve-hero {
+    position: relative;
+    display: flex;
+    min-height: 13rem;
+    overflow: hidden;
+    flex-shrink: 0;
+    align-items: flex-end;
+    background: #fff;
+    color: #111827;
+  }
+
+  .public-reserve-hero.has-media {
+    min-height: 16rem;
+    background: #17191d;
+    color: #fff;
+  }
+
+  .public-reserve-hero-media,
+  .public-reserve-hero-scrim {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+
+  .public-reserve-hero-media {
+    object-fit: cover;
+  }
+
+  .public-reserve-hero-scrim {
+    background:
+      linear-gradient(to top, rgb(9 11 15 / 82%) 0%, rgb(9 11 15 / 24%) 56%, rgb(9 11 15 / 5%) 100%);
+  }
+
+  .public-reserve-hero:not(.has-media) .public-reserve-hero-scrim {
+    display: none;
+  }
+
+  .public-reserve-hero-copy {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    padding: 2rem 1.5rem 1.5rem;
+    text-align: center;
+  }
+
+  .public-reserve-hero-copy > div {
+    color: currentColor;
+    font-size: .75rem;
+    font-weight: 700;
+    letter-spacing: .08em;
+    opacity: .72;
+    text-transform: uppercase;
+  }
+
+  .public-reserve-hero-copy h1 {
+    margin-top: .35rem;
+    font-size: clamp(2rem, 10vw, 2.8rem);
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  .public-reserve-hero-copy p {
+    margin-top: .5rem;
+    font-size: .875rem;
+    opacity: .78;
+  }
+
+  .public-reserve-hero-logo {
+    width: 4rem;
+    height: 4rem;
+    margin: 0 auto .75rem;
+    border-radius: 999px;
+    object-fit: cover;
+    box-shadow: 0 8px 28px rgb(0 0 0 / 18%);
+  }
+
+  .public-reserve-compact-header {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    display: flex;
+    min-height: calc(4.5rem + env(safe-area-inset-top));
+    padding: env(safe-area-inset-top) 4.25rem 0;
+    align-items: center;
+    justify-content: center;
+    border-bottom: 1px solid rgb(17 24 39 / 8%);
+    background: rgb(255 255 255 / 94%);
+    -webkit-backdrop-filter: blur(16px);
+    backdrop-filter: blur(16px);
+  }
+
+  .public-reserve-back-button {
+    position: absolute;
+    inset-inline-start: .75rem;
+    top: calc(env(safe-area-inset-top) + .75rem);
+    display: grid;
+    width: 3rem;
+    height: 3rem;
+    place-items: center;
+    border: 1px solid rgb(17 24 39 / 10%);
+    border-radius: 999px;
+    background: #f6f5f2;
+    color: #111827;
+    transition: transform 150ms ease;
+  }
+
+  .public-reserve-back-button:active {
+    transform: scale(.94);
+  }
+
+  .public-reserve-compact-brand {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: .625rem;
+    text-align: start;
+  }
+
+  .public-reserve-compact-brand img {
+    width: 2.5rem;
+    height: 2.5rem;
+    flex-shrink: 0;
+    border-radius: 999px;
+    object-fit: cover;
+  }
+
+  .public-reserve-compact-brand span {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+  }
+
+  .public-reserve-compact-brand small {
+    color: #6b7280;
+    font-size: .7rem;
+    font-weight: 600;
+  }
+
+  .public-reserve-compact-brand strong {
+    overflow: hidden;
+    color: #111827;
+    font-size: 1rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .public-reserve-progress {
+    display: flex;
+    width: 100%;
+    padding-top: 1.25rem;
+    gap: .375rem;
+  }
+
+  .public-reserve-progress > span {
+    height: .25rem;
+    flex: 1;
+    border-radius: 999px;
+    background: #e5e7eb;
+    transition: background-color 180ms ease;
+  }
+
+  .public-reserve-progress > span[data-active='true'] {
+    background: #111827;
+  }
+
+  .public-reserve-selection-summary {
+    display: grid;
+    overflow: hidden;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    border: 1px solid rgb(17 24 39 / 8%);
+    border-radius: 1rem;
+    background: #f8f8f7;
+  }
+
+  .public-reserve-selection-summary > div {
+    display: flex;
+    min-width: 0;
+    padding: .875rem .5rem;
+    align-items: center;
+    flex-direction: column;
+    border-inline-start: 1px solid rgb(17 24 39 / 8%);
+    gap: .35rem;
+    text-align: center;
+  }
+
+  .public-reserve-selection-summary > div:first-child {
+    border-inline-start: 0;
+  }
+
+  .public-reserve-selection-summary span {
+    display: grid;
+    width: 1.25rem;
+    height: 1.25rem;
+    place-items: center;
+    color: #6b7280;
+  }
+
+  .public-reserve-selection-summary strong {
+    overflow: hidden;
+    max-width: 100%;
+    color: #111827;
+    font-size: .875rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .public-reserve-zone-summary {
+    margin-top: .625rem;
+    color: #6b7280;
+    font-size: .875rem;
+    text-align: center;
+  }
+
+  .public-reserve-zone-summary strong {
+    color: #111827;
+  }
+
+  .public-reserve-availability-note {
+    display: flex;
+    width: 100%;
+    min-height: 2.75rem;
+    margin-top: 1rem;
+    padding: .625rem 1rem;
+    align-items: center;
+    justify-content: center;
+    border-radius: 1rem;
+    background: #f8f8f7;
+    color: #4b5563;
+    font-size: .875rem;
+    font-weight: 600;
+    gap: .5rem;
+  }
+
+  .public-reserve-availability-note > span {
+    width: .875rem;
+    height: .875rem;
+    border: 2px solid #d1d5db;
+    border-top-color: #111827;
+    border-radius: 999px;
+    animation: public-reserve-spin 700ms linear infinite;
+  }
+
+  @keyframes public-reserve-spin {
+    to { transform: rotate(360deg); }
+  }
+
+  .public-reserve-time-strip {
+    display: flex;
+    overflow-x: auto;
+    padding: .125rem .125rem .5rem;
+    gap: .625rem;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+  }
+
+  .public-reserve-time-strip::-webkit-scrollbar {
+    display: none;
+  }
+
+  .public-reserve-time-card {
+    display: flex;
+    width: 6.75rem;
+    min-width: 6.75rem;
+    height: 4.75rem;
+    padding: .5rem;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    border: 1px solid #d1d5db;
+    border-radius: 1rem;
+    background: #fff;
+    box-shadow: 0 4px 14px rgb(17 24 39 / 5%);
+    gap: .25rem;
+    scroll-snap-align: start;
+    transition: transform 150ms ease, border-color 150ms ease, background-color 150ms ease;
+  }
+
+  .public-reserve-time-card.is-requested {
+    border: 2px solid #111827;
+    background: #fafafa;
+  }
+
+  .public-reserve-time-card.is-disabled {
+    border-color: #eceff2;
+    background: #f8f8f7;
+    box-shadow: none;
+    cursor: not-allowed;
+  }
+
+  .public-reserve-time-card:not(:disabled):active {
+    transform: scale(.96);
+  }
+
+  .public-reserve-time-loading {
+    width: 2.5rem;
+    height: .5rem;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #e5e7eb 25%, #f4f4f5 50%, #e5e7eb 75%);
+    background-size: 200% 100%;
+    animation: public-reserve-loading 1s linear infinite;
+  }
+
+  .public-reserve-status-spinner {
+    animation: public-reserve-spin 800ms linear infinite;
+  }
+
+  @keyframes public-reserve-loading {
+    to { background-position: -200% 0; }
+  }
+
+  .public-reserve-details-fields {
+    display: flex;
+    margin-top: 1.5rem;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .public-reserve-details-fields label {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .public-reserve-details-fields label > span {
+    margin-bottom: .4rem;
+    color: #4b5563;
+    font-size: .75rem;
+    font-weight: 700;
+  }
+
+  .public-reserve-details-fields input,
+  .public-reserve-details-fields textarea {
+    width: 100%;
+    min-height: 3.25rem;
+    padding: .75rem 1rem;
+    border: 1px solid #d1d5db;
+    border-radius: .875rem;
+    background: #fff;
+    color: #111827;
+    font-size: 1rem;
+    outline: none;
+    transition: border-color 150ms ease, box-shadow 150ms ease;
+  }
+
+  .public-reserve-details-fields textarea {
+    min-height: 5.5rem;
+    resize: vertical;
+  }
+
+  .public-reserve-details-fields input:focus,
+  .public-reserve-details-fields textarea:focus {
+    border-color: #111827;
+    box-shadow: 0 0 0 3px rgb(17 24 39 / 8%);
+  }
+
+  .public-reserve-details-fields [aria-invalid='true'] {
+    border-color: #dc2626;
+    box-shadow: 0 0 0 3px rgb(220 38 38 / 7%);
+  }
+
+  .public-reserve-details-fields small {
+    margin-top: .35rem;
+    color: #b91c1c;
+    font-size: .75rem;
+    font-weight: 600;
+  }
+
+  .public-reserve-details-fields em {
+    position: absolute;
+    inset-inline-end: .75rem;
+    bottom: .5rem;
+    color: #9ca3af;
+    font-size: .7rem;
+    font-style: normal;
+  }
+
+  .public-reserve-primary-action {
+    width: 100%;
+    height: 3.5rem;
+    margin-top: 1rem;
+    border-radius: 1rem;
+    background: #111827;
+    color: #fff;
+    font-weight: 700;
+    transition: transform 150ms ease, opacity 150ms ease;
+  }
+
+  .public-reserve-primary-action:disabled {
+    opacity: .55;
+  }
+
+  .public-reserve-primary-action:not(:disabled):active {
+    transform: scale(.98);
+  }
+
+  .public-reserve-route-focus:focus {
+    outline: none;
+  }
+
+  .public-reserve-sheet-overlay {
+    animation: public-reserve-sheet-fade 180ms ease-out both;
+  }
+
+  .public-reserve-sheet {
+    animation: public-reserve-sheet-in 280ms cubic-bezier(.32, .72, 0, 1) both;
+  }
+
+  @keyframes public-reserve-sheet-fade {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @keyframes public-reserve-sheet-in {
+    from { transform: translate3d(0, 100%, 0); }
+    to { transform: translate3d(0, 0, 0); }
+  }
+
+  .public-reserve-shell button:focus-visible,
+  .public-reserve-shell a:focus-visible,
+  .public-reserve-shell input:focus-visible,
+  .public-reserve-shell textarea:focus-visible,
+  .public-reserve-shell select:focus-visible {
+    outline: 3px solid rgb(17 24 39 / 38%);
+    outline-offset: 2px;
+  }
+
+  @supports (height: 100dvh) {
+    .public-reserve-shell,
+    .public-reserve-screen,
+    .public-reserve-route-motion {
+      min-height: 100dvh;
+    }
+  }
+
   #root {
     min-height: 100vh;
     width: 100%;
@@ -2492,6 +3006,19 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   }
 
   .public-menu-item-media[data-image-state='loading']::after {
+    animation: none !important;
+  }
+
+  .public-reserve-route-motion,
+  .public-reserve-sheet-overlay,
+  .public-reserve-sheet,
+  .public-reserve-availability-note > span,
+  .public-reserve-time-loading {
+    animation: none !important;
+    transform: none !important;
+  }
+
+  .public-reserve-status-spinner {
     animation: none !important;
   }
 }
