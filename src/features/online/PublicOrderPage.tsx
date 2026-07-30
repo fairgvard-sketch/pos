@@ -60,9 +60,12 @@ type RouteDirection = 'forward' | 'back'
 type RouteTransitionPhase = 'idle' | 'enter'
 type RouteTransitionKind = 'hero' | 'route'
 
-const ROUTE_ENTER_MS = 210
-const HERO_ENTER_MS = 240
-const ITEM_SHEET_EXIT_MS = 190
+const ROUTE_ENTER_MS = 320
+const HERO_ENTER_MS = 320
+const ITEM_SHEET_EXIT_MS = 280
+/** URL попадает сюда только после load/decode — карточка может показать
+ * уже подготовленный bitmap в первом кадре, без повторного shimmer. */
+const decodedPublicMenuImages = new Set<string>()
 
 function readActive(locId: string): string | null {
   try {
@@ -104,7 +107,8 @@ export default function PublicOrderPage() {
     phase: RouteTransitionPhase
     direction: RouteDirection
     kind: RouteTransitionKind
-  }>({ phase: 'idle', direction: 'forward', kind: 'route' })
+    outgoingScrollY: number
+  }>({ phase: 'idle', direction: 'forward', kind: 'route', outgoingScrollY: 0 })
   const routeTransitionBusy = useRef(false)
   const routeEnterTimer = useRef<number | undefined>(undefined)
   const itemCloseTimer = useRef<number | undefined>(undefined)
@@ -135,12 +139,17 @@ export default function PublicOrderPage() {
     }
 
     routeTransitionBusy.current = true
-    window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+    const outgoingScrollY = window.scrollY
     commit()
-    setRouteTransition({ phase: 'enter', direction, kind })
+    setRouteTransition({ phase: 'enter', direction, kind, outgoingScrollY })
+    // Новый экран всегда начинает с верхней границы. Исходящий слой
+    // компенсирует прежний scrollY в Shell, поэтому перед движением он
+    // остаётся ровно в том кадре, где гость нажал кнопку, и не прыгает
+    // сначала к началу длинного меню.
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
     routeEnterTimer.current = window.setTimeout(() => {
       routeTransitionBusy.current = false
-      setRouteTransition({ phase: 'idle', direction, kind })
+      setRouteTransition({ phase: 'idle', direction, kind, outgoingScrollY: 0 })
       routeEnterTimer.current = undefined
     }, kind === 'hero' ? HERO_ENTER_MS : ROUTE_ENTER_MS)
   }, [reducedMotion])
@@ -212,15 +221,32 @@ export default function PublicOrderPage() {
     staleTime: 30_000,
   })
   useEffect(() => {
-    // Первый экран карточек готовим, пока гость смотрит hero. Остальные
-    // изображения остаются lazy и не расходуют трафик заранее.
-    for (const item of menu?.categories[0]?.items.slice(0, 4) ?? []) {
-      if (!item.image_url) continue
-      const image = new Image()
-      image.decoding = 'async'
-      image.src = item.image_url
+    if (!menu?.categories.length) return
+
+    // Шесть карточек двух первых категорий декодируем ещё на hero. После
+    // старта держим прогретыми текущую и следующую категории: быстрый тап
+    // по соседнему чипу не показывает пустые карточки, а весь остальной
+    // каталог по-прежнему остаётся lazy.
+    const activeIndex = activeCat
+      ? Math.max(0, menu.categories.findIndex((category) => category.id === activeCat))
+      : 0
+    const categoryIndexes = menu.categories.length > 1
+      ? [activeIndex, (activeIndex + 1) % menu.categories.length]
+      : [activeIndex]
+
+    for (const categoryIndex of categoryIndexes) {
+      for (const item of menu.categories[categoryIndex]?.items.slice(0, 6) ?? []) {
+        if (!item.image_url) continue
+        const image = new Image()
+        image.decoding = 'async'
+        image.onload = () => decodedPublicMenuImages.add(item.image_url!)
+        image.src = item.image_url
+        void image.decode?.()
+          .then(() => decodedPublicMenuImages.add(item.image_url!))
+          .catch(() => undefined)
+      }
     }
-  }, [menu])
+  }, [activeCat, menu])
   /**
    * Сверка восстановленной корзины с меню. Корзина живёт до 6 часов и
    * хранит снапшот цен: товар мог подорожать или исчезнуть. Сервер это
@@ -500,6 +526,7 @@ export default function PublicOrderPage() {
       transitionPhase={routeTransition.phase}
       transitionDirection={routeTransition.direction}
       transitionKind={routeTransition.kind}
+      outgoingScrollY={routeTransition.outgoingScrollY}
       onHeroStart={() => {
         transitionTo('forward', 'hero', () => {
           setHasStarted(true)
@@ -548,7 +575,7 @@ export default function PublicOrderPage() {
                       item={item}
                       lang={lang}
                       layout="grid"
-                      priority={index < 4}
+                      priority={index < 6}
                       onTap={() => openItem(item)}
                     />
                   ))}
@@ -697,7 +724,7 @@ export default function PublicOrderPage() {
 function Shell({
   isRtl, title, logo, hero, headerImg, heroVideo, bgImg, onHeroStart, onBack, backLabel,
   routeKey, transitionPhase = 'idle', transitionDirection = 'forward',
-  transitionKind = 'route', children,
+  transitionKind = 'route', outgoingScrollY = 0, children,
 }: {
   isRtl: boolean
   title?: string
@@ -715,6 +742,8 @@ function Shell({
   transitionPhase?: RouteTransitionPhase
   transitionDirection?: RouteDirection
   transitionKind?: RouteTransitionKind
+  /** Сохраняет визуальную позицию длинного исходящего экрана после scrollTo(0). */
+  outgoingScrollY?: number
   children: React.ReactNode
 }) {
   const hasBg = !!bgImg
@@ -729,6 +758,25 @@ function Shell({
   const showCompactHeader = !hero || enteringHero
   const heroTransitionRole = leavingHero ? 'leaving' : enteringHero ? 'entering' : 'idle'
   const compactTransitionRole = leavingHero ? 'entering' : enteringHero ? 'leaving' : 'idle'
+  const currentRouteKey = routeKey ?? '__default__'
+  const currentRouteChildren = enteringHero ? null : children
+  const latestRouteChildren = useRef<React.ReactNode>(currentRouteChildren)
+  const latestRouteKey = useRef(currentRouteKey)
+  const outgoingRoute = useRef<{ key: string; children: React.ReactNode } | null>(null)
+
+  if (latestRouteKey.current !== currentRouteKey) {
+    outgoingRoute.current = {
+      key: latestRouteKey.current,
+      children: latestRouteChildren.current,
+    }
+    latestRouteKey.current = currentRouteKey
+  }
+  latestRouteChildren.current = currentRouteChildren
+
+  const visibleOutgoingRoute =
+    transitionPhase === 'enter' && outgoingRoute.current?.key !== currentRouteKey
+      ? outgoingRoute.current
+      : null
 
   useEffect(() => {
     if (!routeKey || routeKey === focusedRoute.current || transitionPhase !== 'idle') return
@@ -847,7 +895,19 @@ function Shell({
           aria-busy={transitionPhase !== 'idle'}
           className="public-menu-screen flex-1 flex flex-col"
         >
-          {children}
+          {visibleOutgoingRoute && (
+            <div
+              key={visibleOutgoingRoute.key}
+              aria-hidden="true"
+              className="public-menu-route-layer is-outgoing"
+              style={{ insetBlockStart: -outgoingScrollY }}
+            >
+              {visibleOutgoingRoute.children}
+            </div>
+          )}
+          <div key={currentRouteKey} className="public-menu-route-layer is-current">
+            {currentRouteChildren}
+          </div>
         </div>
       </div>
     </div>
@@ -1074,19 +1134,49 @@ function ItemRow({ item, lang, onTap, layout = 'row', priority = false }: {
 }) {
   const prices = item.variants.length > 0 ? item.variants.map((v) => v.price) : [item.price]
   const minPrice = Math.min(...prices)
+  const [imageState, setImageState] = useState<'loading' | 'ready' | 'error'>(
+    item.image_url
+      ? decodedPublicMenuImages.has(item.image_url) ? 'ready' : 'loading'
+      : 'error'
+  )
+  useEffect(() => {
+    setImageState(
+      item.image_url
+        ? decodedPublicMenuImages.has(item.image_url) ? 'ready' : 'loading'
+        : 'error'
+    )
+  }, [item.image_url])
+
+  function revealImage(image: HTMLImageElement) {
+    const markReady = () => {
+      if (item.image_url) decodedPublicMenuImages.add(item.image_url)
+      setImageState('ready')
+    }
+    const decoded = image.decode?.()
+    if (!decoded) {
+      markReady()
+      return
+    }
+    void decoded
+      .catch(() => undefined)
+      .then(markReady)
+  }
+
   return (
     <button
       onClick={onTap}
       className={`public-menu-item-card is-${layout}`}
     >
-      <span className="public-menu-item-media">
-        {item.image_url ? (
+      <span className="public-menu-item-media" data-image-state={imageState}>
+        {item.image_url && imageState !== 'error' ? (
           <img
             src={item.image_url}
             alt=""
             loading={priority ? 'eager' : 'lazy'}
             fetchPriority={priority ? 'high' : 'auto'}
             decoding="async"
+            onLoad={(event) => revealImage(event.currentTarget)}
+            onError={() => setImageState('error')}
           />
         ) : (
           <span className="public-menu-item-placeholder" aria-hidden>
