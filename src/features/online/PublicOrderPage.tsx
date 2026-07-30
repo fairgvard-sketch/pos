@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { t, formatTime, type Lang } from '../../lib/i18n'
@@ -55,6 +56,16 @@ interface CartLine {
   qty: number
 }
 
+type RouteDirection = 'forward' | 'back'
+type RouteTransitionPhase = 'idle' | 'exit' | 'enter'
+type RouteTransitionKind = 'hero' | 'route'
+
+const ROUTE_EXIT_MS = 100
+const ROUTE_ENTER_MS = 210
+const HERO_EXIT_MS = 140
+const HERO_ENTER_MS = 240
+const ITEM_SHEET_EXIT_MS = 190
+
 function readActive(locId: string): string | null {
   try {
     const raw = localStorage.getItem(ACTIVE_KEY)
@@ -85,33 +96,91 @@ export default function PublicOrderPage() {
   const [checkoutStage, setCheckoutStage] = useState<'cart' | 'payment'>('cart')
   const [hasStarted, setHasStarted] = useState(false)
   const [configItem, setConfigItem] = useState<PublicItem | null>(null)
+  const [configClosing, setConfigClosing] = useState(false)
   /** Правится строка корзины (её key), а не добавляется новая позиция */
   const [editingKey, setEditingKey] = useState<string | null>(null)
-  // null = экран плиток категорий; id = экран позиций категории
+  // null = hero; id = экран позиций категории
   const [activeCat, setActiveCat] = useState<string | null>(null)
-  useEffect(() => { window.scrollTo(0, 0) }, [activeCat, view, checkoutStage])
+  const [categoryDirection, setCategoryDirection] = useState<'next' | 'previous'>('next')
+  const reducedMotion = usePrefersReducedMotion()
+  const [routeTransition, setRouteTransition] = useState<{
+    phase: RouteTransitionPhase
+    direction: RouteDirection
+    kind: RouteTransitionKind
+  }>({ phase: 'idle', direction: 'forward', kind: 'route' })
+  const routeTransitionBusy = useRef(false)
+  const routeExitTimer = useRef<number | undefined>(undefined)
+  const routeEnterTimer = useRef<number | undefined>(undefined)
+  const itemCloseTimer = useRef<number | undefined>(undefined)
+  const itemTrigger = useRef<HTMLElement | null>(null)
+
+  useEffect(() => () => {
+    if (routeExitTimer.current !== undefined) window.clearTimeout(routeExitTimer.current)
+    if (routeEnterTimer.current !== undefined) window.clearTimeout(routeEnterTimer.current)
+    if (itemCloseTimer.current !== undefined) window.clearTimeout(itemCloseTimer.current)
+  }, [])
 
   /**
-   * Переход между экранами. Раньше контент подменялся рывком вместе со
-   * scrollTo(0,0) — без кадра перехода теряется связь «откуда я пришёл»,
-   * и каждый экран приходится перечитывать заново.
-   *
-   * key перемонтирует контейнер, поэтому анимация проигрывается на каждой
-   * смене; data-nav задаёт направление — назад контент приходит сверху.
+   * Старый экран сначала коротко уходит, затем новый входит в обратимом
+   * направлении. Transform применяется только к прокручиваемому контенту,
+   * не к предку fixed-панелей: иначе CSS превращает viewport-fixed в
+   * «fixed относительно длинной страницы».
    */
-  const screenKey = view === 'checkout' ? `checkout:${checkoutStage}` : `menu:${activeCat ?? 'hero'}`
-  const screenDepth = view === 'checkout' ? (checkoutStage === 'payment' ? 3 : 2) : 1
-  /**
-   * Направление вычисляем синхронно со сменой глубины, а не в эффекте:
-   * эффект отработал бы уже после первого кадра нового экрана, и анимация
-   * успела бы стартовать со старым направлением. Паттерн «состояние,
-   * производное от пропса» — сравниваем с предыдущим значением в рендере.
-   */
-  const [nav, setNav] = useState({ depth: screenDepth, direction: 'forward' as 'forward' | 'back' })
-  if (nav.depth !== screenDepth) {
-    setNav({ depth: screenDepth, direction: screenDepth < nav.depth ? 'back' : 'forward' })
-  }
-  const navDirection = nav.direction
+  const transitionTo = useCallback((
+    direction: RouteDirection,
+    kind: RouteTransitionKind,
+    commit: () => void,
+  ) => {
+    if (routeTransitionBusy.current) return
+    if (reducedMotion) {
+      window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+      commit()
+      return
+    }
+
+    routeTransitionBusy.current = true
+    setRouteTransition({ phase: 'exit', direction, kind })
+    routeExitTimer.current = window.setTimeout(() => {
+      window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+      commit()
+      setRouteTransition({ phase: 'enter', direction, kind })
+      routeEnterTimer.current = window.setTimeout(() => {
+        routeTransitionBusy.current = false
+        setRouteTransition({ phase: 'idle', direction, kind })
+        routeEnterTimer.current = undefined
+      }, kind === 'hero' ? HERO_ENTER_MS : ROUTE_ENTER_MS)
+      routeExitTimer.current = undefined
+    }, kind === 'hero' ? HERO_EXIT_MS : ROUTE_EXIT_MS)
+  }, [reducedMotion])
+
+  const finishConfigClose = useCallback(() => {
+    setConfigItem(null)
+    setEditingKey(null)
+    setConfigClosing(false)
+  }, [])
+
+  useEffect(() => {
+    if (configItem || !itemTrigger.current) return
+    const trigger = itemTrigger.current
+    const timer = window.setTimeout(() => {
+      if (trigger.isConnected) trigger.focus({ preventScroll: true })
+      itemTrigger.current = null
+    }, 0)
+    return () => window.clearTimeout(timer)
+  }, [configItem])
+
+  const closeConfigItem = useCallback(() => {
+    if (itemCloseTimer.current !== undefined) return
+    if (reducedMotion) {
+      finishConfigClose()
+      return
+    }
+    setConfigClosing(true)
+    itemCloseTimer.current = window.setTimeout(() => {
+      itemCloseTimer.current = undefined
+      finishConfigClose()
+    }, ITEM_SHEET_EXIT_MS)
+  }, [finishConfigClose, reducedMotion])
 
   /**
    * Киоск-режим: планшет на столе не должен хранить заказ ушедшего гостя.
@@ -121,20 +190,23 @@ export default function PublicOrderPage() {
    * него — значит лишить гостя единственного способа узнать свой номер.
    */
   const resetToStart = () => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
     setCart([])
     setConfigItem(null)
+    setConfigClosing(false)
     setActiveCat(null)
     setCheckoutStage('cart')
     setView('menu')
     setHasStarted(false)
   }
   /**
-   * Киоск-таймер работает, только когда гость вошёл в меню (hasStarted).
-   * На экране приветствия сбрасывать нечего — корзина пуста, и гость там
-   * ничего не выбирал: вопрос «вы ещё здесь?» поверх заставки выглядел
-   * как ошибка и требовал ответа ни на чём.
+   * Автосброс включается только явным ?kiosk=1. Обычный QR открывается на
+   * личном телефоне: там минута чтения состава не должна стирать корзину.
    */
-  const { countdown, stayActive } = useIdleReset(!activeUuid && hasStarted, resetToStart)
+  const { countdown, stayActive } = useIdleReset(
+    queryContext.kiosk && !activeUuid && hasStarted,
+    resetToStart,
+  )
 
   const { data: menu, isLoading, isError } = useQuery({
     queryKey: ['public_menu', locId, queryContext.tableToken],
@@ -316,9 +388,12 @@ export default function PublicOrderPage() {
   }
 
   function startNewOrder() {
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
     localStorage.removeItem(ACTIVE_KEY)
     setActiveUuid(null)
     setCart([])
+    setConfigItem(null)
+    setConfigClosing(false)
     setView('menu')
     setHasStarted(false)
     setActiveCat(null)
@@ -328,7 +403,22 @@ export default function PublicOrderPage() {
     // Карточка товара — часть витрины: любой товар сначала раскрывается
     // крупно с фото, описанием и ценой. Это сохраняет предсказуемый UX и
     // не добавляет простые позиции в корзину неожиданно по тапу по карточке.
+    itemTrigger.current = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null
+    setConfigClosing(false)
     setConfigItem(item)
+  }
+
+  function selectCategory(id: string) {
+    if (!menu || id === activeCat) return
+    const currentIndex = menu.categories.findIndex((category) => category.id === activeCat)
+    const nextIndex = menu.categories.findIndex((category) => category.id === id)
+    setCategoryDirection(nextIndex >= currentIndex ? 'next' : 'previous')
+    // Сбрасываем позицию до React-коммита: новый список сразу появляется
+    // от заголовка, без кадра в старом scrollY и последующего прыжка.
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+    setActiveCat(id)
   }
 
   // ── Экран статуса активной заявки ──────────────────────────
@@ -387,6 +477,11 @@ export default function PublicOrderPage() {
       : requestedType && orderTypes.includes(requestedType)
       ? requestedType
       : orderTypes[0] ?? 'takeaway'
+  const routeKey = view === 'checkout'
+    ? checkoutStage
+    : hasStarted
+      ? 'menu'
+      : 'hero'
   return (
     <Shell
       isRtl={isRtl}
@@ -396,11 +491,15 @@ export default function PublicOrderPage() {
       headerImg={menu.location.header_url}
       heroVideo={menu.location.hero_video_url ?? BRANDED_HERO_VIDEOS[locId] ?? null}
       bgImg={menuBackground}
-      screenKey={screenKey}
-      navDirection={navDirection}
+      routeKey={routeKey}
+      transitionPhase={routeTransition.phase}
+      transitionDirection={routeTransition.direction}
+      transitionKind={routeTransition.kind}
       onHeroStart={() => {
-        setHasStarted(true)
-        setActiveCat(menu.categories[0]?.id ?? null)
+        transitionTo('forward', 'hero', () => {
+          setHasStarted(true)
+          setActiveCat(menu.categories[0]?.id ?? null)
+        })
       }}
       // Возврат в шапке: из оплаты → к корзине, из корзины → к меню,
       // из меню → на заставку. Раньше на экране меню кнопки не было, и
@@ -408,10 +507,13 @@ export default function PublicOrderPage() {
       onBack={
         view === 'checkout'
           ? checkoutStage === 'payment'
-            ? () => setCheckoutStage('cart')
-            : () => setView('menu')
+            ? () => transitionTo('back', 'route', () => setCheckoutStage('cart'))
+            : () => transitionTo('back', 'route', () => setView('menu'))
           : hasStarted
-            ? () => { setHasStarted(false); setActiveCat(null) }
+            ? () => transitionTo('back', 'hero', () => {
+                setHasStarted(false)
+                setActiveCat(null)
+              })
             : undefined
       }
       backLabel={t(lang, 'back')}
@@ -420,27 +522,37 @@ export default function PublicOrderPage() {
         const cat = menu.categories.find((c) => c.id === activeCat)
         if (!cat) return null
         return (
-          <>
-            {/* Чипы быстрого перехода между категориями (возврат к плиткам — стрелка в шапке) */}
-            <CategoryChips categories={menu.categories} activeCat={activeCat} onSelect={setActiveCat} />
-            <div className="public-menu-products-section px-4 pb-4">
-              <div className="public-menu-section-heading">
-                <h2 className="public-menu-section-title">{cat.name}</h2>
+          <div className="public-menu-route-motion">
+            {/* Навигация не перемонтируется при смене категории: движется
+                активный чип и обновляется только список товаров. */}
+            <CategoryChips categories={menu.categories} activeCat={activeCat} onSelect={selectCategory} />
+            <div
+              key={activeCat}
+              data-category-direction={categoryDirection}
+              data-category-motion={routeTransition.phase === 'idle' ? 'on' : 'off'}
+              className="public-menu-category-content"
+            >
+              <div className="public-menu-products-section px-4 pb-4">
+                <div className="public-menu-section-heading">
+                  <h2 className="public-menu-section-title public-menu-route-focus public-menu-route-heading" tabIndex={-1}>
+                    {cat.name}
+                  </h2>
+                </div>
+                <div className="public-menu-product-grid">
+                  {cat.items.map((item) => (
+                    <ItemRow
+                      key={item.id}
+                      item={item}
+                      lang={lang}
+                      layout="grid"
+                      onTap={() => openItem(item)}
+                    />
+                  ))}
+                </div>
               </div>
-              <div className="public-menu-product-grid">
-                {cat.items.map((item) => (
-                  <ItemRow
-                    key={item.id}
-                    item={item}
-                    lang={lang}
-                    layout="grid"
-                    onTap={() => openItem(item)}
-                  />
-                ))}
-              </div>
+              <SocialFooter links={menu.location.links} lang={lang} padForCart={cartCount > 0} />
             </div>
-            <SocialFooter links={menu.location.links} lang={lang} padForCart={cartCount > 0} />
-          </>
+          </div>
         )
       })()}
 
@@ -452,8 +564,10 @@ export default function PublicOrderPage() {
           total={cartTotal}
           bumping={bumping}
           onOpen={() => {
-            setCheckoutStage('cart')
-            setView('checkout')
+            transitionTo('forward', 'route', () => {
+              setCheckoutStage('cart')
+              setView('checkout')
+            })
           }}
         />
       )}
@@ -506,12 +620,13 @@ export default function PublicOrderPage() {
                 : 'pubTableQrExpired')
               : null
           }
-          onAddItems={() => setView('menu')}
-          onContinue={() => setCheckoutStage('payment')}
+          onAddItems={() => transitionTo('back', 'route', () => setView('menu'))}
+          onContinue={() => transitionTo('forward', 'route', () => setCheckoutStage('payment'))}
           onQty={updateQty}
           onEditLine={editCartLine}
           onRecommend={openItem}
           onSubmitted={(clientUuid) => {
+            window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
             localStorage.setItem(ACTIVE_KEY, JSON.stringify({ clientUuid, locId }))
             setActiveUuid(clientUuid)
             setCart([])
@@ -527,21 +642,20 @@ export default function PublicOrderPage() {
           isRtl={isRtl}
           viewOnly={viewOnly}
           editing={editingLine}
-          onClose={() => { setConfigItem(null); setEditingKey(null) }}
+          closing={configClosing}
+          onClose={closeConfigItem}
           // Удаление позиции из самой шторки правки: гость, открывший
           // строку «передумать», ожидает найти здесь и «убрать», а не
           // закрывать карточку и жать «−» до нуля в корзине.
           onRemove={editingKey ? () => {
             updateQty(editingKey, 0)
-            setConfigItem(null)
-            setEditingKey(null)
+            closeConfigItem()
           } : undefined}
           onAdd={(line) => {
             // Правка строки заменяет её состав; обычный сценарий добавляет
             if (editingKey) replaceLine(editingKey, line)
             else addLine(line)
-            setConfigItem(null)
-            setEditingKey(null)
+            closeConfigItem()
           }}
         />
       )}
@@ -578,7 +692,8 @@ export default function PublicOrderPage() {
  */
 function Shell({
   isRtl, title, logo, hero, headerImg, heroVideo, bgImg, onHeroStart, onBack, backLabel,
-  screenKey, navDirection, children,
+  routeKey, transitionPhase = 'idle', transitionDirection = 'forward',
+  transitionKind = 'route', children,
 }: {
   isRtl: boolean
   title?: string
@@ -591,15 +706,30 @@ function Shell({
   /** Стрелка возврата в компактной шапке (не hero); заменяет in-body «Назад» */
   onBack?: () => void
   backLabel?: string
-  /** Меняется при смене экрана — перемонтирует контейнер, чтобы проиграть переход */
-  screenKey?: string
-  /** Назад по маршруту — контент приходит сверху, а не снизу */
-  navDirection?: 'forward' | 'back'
+  /** Семантический экран для восстановления фокуса после перехода. */
+  routeKey?: string
+  transitionPhase?: RouteTransitionPhase
+  transitionDirection?: RouteDirection
+  transitionKind?: RouteTransitionKind
   children: React.ReactNode
 }) {
   const hasBg = !!bgImg
   const reducedMotion = usePrefersReducedMotion()
   const hasHeroMedia = !!heroVideo || !!headerImg
+  const frameRef = useRef<HTMLDivElement>(null)
+  const focusedRoute = useRef(routeKey)
+
+  useEffect(() => {
+    if (!routeKey || routeKey === focusedRoute.current || transitionPhase !== 'idle') return
+    const timer = window.setTimeout(() => {
+      frameRef.current
+        ?.querySelector<HTMLElement>('.public-menu-route-focus')
+        ?.focus({ preventScroll: true })
+      focusedRoute.current = routeKey
+    }, 0)
+    return () => window.clearTimeout(timer)
+  }, [routeKey, transitionPhase])
+
   return (
     // ВАЖНО (iOS Safari): не вешать overflow-x-clip на корень — clip на
     // предке ломает position:fixed у потомков (иконка корзины и нижняя
@@ -611,9 +741,16 @@ function Shell({
       dir={isRtl ? 'rtl' : 'ltr'}
       className={`public-menu-shell min-h-screen ${hasBg ? 'bg-transparent' : 'bg-[#eceef1]'}`}
     >
-      <div className={`public-menu-frame relative mx-auto min-h-screen flex flex-col ${hasBg ? '' : 'bg-white'}`}>
+      <div
+        ref={frameRef}
+        className={`public-menu-frame relative mx-auto min-h-screen flex flex-col ${hasBg ? '' : 'bg-white'}`}
+      >
         {hero ? (
-          <header className={`public-menu-hero${hasHeroMedia ? ' has-media' : ' is-brand-only'}`}>
+          <header
+            data-transition={transitionKind === 'hero' ? transitionPhase : 'idle'}
+            data-nav={transitionDirection}
+            className={`public-menu-hero${hasHeroMedia ? ' has-media' : ' is-brand-only'}`}
+          >
             {heroVideo ? (
               <video
                 key={heroVideo}
@@ -649,7 +786,7 @@ function Shell({
             </div>
             <button
               type="button"
-              className="public-menu-hero-scroll"
+              className="public-menu-hero-scroll public-menu-route-focus"
               onClick={onHeroStart}
               aria-label="התחלה"
             >
@@ -658,6 +795,8 @@ function Shell({
           </header>
         ) : (
           <header
+            data-transition={transitionKind === 'hero' ? transitionPhase : 'idle'}
+            data-nav={transitionDirection}
             className="public-menu-compact-header sticky top-0 z-10 bg-white border-b border-gray-100 px-4 flex items-center justify-center relative"
             style={{
               height: 'calc(3.5rem + env(safe-area-inset-top))',
@@ -686,8 +825,10 @@ function Shell({
           </header>
         )}
         <div
-          key={screenKey}
-          data-nav={navDirection}
+          data-transition={transitionPhase}
+          data-nav={transitionDirection}
+          data-transition-kind={transitionKind}
+          aria-busy={transitionPhase !== 'idle'}
           className="public-menu-screen flex-1 flex flex-col"
         >
           {children}
@@ -949,7 +1090,9 @@ function ItemRow({ item, lang, onTap, layout = 'row' }: {
 }
 
 /** Конфигуратор позиции: размер, модификаторы (min/max по группе), количество */
-function ItemConfigSheet({ item, lang, isRtl, viewOnly = false, editing, onClose, onAdd, onRemove }: {
+function ItemConfigSheet({
+  item, lang, isRtl, viewOnly = false, editing, closing, onClose, onAdd, onRemove,
+}: {
   item: PublicItem
   lang: Lang
   isRtl: boolean
@@ -957,6 +1100,8 @@ function ItemConfigSheet({ item, lang, isRtl, viewOnly = false, editing, onClose
   viewOnly?: boolean
   /** Правка строки корзины: открываем с уже выбранными вариантом и модификаторами */
   editing?: { variantId: string | null; modIds: string[] } | null
+  /** Пока true, sheet остаётся в DOM и проигрывает обратный переход. */
+  closing: boolean
   onClose: () => void
   onAdd: (line: Omit<CartLine, 'key' | 'qty'>) => void
   /** Убрать позицию из корзины; задан только в режиме правки строки */
@@ -983,15 +1128,39 @@ function ItemConfigSheet({ item, lang, isRtl, viewOnly = false, editing, onClose
     return initial
   })
   const [qty, setQty] = useState(1)
+  const sheetRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        onClose()
+        return
+      }
+      if (event.key !== 'Tab') return
+      const focusable = Array.from(
+        sheetRef.current?.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ) ?? [],
+      ).filter((element) => !element.hasAttribute('hidden'))
+      if (focusable.length === 0) return
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
     }
     const previousOverflow = document.body.style.overflow
+    const pageFrame = document.querySelector<HTMLElement>('.public-menu-frame')
     document.body.style.overflow = 'hidden'
+    pageFrame?.setAttribute('inert', '')
     window.addEventListener('keydown', onKeyDown)
     return () => {
       document.body.style.overflow = previousOverflow
+      pageFrame?.removeAttribute('inert')
       window.removeEventListener('keydown', onKeyDown)
     }
   }, [onClose])
@@ -1029,13 +1198,15 @@ function ItemConfigSheet({ item, lang, isRtl, viewOnly = false, editing, onClose
     })
   }
 
-  return (
+  return createPortal(
     <div
       dir={isRtl ? 'rtl' : 'ltr'}
+      data-state={closing ? 'closing' : 'open'}
       className="public-menu-item-overlay fixed inset-0 z-40 flex items-end justify-center"
       onClick={onClose}
     >
       <div
+        ref={sheetRef}
         className="public-menu-item-sheet relative w-full bg-white overflow-hidden"
         role="dialog"
         aria-modal="true"
@@ -1176,7 +1347,8 @@ function ItemConfigSheet({ item, lang, isRtl, viewOnly = false, editing, onClose
         </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
 
@@ -1201,16 +1373,18 @@ function CartStage({
 
   return (
     <div className="public-menu-checkout public-menu-cart-stage">
-      <div className="public-menu-checkout-content">
+      <div className="public-menu-checkout-content public-menu-route-motion">
         <div className="public-menu-checkout-intro">
           <div>
-            <h1 className="font-display text-gray-900">{t(lang, 'pubYourOrder')}</h1>
+            <h1 className="font-display text-gray-900 public-menu-route-focus public-menu-route-heading" tabIndex={-1}>
+              {t(lang, 'pubYourOrder')}
+            </h1>
           </div>
         </div>
 
         <section className="public-menu-checkout-card public-menu-cart-card">
           <div className="public-menu-checkout-section-title public-menu-cart-title">
-            <h2>{t(lang, 'pubYourOrder')}</h2>
+            <h2 aria-hidden="true">{t(lang, 'pubYourOrder')}</h2>
             <button type="button" onClick={onAddItems}>
               <span aria-hidden>+</span>
               {t(lang, 'pubAddMoreItems')}
@@ -1481,12 +1655,14 @@ function CheckoutScreen({
 
   return (
     <div className="public-menu-checkout">
-      <div className="public-menu-checkout-content">
+      <div className="public-menu-checkout-content public-menu-route-motion">
         {/* Только заголовок: надзаголовок «сводка заказа» и подпись
             «выберите способ получения…» дублировали то, что и так видно
             в самих чипах ниже. */}
         <div className="public-menu-checkout-intro">
-          <h1 className="font-display text-gray-900">{t(lang, 'pubPaymentTitle')}</h1>
+          <h1 className="font-display text-gray-900 public-menu-route-focus public-menu-route-heading" tabIndex={-1}>
+            {t(lang, 'pubPaymentTitle')}
+          </h1>
         </div>
 
         {contextMessage && (

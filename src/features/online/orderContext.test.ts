@@ -14,6 +14,7 @@ describe('parsePublicOrderQuery', () => {
       tableToken: null,
       requestedType: null,
       channel: 'link',
+      kiosk: false,
     })
   })
 
@@ -22,6 +23,7 @@ describe('parsePublicOrderQuery', () => {
       tableToken: null,
       requestedType: 'takeaway',
       channel: 'website',
+      kiosk: false,
     })
   })
 
@@ -30,7 +32,16 @@ describe('parsePublicOrderQuery', () => {
       tableToken: TABLE_TOKEN,
       requestedType: 'here',
       channel: 'table_qr',
+      kiosk: false,
     })
+  })
+
+  it('enables idle reset only for an explicit kiosk link', () => {
+    expect(parsePublicOrderQuery('?source=counter_qr&kiosk=1')).toMatchObject({
+      channel: 'counter_qr',
+      kiosk: true,
+    })
+    expect(parsePublicOrderQuery('?source=counter_qr')).toMatchObject({ kiosk: false })
   })
 })
 

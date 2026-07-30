@@ -11,6 +11,8 @@ export interface PublicOrderQueryContext {
   tableToken: string | null
   requestedType: PublicOrderType | null
   channel: PublicOrderChannel
+  /** Автовозврат на hero нужен только общему киоск-устройству, не телефону гостя. */
+  kiosk: boolean
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -64,8 +66,10 @@ export function parsePublicOrderQuery(search: string): PublicOrderQueryContext {
     : rawChannel && CHANNELS.has(rawChannel)
       ? rawChannel
       : 'link'
+  const rawKiosk = params.get('kiosk')?.trim().toLowerCase()
+  const kiosk = rawKiosk === '1' || rawKiosk === 'true'
 
-  return { tableToken, requestedType: tableToken ? 'here' : requestedType, channel }
+  return { tableToken, requestedType: tableToken ? 'here' : requestedType, channel, kiosk }
 }
 
 /**

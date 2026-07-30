@@ -258,6 +258,68 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     background-size: cover;
   }
 
+  .public-menu-hero[data-transition='exit'] {
+    pointer-events: none;
+    animation: public-hero-exit 140ms ease-in both;
+  }
+
+  .public-menu-hero[data-transition='enter'] {
+    animation: public-hero-enter 240ms cubic-bezier(.22, .61, .21, 1) both;
+  }
+
+  .public-menu-compact-header[data-transition='exit'] {
+    pointer-events: none;
+    animation: public-header-exit 140ms ease-in both;
+  }
+
+  .public-menu-compact-header[data-transition='enter'] {
+    animation: public-header-enter 240ms cubic-bezier(.22, .61, .21, 1) both;
+  }
+
+  @keyframes public-hero-enter {
+    from {
+      opacity: 0;
+      transform: scale(1.015);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  @keyframes public-hero-exit {
+    from {
+      opacity: 1;
+      transform: scale(1);
+    }
+    to {
+      opacity: 0;
+      transform: scale(.992);
+    }
+  }
+
+  @keyframes public-header-enter {
+    from {
+      opacity: 0;
+      transform: translate3d(0, -.5rem, 0);
+    }
+    to {
+      opacity: 1;
+      transform: translate3d(0, 0, 0);
+    }
+  }
+
+  @keyframes public-header-exit {
+    from {
+      opacity: 1;
+      transform: translate3d(0, 0, 0);
+    }
+    to {
+      opacity: 0;
+      transform: translate3d(0, -.35rem, 0);
+    }
+  }
+
   /* Именно lvh, не dvh: dvh — высота при РАЗВЁРНУТЫХ панелях Safari, она
      МЕНЬШЕ видимой области, пока панель свёрнута, и под hero пробивалась
      полоса фона. lvh — максимальная высота вьюпорта, поэтому hero всегда
@@ -1710,8 +1772,7 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   .public-menu-item-overlay {
     align-items: stretch;
     background: #fff;
-    /* Подложка проявляется чуть быстрее шита: экран не «моргает» белым */
-    animation: sheet-fade 100ms ease-out both;
+    animation: sheet-fade 160ms ease-out both;
   }
 
   .public-menu-item-sheet {
@@ -1721,10 +1782,17 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     max-height: 100svh;
     flex-direction: column;
     border-radius: 0;
-    /* Выезд снизу: карточка возникала мгновенно, и это был самый резкий
-       момент маршрута. Только transform/opacity — на слабых телефонах
-       анимация остаётся на композиторе и не дёргается. */
-    animation: sheet-in 150ms cubic-bezier(.22, .61, .21, 1) both;
+    animation: sheet-in 240ms cubic-bezier(.22, .61, .21, 1) both;
+    will-change: transform, opacity;
+  }
+
+  .public-menu-item-overlay[data-state='closing'] {
+    pointer-events: none;
+    animation: sheet-fade-out 190ms ease-in both;
+  }
+
+  .public-menu-item-overlay[data-state='closing'] .public-menu-item-sheet {
+    animation: sheet-out 190ms cubic-bezier(.4, 0, 1, 1) both;
   }
 
   @keyframes sheet-fade {
@@ -1732,46 +1800,140 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     to { opacity: 1; }
   }
 
-  /* Смена экрана (меню → корзина → оплата) и смена категории.
-     Раньше контент подменялся рывком вместе со scrollTo(0,0): гость
-     терял связь «откуда я пришёл». Задача перехода — обозначить смену,
-     а не показать её: 120ms и сдвиг 8px читаются как отзывчивость,
-     всё длиннее в POS-сценарии воспринимается как ожидание.
-     Направление задаётся data-nav: вперёд (по ходу) или назад. */
-  .public-menu-screen {
-    animation: screen-in 120ms cubic-bezier(.22, .61, .21, 1) both;
-  }
-
-  .public-menu-screen[data-nav='back'] {
-    animation-name: screen-in-back;
-  }
-
-  @keyframes screen-in {
-    from {
-      opacity: 0;
-      transform: translate3d(0, 8px, 0);
-    }
-    to {
-      opacity: 1;
-      transform: translate3d(0, 0, 0);
-    }
-  }
-
-  @keyframes screen-in-back {
-    from {
-      opacity: 0;
-      transform: translate3d(0, -8px, 0);
-    }
-    to {
-      opacity: 1;
-      transform: translate3d(0, 0, 0);
-    }
+  @keyframes sheet-fade-out {
+    from { opacity: 1; }
+    to { opacity: 0; }
   }
 
   @keyframes sheet-in {
     from {
       opacity: 0;
-      transform: translate3d(0, 3%, 0);
+      transform: translate3d(0, 3rem, 0);
+    }
+    to {
+      opacity: 1;
+      transform: translate3d(0, 0, 0);
+    }
+  }
+
+  @keyframes sheet-out {
+    from {
+      opacity: 1;
+      transform: translate3d(0, 0, 0);
+    }
+    to {
+      opacity: 0;
+      transform: translate3d(0, 3.5rem, 0);
+    }
+  }
+
+  /*
+   * Route-контейнер сам никогда не получает transform: внутри него живут
+   * viewport-fixed CTA. Движется только .public-menu-route-motion, а
+   * нижняя панель анимируется самостоятельно.
+   */
+  .public-menu-screen {
+    --public-route-enter-x: 1.25rem;
+    --public-route-exit-x: -0.75rem;
+  }
+
+  .public-menu-route-heading:focus {
+    outline: none;
+  }
+
+  .public-menu-screen[data-nav='back'] {
+    --public-route-enter-x: -1.25rem;
+    --public-route-exit-x: 0.75rem;
+  }
+
+  [dir='rtl'] .public-menu-screen[data-nav='forward'] {
+    --public-route-enter-x: -1.25rem;
+    --public-route-exit-x: 0.75rem;
+  }
+
+  [dir='rtl'] .public-menu-screen[data-nav='back'] {
+    --public-route-enter-x: 1.25rem;
+    --public-route-exit-x: -0.75rem;
+  }
+
+  .public-menu-screen[data-transition='exit'] {
+    pointer-events: none;
+  }
+
+  .public-menu-screen[data-transition='exit'] .public-menu-route-motion {
+    animation: public-route-exit 100ms cubic-bezier(.4, 0, 1, 1) both;
+  }
+
+  .public-menu-screen[data-transition='enter'] .public-menu-route-motion {
+    animation: public-route-enter 210ms cubic-bezier(.22, .61, .21, 1) both;
+  }
+
+  .public-menu-screen[data-transition='exit'] .public-menu-checkout-submitbar {
+    animation: public-route-bar-exit 100ms ease-in both;
+  }
+
+  .public-menu-screen[data-transition='enter'] .public-menu-checkout-submitbar {
+    animation: public-route-bar-enter 210ms cubic-bezier(.22, .61, .21, 1) both;
+  }
+
+  @keyframes public-route-enter {
+    from {
+      opacity: 0;
+      transform: translate3d(var(--public-route-enter-x), 0, 0);
+    }
+    to {
+      opacity: 1;
+      transform: translate3d(0, 0, 0);
+    }
+  }
+
+  @keyframes public-route-exit {
+    from {
+      opacity: 1;
+      transform: translate3d(0, 0, 0);
+    }
+    to {
+      opacity: 0;
+      transform: translate3d(var(--public-route-exit-x), 0, 0);
+    }
+  }
+
+  @keyframes public-route-bar-enter {
+    from {
+      opacity: 0;
+      transform: translate3d(0, 1rem, 0);
+    }
+    to {
+      opacity: 1;
+      transform: translate3d(0, 0, 0);
+    }
+  }
+
+  @keyframes public-route-bar-exit {
+    from {
+      opacity: 1;
+      transform: translate3d(0, 0, 0);
+    }
+    to {
+      opacity: 0;
+      transform: translate3d(0, .75rem, 0);
+    }
+  }
+
+  /* Категории — peer-навигация, не новый экран: шапка и чипы остаются. */
+  .public-menu-category-content[data-category-motion='on'] {
+    --public-category-enter-x: -.5rem;
+    animation: public-category-enter 150ms cubic-bezier(.22, .61, .21, 1);
+  }
+
+  .public-menu-category-content[data-category-direction='previous'] {
+    --public-category-enter-x: .5rem;
+  }
+
+  @keyframes public-category-enter {
+    from {
+      opacity: 0;
+      transform: translate3d(var(--public-category-enter-x), 0, 0);
     }
     to {
       opacity: 1;
@@ -2254,7 +2416,11 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   /* Переходы гостевого меню: гость просил отключить движение — отключаем
      полностью, а не ускоряем. Контент при этом остаётся видимым (both в
      animation мог бы оставить его в начальном, полупрозрачном кадре). */
-  .public-menu-screen,
+  .public-menu-route-motion,
+  .public-menu-category-content,
+  .public-menu-hero,
+  .public-menu-compact-header,
+  .public-menu-checkout-submitbar,
   .public-menu-item-sheet,
   .public-menu-item-overlay {
     animation: none !important;
