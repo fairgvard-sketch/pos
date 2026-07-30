@@ -57,12 +57,10 @@ interface CartLine {
 }
 
 type RouteDirection = 'forward' | 'back'
-type RouteTransitionPhase = 'idle' | 'exit' | 'enter'
+type RouteTransitionPhase = 'idle' | 'enter'
 type RouteTransitionKind = 'hero' | 'route'
 
-const ROUTE_EXIT_MS = 100
 const ROUTE_ENTER_MS = 210
-const HERO_EXIT_MS = 140
 const HERO_ENTER_MS = 240
 const ITEM_SHEET_EXIT_MS = 190
 
@@ -101,7 +99,6 @@ export default function PublicOrderPage() {
   const [editingKey, setEditingKey] = useState<string | null>(null)
   // null = hero; id = экран позиций категории
   const [activeCat, setActiveCat] = useState<string | null>(null)
-  const [categoryDirection, setCategoryDirection] = useState<'next' | 'previous'>('next')
   const reducedMotion = usePrefersReducedMotion()
   const [routeTransition, setRouteTransition] = useState<{
     phase: RouteTransitionPhase
@@ -109,22 +106,21 @@ export default function PublicOrderPage() {
     kind: RouteTransitionKind
   }>({ phase: 'idle', direction: 'forward', kind: 'route' })
   const routeTransitionBusy = useRef(false)
-  const routeExitTimer = useRef<number | undefined>(undefined)
   const routeEnterTimer = useRef<number | undefined>(undefined)
   const itemCloseTimer = useRef<number | undefined>(undefined)
   const itemTrigger = useRef<HTMLElement | null>(null)
 
   useEffect(() => () => {
-    if (routeExitTimer.current !== undefined) window.clearTimeout(routeExitTimer.current)
     if (routeEnterTimer.current !== undefined) window.clearTimeout(routeEnterTimer.current)
     if (itemCloseTimer.current !== undefined) window.clearTimeout(itemCloseTimer.current)
   }, [])
 
   /**
-   * Старый экран сначала коротко уходит, затем новый входит в обратимом
-   * направлении. Transform применяется только к прокручиваемому контенту,
-   * не к предку fixed-панелей: иначе CSS превращает viewport-fixed в
-   * «fixed относительно длинной страницы».
+   * Переход коммитится сразу: отдельной exit-фазы и паузы между экранами
+   * нет. Новый экран одним движением входит слева направо. Transform
+   * применяется только к прокручиваемому контенту, не к предку
+   * fixed-панелей: иначе CSS превращает viewport-fixed в «fixed
+   * относительно длинной страницы».
    */
   const transitionTo = useCallback((
     direction: RouteDirection,
@@ -139,18 +135,14 @@ export default function PublicOrderPage() {
     }
 
     routeTransitionBusy.current = true
-    setRouteTransition({ phase: 'exit', direction, kind })
-    routeExitTimer.current = window.setTimeout(() => {
-      window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
-      commit()
-      setRouteTransition({ phase: 'enter', direction, kind })
-      routeEnterTimer.current = window.setTimeout(() => {
-        routeTransitionBusy.current = false
-        setRouteTransition({ phase: 'idle', direction, kind })
-        routeEnterTimer.current = undefined
-      }, kind === 'hero' ? HERO_ENTER_MS : ROUTE_ENTER_MS)
-      routeExitTimer.current = undefined
-    }, kind === 'hero' ? HERO_EXIT_MS : ROUTE_EXIT_MS)
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+    commit()
+    setRouteTransition({ phase: 'enter', direction, kind })
+    routeEnterTimer.current = window.setTimeout(() => {
+      routeTransitionBusy.current = false
+      setRouteTransition({ phase: 'idle', direction, kind })
+      routeEnterTimer.current = undefined
+    }, kind === 'hero' ? HERO_ENTER_MS : ROUTE_ENTER_MS)
   }, [reducedMotion])
 
   const finishConfigClose = useCallback(() => {
@@ -181,6 +173,12 @@ export default function PublicOrderPage() {
       finishConfigClose()
     }, ITEM_SHEET_EXIT_MS)
   }, [finishConfigClose, reducedMotion])
+
+  useEffect(() => {
+    if (view === 'menu' && !hasStarted && routeTransition.phase === 'idle' && activeCat) {
+      setActiveCat(null)
+    }
+  }, [activeCat, hasStarted, routeTransition.phase, view])
 
   /**
    * Киоск-режим: планшет на столе не должен хранить заказ ушедшего гостя.
@@ -213,6 +211,16 @@ export default function PublicOrderPage() {
     queryFn: () => fetchPublicMenu(locId, queryContext.tableToken),
     staleTime: 30_000,
   })
+  useEffect(() => {
+    // Первый экран карточек готовим, пока гость смотрит hero. Остальные
+    // изображения остаются lazy и не расходуют трафик заранее.
+    for (const item of menu?.categories[0]?.items.slice(0, 4) ?? []) {
+      if (!item.image_url) continue
+      const image = new Image()
+      image.decoding = 'async'
+      image.src = item.image_url
+    }
+  }, [menu])
   /**
    * Сверка восстановленной корзины с меню. Корзина живёт до 6 часов и
    * хранит снапшот цен: товар мог подорожать или исчезнуть. Сервер это
@@ -412,9 +420,6 @@ export default function PublicOrderPage() {
 
   function selectCategory(id: string) {
     if (!menu || id === activeCat) return
-    const currentIndex = menu.categories.findIndex((category) => category.id === activeCat)
-    const nextIndex = menu.categories.findIndex((category) => category.id === id)
-    setCategoryDirection(nextIndex >= currentIndex ? 'next' : 'previous')
     // Сбрасываем позицию до React-коммита: новый список сразу появляется
     // от заголовка, без кадра в старом scrollY и последующего прыжка.
     window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
@@ -487,7 +492,7 @@ export default function PublicOrderPage() {
       isRtl={isRtl}
       title={menu.location.business_name || menu.location.name}
       logo={menu.location.logo_url}
-      hero={view === 'menu' && !activeCat && !hasStarted}
+      hero={view === 'menu' && !hasStarted}
       headerImg={menu.location.header_url}
       heroVideo={menu.location.hero_video_url ?? BRANDED_HERO_VIDEOS[locId] ?? null}
       bgImg={menuBackground}
@@ -512,7 +517,6 @@ export default function PublicOrderPage() {
           : hasStarted
             ? () => transitionTo('back', 'hero', () => {
                 setHasStarted(false)
-                setActiveCat(null)
               })
             : undefined
       }
@@ -528,7 +532,6 @@ export default function PublicOrderPage() {
             <CategoryChips categories={menu.categories} activeCat={activeCat} onSelect={selectCategory} />
             <div
               key={activeCat}
-              data-category-direction={categoryDirection}
               data-category-motion={routeTransition.phase === 'idle' ? 'on' : 'off'}
               className="public-menu-category-content"
             >
@@ -539,12 +542,13 @@ export default function PublicOrderPage() {
                   </h2>
                 </div>
                 <div className="public-menu-product-grid">
-                  {cat.items.map((item) => (
+                  {cat.items.map((item, index) => (
                     <ItemRow
                       key={item.id}
                       item={item}
                       lang={lang}
                       layout="grid"
+                      priority={index < 4}
                       onTap={() => openItem(item)}
                     />
                   ))}
@@ -718,6 +722,13 @@ function Shell({
   const hasHeroMedia = !!heroVideo || !!headerImg
   const frameRef = useRef<HTMLDivElement>(null)
   const focusedRoute = useRef(routeKey)
+  const heroTransitionActive = transitionKind === 'hero' && transitionPhase === 'enter'
+  const leavingHero = heroTransitionActive && !hero && transitionDirection === 'forward'
+  const enteringHero = heroTransitionActive && !!hero && transitionDirection === 'back'
+  const showHero = !!hero || leavingHero
+  const showCompactHeader = !hero || enteringHero
+  const heroTransitionRole = leavingHero ? 'leaving' : enteringHero ? 'entering' : 'idle'
+  const compactTransitionRole = leavingHero ? 'entering' : enteringHero ? 'leaving' : 'idle'
 
   useEffect(() => {
     if (!routeKey || routeKey === focusedRoute.current || transitionPhase !== 'idle') return
@@ -745,11 +756,14 @@ function Shell({
         ref={frameRef}
         className={`public-menu-frame relative mx-auto min-h-screen flex flex-col ${hasBg ? '' : 'bg-white'}`}
       >
-        {hero ? (
+        {showHero && (
           <header
-            data-transition={transitionKind === 'hero' ? transitionPhase : 'idle'}
+            key="hero"
+            data-transition-role={heroTransitionRole}
             data-nav={transitionDirection}
-            className={`public-menu-hero${hasHeroMedia ? ' has-media' : ' is-brand-only'}`}
+            className={`public-menu-hero${hasHeroMedia ? ' has-media' : ' is-brand-only'}${
+              heroTransitionRole !== 'idle' ? ' is-transition-overlay' : ''
+            }`}
           >
             {heroVideo ? (
               <video
@@ -793,9 +807,11 @@ function Shell({
               <span>התחל</span>
             </button>
           </header>
-        ) : (
+        )}
+        {showCompactHeader && (
           <header
-            data-transition={transitionKind === 'hero' ? transitionPhase : 'idle'}
+            key="compact"
+            data-transition-role={compactTransitionRole}
             data-nav={transitionDirection}
             className="public-menu-compact-header sticky top-0 z-10 bg-white border-b border-gray-100 px-4 flex items-center justify-center relative"
             style={{
@@ -1048,11 +1064,13 @@ function SocialFooter({ links, lang, padForCart }: {
  * цена. Без фото — плейсхолдер с первой буквой названия,
  * чтобы список не «прыгал» по выравниванию.
  */
-function ItemRow({ item, lang, onTap, layout = 'row' }: {
+function ItemRow({ item, lang, onTap, layout = 'row', priority = false }: {
   item: PublicItem
   lang: Lang
   onTap: () => void
   layout?: 'row' | 'grid'
+  /** Первые видимые карточки загружаются сразу; остальной каталог — lazy. */
+  priority?: boolean
 }) {
   const prices = item.variants.length > 0 ? item.variants.map((v) => v.price) : [item.price]
   const minPrice = Math.min(...prices)
@@ -1063,7 +1081,13 @@ function ItemRow({ item, lang, onTap, layout = 'row' }: {
     >
       <span className="public-menu-item-media">
         {item.image_url ? (
-          <img src={item.image_url} alt="" loading="lazy" />
+          <img
+            src={item.image_url}
+            alt=""
+            loading={priority ? 'eager' : 'lazy'}
+            fetchPriority={priority ? 'high' : 'auto'}
+            decoding="async"
+          />
         ) : (
           <span className="public-menu-item-placeholder" aria-hidden>
             {item.name.slice(0, 1)}
