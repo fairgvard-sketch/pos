@@ -1,19 +1,21 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { useQueries, useQuery } from '@tanstack/react-query'
+import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { t, formatTime, type Lang } from '../../lib/i18n'
 import { PublicApiError } from '../online/publicApi'
 import { navigateWithTransition } from '../online/viewTransition'
 import {
-  fetchReserveInfo, submitPublicReservation, fetchPublicReservationStatus,
-  cancelPublicReservation, fetchAvailability,
-  type ReserveInfo, type ReserveStatus,
+  fetchReserveInfo, submitPublicReservation, fetchReservationView,
+  cancelPublicReservation, fetchAvailability, reschedulePublicReservation,
+  type ReserveInfo, type ReservationView,
 } from './publicReserveApi'
 import BrandSplash from '../../components/ui/BrandSplash'
 import {
   hasBookableSlot, normalizeSchedule, partsInZone, shiftDate, slotGrid,
   weeklyHoursRows,
 } from './schedule'
+import { downloadIcs } from './calendar'
+import { updateInstalledMenuName } from '../online/menuManifest'
 
 /**
  * Публичная страница брони стола (053), флоу как у Tabit:
@@ -34,7 +36,19 @@ const DEF_TZ = 'Asia/Jerusalem'
 
 type ReserveStep = 'slot' | 'times' | 'details'
 
-function readActive(locId: string): string | null {
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/**
+ * Ключ текущей брони. Приоритет у `?b=` из адреса (118): постоянная ссылка
+ * должна открывать бронь на ЛЮБОМ устройстве, в том числе там, где
+ * localStorage пуст. Хранилище остаётся вторым источником — для гостя,
+ * который просто вернулся на страницу заведения.
+ */
+function readBookingKey(locId: string): string | null {
+  try {
+    const fromUrl = new URLSearchParams(window.location.search).get('b')
+    if (fromUrl && UUID_RE.test(fromUrl)) return fromUrl
+  } catch { /* нет window.location — не беда, идём в хранилище */ }
   try {
     const raw = localStorage.getItem(ACTIVE_KEY)
     if (!raw) return null
@@ -43,6 +57,16 @@ function readActive(locId: string): string | null {
   } catch {
     return null
   }
+}
+
+/** Адрес страницы = постоянная ссылка на бронь; история не засоряется */
+function writeBookingUrl(token: string | null): void {
+  try {
+    const url = new URL(window.location.href)
+    if (token) url.searchParams.set('b', token)
+    else url.searchParams.delete('b')
+    window.history.replaceState(null, '', url.toString())
+  } catch { /* окружение без History API — ссылка просто не обновится */ }
 }
 
 function pad(n: number): string {
@@ -69,14 +93,28 @@ export default function PublicReservePage() {
   }, [])
   const isRtl = true
 
+  const qc = useQueryClient()
+
   // Незавершённая бронь переживает перезагрузку страницы
-  const [activeUuid, setActiveUuid] = useState<string | null>(() => readActive(locId))
+  const [activeUuid, setActiveUuid] = useState<string | null>(() => readBookingKey(locId))
 
   const { data: info, isLoading, isError } = useQuery({
     queryKey: ['public_reserve_info', locId],
     queryFn: () => fetchReserveInfo(locId),
     staleTime: 30_000,
   })
+
+  // Заголовок вкладки и имя устанавливаемого приложения (118). До этого в
+  // обоих местах стояло родовое «Angle — Digital Menu»: гость сохранял на
+  // домашний экран страницу брони, а получал ярлык меню.
+  const pageTitle = info?.location.business_name || info?.location.name
+  useEffect(() => {
+    if (!pageTitle) return
+    const previousTitle = document.title
+    document.title = `${t('he', 'rsvPageLabel')} · ${pageTitle}`
+    updateInstalledMenuName(pageTitle)
+    return () => { document.title = previousTitle }
+  }, [pageTitle])
 
   // «Сейчас» фиксируется на маунте: страница короткоживущая, а серверная
   // валидация окна своя — submit перепроверяет расписание в любом случае.
@@ -113,6 +151,9 @@ export default function PublicReservePage() {
   // Контакты живут выше экранов: возврат к времени и повторный вход в
   // детали не стирают уже набранное имя/телефон.
   const [detailsDraft, setDetailsDraft] = useState({ name: '', phone: '', note: '' })
+  // Слот заняли, пока гость заполнял контакты: экран времени показывает
+  // объяснение и перезапрошенную доступность.
+  const [conflict, setConflict] = useState(false)
   const [clientUuid, setClientUuid] = useState(() => crypto.randomUUID())
 
   // Лимит гостей (061): настройка владельца, дефолт 20, потолок 50
@@ -194,6 +235,7 @@ export default function PublicReservePage() {
   function startNew() {
     navigateWithTransition('back', () => {
       localStorage.removeItem(ACTIVE_KEY)
+      writeBookingUrl(null)
       setActiveUuid(null)
       setStep('slot')
       setZoneId(null)
@@ -212,7 +254,12 @@ export default function PublicReservePage() {
           lang={lang}
           routeKey="status"
         >
-          <StatusScreen lang={lang} clientUuid={activeUuid} onNew={startNew} />
+          <BookingScreen
+            lang={lang}
+            bookingKey={activeUuid}
+            tz={info?.location.timezone || DEF_TZ}
+            onNew={startNew}
+          />
         </Shell>
       </>
     )
@@ -304,8 +351,10 @@ export default function PublicReservePage() {
             freeTimes={freeTimes}
             zones={zones}
             todayStr={todayStr}
+            conflict={conflict}
             onPick={(nextTime, nextZone) => {
               navigateWithTransition('forward', () => {
+                setConflict(false)
                 setTime(nextTime)
                 setZoneId(nextZone)
                 setStep('details')
@@ -328,10 +377,22 @@ export default function PublicReservePage() {
             draft={detailsDraft}
             onDraft={setDetailsDraft}
             clientUuid={clientUuid}
-            onSubmitted={(uuid) => {
+            onConflict={() => {
+              // Доступность могла устареть — перезапрашиваем и возвращаем
+              // гостя на шаг выбора времени.
+              qc.invalidateQueries({ queryKey: ['reserve_avail', locId] })
+              navigateWithTransition('back', () => {
+                setConflict(true)
+                setStep('times')
+              })
+            }}
+            onSubmitted={(key) => {
               navigateWithTransition('forward', () => {
-                localStorage.setItem(ACTIVE_KEY, JSON.stringify({ clientUuid: uuid, locId }))
-                setActiveUuid(uuid)
+                // Ключом становится серверный public_token (118): именно он
+                // уходит в адрес и переживает смену устройства.
+                localStorage.setItem(ACTIVE_KEY, JSON.stringify({ clientUuid: key, locId }))
+                writeBookingUrl(key)
+                setActiveUuid(key)
               })
             }}
           />
@@ -904,7 +965,7 @@ function NavChooserSheet({ lang, googleMapsUrl, wazeUrl, onClose }: {
  * зону в контакты. Без зон (или одна) — единственная секция «вся точка»
  * (zoneId=null).
  */
-function TimesScreen({ lang, locId, date, time, guests, timeSlots, instant, freeTimes, zones, todayStr, onPick }: {
+function TimesScreen({ lang, locId, date, time, guests, timeSlots, instant, freeTimes, zones, todayStr, conflict, onPick }: {
   lang: Lang
   locId: string
   date: string
@@ -918,6 +979,8 @@ function TimesScreen({ lang, locId, date, time, guests, timeSlots, instant, free
   /** Зоны зала (072); от двух зон — секция на зону, иначе одна общая */
   zones: { id: string; name: string }[]
   todayStr: string
+  /** Гость вернулся сюда из-за занятого слота (118) */
+  conflict: boolean
   /** (время, zoneId) — zoneId=null для общей секции «без зоны» */
   onPick: (time: string, zoneId: string | null) => void
 }) {
@@ -957,6 +1020,15 @@ function TimesScreen({ lang, locId, date, time, guests, timeSlots, instant, free
       >
         {instant ? t(lang, 'rsvFoundTitle') : t(lang, 'rsvPickTimeTitle')}
       </h2>
+      {conflict && (
+        <div
+          className="w-full mt-4 rounded-2xl bg-amber-50 text-amber-800 text-sm font-semibold px-4 py-3"
+          role="alert"
+        >
+          {t(lang, 'rsvConflictHint')}
+        </div>
+      )}
+
       <div className="mt-4">
         <ReserveSelectionSummary
           lang={lang}
@@ -1103,7 +1175,7 @@ function reserveErrorText(lang: Lang, code: string): string {
 
 function DetailsScreen({
   lang, locId, date, time, guests, instant, zoneId, zoneName, todayStr,
-  reservedAt, draft, onDraft, clientUuid, onSubmitted,
+  reservedAt, draft, onDraft, clientUuid, onSubmitted, onConflict,
 }: {
   lang: Lang
   locId: string
@@ -1123,6 +1195,9 @@ function DetailsScreen({
   onDraft: (draft: { name: string; phone: string; note: string }) => void
   clientUuid: string
   onSubmitted: (clientUuid: string) => void
+  /** Слот заняли, пока гость заполнял форму: возвращаем его к выбору
+   *  времени со свежей доступностью, не стирая контакты. */
+  onConflict: () => void
 }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -1159,7 +1234,7 @@ function DetailsScreen({
     setBusy(true)
     setError(null)
     try {
-      await submitPublicReservation({
+      const result = await submitPublicReservation({
         loc: locId,
         client_uuid: clientUuid,
         name: name.trim(),
@@ -1169,11 +1244,20 @@ function DetailsScreen({
         note: note.trim() || null,
         zone_id: zoneId,
       })
-      onSubmitted(clientUuid)
+      // Старый сервер (до 118) токена не вернёт — тогда ключом остаётся
+      // client_uuid, и страница работает как раньше.
+      onSubmitted(result.public_token ?? clientUuid)
     } catch (e) {
       const code = e instanceof PublicApiError ? e.code : 'unknown'
-      setError(reserveErrorText(lang, code))
       setBusy(false)
+      // Конфликт — не тупик: пока гость набирал имя, слот заняли. Форму
+      // сохраняем (контакты живут выше экранов) и показываем СВЕЖИЕ
+      // варианты времени вместо красной надписи в никуда.
+      if (code === 'full_slot' || code === 'outside_hours' || code === 'invalid_time') {
+        onConflict()
+        return
+      }
+      setError(reserveErrorText(lang, code))
     }
   }
 
@@ -1269,47 +1353,54 @@ function visitLabel(iso: string, lang: Lang): string {
   return `${day}, ${formatTime(iso, lang)}`
 }
 
-/** Статус брони: поллинг каждые 5 секунд; отмена гостем — двухшагово */
-function StatusScreen({ lang, clientUuid, onNew }: {
+/**
+ * Постоянная страница брони (118). Открывается и по ссылке `?b=<токен>`, и
+ * из localStorage прежнего гостя, поэтому доступ к брони больше не умирает
+ * вместе с браузером, в котором её оформили.
+ *
+ * Всё, что здесь можно сделать, разрешает СЕРВЕР (`can_cancel` /
+ * `can_reschedule`): правило отсечки живёт в одном месте. Клиент лишь
+ * объясняет отказ человеческими словами.
+ */
+function BookingScreen({ lang, bookingKey, tz, onNew }: {
   lang: Lang
-  clientUuid: string
+  bookingKey: string
+  tz: string
   onNew: () => void
 }) {
-  const [status, setStatus] = useState<ReserveStatus | null>(null)
-  const [lost, setLost] = useState(false)
   const [confirmCancel, setConfirmCancel] = useState(false)
   const [cancelBusy, setCancelBusy] = useState(false)
+  const [cancelError, setCancelError] = useState<string | null>(null)
+  const [rescheduling, setRescheduling] = useState(false)
+  const [navOpen, setNavOpen] = useState(false)
+  const qc = useQueryClient()
 
-  useEffect(() => {
-    let stopped = false
-    async function poll() {
-      try {
-        const s = await fetchPublicReservationStatus(clientUuid)
-        if (!stopped) {
-          setStatus(s)
-          setLost(false)
-        }
-      } catch (e) {
-        if (!stopped && e instanceof PublicApiError && e.code === 'not_found') setLost(true)
-      }
-    }
-    poll()
-    const id = setInterval(poll, 5000)
-    return () => {
-      stopped = true
-      clearInterval(id)
-    }
-  }, [clientUuid])
+  const { data: view, error: viewError } = useQuery({
+    queryKey: ['reserve_view', bookingKey],
+    queryFn: () => fetchReservationView(bookingKey),
+    // Ждём решения кассы — опрашиваем часто; решённую бронь опрашивать
+    // незачем, она не меняется сама по себе.
+    refetchInterval: (query) => (query.state.data?.status === 'new' ? 5000 : false),
+    retry: (_count, error) => !(error instanceof PublicApiError && error.code === 'not_found'),
+  })
+
+  // Ссылка ведёт в никуда: бронь удалили или ключ чужой. Выводим из ошибки
+  // запроса, а не отдельным состоянием — иначе оно живёт своей жизнью.
+  const lost = viewError instanceof PublicApiError && viewError.code === 'not_found'
 
   async function doCancel() {
     if (cancelBusy) return
     setCancelBusy(true)
+    setCancelError(null)
     try {
-      await cancelPublicReservation(clientUuid)
-      setStatus((s) => (s ? { ...s, status: 'cancelled' } : s))
-    } catch { /* поллинг догонит актуальный статус */ }
+      await cancelPublicReservation(bookingKey)
+      await qc.invalidateQueries({ queryKey: ['reserve_view', bookingKey] })
+      setConfirmCancel(false)
+    } catch (e) {
+      const code = e instanceof PublicApiError ? e.code : 'unknown'
+      setCancelError(guestBlockText(lang, code))
+    }
     setCancelBusy(false)
-    setConfirmCancel(false)
   }
 
   if (lost) {
@@ -1320,22 +1411,35 @@ function StatusScreen({ lang, clientUuid, onNew }: {
       </CenterCard>
     )
   }
-  if (!status) {
+  if (!view) {
     return <CenterCard><p className="text-gray-500">{t(lang, 'loading')}</p></CenterCard>
   }
 
-  if (status.status === 'rejected') {
+  const loc = view.location
+  const hasCoords = loc.lat != null && loc.lng != null
+  const googleMapsUrl = hasCoords
+    ? `https://www.google.com/maps/search/?api=1&query=${loc.lat},${loc.lng}`
+    : loc.address
+      ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(loc.address)}`
+      : null
+  const wazeUrl = hasCoords
+    ? `https://waze.com/ul?ll=${loc.lat},${loc.lng}&navigate=yes`
+    : loc.address
+      ? `https://waze.com/ul?q=${encodeURIComponent(loc.address)}&navigate=yes`
+      : null
+
+  if (view.status === 'rejected') {
     return (
       <CenterCard>
         <p className="text-2xl font-black text-gray-900">{t(lang, 'rsvRejectedTitle')}</p>
-        <p className="text-sm text-gray-500 mt-2">{status.reject_reason || t(lang, 'rsvRejectedHint')}</p>
+        <p className="text-sm text-gray-500 mt-2">{view.reject_reason || t(lang, 'rsvRejectedHint')}</p>
         <NewBtn lang={lang} onClick={onNew} />
       </CenterCard>
     )
   }
 
   // no_show (102) для гостя равнозначен отменённой брони — визит не состоялся
-  if (status.status === 'cancelled' || status.status === 'no_show') {
+  if (view.status === 'cancelled' || view.status === 'no_show') {
     return (
       <CenterCard>
         <p className="text-2xl font-black text-gray-900">{t(lang, 'rsvCancelledTitle')}</p>
@@ -1346,54 +1450,134 @@ function StatusScreen({ lang, clientUuid, onNew }: {
 
   const details = (
     <div className="mt-4 rounded-2xl bg-gray-50 px-4 py-3 text-start">
-      <div className="font-bold text-gray-900">{visitLabel(status.reserved_at, lang)}</div>
+      <div className="font-bold text-gray-900">{visitLabel(view.reserved_at, lang)}</div>
       <div className="text-sm text-gray-500 mt-1">
-        {status.customer_name} · {status.party_size} {t(lang, 'resGuestsShort')}
-        {status.zone_name && <> · {status.zone_name}</>}
-        {status.table_label && <> · {t(lang, 'tableLabel')} {status.table_label}</>}
+        {view.customer_name} · {view.party_size} {t(lang, 'resGuestsShort')}
+        {view.zone_name && <> · {view.zone_name}</>}
+        {view.table_label && <> · {t(lang, 'tableLabel')} {view.table_label}</>}
       </div>
+      {loc.address && <div className="text-sm text-gray-500 mt-1">{loc.address}</div>}
     </div>
   )
 
-  const cancelBlock = confirmCancel ? (
-    <div className="flex gap-2 mt-6">
-      <button
-        className="flex-1 h-12 rounded-xl bg-gray-100 text-sm font-semibold text-gray-700 active:scale-[0.97] transition-all"
-        onClick={() => setConfirmCancel(false)}
-      >
-        {t(lang, 'back')}
-      </button>
-      <button
-        className="flex-1 h-12 rounded-xl bg-red-600 text-white text-sm font-bold active:scale-[0.97] transition-all disabled:opacity-40"
-        disabled={cancelBusy}
-        onClick={doCancel}
-      >
-        {t(lang, 'rsvCancelConfirm')}
-      </button>
+  // Дорога и звонок: страница брони должна отвечать «как доехать» сама,
+  // не отправляя гостя обратно на витрину.
+  const contacts = (loc.phone || googleMapsUrl) ? (
+    <div className="mt-3 flex gap-2">
+      {loc.phone && (
+        <a
+          href={`tel:${loc.phone}`}
+          className="flex-1 h-12 rounded-xl border border-gray-300 text-sm font-semibold text-gray-900 flex items-center justify-center gap-2 active:scale-[0.97] transition-all"
+        >
+          <PhoneIcon />
+          {t(lang, 'rsvPhoneBtn')}
+        </a>
+      )}
+      {googleMapsUrl && (
+        <button
+          type="button"
+          onClick={() => setNavOpen(true)}
+          className="flex-1 h-12 rounded-xl border border-gray-300 text-sm font-semibold text-gray-900 flex items-center justify-center gap-2 active:scale-[0.97] transition-all"
+        >
+          <PinIcon />
+          {t(lang, 'rsvNavigateBtn')}
+        </button>
+      )}
     </div>
-  ) : (
-    <button
-      className="w-full h-12 mt-6 rounded-xl bg-gray-100 text-sm font-semibold text-gray-700 active:scale-[0.97] transition-all"
-      onClick={() => setConfirmCancel(true)}
-    >
-      {t(lang, 'rsvCancelAction')}
-    </button>
+  ) : null
+
+  const actions = (
+    <>
+      {view.can_reschedule && (
+        <button
+          type="button"
+          onClick={() => setRescheduling(true)}
+          className="w-full h-12 mt-3 rounded-xl border border-gray-300 text-sm font-semibold text-gray-900 active:scale-[0.97] transition-all"
+        >
+          {t(lang, 'rsvReschedule')}
+        </button>
+      )}
+      {view.can_cancel ? (
+        confirmCancel ? (
+          <div className="flex gap-2 mt-3">
+            <button
+              className="flex-1 h-12 rounded-xl bg-gray-100 text-sm font-semibold text-gray-700 active:scale-[0.97] transition-all"
+              onClick={() => setConfirmCancel(false)}
+            >
+              {t(lang, 'back')}
+            </button>
+            <button
+              className="flex-1 h-12 rounded-xl bg-red-600 text-white text-sm font-bold active:scale-[0.97] transition-all disabled:opacity-40"
+              disabled={cancelBusy}
+              onClick={doCancel}
+            >
+              {t(lang, 'rsvCancelConfirm')}
+            </button>
+          </div>
+        ) : (
+          <button
+            className="w-full h-12 mt-3 rounded-xl bg-gray-100 text-sm font-semibold text-gray-700 active:scale-[0.97] transition-all"
+            onClick={() => setConfirmCancel(true)}
+          >
+            {t(lang, 'rsvCancelAction')}
+          </button>
+        )
+      ) : (
+        // Кнопки нет — объясняем почему. Неактивная кнопка без причины
+        // заставляет звонить в заведение, а ровно этого мы и избегаем.
+        <p className="text-sm text-gray-500 mt-3">
+          {guestBlockText(lang, view.cancel_block ?? 'unknown')}
+        </p>
+      )}
+      {cancelError && (
+        <p className="text-sm font-semibold text-red-600 mt-3" role="alert">{cancelError}</p>
+      )}
+      {loc.policy && <p className="text-xs text-gray-500 mt-3">{loc.policy}</p>}
+    </>
   )
 
-  if (status.status === 'new') {
+  const sheets = (
+    <>
+      {navOpen && googleMapsUrl && (
+        <NavChooserSheet
+          lang={lang}
+          googleMapsUrl={googleMapsUrl}
+          wazeUrl={wazeUrl}
+          onClose={() => setNavOpen(false)}
+        />
+      )}
+      {rescheduling && (
+        <RescheduleSheet
+          lang={lang}
+          view={view}
+          tz={tz}
+          bookingKey={bookingKey}
+          onClose={() => setRescheduling(false)}
+          onDone={async () => {
+            await qc.invalidateQueries({ queryKey: ['reserve_view', bookingKey] })
+            setRescheduling(false)
+          }}
+        />
+      )}
+    </>
+  )
+
+  if (view.status === 'new') {
     return (
       <CenterCard>
         <div className="public-reserve-status-spinner w-10 h-10 mx-auto rounded-full border-4 border-gray-200 border-t-gray-900" />
         <p className="text-xl font-bold text-gray-900 mt-5">{t(lang, 'rsvPendingTitle')}</p>
         <p className="text-sm text-gray-500 mt-2">{t(lang, 'rsvPendingHint')}</p>
         {details}
-        {cancelBlock}
+        {contacts}
+        {actions}
+        {sheets}
       </CenterCard>
     )
   }
 
   // confirmed / completed (102): после визита карточка остаётся
-  // подтверждённой, но отменять уже нечего
+  // подтверждённой, но действовать уже нечего
   return (
     <CenterCard>
       <div className="w-14 h-14 mx-auto rounded-full bg-green-100 flex items-center justify-center">
@@ -1404,8 +1588,187 @@ function StatusScreen({ lang, clientUuid, onNew }: {
       <p className="text-2xl font-black text-gray-900 mt-4">{t(lang, 'rsvConfirmedTitle')}</p>
       <p className="text-sm text-gray-500 mt-2">{t(lang, 'rsvConfirmedHint')}</p>
       {details}
-      {status.status === 'completed' ? <NewBtn lang={lang} onClick={onNew} /> : cancelBlock}
+      {view.status === 'confirmed' && (
+        <button
+          type="button"
+          onClick={() => downloadIcs({
+            uid: view.public_token,
+            start: new Date(view.reserved_at),
+            durationMin: view.duration_min,
+            summary: `${t(lang, 'rsvPageLabel')} · ${loc.name}`,
+            location: loc.address,
+            description: `${view.customer_name} · ${view.party_size} ${t(lang, 'resGuestsShort')}`,
+          })}
+          className="w-full h-12 mt-4 rounded-xl border border-gray-300 text-sm font-semibold text-gray-900 flex items-center justify-center gap-2 active:scale-[0.97] transition-all"
+        >
+          <CalendarIcon />
+          {t(lang, 'rsvAddToCalendar')}
+        </button>
+      )}
+      {contacts}
+      {view.status === 'completed' ? <NewBtn lang={lang} onClick={onNew} /> : actions}
+      {sheets}
     </CenterCard>
+  )
+}
+
+/** Почему действие недоступно — человеческими словами, а не кодом */
+function guestBlockText(lang: Lang, code: string): string {
+  switch (code) {
+    case 'too_late': return t(lang, 'rsvBlockTooLate')
+    case 'pos_mode': return t(lang, 'rsvBlockSeated')
+    case 'reschedule_limit': return t(lang, 'rsvBlockLimit')
+    case 'not_active': return t(lang, 'rsvBlockInactive')
+    default: return t(lang, 'rsvErrUnknown')
+  }
+}
+
+/**
+ * Перенос брони: та же сетка слотов, что и при первичном бронировании,
+ * поэтому гость не встречает второй, непохожей логики выбора времени.
+ * Неудачная попытка не трогает уже существующую бронь — это гарантирует
+ * сервер, здесь мы только показываем ошибку и оставляем лист открытым.
+ */
+function RescheduleSheet({ lang, view, tz, bookingKey, onClose, onDone }: {
+  lang: Lang
+  view: ReservationView
+  tz: string
+  bookingKey: string
+  onClose: () => void
+  onDone: () => void
+}) {
+  const { locId = '' } = useParams()
+  const [nowMs] = useState(() => Date.now())
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const { data: info } = useQuery({
+    queryKey: ['public_reserve_info', locId],
+    queryFn: () => fetchReserveInfo(locId),
+    staleTime: 30_000,
+  })
+  const schedule = useMemo(() => normalizeSchedule(info?.location), [info])
+  const stepMin = info?.location.slot_min && info.location.slot_min > 0
+    ? info.location.slot_min : DEF_STEP_MIN
+
+  const todayStr = useMemo(() => todayInZone(nowMs, tz), [nowMs, tz])
+  const days = useMemo(() => {
+    const count = Math.min(schedule.horizonDays, MAX_DAYS_SHOWN)
+    return Array.from({ length: count }, (_, i) => shiftDate(todayStr, i))
+      .filter((d) => hasBookableSlot({ schedule, dateStr: d, tz, stepMin, nowMs }))
+  }, [todayStr, schedule, tz, stepMin, nowMs])
+
+  const [date, setDate] = useState('')
+  const effectiveDate = date || days[0] || ''
+  const slots = useMemo(
+    () => (effectiveDate
+      ? slotGrid({ schedule, dateStr: effectiveDate, tz, stepMin, nowMs })
+      : []),
+    [schedule, effectiveDate, tz, stepMin, nowMs]
+  )
+  const [time, setTime] = useState('')
+  const effectiveTime = slots.some((s) => s.time === time) ? time : slots[0]?.time ?? ''
+  const selected = slots.find((s) => s.time === effectiveTime) ?? null
+
+  async function submit() {
+    if (busy || !selected) return
+    setBusy(true)
+    setError(null)
+    try {
+      await reschedulePublicReservation(bookingKey, selected.at.toISOString(), view.zone_id)
+      onDone()
+    } catch (e) {
+      const code = e instanceof PublicApiError ? e.code : 'unknown'
+      setError(code === 'full_slot' ? t(lang, 'rsvErrFull') : guestBlockText(lang, code))
+      setBusy(false)
+    }
+  }
+
+  // Модалка ведёт себя как соседний NavChooserSheet: фон не прокручивается,
+  // Escape закрывает. Иначе гость на телефоне «проваливается» сквозь лист.
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.body.style.overflow = previousOverflow
+      window.removeEventListener('keydown', onKeyDown)
+    }
+  }, [onClose])
+
+  return (
+    <div
+      className="public-reserve-sheet-overlay fixed inset-0 z-50 flex items-end justify-center bg-black/40"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label={t(lang, 'rsvReschedule')}
+    >
+      <div
+        className="public-reserve-sheet w-full max-w-lg rounded-t-3xl bg-white px-4 pt-3 pb-6 shadow-xl text-start"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-gray-200" aria-hidden="true" />
+        <h3 className="text-lg font-bold text-gray-900">{t(lang, 'rsvReschedule')}</h3>
+        <p className="text-sm text-gray-500 mt-1">{t(lang, 'rsvRescheduleHint')}</p>
+
+        {days.length === 0 ? (
+          <p className="mt-4 text-sm font-semibold text-amber-700">{t(lang, 'rsvNoFreeSlots')}</p>
+        ) : (
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            <label className="flex flex-col gap-1">
+              <span className="text-xs font-semibold text-gray-500">{t(lang, 'rsvDate')}</span>
+              <select
+                className="h-12 rounded-xl border border-gray-300 px-3 text-base"
+                value={effectiveDate}
+                onChange={(e) => { setDate(e.target.value); setTime('') }}
+              >
+                {days.map((d) => (
+                  <option key={d} value={d}>{dayOptionLabel(d, todayStr, lang)}</option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-xs font-semibold text-gray-500">{t(lang, 'rsvTime')}</span>
+              <select
+                className="h-12 rounded-xl border border-gray-300 px-3 text-base tabular-nums"
+                value={effectiveTime}
+                onChange={(e) => setTime(e.target.value)}
+              >
+                {slots.map((s) => (
+                  <option key={s.time} value={s.time}>{s.time}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+        )}
+
+        {error && (
+          <p className="mt-3 text-sm font-semibold text-red-600" role="alert">{error}</p>
+        )}
+
+        <div className="flex gap-2 mt-5">
+          <button
+            type="button"
+            className="flex-1 h-12 rounded-xl bg-gray-100 text-sm font-semibold text-gray-700 active:scale-[0.97] transition-all"
+            onClick={onClose}
+          >
+            {t(lang, 'cancel')}
+          </button>
+          <button
+            type="button"
+            className="flex-1 h-12 rounded-xl bg-gray-900 text-white text-sm font-bold active:scale-[0.97] transition-all disabled:opacity-40"
+            disabled={busy || !selected}
+            onClick={submit}
+          >
+            {busy ? t(lang, 'pubSubmitting') : t(lang, 'rsvRescheduleConfirm')}
+          </button>
+        </div>
+      </div>
+    </div>
   )
 }
 

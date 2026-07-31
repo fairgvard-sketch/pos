@@ -9,6 +9,11 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const appSurface = env.VITE_APP_SURFACE === 'menu' ? 'menu' : 'pos'
   const appTitle = appSurface === 'menu' ? 'Angle — Digital Menu' : 'Angle — POS'
+  // Гостевая поверхность уходит ссылкой в мессенджеры, поэтому у неё есть
+  // осмысленное описание; POS — внутренний экран, ему хватает названия.
+  const appDescription = appSurface === 'menu'
+    ? 'תפריט דיגיטלי והזמנת מקום'
+    : 'Angle POS'
 
   return {
     // Версия приложения доступна в коде как __APP_VERSION__ (см. src/types/global.d.ts)
@@ -21,7 +26,8 @@ export default defineConfig(({ mode }) => {
         transformIndexHtml(html) {
           return html
             .replace('__ANGLE_APP_SURFACE_VALUE__', appSurface)
-            .replace('__ANGLE_APP_TITLE__', appTitle)
+            .replaceAll('__ANGLE_APP_TITLE__', appTitle)
+            .replaceAll('__ANGLE_APP_DESCRIPTION__', appDescription)
         },
       },
       react(),

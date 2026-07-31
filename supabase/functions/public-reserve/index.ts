@@ -11,6 +11,10 @@
  *   zones — живые зоны зала с активными столами (072), гость выбирает
  *   зону, когда их две и больше.
  *
+ * GET ?b=<public_token|client_uuid>
+ *   → карточка брони для постоянной ссылки (118): статус, детали визита,
+ *   контакты точки и серверный вердикт can_cancel / can_reschedule.
+ *
  * GET ?id=<client_uuid>
  *   → { status, reject_reason, reserved_at, party_size, table_label, zone_name }
  *   client_uuid знает только гость — он же и ключ доступа к статусу.
@@ -18,7 +22,9 @@
  * POST { action:'submit', loc, client_uuid, name, phone, party_size, reserved_at, note?, zone_id? }
  *   → { reservation_id, duplicate } | { error }
  * POST { action:'cancel', client_uuid }
- *   → { status } | { error }
+ *   → { status } | { error }   client_uuid = public_token или client_uuid
+ * POST { action:'reschedule', client_uuid, reserved_at, zone_id? }
+ *   → { status, reserved_at, public_token } | { error }
  *
  * Вся валидация, анти-спам и идемпотентность — в БД
  * (submit_reservation и др., SECURITY DEFINER, только service_role).
@@ -47,6 +53,12 @@ const KNOWN_ERRORS = [
   'invalid_phone', 'invalid_party', 'invalid_time', 'outside_hours', 'not_found',
   'full_slot', // 063: instant-режим, на слот не осталось свободного стола
   'invalid_zone', // 072: зона не существует / выключена / чужой точки
+  'module_disabled', // 105: продукт не подключён организации
+  // 118, самообслуживание гостя:
+  'too_late', // отмена/перенос позже правила отсечки
+  'reschedule_limit', // исчерпан лимит переносов
+  'pos_mode', // гостя уже посадили за стол на кассе
+  'not_active', // бронь отклонена/завершена — трогать нечего
 ]
 
 function errorCode(message: string): string {
@@ -89,6 +101,22 @@ Deno.serve(async (req) => {
       if (error) {
         const code = errorCode(error.message)
         return json({ error: code }, code === 'unknown' ? 500 : 400)
+      }
+      return json(data, 200, { 'Cache-Control': 'no-store' })
+    }
+
+    // Карточка брони по постоянной ссылке (118). Ключ — public_token,
+    // но принимается и старый client_uuid: ссылки, выданные до 118, и
+    // localStorage прежних гостей должны продолжать работать.
+    const bookingKey = params.get('b')
+    if (bookingKey !== null) {
+      if (!UUID_RE.test(bookingKey)) return json({ error: 'not_found' }, 404)
+      const { data, error } = await supabase.rpc('reservation_public_view', {
+        p_key: bookingKey,
+      })
+      if (error) {
+        const code = errorCode(error.message)
+        return json({ error: code }, code === 'not_found' ? 404 : 500)
       }
       return json(data, 200, { 'Cache-Control': 'no-store' })
     }
@@ -227,6 +255,31 @@ Deno.serve(async (req) => {
     if (error) {
       const code = errorCode(error.message)
       return json({ error: code }, code === 'not_found' ? 404 : 500)
+    }
+    return json(data)
+  }
+
+  // Перенос брони гостем (118). Доступность, расписание и правило отсечки
+  // целиком проверяет БД: клиент присылает только новое время.
+  if (action === 'reschedule') {
+    const { client_uuid: key, reserved_at, zone_id } = body as {
+      client_uuid?: string; reserved_at?: string; zone_id?: string | null
+    }
+    if (typeof key !== 'string' || !UUID_RE.test(key)) {
+      return json({ error: 'not_found' }, 404)
+    }
+    if (typeof reserved_at !== 'string') return json({ error: 'bad_request' }, 400)
+    if (zone_id != null && (typeof zone_id !== 'string' || !UUID_RE.test(zone_id))) {
+      return json({ error: 'invalid_zone' }, 400)
+    }
+    const { data, error } = await supabase.rpc('reschedule_reservation', {
+      p_key: key,
+      p_at: reserved_at,
+      p_zone_id: zone_id ?? null,
+    })
+    if (error) {
+      const code = errorCode(error.message)
+      return json({ error: code }, code === 'unknown' ? 500 : 400)
     }
     return json(data)
   }

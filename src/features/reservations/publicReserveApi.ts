@@ -93,6 +93,8 @@ export interface ReserveResult {
   duplicate: boolean
   /** instant-режим (063): бронь сразу confirmed; иначе 'new' (заявка) */
   status?: 'new' | 'confirmed'
+  /** Секрет постоянной ссылки на бронь (118) — выдаёт сервер */
+  public_token?: string
   deposit_status?: 'none' | 'required' | 'paid' | 'refunded' | 'forfeited'
   deposit_amount?: number
 }
@@ -140,31 +142,98 @@ export async function submitPublicReservation(payload: ReservePayload): Promise<
   return res.json()
 }
 
-export interface ReserveStatus {
-  /** completed/no_show — терминальные статусы веб-стола хостес (102) */
-  status: 'new' | 'confirmed' | 'rejected' | 'cancelled' | 'completed' | 'no_show'
-  reject_reason: string | null
-  reserved_at: string
-  party_size: number
-  customer_name: string
-  /** Метка назначенного стола (если касса выбрала) */
-  table_label: string | null
-  /** Выбранная гостем зона зала (072); null = не выбирал */
-  zone_name: string | null
-  created_at: string
-}
-
-export async function fetchPublicReservationStatus(clientUuid: string): Promise<ReserveStatus> {
-  const res = await fetch(`${FN_BASE}/public-reserve?id=${encodeURIComponent(clientUuid)}`, { headers })
-  if (!res.ok) await parseError(res)
-  return res.json()
-}
+/**
+ * Статус брони по client_uuid — путь до 118. Заменён на
+ * `fetchReservationView` (постоянная ссылка + вердикт сервера
+ * can_cancel/can_reschedule), поэтому клиентской обёртки больше нет.
+ * Эндпоинт `?id=` в Edge Function оставлен ради страниц, открытых до
+ * выкладки нового фронта.
+ */
 
 export async function cancelPublicReservation(clientUuid: string): Promise<{ status: string }> {
   const res = await fetch(`${FN_BASE}/public-reserve`, {
     method: 'POST',
     headers,
     body: JSON.stringify({ action: 'cancel', client_uuid: clientUuid }),
+  })
+  if (!res.ok) await parseError(res)
+  return res.json()
+}
+
+// ── Постоянная ссылка на бронь (118) ─────────────────────────
+
+/** Почему действие гостя недоступно; null = доступно */
+export type GuestBlock =
+  | 'not_active'   // бронь отклонена, отменена или завершена
+  | 'pos_mode'     // гостя уже посадили за стол на кассе
+  | 'too_late'     // позже правила отсечки заведения
+  | 'reschedule_limit'
+  | null
+
+export interface ReservationView {
+  status: 'new' | 'confirmed' | 'rejected' | 'cancelled' | 'completed' | 'no_show'
+  reject_reason: string | null
+  reserved_at: string
+  party_size: number
+  customer_name: string
+  note: string | null
+  table_label: string | null
+  zone_name: string | null
+  zone_id: string | null
+  created_at: string
+  duration_min: number
+  /** Секрет постоянной ссылки: гость может сохранить её или открыть с другого устройства */
+  public_token: string
+  rescheduled: boolean
+  /** Вердикт СЕРВЕРА. Клиент его только показывает: правила отсечки живут
+   *  в одном месте, иначе они разойдутся — урок часов из 117. */
+  can_cancel: boolean
+  cancel_block: GuestBlock
+  can_reschedule: boolean
+  reschedule_block: GuestBlock
+  location: {
+    id: string
+    name: string
+    address: string | null
+    phone: string | null
+    lat: number | null
+    lng: number | null
+    timezone: string
+    /** Правила отмены своими словами — показываем рядом с кнопкой */
+    policy: string | null
+  }
+}
+
+/** Карточка брони по постоянной ссылке; ключ — public_token или client_uuid */
+export async function fetchReservationView(key: string): Promise<ReservationView> {
+  const res = await fetch(`${FN_BASE}/public-reserve?b=${encodeURIComponent(key)}`, { headers })
+  if (!res.ok) await parseError(res)
+  return res.json()
+}
+
+export interface RescheduleResult {
+  status: 'new' | 'confirmed'
+  reserved_at: string
+  public_token: string
+}
+
+/**
+ * Перенос брони. Доступность, расписание и правило отсечки перепроверяет
+ * сервер; неудача (`full_slot`, `outside_hours`, `too_late`) НЕ трогает
+ * уже существующее время — гость не теряет бронь, пытаясь её подвинуть.
+ */
+export async function reschedulePublicReservation(
+  key: string, reservedAt: string, zoneId?: string | null,
+): Promise<RescheduleResult> {
+  const res = await fetch(`${FN_BASE}/public-reserve`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      action: 'reschedule',
+      client_uuid: key,
+      reserved_at: reservedAt,
+      zone_id: zoneId ?? null,
+    }),
   })
   if (!res.ok) await parseError(res)
   return res.json()

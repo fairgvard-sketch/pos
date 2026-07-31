@@ -11,6 +11,15 @@
          попадает скриншот страницы вместо логотипа. -->
     <link rel="apple-touch-icon" href="/pwa-192.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <!-- Гостевые страницы (меню, заказ, бронь) попадают в мессенджеры и
+         поиск ссылкой. Без описания и og-тегов превью выглядело пустым;
+         конкретное имя заведения проставляет сама страница после загрузки. -->
+    <meta name="description" content="__ANGLE_APP_DESCRIPTION__" />
+    <meta property="og:title" content="__ANGLE_APP_TITLE__" />
+    <meta property="og:description" content="__ANGLE_APP_DESCRIPTION__" />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="/pwa-512.png" />
+    <meta name="twitter:card" content="summary" />
     <meta name="theme-color" content="#f8f9fb" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <!-- До загрузки React выбираем ровно один manifest. Safari загружает его

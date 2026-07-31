@@ -68,7 +68,11 @@ export function buildMenuManifest(params: URLSearchParams): MenuWebManifest | nu
   if (mode) startParams.set('mode', mode)
   if (source && source !== 'link') startParams.set('source', source)
 
-  const basePath = `/order/${locationId}`
+  // Гостевых поверхностей две: витрина/заказ и бронь (118). У каждой свой
+  // scope, иначе установленное приложение брони уводило бы гостя в меню.
+  // Значение из закрытого набора — в start_url недоверенное не попадает.
+  const surface = params.get('surface')?.trim().toLowerCase() === 'reserve' ? 'reserve' : 'order'
+  const basePath = `/${surface}/${locationId}`
   const startUrl = startParams.size > 0 ? `${basePath}?${startParams.toString()}` : basePath
   const appId = tableToken ? `${basePath}?table=${tableToken}` : basePath
   const name = cleanName(params.get('name'))
@@ -76,10 +80,10 @@ export function buildMenuManifest(params: URLSearchParams): MenuWebManifest | nu
   return {
     name,
     short_name: name.slice(0, 24),
-    description: 'Digital menu and ordering',
+    description: surface === 'reserve' ? 'Table reservations' : 'Digital menu and ordering',
     id: appId,
     start_url: startUrl,
-    scope: '/order/',
+    scope: `/${surface}/`,
     lang: 'he',
     dir: 'rtl',
     display: 'standalone',

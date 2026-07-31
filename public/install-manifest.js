@@ -3,8 +3,10 @@
   // как в CHECK location_slugs_format; строгая проверка и здесь, и в
   // buildMenuManifest, иначе в start_url установленного приложения попадёт
   // произвольный путь.
+  // Гостевых поверхностей две: заказ и бронь (118). У каждой свой manifest,
+  // иначе установленная «Бронь» открывалась бы на витрине меню.
   var guestMatch = window.location.pathname.match(
-    /^\/order\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[a-z0-9][a-z0-9-]{1,38}[a-z0-9])\/?$/i
+    /^\/(order|reserve)\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[a-z0-9][a-z0-9-]{1,38}[a-z0-9])\/?$/i
   )
   var href = window.__ANGLE_APP_SURFACE__ === 'menu'
     ? '/menu.webmanifest'
@@ -15,7 +17,8 @@
     var manifestParams = new URLSearchParams()
     // Слаг в БД всегда строчный, а путь регистронезависим: нормализуем,
     // иначе /order/BULOCHKA не пройдёт валидацию на стороне манифеста.
-    manifestParams.set('loc', guestMatch[1].toLowerCase())
+    manifestParams.set('loc', guestMatch[2].toLowerCase())
+    manifestParams.set('surface', guestMatch[1].toLowerCase())
 
     ;['table', 'mode', 'source'].forEach(function (key) {
       var value = incoming.get(key)

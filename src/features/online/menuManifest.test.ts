@@ -95,4 +95,22 @@ describe('buildMenuManifest', () => {
     expect(invalid.status).toBe(400)
     expect(invalid.headers.get('cache-control')).toBe('no-store')
   })
+
+  it('поверхность брони получает свой scope и start_url (118)', () => {
+    const manifest = buildMenuManifest(
+      new URLSearchParams(`loc=${LOCATION_A}&surface=reserve&name=Bulochka`),
+    )
+    expect(manifest?.start_url).toBe(`/reserve/${LOCATION_A}`)
+    expect(manifest?.scope).toBe('/reserve/')
+    expect(manifest?.id).toBe(`/reserve/${LOCATION_A}`)
+    expect(manifest?.description).toBe('Table reservations')
+  })
+
+  it('поверхность по умолчанию — заказ; чужое значение не подставляется в путь', () => {
+    const bogus = buildMenuManifest(
+      new URLSearchParams(`loc=${LOCATION_A}&surface=..%2Fsetup`),
+    )
+    expect(bogus?.start_url).toBe(`/order/${LOCATION_A}`)
+    expect(bogus?.scope).toBe('/order/')
+  })
 })
