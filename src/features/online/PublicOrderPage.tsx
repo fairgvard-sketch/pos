@@ -294,6 +294,12 @@ export default function PublicOrderPage() {
         : window.innerHeight
       const bottomInset = Math.max(0, window.innerHeight - visibleBottom)
       root.style.setProperty('--public-menu-visual-bottom-inset', `${bottomInset.toFixed(2)}px`)
+      // Chrome на iOS приравнивает innerHeight к видимой высоте, поэтому
+      // разница выше всегда 0, хотя 100lvh включает зону под панелью.
+      // Отдаём саму высоту: разницу с lvh посчитает CSS — он знает
+      // фактическое значение единицы, а JS его не видит.
+      const visualHeight = viewport ? viewport.height : window.innerHeight
+      root.style.setProperty('--public-menu-visual-height', `${visualHeight.toFixed(2)}px`)
     }
     const scheduleUpdate = () => {
       window.cancelAnimationFrame(animationFrame)
@@ -316,6 +322,7 @@ export default function PublicOrderPage() {
       viewport?.removeEventListener('resize', scheduleUpdate)
       viewport?.removeEventListener('scroll', scheduleUpdate)
       root.style.removeProperty('--public-menu-visual-bottom-inset')
+      root.style.removeProperty('--public-menu-visual-height')
     }
   }, [])
 
