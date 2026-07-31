@@ -692,19 +692,37 @@ function GuestBadge({ phone, currentId, lang }: { phone: string; currentId: stri
   const priorVisits = Math.max(0, data.visits - (currentId ? 1 : 0))
   const returning = priorVisits >= 1
   const hasCancels = data.cancelled >= 1
-  if (!returning && !hasCancels) return null
+  // 121: неявки, метки и заметка о госте — контекст, ради которого хостес
+  // раньше уходил в базу клиентов отдельным действием.
+  const noShows = data.no_shows ?? 0
+  const tags = data.tags ?? []
+  const note = data.guest_note?.trim()
+  if (!returning && !hasCancels && noShows === 0 && tags.length === 0 && !note) return null
   return (
-    <div className="flex items-center gap-2 mt-1 text-xs">
-      {returning && (
-        <span className="inline-flex items-center gap-1 rounded-full bg-green-50 text-green-700 px-2 py-0.5 font-semibold">
-          {t(lang, 'resGuestReturning')} · {priorVisits} {t(lang, 'resGuestVisits')}
-        </span>
-      )}
-      {hasCancels && (
-        <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 text-amber-700 px-2 py-0.5 font-semibold tabular-nums">
-          ×{data.cancelled} {t(lang, 'resGuestCancels')}
-        </span>
-      )}
+    <div className="mt-1 text-xs">
+      <div className="flex items-center gap-2 flex-wrap">
+        {returning && (
+          <span className="inline-flex items-center gap-1 rounded-full bg-green-50 text-green-700 px-2 py-0.5 font-semibold">
+            {t(lang, 'resGuestReturning')} · {priorVisits} {t(lang, 'resGuestVisits')}
+          </span>
+        )}
+        {hasCancels && (
+          <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 text-amber-700 px-2 py-0.5 font-semibold tabular-nums">
+            ×{data.cancelled} {t(lang, 'resGuestCancels')}
+          </span>
+        )}
+        {noShows > 0 && (
+          <span className="inline-flex items-center gap-1 rounded-full bg-red-50 text-red-700 px-2 py-0.5 font-semibold tabular-nums">
+            ×{noShows} {t(lang, 'resGuestNoShows')}
+          </span>
+        )}
+        {tags.map((tag) => (
+          <span key={tag} className="inline-flex items-center rounded-full bg-gray-100 text-gray-700 px-2 py-0.5 font-semibold">
+            {tag}
+          </span>
+        ))}
+      </div>
+      {note && <p className="text-gray-600 mt-1">{note}</p>}
     </div>
   )
 }

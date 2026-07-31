@@ -158,6 +158,8 @@ function GuestDetailSheet({
 
   const orders = card?.orders ?? []
   const favorites = card?.favorites ?? []
+  const rsv = card?.reservations
+  const tags = card?.tags ?? []
   const events = card?.events ?? []
 
   return (
@@ -177,6 +179,46 @@ function GuestDetailSheet({
           <Stat label={t(lang, 'guestVisits')} value={String(guest.visits)} />
           <Stat label={t(lang, 'guestSpent')} value={formatMoney(guest.total_spent, lang)} />
         </div>
+
+        {/* Ресторанное поведение (121): визиты, неявки, любимая зона.
+            Заполнено и у точки без кассы — там пусты как раз заказы. */}
+        {rsv && rsv.total > 0 && (
+          <div className="mt-4">
+            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">
+              {t(lang, 'guestBookings')}
+            </h3>
+            <div className="flex flex-wrap gap-1.5">
+              <span className="badge-gray">
+                {t(lang, 'guestBookingVisits')} · <span className="tabular-nums">{rsv.visits}</span>
+              </span>
+              {rsv.upcoming > 0 && (
+                <span className="badge-blue">
+                  {t(lang, 'guestBookingUpcoming')} · <span className="tabular-nums">{rsv.upcoming}</span>
+                </span>
+              )}
+              {rsv.no_shows > 0 && (
+                <span className="inline-flex items-center rounded-full bg-red-50 text-red-700 px-2 py-0.5 text-xs font-semibold">
+                  {t(lang, 'resGuestNoShows')} · <span className="tabular-nums">{rsv.no_shows}</span>
+                </span>
+              )}
+              {rsv.zone && <span className="badge-gray">{rsv.zone}</span>}
+              {rsv.avg_party && (
+                <span className="badge-gray">
+                  ~{rsv.avg_party} {t(lang, 'resGuestsShort')}
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Метки — внутренние, наружу не уходят */}
+        {tags.length > 0 && (
+          <div className="mt-4 flex flex-wrap gap-1.5">
+            {tags.map((tag) => (
+              <span key={tag} className="badge-gray">{tag}</span>
+            ))}
+          </div>
+        )}
 
         {/* Любимые позиции — бариста сразу видит, что человек берёт обычно */}
         {favorites.length > 0 && (

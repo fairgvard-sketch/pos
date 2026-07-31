@@ -43,14 +43,28 @@ export interface Reservation {
 /** Статусы, которые терминальны для веб-стола хостес (102) */
 export type ReservationStatusFull = ReservationStatus | 'completed' | 'no_show'
 
-/** CRM-история гостя по телефону (063): визиты, отмены, заметки */
+/** Профиль гостя по телефону (063 → 121): единая запись брони и продаж */
 export interface GuestHistory {
   visits: number
   cancelled: number
   total: number
   last_at: string | null
   name: string | null
+  /** Заметки из самих броней (последние 5) */
   notes: string[]
+  /** Профиль в базе клиентов (121); null — телефона нет в базе */
+  guest_id?: string | null
+  /** Заметка бариста о госте */
+  guest_note?: string | null
+  /** Внутренние метки: VIP, аллергия, дважды не пришёл (наружу не уходят) */
+  tags?: string[]
+  no_shows?: number
+  upcoming?: number
+  avg_party?: string | null
+  zone?: string | null
+  /** Денежная часть — только у точки с кассой */
+  total_spent?: number
+  pos_visits?: number
 }
 
 /**

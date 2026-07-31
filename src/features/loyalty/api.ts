@@ -107,6 +107,22 @@ export interface GuestCard {
   orders: GuestOrder[]
   favorites: { name: string; qty: number }[]
   events: GuestEvent[]
+  /** Внутренние метки (121): VIP, аллергия, дважды не пришёл */
+  tags: string[]
+  /** Ресторанное поведение (121). Заполнено и у точки без кассы */
+  reservations: {
+    total: number
+    visits: number
+    upcoming: number
+    cancelled: number
+    rejected: number
+    no_shows: number
+    first_at: string | null
+    last_at: string | null
+    avg_party: string | null
+    zone: string | null
+    notes: string[]
+  }
 }
 
 /**
@@ -123,17 +139,26 @@ export async function fetchGuestCard(guestId: string): Promise<GuestCard> {
 }
 
 /**
- * Переименовать гостя и/или сохранить заметку. Телефон — ключ лояльности,
- * его не меняем. Балансы правит только сервер (грант 031/114).
+ * Переименовать гостя, сохранить заметку и внутренние метки. Телефон —
+ * ключ лояльности, его не меняем. Балансы правит только сервер (031/114).
+ *
+ * Со 121 идёт через `set_guest_profile`, а не прямым UPDATE: метки
+ * колоночным грантом не открыты, право проверяется сервером, а в аудит
+ * попадает ещё и сотрудник за кассой (прямой путь оставил бы только
+ * аккаунт устройства).
  */
 export async function updateGuest(
   guestId: string,
-  patch: { name?: string; notes?: string },
+  patch: { name?: string; notes?: string; tags?: string[] },
 ): Promise<void> {
-  const row: Record<string, string | null> = {}
-  if (patch.name !== undefined) row.name = patch.name.trim() || null
-  if (patch.notes !== undefined) row.notes = patch.notes.trim() || null
-  const { error } = await supabase.from('guests').update(row).eq('id', guestId)
+  const { error } = await supabase.rpc('set_guest_profile', {
+    p_guest_id: guestId,
+    p_name: patch.name === undefined ? null : patch.name.trim() || null,
+    p_notes: patch.notes === undefined ? null : patch.notes.trim(),
+    p_tags: patch.tags ?? null,
+    // Токен читается в момент вызова, как во всём горячем потоке
+    p_staff_session: currentStaffToken(),
+  })
   if (error) throw new Error(error.message)
 }
 
