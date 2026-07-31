@@ -3044,7 +3044,7 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
 ::view-transition-new(root) {
   /* Свои keyframes вместо дефолтного кросс-фейда: снимки едут вбок,
      как настоящие экраны, и не просвечивают друг сквозь друга. */
-  animation-duration: 200ms;
+  animation-duration: 350ms;
   animation-timing-function: cubic-bezier(.32, .72, 0, 1);
   animation-fill-mode: both;
   mix-blend-mode: normal;
