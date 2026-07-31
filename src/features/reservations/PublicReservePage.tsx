@@ -7,6 +7,7 @@ import { navigateWithTransition } from '../online/viewTransition'
 import {
   fetchReserveInfo, submitPublicReservation, fetchReservationView,
   cancelPublicReservation, fetchAvailability, reschedulePublicReservation,
+  joinWaitlist, confirmAttendance,
   type ReserveInfo, type ReservationView,
 } from './publicReserveApi'
 import BrandSplash from '../../components/ui/BrandSplash'
@@ -173,6 +174,8 @@ export default function PublicReservePage() {
   // Слот заняли, пока гость заполнял контакты: экран времени показывает
   // объяснение и перезапрошенную доступность.
   const [conflict, setConflict] = useState(false)
+  // Лист ожидания (122): открыт лист-форма
+  const [waitlistOpen, setWaitlistOpen] = useState(false)
   const [clientUuid, setClientUuid] = useState(() => crypto.randomUUID())
 
   // Лимит гостей (061): настройка владельца, дефолт 20, потолок 50
@@ -356,6 +359,7 @@ export default function PublicReservePage() {
             onTime={setTime}
             onGuests={setGuests}
             onNext={() => navigateWithTransition('forward', () => setStep('times'))}
+            onWaitlist={() => setWaitlistOpen(true)}
           />
         )}
         {step === 'times' && (
@@ -417,6 +421,19 @@ export default function PublicReservePage() {
           />
         )}
       </Shell>
+
+      {waitlistOpen && info && (
+        <WaitlistSheet
+          lang={lang}
+          locId={locId}
+          date={date}
+          guests={guests}
+          zones={zones}
+          draft={detailsDraft}
+          onDraft={setDetailsDraft}
+          onClose={() => setWaitlistOpen(false)}
+        />
+      )}
     </>
   )
 }
@@ -707,7 +724,7 @@ function ScheduleHours({ schedule, lang }: {
 function SlotScreen({
   lang, info, days, todayStr, todayHasSlots, dayOpen, date, time, guests, maxParty,
   timeSlots, instant, freeTimes, availabilityLoading, availabilityError,
-  onDate, onTime, onGuests, onNext,
+  onDate, onTime, onGuests, onNext, onWaitlist,
 }: {
   lang: Lang
   info: ReserveInfo
@@ -731,6 +748,8 @@ function SlotScreen({
   onTime: (v: string) => void
   onGuests: (v: number) => void
   onNext: () => void
+  /** День занят целиком — гость может встать в лист ожидания (122) */
+  onWaitlist: () => void
 }) {
   // В instant-режиме день целиком занят, если сетка загружена и пуста на free
   const dayFull = instant && freeTimes !== null && freeTimes.size === 0 && timeSlots.length > 0
@@ -808,6 +827,19 @@ function SlotScreen({
         <div className="w-full mt-4 rounded-2xl bg-amber-50 text-amber-800 text-sm font-semibold px-4 py-3 text-center">
           {t(lang, 'rsvNoFreeSlots')}
         </div>
+      )}
+
+      {/* Лист ожидания (122): день занят целиком — предлагаем ждать, а не
+          отправляем гостя ни с чем. Тумблер владельца: заведение, которое
+          не собирается перезванивать, обещаний не копит. */}
+      {dayFull && loc.waitlist && (
+        <button
+          type="button"
+          onClick={onWaitlist}
+          className="w-full h-12 mt-3 rounded-2xl border border-gray-300 text-sm font-bold text-gray-900 active:scale-[0.98] transition-all"
+        >
+          {t(lang, 'rsvJoinWaitlist')}
+        </button>
       )}
 
       {availabilityLoading && (
@@ -1188,6 +1220,7 @@ function reserveErrorText(lang: Lang, code: string): string {
     case 'invalid_phone': return t(lang, 'rsvErrPhone')
     case 'full_slot': return t(lang, 'rsvErrFull')
     case 'invalid_zone': return t(lang, 'rsvErrZone')
+    case 'waitlist_disabled': return t(lang, 'rsvErrWaitlistOff')
     default: return t(lang, 'rsvErrUnknown')
   }
 }
@@ -1391,6 +1424,7 @@ function BookingScreen({ lang, bookingKey, tz, onNew }: {
   const [cancelBusy, setCancelBusy] = useState(false)
   const [cancelError, setCancelError] = useState<string | null>(null)
   const [rescheduling, setRescheduling] = useState(false)
+  const [attendBusy, setAttendBusy] = useState(false)
   const [navOpen, setNavOpen] = useState(false)
   const qc = useQueryClient()
 
@@ -1507,6 +1541,32 @@ function BookingScreen({ lang, bookingKey, tz, onNew }: {
 
   const actions = (
     <>
+      {/* Просьба подтвердить приход (122). Кнопка появляется, только когда
+          заведение действительно попросило: без этого гость не понимает,
+          что от него хотят. */}
+      {view.status === 'confirmed' && view.confirm_requested_at && !view.guest_confirmed_at && (
+        <button
+          type="button"
+          disabled={attendBusy}
+          onClick={async () => {
+            setAttendBusy(true)
+            try {
+              await confirmAttendance(bookingKey)
+              await qc.invalidateQueries({ queryKey: ['reserve_view', bookingKey] })
+            } catch { /* поллинг догонит актуальный статус */ }
+            setAttendBusy(false)
+          }}
+          className="w-full h-12 mt-3 rounded-xl bg-gray-900 text-white text-sm font-bold active:scale-[0.97] transition-all disabled:opacity-40"
+        >
+          {t(lang, 'rsvConfirmAttend')}
+        </button>
+      )}
+      {view.guest_confirmed_at && (
+        <p className="text-sm font-semibold text-green-700 mt-3">
+          {t(lang, 'rsvAttendConfirmed')}
+        </p>
+      )}
+
       {view.can_reschedule && (
         <button
           type="button"
@@ -1802,6 +1862,185 @@ function RescheduleSheet({ lang, view, tz, bookingKey, onClose, onDone }: {
             {busy ? t(lang, 'pubSubmitting') : t(lang, 'rsvRescheduleConfirm')}
           </button>
         </div>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Лист ожидания (122): день занят, но гость готов ждать. Просим ровно то,
+ * что нужно хостес для подбора — диапазон времени и зоны, — и ни строчкой
+ * больше: это ещё не бронь, а согласие подождать.
+ *
+ * Контакты берутся из общего черновика сценария: гость, дошедший сюда с
+ * шага деталей, не вводит имя и телефон заново.
+ */
+function WaitlistSheet({ lang, locId, date, guests, zones, draft, onDraft, onClose }: {
+  lang: Lang
+  locId: string
+  date: string
+  guests: number
+  zones: { id: string; name: string }[]
+  draft: { name: string; phone: string; note: string }
+  onDraft: (d: { name: string; phone: string; note: string }) => void
+  onClose: () => void
+}) {
+  const [from, setFrom] = useState('18:00')
+  const [to, setTo] = useState('21:00')
+  const [pickedZones, setPickedZones] = useState<string[]>([])
+  const [busy, setBusy] = useState(false)
+  const [done, setDone] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [clientUuid] = useState(() => crypto.randomUUID())
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    window.addEventListener('keydown', onKey)
+    return () => {
+      document.body.style.overflow = prev
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [onClose])
+
+  const phoneDigits = draft.phone.replace(/\D/g, '')
+  const valid = draft.name.trim().length > 0 && phoneDigits.length >= 9 && to > from
+
+  async function submit() {
+    if (busy || !valid) return
+    setBusy(true)
+    setError(null)
+    try {
+      await joinWaitlist({
+        loc: locId,
+        client_uuid: clientUuid,
+        name: draft.name.trim(),
+        phone: phoneDigits,
+        party_size: guests,
+        date,
+        time_from: from,
+        time_to: to,
+        zone_ids: pickedZones,
+        note: draft.note.trim() || null,
+      })
+      setDone(true)
+    } catch (e) {
+      const code = e instanceof PublicApiError ? e.code : 'unknown'
+      setError(reserveErrorText(lang, code))
+    }
+    setBusy(false)
+  }
+
+  return (
+    <div
+      className="public-reserve-sheet-overlay fixed inset-0 z-50 flex items-end justify-center bg-black/40"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label={t(lang, 'rsvJoinWaitlist')}
+    >
+      <div
+        className="public-reserve-sheet w-full max-w-lg rounded-t-3xl bg-white px-4 pt-3 pb-6 shadow-xl text-start"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-gray-200" aria-hidden />
+
+        {done ? (
+          <div className="py-6 text-center">
+            <p className="text-xl font-bold text-gray-900">{t(lang, 'rsvWaitlistDoneTitle')}</p>
+            <p className="text-sm text-gray-500 mt-2">{t(lang, 'rsvWaitlistDoneHint')}</p>
+            <button
+              type="button"
+              onClick={onClose}
+              className="w-full h-12 mt-5 rounded-xl bg-gray-900 text-white text-sm font-bold"
+            >
+              {t(lang, 'close')}
+            </button>
+          </div>
+        ) : (
+          <>
+            <h3 className="text-lg font-bold text-gray-900">{t(lang, 'rsvJoinWaitlist')}</h3>
+            <p className="text-sm text-gray-500 mt-1">{t(lang, 'rsvWaitlistHint')}</p>
+
+            <div className="grid grid-cols-2 gap-3 mt-4">
+              <label className="flex flex-col gap-1">
+                <span className="text-xs font-semibold text-gray-500">{t(lang, 'rsvWaitFrom')}</span>
+                <input
+                  type="time" value={from} onChange={(e) => setFrom(e.target.value)}
+                  className="h-12 rounded-xl border border-gray-300 px-3 text-base"
+                />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-xs font-semibold text-gray-500">{t(lang, 'rsvWaitTo')}</span>
+                <input
+                  type="time" value={to} onChange={(e) => setTo(e.target.value)}
+                  className="h-12 rounded-xl border border-gray-300 px-3 text-base"
+                />
+              </label>
+            </div>
+
+            {zones.length >= 2 && (
+              <div className="mt-3">
+                <span className="text-xs font-semibold text-gray-500">{t(lang, 'rsvWaitZones')}</span>
+                <div className="flex flex-wrap gap-2 mt-1.5">
+                  {zones.map((z) => (
+                    <button
+                      key={z.id}
+                      type="button"
+                      onClick={() => setPickedZones((cur) => (
+                        cur.includes(z.id) ? cur.filter((x) => x !== z.id) : [...cur, z.id]
+                      ))}
+                      className={`h-11 px-4 rounded-xl border text-sm font-semibold ${
+                        pickedZones.includes(z.id)
+                          ? 'bg-gray-900 text-white border-gray-900'
+                          : 'border-gray-300 text-gray-700'
+                      }`}
+                    >
+                      {z.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="public-reserve-details-fields">
+              <label>
+                <span>{t(lang, 'rsvName')}</span>
+                <input
+                  autoComplete="name" value={draft.name}
+                  onChange={(e) => onDraft({ ...draft, name: e.target.value })}
+                />
+              </label>
+              <label>
+                <span>{t(lang, 'rsvPhone')}</span>
+                <input
+                  type="tel" inputMode="tel" autoComplete="tel" dir="ltr" value={draft.phone}
+                  onChange={(e) => onDraft({ ...draft, phone: e.target.value })}
+                />
+              </label>
+            </div>
+
+            {error && (
+              <p className="mt-3 text-sm font-semibold text-red-600" role="alert">{error}</p>
+            )}
+
+            <div className="flex gap-2 mt-4">
+              <button
+                type="button" onClick={onClose}
+                className="flex-1 h-12 rounded-xl bg-gray-100 text-sm font-semibold text-gray-700"
+              >
+                {t(lang, 'cancel')}
+              </button>
+              <button
+                type="button" disabled={busy || !valid} onClick={submit}
+                className="flex-1 h-12 rounded-xl bg-gray-900 text-white text-sm font-bold disabled:opacity-40"
+              >
+                {busy ? t(lang, 'pubSubmitting') : t(lang, 'rsvWaitlistSubmit')}
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   )

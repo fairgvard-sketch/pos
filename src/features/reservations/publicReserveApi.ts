@@ -66,6 +66,9 @@ export interface ReserveInfo {
     }
     /** Зоны зала с активными столами (072); выбор показываем от двух зон */
     zones?: { id: string; name: string }[]
+    /** Лист ожидания включён владельцем (122): гость может оставить
+     *  пожелание, когда свободного слота нет */
+    waitlist?: boolean
   }
 }
 
@@ -185,6 +188,10 @@ export interface ReservationView {
   /** Секрет постоянной ссылки: гость может сохранить её или открыть с другого устройства */
   public_token: string
   rescheduled: boolean
+  /** Заведение попросило подтвердить приход (122) */
+  confirm_requested_at?: string | null
+  /** Гость подтвердил, что придёт */
+  guest_confirmed_at?: string | null
   /** Вердикт СЕРВЕРА. Клиент его только показывает: правила отсечки живут
    *  в одном месте, иначе они разойдутся — урок часов из 117. */
   can_cancel: boolean
@@ -234,6 +241,52 @@ export async function reschedulePublicReservation(
       reserved_at: reservedAt,
       zone_id: zoneId ?? null,
     }),
+  })
+  if (!res.ok) await parseError(res)
+  return res.json()
+}
+
+// ── Лист ожидания (122) ──────────────────────────────────────
+
+export interface WaitlistPayload {
+  loc: string
+  client_uuid: string
+  name: string
+  phone: string
+  party_size: number
+  /** Дата в зоне точки, 'YYYY-MM-DD' */
+  date: string
+  /** Приемлемый диапазон времени, 'HH:MM' */
+  time_from: string
+  time_to: string
+  zone_ids?: string[]
+  note?: string | null
+}
+
+/**
+ * Встать в лист ожидания. Вызывается там, где обычная бронь невозможна:
+ * день занят целиком или выбранное время увели. Обещание перезвонить —
+ * ответственность заведения, поэтому лист включается отдельным тумблером.
+ */
+export async function joinWaitlist(payload: WaitlistPayload): Promise<{
+  waitlist_id: string; duplicate: boolean; status: string
+}> {
+  const loc = await resolveLocationId(payload.loc)
+  const res = await fetch(`${FN_BASE}/public-reserve`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ action: 'waitlist', ...payload, loc }),
+  })
+  if (!res.ok) await parseError(res)
+  return res.json()
+}
+
+/** Гость подтверждает, что придёт (122) */
+export async function confirmAttendance(key: string): Promise<{ confirmed: boolean }> {
+  const res = await fetch(`${FN_BASE}/public-reserve`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ action: 'confirm_attendance', client_uuid: key }),
   })
   if (!res.ok) await parseError(res)
   return res.json()

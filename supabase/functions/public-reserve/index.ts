@@ -25,6 +25,13 @@
  *   → { status } | { error }   client_uuid = public_token или client_uuid
  * POST { action:'reschedule', client_uuid, reserved_at, zone_id? }
  *   → { status, reserved_at, public_token } | { error }
+ * POST { action:'waitlist', loc, client_uuid, name, phone, party_size,
+ *        date, time_from, time_to, zone_ids?, note? }
+ *   → { waitlist_id, duplicate, status } | { error }   лист ожидания (122)
+ * POST { action:'accept_offer', offer_token }
+ *   → { reservation_id, public_token, status } | { error }
+ * POST { action:'confirm_attendance', client_uuid }
+ *   → { confirmed } | { error }
  *
  * Вся валидация, анти-спам и идемпотентность — в БД
  * (submit_reservation и др., SECURITY DEFINER, только service_role).
@@ -59,6 +66,10 @@ const KNOWN_ERRORS = [
   'reschedule_limit', // исчерпан лимит переносов
   'pos_mode', // гостя уже посадили за стол на кассе
   'not_active', // бронь отклонена/завершена — трогать нечего
+  // 122, лист ожидания:
+  'waitlist_disabled', // владелец не включил лист ожидания
+  'offer_expired', // предложение просрочено или уже использовано
+  'not_confirmed',
 ]
 
 function errorCode(message: string): string {
@@ -144,6 +155,7 @@ Deno.serve(async (req) => {
           lead_min?: number
           horizon_days?: number
         } | null
+        waitlist?: boolean
         instagram?: string | null; facebook?: string | null; google_review?: string | null
       } }).rsv
       // Соцссылки подвала (066): показываем только заполненные (пусто → нет кнопки)
@@ -213,6 +225,9 @@ Deno.serve(async (req) => {
             links,
             // Зоны зала (072): гость выбирает зону, когда их две и больше
             zones,
+            // Лист ожидания (122): владелец включает отдельно — заведение,
+            // которое не собирается перезванивать, не должно копить обещания
+            waitlist: rsv?.waitlist === true,
           },
         },
         200,
@@ -277,6 +292,74 @@ Deno.serve(async (req) => {
       p_at: reserved_at,
       p_zone_id: zone_id ?? null,
     })
+    if (error) {
+      const code = errorCode(error.message)
+      return json({ error: code }, code === 'unknown' ? 500 : 400)
+    }
+    return json(data)
+  }
+
+  // Гость встаёт в лист ожидания (122): слота нет, но он готов ждать.
+  if (action === 'waitlist') {
+    const {
+      loc, client_uuid, name, phone, party_size, date, time_from, time_to,
+      zone_ids, note,
+    } = body as {
+      loc?: string; client_uuid?: string; name?: string; phone?: string
+      party_size?: number; date?: string; time_from?: string; time_to?: string
+      zone_ids?: string[] | null; note?: string | null
+    }
+    if (!UUID_RE.test(loc ?? '') || !UUID_RE.test(client_uuid ?? '')) {
+      return json({ error: 'bad_request' }, 400)
+    }
+    if (typeof name !== 'string' || typeof phone !== 'string'
+        || typeof party_size !== 'number'
+        || !/^\d{4}-\d{2}-\d{2}$/.test(date ?? '')
+        || !/^\d{2}:\d{2}$/.test(time_from ?? '')
+        || !/^\d{2}:\d{2}$/.test(time_to ?? '')) {
+      return json({ error: 'bad_request' }, 400)
+    }
+    const zones = Array.isArray(zone_ids) ? zone_ids.filter((z) => UUID_RE.test(z)) : []
+    const { data, error } = await supabase.rpc('submit_waitlist', {
+      p_location_id: loc,
+      p_client_uuid: client_uuid,
+      p_name: name,
+      p_phone: phone,
+      p_party_size: Math.floor(party_size),
+      p_date: date,
+      p_from: time_from,
+      p_to: time_to,
+      p_zone_ids: zones,
+      p_note: note ?? null,
+    })
+    if (error) {
+      const code = errorCode(error.message)
+      return json({ error: code }, code === 'unknown' ? 500 : 400)
+    }
+    return json(data)
+  }
+
+  // Гость соглашается на предложенное время из листа ожидания.
+  if (action === 'accept_offer') {
+    const token = (body as { offer_token?: string }).offer_token
+    if (typeof token !== 'string' || !UUID_RE.test(token)) {
+      return json({ error: 'not_found' }, 404)
+    }
+    const { data, error } = await supabase.rpc('accept_waitlist_offer', { p_token: token })
+    if (error) {
+      const code = errorCode(error.message)
+      return json({ error: code }, code === 'unknown' ? 500 : 400)
+    }
+    return json(data)
+  }
+
+  // Гость подтверждает, что придёт (122).
+  if (action === 'confirm_attendance') {
+    const key = (body as { client_uuid?: string }).client_uuid
+    if (typeof key !== 'string' || !UUID_RE.test(key)) {
+      return json({ error: 'not_found' }, 404)
+    }
+    const { data, error } = await supabase.rpc('confirm_reservation_attendance', { p_key: key })
     if (error) {
       const code = errorCode(error.message)
       return json({ error: code }, code === 'unknown' ? 500 : 400)

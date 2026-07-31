@@ -16,11 +16,20 @@ SELECT plan(18);
 -- ── Хелперы окон ─────────────────────────────────────────────
 -- Расписание «открыто от -N до +M часов относительно сейчас» для
 -- сегодняшнего дня недели точки.
+-- Окно пишется под ДВА дня недели — сегодняшний и завтрашний. Иначе
+-- прогон за полчаса до полуночи падал: NOW()+30 минут попадает уже в
+-- следующие сутки, у которых в расписании нет ключа, и точка читается
+-- закрытой. Тест обязан быть верным в любой час, а не в рабочий.
 CREATE FUNCTION pg_temp.hours_around(p_back INTERVAL, p_fwd INTERVAL)
 RETURNS JSONB LANGUAGE sql AS $$
   SELECT jsonb_build_object('online_orders', jsonb_build_object('hours',
     jsonb_build_object(
       EXTRACT(DOW FROM NOW() AT TIME ZONE 'Asia/Jerusalem')::INT::TEXT,
+      jsonb_build_array(jsonb_build_array(
+        to_char(NOW() AT TIME ZONE 'Asia/Jerusalem' - p_back, 'HH24:MI'),
+        to_char(NOW() AT TIME ZONE 'Asia/Jerusalem' + p_fwd, 'HH24:MI')
+      )),
+      EXTRACT(DOW FROM (NOW() + INTERVAL '1 day') AT TIME ZONE 'Asia/Jerusalem')::INT::TEXT,
       jsonb_build_array(jsonb_build_array(
         to_char(NOW() AT TIME ZONE 'Asia/Jerusalem' - p_back, 'HH24:MI'),
         to_char(NOW() AT TIME ZONE 'Asia/Jerusalem' + p_fwd, 'HH24:MI')
@@ -181,20 +190,25 @@ SET settings = jsonb_build_object('online_orders', jsonb_build_object('hours',
       to_char(NOW() AT TIME ZONE 'Asia/Jerusalem' - INTERVAL '3 hours', 'HH24:MI'),
       to_char(NOW() AT TIME ZONE 'Asia/Jerusalem' - INTERVAL '2 hours', 'HH24:MI')
     )),
-    -- завтра: открыто весь день
+    -- Завтра: КОНКРЕТНОЕ окно, а не круглые сутки. «Весь день» ломал
+    -- проверку «предзаказ на закрытый момент» за полчаса до полуночи:
+    -- NOW()+30 минут попадал уже в завтра и оказывался внутри окна.
     EXTRACT(DOW FROM (NOW() + INTERVAL '1 day') AT TIME ZONE 'Asia/Jerusalem')::INT::TEXT,
-    jsonb_build_array(jsonb_build_array('00:00', '23:59'))
+    jsonb_build_array(jsonb_build_array('12:00', '14:00'))
   )
 ))
 WHERE id = 'c1000000-0000-4000-8000-000000000001';
 
+-- Время берётся ЯВНО внутри завтрашнего окна, а не «через 20 часов»:
+-- смещение от NOW() зависит от часа прогона и однажды промахнётся.
 SELECT lives_ok($$
   SELECT submit_online_order(
     'c1000000-0000-4000-8000-000000000001',
     'c6000000-0000-4000-8000-000000000005',
     'Гость', '0501234567',
     '[{"menu_item_id":"c3000000-0000-4000-8000-000000000011","qty":1}]'::jsonb,
-    NOW() + INTERVAL '20 hours'
+    (((NOW() AT TIME ZONE 'Asia/Jerusalem')::DATE + 1 + TIME '13:00')
+      AT TIME ZONE 'Asia/Jerusalem')
   )
 $$, 'закрыто сейчас — предзаказ на завтрашнее окно принимается (116)');
 
