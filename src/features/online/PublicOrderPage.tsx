@@ -344,6 +344,46 @@ export default function PublicOrderPage() {
     }
   }, [heroSystemUiActive, menuSystemUiColor])
 
+  // iOS 26 может привязать fixed-bottom к layout viewport, хотя реальная
+  // нижняя панель Chrome/Safari уже съела часть visual viewport. dvh при
+  // этом иногда остаётся равен lvh. Передаём фактическое перекрытие в CSS,
+  // чтобы CTA hero и подпись всегда оставались выше browser chrome.
+  useLayoutEffect(() => {
+    const root = document.documentElement
+    const viewport = window.visualViewport
+    let animationFrame = 0
+
+    const updateBottomInset = () => {
+      const visibleBottom = viewport
+        ? viewport.offsetTop + viewport.height
+        : window.innerHeight
+      const bottomInset = Math.max(0, window.innerHeight - visibleBottom)
+      root.style.setProperty('--public-menu-visual-bottom-inset', `${bottomInset.toFixed(2)}px`)
+    }
+    const scheduleUpdate = () => {
+      window.cancelAnimationFrame(animationFrame)
+      animationFrame = window.requestAnimationFrame(updateBottomInset)
+    }
+
+    updateBottomInset()
+    animationFrame = window.requestAnimationFrame(updateBottomInset)
+    const settleTimer = window.setTimeout(updateBottomInset, 250)
+    window.addEventListener('resize', scheduleUpdate, { passive: true })
+    window.addEventListener('pageshow', scheduleUpdate, { passive: true })
+    viewport?.addEventListener('resize', scheduleUpdate, { passive: true })
+    viewport?.addEventListener('scroll', scheduleUpdate, { passive: true })
+
+    return () => {
+      window.cancelAnimationFrame(animationFrame)
+      window.clearTimeout(settleTimer)
+      window.removeEventListener('resize', scheduleUpdate)
+      window.removeEventListener('pageshow', scheduleUpdate)
+      viewport?.removeEventListener('resize', scheduleUpdate)
+      viewport?.removeEventListener('scroll', scheduleUpdate)
+      root.style.removeProperty('--public-menu-visual-bottom-inset')
+    }
+  }, [])
+
   const cartCount = cart.reduce((s, l) => s + l.qty, 0)
   const cartTotal = cart.reduce((s, l) => s + l.unitPrice * l.qty, 0)
   useEffect(() => { writePublicCart(locId, cart) }, [locId, cart])
