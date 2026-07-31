@@ -1453,6 +1453,7 @@ export const translations = {
     rsvCheckingSlots: 'Проверяем свободные места…',
     // Подвал страницы брони (066)
     rsvHoursTitle: 'Часы работы',
+    rsvDayClosed: 'закрыто',
     // Бронь по зонам (072)
     rsvZoneTitle: 'Где вам удобнее сесть?',
     rsvZoneSummary: 'Зона',
@@ -2913,6 +2914,7 @@ export const translations = {
     rsvCheckingSlots: 'בודקים מקומות פנויים…',
     // תחתית דף ההזמנה (066)
     rsvHoursTitle: 'שעות פעילות',
+    rsvDayClosed: 'סגור',
     // הזמנה לפי אזורים (072)
     rsvZoneTitle: 'איפה נוח לכם לשבת?',
     rsvZoneSummary: 'אזור',

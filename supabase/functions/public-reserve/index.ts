@@ -100,7 +100,7 @@ Deno.serve(async (req) => {
       // Наружу — только флаг брони и баннер, НЕ весь settings (там права ролей)
       const { data, error } = await supabase
         .from('locations')
-        .select('id, name, receipt_business_name, receipt_address, receipt_phone, logo_url, display_name:settings->>display_name, rsv:settings->reservations, oo_header_url:settings->online_orders->>header_url')
+        .select('id, name, timezone, receipt_business_name, receipt_address, receipt_phone, logo_url, display_name:settings->>display_name, rsv:settings->reservations, oo_header_url:settings->online_orders->>header_url')
         .eq('id', loc)
         .maybeSingle()
       if (error || !data) return json({ error: 'invalid_location' }, 404)
@@ -110,6 +110,12 @@ Deno.serve(async (req) => {
         display_name?: string | null
         address?: string | null; lat?: number | null; lng?: number | null
         header_url?: string | null; hours?: string | null
+        schedule?: {
+          weekly?: Record<string, [string, string][]>
+          exceptions?: Record<string, [string, string][]>
+          lead_min?: number
+          horizon_days?: number
+        } | null
         instagram?: string | null; facebook?: string | null; google_review?: string | null
       } }).rsv
       // Соцссылки подвала (066): показываем только заполненные (пусто → нет кнопки)
@@ -150,10 +156,17 @@ Deno.serve(async (req) => {
             accepting: rsv?.enabled === true,
             // instant-режим (063): гость видит live-доступность, бронь сразу confirmed
             instant: rsv?.instant === true,
-            // Часы приёма (059): гостевая страница ограничивает слоты этим окном
+            // Часы приёма (059): устаревшая пара на все семь дней. Оставлена
+            // для клиентов, выложенных до 117, и как фолбэк, пока точке не
+            // заполнили schedule. Новый клиент читает schedule.
             open: rsv?.open ?? null,
             close: rsv?.close ?? null,
             slot_min: rsv?.slot_min ?? null,
+            // Расписание (117) — ЕДИНЫЙ источник и показанных часов, и сетки
+            // слотов. Гостевая страница строит слоты по нему в часовом поясе
+            // ТОЧКИ, а не устройства, поэтому tz уходит наружу вместе с ним.
+            schedule: rsv?.schedule ?? null,
+            timezone: (data as { timezone?: string | null }).timezone || 'Asia/Jerusalem',
             // Лимит гостей на бронь (061): гостевой селект ограничен этим числом
             max_party: rsv?.max_party ?? null,
             // Адрес брони (062): точный адрес из настроек приоритетнее адреса

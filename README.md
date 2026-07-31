@@ -8,7 +8,9 @@ Kassa — веб-касса для specialty coffee, кофеен и пекар�
 термопринтером. Приоритет продукта — быстрый кассовый поток: типовой заказ
 должен укладываться в три тапа, а сетевой сбой не должен останавливать работу.
 
-Текущий технический baseline: версия `1.1.0`, миграции `001–105`.
+Текущий технический baseline: версия `1.1.0`. Номер последней миграции —
+в `supabase/migrations/` и в `MIN_SCHEMA_VERSION` (`src/lib/schemaVersion.ts`),
+их равенство проверяет `npm run check:schema`.
 
 ## Возможности
 
@@ -97,6 +99,7 @@ npm run check:bundle
 | `npm run lint` | ESLint для `src/` и `scripts/` |
 | `npm run test` | Vitest в watch-режиме |
 | `npm run test:run` | один полный прогон Vitest |
+| `npm run check:schema` | сверка `MIN_SCHEMA_VERSION` с номером последней миграции |
 | `npm run check:ref` | проверка целевого Supabase project ref |
 | `npm run db:push` | проверка ref и применение миграций |
 | `npm run functions:deploy` | проверка ref и деплой Edge Functions |

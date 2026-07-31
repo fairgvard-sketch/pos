@@ -10,6 +10,10 @@ import {
   type ReserveInfo, type ReserveStatus,
 } from './publicReserveApi'
 import BrandSplash from '../../components/ui/BrandSplash'
+import {
+  hasBookableSlot, normalizeSchedule, partsInZone, shiftDate, slotGrid,
+  weeklyHoursRows,
+} from './schedule'
 
 /**
  * Публичная страница брони стола (053), флоу как у Tabit:
@@ -22,28 +26,13 @@ import BrandSplash from '../../components/ui/BrandSplash'
 
 const ACTIVE_KEY = 'kassa-public-reserve' // {clientUuid, locId} — текущая бронь
 
-// Слоты времени по умолчанию: 07:00–23:45, шаг 15 мин. Если владелец задал
-// часы приёма (059), окно и шаг приходят из настроек точки (slotParams).
-const DEF_FROM_MIN = 7 * 60
-const DEF_TO_MIN = 23 * 60 + 45
 const DEF_STEP_MIN = 15
-const DAYS_AHEAD = 30
+/** Сколько дней показывать в селекте дат, даже если горизонт записи больше */
+const MAX_DAYS_SHOWN = 60
+/** Зона по умолчанию: страница брони he-first, продукт израильский */
+const DEF_TZ = 'Asia/Jerusalem'
 
 type ReserveStep = 'slot' | 'times' | 'details'
-
-
-/** 'HH:MM' → минуты от полуночи; null/мусор → fallback */
-function hmToMin(s: string | null | undefined, fallback: number): number {
-  const m = /^(\d{1,2}):(\d{2})$/.exec(s ?? '')
-  if (!m) return fallback
-  return Number(m[1]) * 60 + Number(m[2])
-}
-
-export interface SlotParams {
-  fromMin: number
-  toMin: number
-  stepMin: number
-}
 
 function readActive(locId: string): string | null {
   try {
@@ -60,27 +49,14 @@ function pad(n: number): string {
   return String(n).padStart(2, '0')
 }
 
-function toDateInput(d: Date): string {
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
-}
-
-/** Слоты дня в окне [from,to] с шагом; для сегодняшнего — не раньше minTs */
-function slotsFor(dateStr: string, todayStr: string, minTs: number, p?: SlotParams): string[] {
-  const fromMin = p?.fromMin ?? DEF_FROM_MIN
-  const toMin = p?.toMin ?? DEF_TO_MIN
-  const step = p?.stepMin && p.stepMin > 0 ? p.stepMin : DEF_STEP_MIN
-  const out: string[] = []
-  for (let mins = fromMin; mins <= toMin; mins += step) {
-    const h = Math.floor(mins / 60)
-    const m = mins % 60
-    if (dateStr === todayStr) {
-      const d = new Date(`${dateStr}T00:00:00`)
-      d.setHours(h, m, 0, 0)
-      if (d.getTime() < minTs) continue
-    }
-    out.push(`${pad(h)}:${pad(m)}`)
+/** Сегодняшняя дата в часовом поясе ТОЧКИ, а не устройства */
+function todayInZone(nowMs: number, tz: string): string {
+  const p = partsInZone(new Date(nowMs), tz)
+  if (!p) {
+    const d = new Date(nowMs)
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
   }
-  return out
+  return `${p.year}-${pad(p.month)}-${pad(p.day)}`
 }
 
 export default function PublicReservePage() {
@@ -102,20 +78,25 @@ export default function PublicReservePage() {
     staleTime: 30_000,
   })
 
-  // Календарь и «сейчас» фиксируются на маунте (страница короткоживущая;
-  // серверная валидация окна — своя, submit перепроверяет)
-  const [slotCtx] = useState(() => {
-    const now = new Date()
-    const todayStr = toDateInput(now)
-    const minTs = now.getTime() + 30 * 60_000
-    const days: string[] = []
-    for (let i = 0; i < DAYS_AHEAD; i++) {
-      const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i)
-      days.push(toDateInput(d))
-    }
-    const todayHasSlots = slotsFor(todayStr, todayStr, minTs).length > 0
-    return { todayStr, minTs, days, todayHasSlots }
-  })
+  // «Сейчас» фиксируется на маунте: страница короткоживущая, а серверная
+  // валидация окна своя — submit перепроверяет расписание в любом случае.
+  const [nowMs] = useState(() => Date.now())
+
+  // Часовой пояс ТОЧКИ (117). До этого сетка считалась в зоне устройства,
+  // и гость с телефоном в другой зоне видел одно время, а бронировал другое.
+  const tz = info?.location.timezone || DEF_TZ
+  // Расписание (117): недельные окна, исключения, lead time и горизонт.
+  // Точка без schedule разворачивается в legacy open/close — ровно как на
+  // сервере, поэтому показанное и принимаемое не расходятся.
+  const schedule = useMemo(() => normalizeSchedule(info?.location), [info])
+  const stepMin = info?.location.slot_min && info.location.slot_min > 0
+    ? info.location.slot_min : DEF_STEP_MIN
+
+  const todayStr = useMemo(() => todayInZone(nowMs, tz), [nowMs, tz])
+  const days = useMemo(() => {
+    const count = Math.min(schedule.horizonDays, MAX_DAYS_SHOWN)
+    return Array.from({ length: count }, (_, i) => shiftDate(todayStr, i))
+  }, [todayStr, schedule])
 
   // Выбранный слот (шаг 1) и шаг флоу: слот → точное время → контакты
   const [step, setStep] = useState<ReserveStep>('slot')
@@ -124,27 +105,15 @@ export default function PublicReservePage() {
   // свой ряд времён; выбор времени в секции = бронь этой зоны. Задаётся
   // при тапе по слоту вместе со временем.
   const [zoneId, setZoneId] = useState<string | null>(null)
-  const [date, setDate] = useState(() => (slotCtx.todayHasSlots ? slotCtx.days[0] : slotCtx.days[1]))
-  const [time, setTime] = useState(() => {
-    const slots = slotsFor(
-      slotCtx.todayHasSlots ? slotCtx.days[0] : slotCtx.days[1],
-      slotCtx.todayStr, slotCtx.minTs
-    )
-    return slots.find((s) => s >= '12:00') ?? slots[0] ?? '12:00'
-  })
+  // Дата и время выбираются до загрузки расписания, поэтому стартовые
+  // значения — заведомо валидная заглушка; ниже идёт сверка при рендере.
+  const [date, setDate] = useState(todayStr)
+  const [time, setTime] = useState('')
   const [guests, setGuests] = useState(2)
   // Контакты живут выше экранов: возврат к времени и повторный вход в
   // детали не стирают уже набранное имя/телефон.
   const [detailsDraft, setDetailsDraft] = useState({ name: '', phone: '', note: '' })
   const [clientUuid, setClientUuid] = useState(() => crypto.randomUUID())
-
-  // Часы приёма из настроек точки (059): обе границы заданы → окно слотов
-  // сужается, иначе дефолт 07:00–23:45. slot_min задаёт шаг.
-  const slotParams = useMemo<SlotParams>(() => ({
-    fromMin: hmToMin(info?.location.open, DEF_FROM_MIN),
-    toMin: hmToMin(info?.location.close, DEF_TO_MIN),
-    stepMin: info?.location.slot_min && info.location.slot_min > 0 ? info.location.slot_min : DEF_STEP_MIN,
-  }), [info])
 
   // Лимит гостей (061): настройка владельца, дефолт 20, потолок 50
   const maxParty = useMemo(() => {
@@ -152,9 +121,24 @@ export default function PublicReservePage() {
     return m && m >= 1 && m <= 50 ? m : 20
   }, [info])
 
-  const timeSlots = useMemo(
-    () => slotsFor(date, slotCtx.todayStr, slotCtx.minTs, slotParams),
-    [date, slotCtx, slotParams]
+  const daySlots = useMemo(
+    () => slotGrid({ schedule, dateStr: date, tz, stepMin, nowMs }),
+    [schedule, date, tz, stepMin, nowMs]
+  )
+  const timeSlots = useMemo(() => daySlots.map((s) => s.time), [daySlots])
+  // «Есть ли слоты у дня» спрашивается про каждый день селекта, поэтому
+  // считается облегчённой проверкой с выходом по первому слоту.
+  const dayOpen = useMemo(
+    () => (d: string) => hasBookableSlot({ schedule, dateStr: d, tz, stepMin, nowMs }),
+    [schedule, tz, stepMin, nowMs]
+  )
+  const todayHasSlots = useMemo(() => dayOpen(todayStr), [dayOpen, todayStr])
+  // Абсолютный момент выбранного слота: именно он уходит на сервер. Собирать
+  // время как «дата + метка» нельзя — у ночной смены метка принадлежит
+  // следующим суткам, а весной локального 02:00 может не существовать.
+  const selectedAt = useMemo(
+    () => daySlots.find((s) => s.time === time)?.at ?? null,
+    [daySlots, time]
   )
 
   // Live-доступность (063): только в instant-режиме. Множество СВОБОДНЫХ
@@ -180,12 +164,19 @@ export default function PublicReservePage() {
   const zoneName = zoneId ? zones.find((z) => z.id === zoneId)?.name ?? null : null
 
   // Сверки во время рендера (реком. React вместо эффекта):
-  // 1) Сегодня без слотов (часы приёма подгрузились и окно на сегодня пусто) —
-  //    сдвигаем выбор на следующий день.
-  if (date === slotCtx.todayStr && timeSlots.length === 0 && slotCtx.days.length > 1) {
-    setDate(slotCtx.days[1])
+  // 1) Выбранный день закрыт или уже прошёл — переходим на ближайший день,
+  //    у которого слоты есть. С недельным расписанием (117) закрытым может
+  //    быть не только сегодня: у заведения с выходным в субботу первый
+  //    доступный день — воскресенье.
+  const firstOpenDay = useMemo(
+    () => days.find(dayOpen) ?? null,
+    [days, dayOpen]
+  )
+  if (timeSlots.length === 0 && firstOpenDay && date !== firstOpenDay) {
+    setDate(firstOpenDay)
   } else if (timeSlots.length > 0 && !timeSlots.includes(time)) {
-    // 2) Выбранное время выпало из окна (часы подгрузились/сменился день) — берём ближайшее.
+    // 2) Выбранное время выпало из окна (расписание подгрузилось/сменился
+    //    день) — берём ближайшее к обеду.
     setTime(timeSlots.find((s) => s >= '12:00') ?? timeSlots[0])
   }
   // 3) Гостей больше нового лимита — подрезаем.
@@ -195,8 +186,9 @@ export default function PublicReservePage() {
 
   function pickDate(next: string) {
     setDate(next)
-    const slots = slotsFor(next, slotCtx.todayStr, slotCtx.minTs, slotParams)
-    if (!slots.includes(time)) setTime(slots.find((s) => s >= '12:00') ?? slots[0] ?? '12:00')
+    const slots = slotGrid({ schedule, dateStr: next, tz, stepMin, nowMs })
+      .map((s) => s.time)
+    if (!slots.includes(time)) setTime(slots.find((s) => s >= '12:00') ?? slots[0] ?? '')
   }
 
   function startNew() {
@@ -281,9 +273,10 @@ export default function PublicReservePage() {
           <SlotScreen
             lang={lang}
             info={info}
-            days={slotCtx.days}
-            todayStr={slotCtx.todayStr}
-            todayHasSlots={slotCtx.todayHasSlots}
+            days={days}
+            todayStr={todayStr}
+            todayHasSlots={todayHasSlots}
+            dayOpen={dayOpen}
             date={date}
             time={time}
             guests={guests}
@@ -310,7 +303,7 @@ export default function PublicReservePage() {
             instant={instant}
             freeTimes={freeTimes}
             zones={zones}
-            todayStr={slotCtx.todayStr}
+            todayStr={todayStr}
             onPick={(nextTime, nextZone) => {
               navigateWithTransition('forward', () => {
                 setTime(nextTime)
@@ -330,7 +323,8 @@ export default function PublicReservePage() {
             instant={instant}
             zoneId={zoneId}
             zoneName={zoneName}
-            todayStr={slotCtx.todayStr}
+            todayStr={todayStr}
+            reservedAt={selectedAt}
             draft={detailsDraft}
             onDraft={setDetailsDraft}
             clientUuid={clientUuid}
@@ -591,8 +585,47 @@ function HoursRows({ text }: { text: string }) {
   )
 }
 
+/** «вс–чт» из группы дней; имена берём у Intl, отдельных ключей не заводим */
+function dayRangeLabel(days: number[], lang: Lang): string {
+  const locale = lang === 'he' ? 'he-IL' : 'ru-RU'
+  // 2024-01-07 — воскресенье; сдвигом получаем любой день недели
+  const name = (dow: number) => new Date(Date.UTC(2024, 0, 7 + dow))
+    .toLocaleDateString(locale, { weekday: 'short', timeZone: 'UTC' })
+  if (days.length === 1) return name(days[0])
+  return `${name(days[0])}–${name(days[days.length - 1])}`
+}
+
+/**
+ * Часы работы из недельного расписания (117). Раньше здесь был свободный
+ * текст, который владелец вёл вручную ОТДЕЛЬНО от часов приёма броней —
+ * из-за этого страница писала «шабат закрыто» и тут же предлагала
+ * субботние слоты. Теперь показ и сетка читают одну структуру.
+ */
+function ScheduleHours({ schedule, lang }: {
+  schedule: ReturnType<typeof normalizeSchedule>
+  lang: Lang
+}) {
+  const rows = weeklyHoursRows(schedule)
+  return (
+    <div className="mt-1.5 space-y-1 text-sm text-gray-900">
+      {rows.map((r) => (
+        <div key={r.days[0]} className="flex items-baseline justify-between gap-2">
+          <span className="font-semibold min-w-0">{dayRangeLabel(r.days, lang)}</span>
+          {r.windows.length > 0 ? (
+            <span className="text-gray-600 tabular-nums whitespace-nowrap shrink-0" dir="ltr">
+              {r.windows.map((w) => `${w[0]}\u2013${w[1]}`).join(', ')}
+            </span>
+          ) : (
+            <span className="text-gray-500 whitespace-nowrap shrink-0">{t(lang, 'rsvDayClosed')}</span>
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function SlotScreen({
-  lang, info, days, todayStr, todayHasSlots, date, time, guests, maxParty,
+  lang, info, days, todayStr, todayHasSlots, dayOpen, date, time, guests, maxParty,
   timeSlots, instant, freeTimes, availabilityLoading, availabilityError,
   onDate, onTime, onGuests, onNext,
 }: {
@@ -601,6 +634,8 @@ function SlotScreen({
   days: string[]
   todayStr: string
   todayHasSlots: boolean
+  /** Открыт ли день по расписанию (117) — закрытые дни в селекте недоступны */
+  dayOpen: (dateStr: string) => boolean
   date: string
   time: string
   guests: number
@@ -637,6 +672,9 @@ function SlotScreen({
       : null
   const mapsUrl = googleMapsUrl // есть ли вообще куда навигировать
   const [navOpen, setNavOpen] = useState(false)
+  // Расписание для показа часов — тот же разбор, что и для сетки слотов
+  const schedule = useMemo(() => normalizeSchedule(loc), [loc])
+  const hasHours = !!loc.schedule || !!loc.hours
   return (
     <div className="px-4 pb-8 flex flex-col items-center">
       <ReserveProgress lang={lang} step={1} />
@@ -659,12 +697,17 @@ function SlotScreen({
         </SlotCell>
         <SlotCell label={dayOptionLabel(date, todayStr, lang)}>
           <select className={SELECT_CLS} value={date} onChange={(e) => onDate(e.target.value)} aria-label={t(lang, 'rsvDate')}>
-            {days.map((d) => (
-              // Сегодня без слотов — день виден, но выбрать нельзя
-              <option key={d} value={d} disabled={d === todayStr && !todayHasSlots}>
-                {dayOptionLabel(d, todayStr, lang)}
-              </option>
-            ))}
+            {days.map((d) => {
+              // Закрытый день (выходной по расписанию, праздник-исключение
+              // или сегодня уже поздно) виден, но выбрать его нельзя.
+              const open = dayOpen(d)
+              return (
+                <option key={d} value={d} disabled={!open}>
+                  {dayOptionLabel(d, todayStr, lang)}
+                  {open ? '' : ` · ${t(lang, 'rsvDayClosed')}`}
+                </option>
+              )
+            })}
           </select>
         </SlotCell>
         <SlotCell label={time}>
@@ -722,16 +765,21 @@ function SlotScreen({
           уже, чем требует диапазон «8:00–22:00», и день обрезался, хотя
           рядом с одинокой кнопкой оставалось пустое место.
           Разделитель — только когда есть обе стороны. */}
-      {(loc.hours || loc.phone || mapsUrl) && (
+      {(hasHours || loc.phone || mapsUrl) && (
         <div className={`w-full mt-6 rounded-2xl border border-gray-200 overflow-hidden ${
-          loc.hours && (loc.phone || mapsUrl)
+          hasHours && (loc.phone || mapsUrl)
             ? 'flex divide-x divide-gray-100 rtl:divide-x-reverse'
             : ''
         }`}>
-          {loc.hours && (
+          {hasHours && (
             <div className="min-w-0 grow px-4 py-4">
               <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{t(lang, 'rsvHoursTitle')}</div>
-              <HoursRows text={loc.hours} />
+              {/* Часы показываются из ТОГО ЖЕ расписания, по которому строится
+                  сетка слотов (117). Свободный текст остаётся только у точек,
+                  которым расписание ещё не заполнили. */}
+              {loc.schedule
+                ? <ScheduleHours schedule={schedule} lang={lang} />
+                : <HoursRows text={loc.hours as string} />}
             </div>
           )}
           {(loc.phone || mapsUrl) && (
@@ -1055,7 +1103,7 @@ function reserveErrorText(lang: Lang, code: string): string {
 
 function DetailsScreen({
   lang, locId, date, time, guests, instant, zoneId, zoneName, todayStr,
-  draft, onDraft, clientUuid, onSubmitted,
+  reservedAt, draft, onDraft, clientUuid, onSubmitted,
 }: {
   lang: Lang
   locId: string
@@ -1068,6 +1116,9 @@ function DetailsScreen({
   zoneId: string | null
   zoneName: string | null
   todayStr: string
+  /** Абсолютный момент выбранного слота в зоне ТОЧКИ (117); null = слот
+   *  пропал из расписания, пока гость заполнял форму */
+  reservedAt: Date | null
   draft: { name: string; phone: string; note: string }
   onDraft: (draft: { name: string; phone: string; note: string }) => void
   clientUuid: string
@@ -1095,11 +1146,13 @@ function DetailsScreen({
       }, 0)
       return
     }
-    // Локальное время визита; серверная граница — от +30 минут
-    const [h, m] = time.split(':').map(Number)
-    const at = new Date(`${date}T00:00:00`)
-    at.setHours(h, m, 0, 0)
-    if (at.getTime() < Date.now() + 30 * 60_000) {
+    // Момент визита приходит из сетки и посчитан в зоне ТОЧКИ (117).
+    // Собирать его здесь из `date` и `time` нельзя: у ночной смены метка
+    // «01:00» принадлежит следующим суткам, а в зоне устройства то же
+    // локальное время означает другой момент. Слот исчез из расписания —
+    // просим выбрать время заново, а не отправляем угаданное.
+    const at = reservedAt
+    if (!at || Number.isNaN(at.getTime())) {
       setError(t(lang, 'rsvErrTime'))
       return
     }

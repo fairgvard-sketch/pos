@@ -28,9 +28,21 @@ export interface ReserveInfo {
     /** instant-режим (063): гость видит live-доступность и бронь
      *  подтверждается сразу. false → прежний флоу заявка→касса. */
     instant?: boolean
-    /** Часы приёма (059): обе заданы → слоты ограничены окном. 'HH:MM' */
+    /** Часы приёма (059) — устаревшая пара на все семь дней. Оставлена как
+     *  фолбэк, пока точке не заполнили schedule. 'HH:MM' */
     open?: string | null
     close?: string | null
+    /** Недельное расписание (117) — ЕДИНЫЙ источник и показанных часов, и
+     *  сетки слотов: окна по дням недели, исключения по датам, минимальный
+     *  запас до визита и горизонт записи. null = точка ещё на legacy-паре */
+    schedule?: {
+      weekly?: Record<string, [string, string][]>
+      exceptions?: Record<string, [string, string][]>
+      lead_min?: number
+      horizon_days?: number
+    } | null
+    /** Часовой пояс точки (117): сетка считается в нём, а не в зоне гостя */
+    timezone?: string | null
     /** Шаг слота времени, мин (по умолчанию 15) */
     slot_min?: number | null
     /** Макс. гостей в одной брони (061; по умолчанию 20) */
@@ -89,6 +101,9 @@ export interface ReserveResult {
 export interface AvailSlot {
   time: string // 'HH:MM'
   free: boolean
+  /** Абсолютный момент слота (117). Нужен ночным сменам: метка «01:00»
+   *  относится к следующим суткам, и по одной метке момент не восстановить */
+  at?: string
 }
 
 export interface AvailabilityResult {

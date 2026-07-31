@@ -14,8 +14,11 @@
 
 ## Миграции
 
-Схема хранится в `supabase/migrations/` и на текущем baseline состоит из
-`001_foundation.sql` … `071_explicit_grants_baseline.sql`.
+Схема хранится в `supabase/migrations/` и нумеруется сквозно от
+`001_foundation.sql`. Актуальный номер последней миграции — в самом каталоге и
+в `MIN_SCHEMA_VERSION` (`src/lib/schemaVersion.ts`); дублировать снимок здесь
+не нужно, он устаревает. `071_explicit_grants_baseline.sql` — baseline модели
+грантов, а не конец истории миграций.
 
 Правила:
 
