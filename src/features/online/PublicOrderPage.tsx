@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
 import { useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
@@ -65,6 +65,8 @@ type RouteTransitionKind = 'hero' | 'route'
 const ROUTE_ENTER_MS = 420
 const HERO_ENTER_MS = 520
 const ITEM_SHEET_EXIT_MS = 480
+const HERO_SYSTEM_UI_COLOR = '#202124'
+const DEFAULT_MENU_SYSTEM_UI_COLOR = '#f8f9fb'
 /** URL попадает сюда только после load/decode — карточка может показать
  * уже подготовленный bitmap в первом кадре, без повторного shimmer. */
 const decodedPublicMenuImages = new Set<string>()
@@ -298,22 +300,49 @@ export default function PublicOrderPage() {
     if (!menuBackground) return
 
     const root = document.documentElement
-    const themeMeta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')
-    const previousThemeColor = themeMeta?.content
 
     root.classList.add('public-menu-themed')
     root.classList.toggle('public-menu-dark', menuBackgroundUsesDarkUi(menuBackground))
     root.style.setProperty('--public-menu-background-image', `url(${JSON.stringify(menuBackground)})`)
     root.style.setProperty('--public-menu-theme-color', menuBackgroundThemeColor(menuBackground))
-    themeMeta?.setAttribute('content', menuBackgroundThemeColor(menuBackground))
 
     return () => {
       root.classList.remove('public-menu-themed', 'public-menu-dark')
       root.style.removeProperty('--public-menu-background-image')
       root.style.removeProperty('--public-menu-theme-color')
-      if (themeMeta && previousThemeColor) themeMeta.content = previousThemeColor
     }
   }, [menuBackground])
+
+  const menuSystemUiColor = menuBackground
+    ? menuBackgroundThemeColor(menuBackground)
+    : DEFAULT_MENU_SYSTEM_UI_COLOR
+  // На выходе оставляем тёмный canvas до последнего кадра hero. На
+  // возврате включаем его сразу: Safari 26 берёт оттенок нижнего glass-bar
+  // из фона html/body, а старые Safari — из meta theme-color.
+  const heroSystemUiActive = !!menu && view === 'menu' && (
+    !hasStarted
+    || (
+      routeTransition.phase === 'enter'
+      && routeTransition.kind === 'hero'
+      && routeTransition.direction === 'forward'
+    )
+  )
+  useLayoutEffect(() => {
+    const root = document.documentElement
+    const themeMeta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')
+    const previousThemeColor = themeMeta?.content
+    const systemUiColor = heroSystemUiActive ? HERO_SYSTEM_UI_COLOR : menuSystemUiColor
+
+    root.classList.toggle('public-menu-hero-system-ui', heroSystemUiActive)
+    root.style.setProperty('--public-menu-system-ui-color', systemUiColor)
+    themeMeta?.setAttribute('content', systemUiColor)
+
+    return () => {
+      root.classList.remove('public-menu-hero-system-ui')
+      root.style.removeProperty('--public-menu-system-ui-color')
+      if (themeMeta && previousThemeColor) themeMeta.content = previousThemeColor
+    }
+  }, [heroSystemUiActive, menuSystemUiColor])
 
   const cartCount = cart.reduce((s, l) => s + l.qty, 0)
   const cartTotal = cart.reduce((s, l) => s + l.unitPrice * l.qty, 0)
