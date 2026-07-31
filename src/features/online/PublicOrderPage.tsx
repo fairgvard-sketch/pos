@@ -146,14 +146,24 @@ export default function PublicOrderPage() {
 
     routeTransitionBusy.current = true
     const outgoingScrollY = window.scrollY
+    const deferScrollReset = kind === 'hero' && direction === 'back'
     commit()
     setRouteTransition({ phase: 'enter', direction, kind, outgoingScrollY })
-    // Новый экран всегда начинает с верхней границы. Исходящий слой
+    // Обычный новый экран начинает с верхней границы. Исходящий слой
     // компенсирует прежний scrollY в Shell, поэтому перед движением он
-    // остаётся ровно в том кадре, где гость нажал кнопку, и не прыгает
-    // сначала к началу длинного меню.
-    window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+    // остаётся ровно в том кадре, где гость нажал кнопку.
+    // При возврате из прокрученного каталога hero уже закреплён к viewport.
+    // Не сбрасываем scroll под ним до конца анимации: иначе видимый каталог
+    // прыгает к началу в тот же кадр, когда обложка только начинает входить.
+    if (!deferScrollReset) {
+      window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+    }
     routeEnterTimer.current = window.setTimeout(() => {
+      if (deferScrollReset) {
+        // Hero уже полностью закрыл экран, поэтому скрытый каталог можно
+        // безопасно вернуть наверх без видимого вертикального скачка.
+        window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+      }
       routeTransitionBusy.current = false
       setRouteTransition({ phase: 'idle', direction, kind, outgoingScrollY: 0 })
       routeEnterTimer.current = undefined
@@ -825,54 +835,59 @@ function Shell({
         className={`public-menu-frame relative mx-auto min-h-screen flex flex-col ${hasBg ? '' : 'bg-white'}`}
       >
         {showHero && (
-          <header
+          <div
             key="hero"
             data-transition-role={heroTransitionRole}
-            data-nav={transitionDirection}
-            className={`public-menu-hero is-viewport-overlay${hasHeroMedia ? ' has-media' : ' is-brand-only'}`}
+            className="public-menu-hero-viewport"
           >
-            {heroVideo ? (
-              <video
-                key={heroVideo}
-                src={heroVideo}
-                poster={headerImg ?? undefined}
-                autoPlay={!reducedMotion}
-                muted
-                loop
-                playsInline
-                preload={reducedMotion ? 'none' : 'metadata'}
-                aria-hidden="true"
-                className="public-menu-hero-media"
-              />
-            ) : headerImg ? (
-              <img
-                src={headerImg}
-                alt=""
-                className="public-menu-hero-media"
-              />
-            ) : null}
-            <span className="public-menu-hero-scrim" />
-            <div className="public-menu-hero-brand">
-              {logo ? (
-                <img src={logo} alt="" className="public-menu-hero-logo" />
-              ) : (
-                <span className="public-menu-hero-monogram" aria-hidden>
-                  {(title ?? '').slice(0, 1)}
-                </span>
-              )}
-            </div>
-            <div className="public-menu-hero-copy">
-              <h1 className="font-display">{title ?? ''}</h1>
-            </div>
-            <button
-              type="button"
-              className="public-menu-hero-scroll public-menu-route-focus"
-              onClick={onHeroStart}
-              aria-label="התחלה"
+            <header
+              data-transition-role={heroTransitionRole}
+              data-nav={transitionDirection}
+              className={`public-menu-hero${hasHeroMedia ? ' has-media' : ' is-brand-only'}`}
             >
-              <span>התחל</span>
-            </button>
-          </header>
+              {heroVideo ? (
+                <video
+                  key={heroVideo}
+                  src={heroVideo}
+                  poster={headerImg ?? undefined}
+                  autoPlay={!reducedMotion}
+                  muted
+                  loop
+                  playsInline
+                  preload={reducedMotion ? 'none' : 'metadata'}
+                  aria-hidden="true"
+                  className="public-menu-hero-media"
+                />
+              ) : headerImg ? (
+                <img
+                  src={headerImg}
+                  alt=""
+                  className="public-menu-hero-media"
+                />
+              ) : null}
+              <span className="public-menu-hero-scrim" />
+              <div className="public-menu-hero-brand">
+                {logo ? (
+                  <img src={logo} alt="" className="public-menu-hero-logo" />
+                ) : (
+                  <span className="public-menu-hero-monogram" aria-hidden>
+                    {(title ?? '').slice(0, 1)}
+                  </span>
+                )}
+              </div>
+              <div className="public-menu-hero-copy">
+                <h1 className="font-display">{title ?? ''}</h1>
+              </div>
+              <button
+                type="button"
+                className="public-menu-hero-scroll public-menu-route-focus"
+                onClick={onHeroStart}
+                aria-label="התחלה"
+              >
+                <span>התחל</span>
+              </button>
+            </header>
+          </div>
         )}
         {showCompactHeader && (
           <header

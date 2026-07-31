@@ -258,14 +258,29 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     background-size: cover;
   }
 
-  .public-menu-hero.is-viewport-overlay {
-    position: absolute;
-    inset-block-start: 0;
+  /*
+   * Отдельный fixed-контейнер держит hero в границах viewport. Сам hero
+   * движется внутри него, поэтому translateX больше не расширяет документ
+   * и Safari не компенсирует появившийся горизонтальный overflow рывком.
+   */
+  .public-menu-hero-viewport {
+    position: fixed;
+    inset-block: 0;
     inset-inline: 0;
     z-index: 40;
+    width: 100%;
+    max-width: 32rem;
+    margin-inline: auto;
+    overflow: hidden;
+    pointer-events: none;
   }
 
-  .public-menu-hero.is-viewport-overlay[data-transition-role='leaving'] {
+  .public-menu-hero-viewport > .public-menu-hero {
+    width: 100%;
+    pointer-events: auto;
+  }
+
+  .public-menu-hero-viewport[data-transition-role='leaving'] > .public-menu-hero {
     pointer-events: none;
   }
 
