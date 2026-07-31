@@ -73,14 +73,29 @@ function pad(n: number): string {
   return String(n).padStart(2, '0')
 }
 
-/** Сегодняшняя дата в часовом поясе ТОЧКИ, а не устройства */
-function todayInZone(nowMs: number, tz: string): string {
-  const p = partsInZone(new Date(nowMs), tz)
+/** Локальная дата момента в часовом поясе ТОЧКИ, а не устройства */
+function localDateOf(ms: number, tz: string): string {
+  const p = partsInZone(new Date(ms), tz)
   if (!p) {
-    const d = new Date(nowMs)
+    const d = new Date(ms)
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
   }
   return `${p.year}-${pad(p.month)}-${pad(p.day)}`
+}
+
+/** Сегодняшняя дата в часовом поясе точки */
+function todayInZone(nowMs: number, tz: string): string {
+  return localDateOf(nowMs, tz)
+}
+
+/** Локальное время момента, 'HH:MM' в зоне точки */
+function localTimeOf(ms: number, tz: string): string {
+  const p = partsInZone(new Date(ms), tz)
+  if (!p) {
+    const d = new Date(ms)
+    return `${pad(d.getHours())}:${pad(d.getMinutes())}`
+  }
+  return `${pad(p.hour)}:${pad(p.minute)}`
 }
 
 export default function PublicReservePage() {
@@ -1662,16 +1677,32 @@ function RescheduleSheet({ lang, view, tz, bookingKey, onClose, onDone }: {
       .filter((d) => hasBookableSlot({ schedule, dateStr: d, tz, stepMin, nowMs }))
   }, [todayStr, schedule, tz, stepMin, nowMs])
 
+  // Лист открывается на дате И времени САМОЙ брони, а не на первом
+  // свободном дне: иначе гость, сдвигающий время на полчаса, молча
+  // переносит визит на другой день (поймано живой приёмкой).
+  const currentDate = useMemo(
+    () => localDateOf(new Date(view.reserved_at).getTime(), tz),
+    [view.reserved_at, tz]
+  )
   const [date, setDate] = useState('')
-  const effectiveDate = date || days[0] || ''
+  const effectiveDate = date
+    || (days.includes(currentDate) ? currentDate : days[0])
+    || ''
   const slots = useMemo(
     () => (effectiveDate
       ? slotGrid({ schedule, dateStr: effectiveDate, tz, stepMin, nowMs })
       : []),
     [schedule, effectiveDate, tz, stepMin, nowMs]
   )
+  const currentTime = useMemo(
+    () => localTimeOf(new Date(view.reserved_at).getTime(), tz),
+    [view.reserved_at, tz]
+  )
   const [time, setTime] = useState('')
-  const effectiveTime = slots.some((s) => s.time === time) ? time : slots[0]?.time ?? ''
+  const preferred = time || (effectiveDate === currentDate ? currentTime : '')
+  const effectiveTime = slots.some((s) => s.time === preferred)
+    ? preferred
+    : slots[0]?.time ?? ''
   const selected = slots.find((s) => s.time === effectiveTime) ?? null
 
   async function submit() {
