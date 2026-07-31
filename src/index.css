@@ -312,20 +312,19 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     }
 
     /* Низ hero уходит под browser chrome, а CTA остаётся в visual viewport.
-       Решает первый член: lvh−svh — высота динамических панелей браузера.
-       svh считается при РАЗВЁРНУТЫХ панелях, поэтому это гарантированно
-       видимая зона независимо от текущего состояния UI.
-       Почему не хватило остальных: dvh и VisualViewport описывают
-       СУЖЕНИЕ вьюпорта, а Chrome на iOS рисует нижнюю панель поверх него,
-       ничего не сужая — все эти члены давали ноль, и кнопка оставалась
-       под панелью. Они сохранены для случаев, где панель действительно
-       сужает вьюпорт. */
+       Chrome на iOS рисует нижнюю панель ПОВЕРХ вьюпорта, не сужая его:
+       lvh, svh, dvh и VisualViewport там дают одно и то же значение, и
+       любая вычисленная компенсация выходит нулевой — кнопка оставалась
+       под панелью. Поэтому первым членом идёт безусловные 5rem: запас
+       больше самой высокой панели среди мобильных браузеров.
+       Остальные члены оставлены для браузеров, которые вьюпорт реально
+       сужают — там max() возьмёт их фактическое значение. */
     .public-menu-hero-scroll {
       bottom: calc(
         1.4rem
         + env(safe-area-inset-bottom)
         + max(
-          0px,
+          5rem,
           calc(100lvh - 100svh),
           calc(100lvh - 100dvh),
           var(--public-menu-visual-bottom-inset, 0px),
@@ -339,7 +338,7 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
         5.6rem
         + env(safe-area-inset-bottom)
         + max(
-          0px,
+          5rem,
           calc(100lvh - 100svh),
           calc(100lvh - 100dvh),
           var(--public-menu-visual-bottom-inset, 0px),
@@ -1825,7 +1824,7 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     max-height: 100svh;
     flex-direction: column;
     border-radius: 0;
-    animation: sheet-in 600ms cubic-bezier(.2, .58, .25, 1) both;
+    animation: sheet-in 550ms cubic-bezier(.2, .58, .25, 1) both;
     backface-visibility: hidden;
     contain: paint;
     will-change: transform;
@@ -3053,7 +3052,7 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
 ::view-transition-new(root) {
   /* Свои keyframes вместо дефолтного кросс-фейда: снимки едут вбок,
      как настоящие экраны, и не просвечивают друг сквозь друга. */
-  animation-duration: 450ms;
+  animation-duration: 550ms;
   animation-timing-function: cubic-bezier(.32, .72, 0, 1);
   animation-fill-mode: both;
   mix-blend-mode: normal;
