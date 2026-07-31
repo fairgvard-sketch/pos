@@ -301,49 +301,34 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     /* Fixed inset:0 ограничивается текущим visual viewport и после скролла
        обрезал hero ровно над нижней строкой Safari. Явный lvh сохраняет
        слой под браузерным chrome и при первом входе, и после возврата. */
+    /* Высота = фактическая видимая область (VisualViewport, из
+       PublicOrderPage). Chrome на iOS отдаёт fixed top:0 ПОД верхней
+       панелью, но 100lvh меряет от полного экрана — hero целиком
+       съезжал вниз, и его низ с кнопкой уходил под нижнюю панель.
+       Fallback 100lvh — для браузеров без VisualViewport. */
     .public-menu-hero-viewport {
-      height: 100lvh;
-      min-height: 100lvh;
+      height: var(--public-menu-visual-height, 100lvh);
+      min-height: var(--public-menu-visual-height, 100lvh);
     }
 
     .public-menu-hero {
-      height: 100lvh;
-      min-height: 100lvh;
+      height: var(--public-menu-visual-height, 100lvh);
+      min-height: var(--public-menu-visual-height, 100lvh);
     }
 
     /* Низ hero уходит под browser chrome, а CTA остаётся в visual viewport.
-       Safari обычно корректно даёт lvh−dvh. Chrome на iOS 26 иногда
-       возвращает ноль, поэтому берём максимум с фактическим inset из
-       VisualViewport API (выставляется в PublicOrderPage).
-
-       ВНИМАНИЕ: в Chrome на iOS кнопка всё равно остаётся под нижней
-       панелью — там все эти члены дают ноль. Пробовали также lvh−svh и
-       высоту visualViewport: тот же результат. Причина не в величине
-       отступа, поэтому наращивать его бессмысленно (проверено запасом
-       в 5rem — не помогло). Нужна диагностика фактических значений
-       единиц на самом устройстве. */
+       Причина была не в отступе кнопки, а в высоте самого hero: он
+       начинался под верхней панелью Chrome, но мерился в 100lvh от
+       полного экрана — весь экран уезжал вниз вместе с кнопкой.
+       Наращивать отступ бессмысленно (проверено запасом 5rem). */
+    /* Компенсация панелей больше не нужна: hero сам равен видимой
+       области, поэтому его низ и есть нижняя граница экрана. */
     .public-menu-hero-scroll {
-      bottom: calc(
-        4.5rem
-        + env(safe-area-inset-bottom)
-        + max(
-          0px,
-          calc(100lvh - 100dvh),
-          var(--public-menu-visual-bottom-inset, 0px)
-        )
-      );
+      bottom: calc(4.5rem + env(safe-area-inset-bottom));
     }
 
     .public-menu-hero.has-media .public-menu-hero-copy {
-      bottom: calc(
-        8.7rem
-        + env(safe-area-inset-bottom)
-        + max(
-          0px,
-          calc(100lvh - 100dvh),
-          var(--public-menu-visual-bottom-inset, 0px)
-        )
-      );
+      bottom: calc(8.7rem + env(safe-area-inset-bottom));
     }
   }
 
