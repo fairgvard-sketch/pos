@@ -1869,9 +1869,12 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   }
 
   /*
-   * Route-контейнер сам никогда не получает transform: внутри него живут
-   * viewport-fixed CTA. Движется только .public-menu-route-motion, а
-   * нижняя панель анимируется самостоятельно.
+   * В покое route-контейнер участвует в обычном длинном документе. На
+   * переходе он становится отдельным fixed viewport под компактной шапкой:
+   * две полноразмерные страницы движутся внутри него и физически не могут
+   * расширить scrollWidth документа. Иначе мобильный браузер может
+   * компенсировать off-screen transform горизонтальным сдвигом всего canvas,
+   * вместе с неподвижной шапкой, и между экранами виден белый кадр.
    */
   .public-menu-screen {
     position: relative;
@@ -1903,48 +1906,66 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     pointer-events: none;
   }
 
+  .public-menu-screen[data-transition='enter'][data-transition-kind='route'] {
+    position: fixed;
+    z-index: 9;
+    top: calc(3.5rem + env(safe-area-inset-top));
+    right: 0;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    max-width: 32rem;
+    margin-inline: auto;
+    overflow: hidden;
+    background: transparent;
+    contain: strict;
+  }
+
+  .public-menu-screen[data-transition='enter'][data-transition-kind='route']
+  > .public-menu-route-layer {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    min-height: 0;
+    overflow: hidden;
+    background: inherit;
+    backface-visibility: hidden;
+    will-change: transform;
+  }
+
+  /* После мгновенного scrollTo(0) исходящий длинный экран сохраняет ровно
+     тот участок, который видел гость. Fixed CTA не получает этот отступ и
+     остаётся прижатым к низу собственного viewport. */
+  .public-menu-screen[data-transition='enter'][data-transition-kind='route']
+  > .public-menu-route-layer.is-outgoing
+  > .public-menu-route-motion,
+  .public-menu-screen[data-transition='enter'][data-transition-kind='route']
+  > .public-menu-route-layer.is-outgoing
+  > .public-menu-checkout
+  > .public-menu-route-motion {
+    margin-block-start: calc(-1 * var(--public-outgoing-scroll-y, 0px));
+  }
+
   .public-menu-route-heading:focus {
     outline: none;
   }
 
   .public-menu-screen[data-transition='enter'][data-transition-kind='route']
-  > .public-menu-route-layer.is-current
-  > .public-menu-route-motion,
-  .public-menu-screen[data-transition='enter']
-  > .public-menu-route-layer.is-current
-  > .public-menu-checkout
-  > .public-menu-route-motion {
+  > .public-menu-route-layer.is-current {
     animation: public-route-enter 420ms cubic-bezier(.25, .65, .3, 1) both;
   }
 
   .public-menu-screen[data-transition='enter'][data-transition-kind='route']
-  > .public-menu-route-layer.is-outgoing
-  > .public-menu-route-motion,
-  .public-menu-screen[data-transition='enter']
-  > .public-menu-route-layer.is-outgoing
-  > .public-menu-checkout
-  > .public-menu-route-motion {
+  > .public-menu-route-layer.is-outgoing {
     animation: public-route-exit 420ms cubic-bezier(.25, .65, .3, 1) both;
   }
 
+  /* Route-layer сам является containing block высотой с viewport. Поэтому
+     fixed-панели корзины/оплаты остаются у его нижней кромки и едут вместе
+     с экраном, а не отдельной анимацией с другим layout-tick. */
   .public-menu-screen[data-transition='enter'][data-transition-kind='route']
-  > .public-menu-route-layer.is-current
-  > .public-menu-checkout-submitbar,
-  .public-menu-screen[data-transition='enter']
-  > .public-menu-route-layer.is-current
-  > .public-menu-checkout
-  > .public-menu-checkout-submitbar {
-    animation: public-route-bar-enter 420ms cubic-bezier(.25, .65, .3, 1) both;
-  }
-
-  .public-menu-screen[data-transition='enter'][data-transition-kind='route']
-  > .public-menu-route-layer.is-outgoing
-  > .public-menu-checkout-submitbar,
-  .public-menu-screen[data-transition='enter']
-  > .public-menu-route-layer.is-outgoing
-  > .public-menu-checkout
-  > .public-menu-checkout-submitbar {
-    animation: public-route-bar-exit 420ms cubic-bezier(.25, .65, .3, 1) both;
+  > .public-menu-route-layer .public-menu-checkout-submitbar {
+    max-width: none;
   }
 
   @keyframes public-route-enter {
@@ -1959,28 +1980,6 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   }
 
   @keyframes public-route-exit {
-    from {
-      opacity: 1;
-      transform: translate3d(0, 0, 0);
-    }
-    to {
-      opacity: 1;
-      transform: translate3d(var(--public-route-exit-x), 0, 0);
-    }
-  }
-
-  @keyframes public-route-bar-enter {
-    from {
-      opacity: 1;
-      transform: translate3d(var(--public-route-enter-x), 0, 0);
-    }
-    to {
-      opacity: 1;
-      transform: translate3d(0, 0, 0);
-    }
-  }
-
-  @keyframes public-route-bar-exit {
     from {
       opacity: 1;
       transform: translate3d(0, 0, 0);
@@ -2332,6 +2331,10 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
 
     .public-menu-frame,
     .public-menu-checkout-submitbar {
+      max-width: 48rem;
+    }
+
+    .public-menu-screen[data-transition='enter'][data-transition-kind='route'] {
       max-width: 48rem;
     }
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
 import { useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
@@ -933,7 +933,7 @@ function Shell({
               key={visibleOutgoingRoute.key}
               aria-hidden="true"
               className="public-menu-route-layer is-outgoing"
-              style={{ insetBlockStart: -outgoingScrollY }}
+              style={{ '--public-outgoing-scroll-y': `${outgoingScrollY}px` } as CSSProperties}
             >
               {visibleOutgoingRoute.children}
             </div>
