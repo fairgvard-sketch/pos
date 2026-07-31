@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useQueries, useQuery } from '@tanstack/react-query'
 import { t, formatTime, type Lang } from '../../lib/i18n'
 import { PublicApiError } from '../online/publicApi'
+import { navigateWithTransition } from '../online/viewTransition'
 import {
   fetchReserveInfo, submitPublicReservation, fetchPublicReservationStatus,
   cancelPublicReservation, fetchAvailability,
@@ -27,23 +28,9 @@ const DEF_FROM_MIN = 7 * 60
 const DEF_TO_MIN = 23 * 60 + 45
 const DEF_STEP_MIN = 15
 const DAYS_AHEAD = 30
-const RESERVE_ROUTE_MS = 320
 
 type ReserveStep = 'slot' | 'times' | 'details'
-type ReserveRoutePhase = 'idle' | 'enter'
 
-function usePrefersReducedMotion(): boolean {
-  const [reduced, setReduced] = useState(
-    () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  )
-  useEffect(() => {
-    const media = window.matchMedia('(prefers-reduced-motion: reduce)')
-    const onChange = (event: MediaQueryListEvent) => setReduced(event.matches)
-    media.addEventListener?.('change', onChange)
-    return () => media.removeEventListener?.('change', onChange)
-  }, [])
-  return reduced
-}
 
 /** 'HH:MM' → минуты от полуночи; null/мусор → fallback */
 function hmToMin(s: string | null | undefined, fallback: number): number {
@@ -132,13 +119,6 @@ export default function PublicReservePage() {
 
   // Выбранный слот (шаг 1) и шаг флоу: слот → точное время → контакты
   const [step, setStep] = useState<ReserveStep>('slot')
-  const reducedMotion = usePrefersReducedMotion()
-  const [routeTransition, setRouteTransition] = useState<{
-    phase: ReserveRoutePhase
-    outgoingScrollY: number
-  }>({ phase: 'idle', outgoingScrollY: 0 })
-  const routeBusy = useRef(false)
-  const routeTimer = useRef<number | undefined>(undefined)
   // Зона зала (072): пожелание гостя, null = без предпочтений. На шаге
   // точного времени зоны показываются секциями (Ontopo-стиль): у каждой
   // свой ряд времён; выбор времени в секции = бронь этой зоны. Задаётся
@@ -157,29 +137,6 @@ export default function PublicReservePage() {
   // детали не стирают уже набранное имя/телефон.
   const [detailsDraft, setDetailsDraft] = useState({ name: '', phone: '', note: '' })
   const [clientUuid, setClientUuid] = useState(() => crypto.randomUUID())
-
-  useEffect(() => () => {
-    if (routeTimer.current !== undefined) window.clearTimeout(routeTimer.current)
-  }, [])
-
-  const transitionTo = useCallback((commit: () => void) => {
-    if (routeBusy.current) return
-    if (reducedMotion) {
-      window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
-      commit()
-      return
-    }
-    routeBusy.current = true
-    const outgoingScrollY = window.scrollY
-    commit()
-    setRouteTransition({ phase: 'enter', outgoingScrollY })
-    window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
-    routeTimer.current = window.setTimeout(() => {
-      routeBusy.current = false
-      routeTimer.current = undefined
-      setRouteTransition({ phase: 'idle', outgoingScrollY: 0 })
-    }, RESERVE_ROUTE_MS)
-  }, [reducedMotion])
 
   // Часы приёма из настроек точки (059): обе границы заданы → окно слотов
   // сужается, иначе дефолт 07:00–23:45. slot_min задаёт шаг.
@@ -243,7 +200,7 @@ export default function PublicReservePage() {
   }
 
   function startNew() {
-    transitionTo(() => {
+    navigateWithTransition('back', () => {
       localStorage.removeItem(ACTIVE_KEY)
       setActiveUuid(null)
       setStep('slot')
@@ -262,8 +219,6 @@ export default function PublicReservePage() {
           info={info}
           lang={lang}
           routeKey="status"
-          transitionPhase={routeTransition.phase}
-          outgoingScrollY={routeTransition.outgoingScrollY}
         >
           <StatusScreen lang={lang} clientUuid={activeUuid} onNew={startNew} />
         </Shell>
@@ -314,13 +269,11 @@ export default function PublicReservePage() {
         lang={lang}
         hero={step === 'slot'}
         routeKey={step}
-        transitionPhase={routeTransition.phase}
-        outgoingScrollY={routeTransition.outgoingScrollY}
         onBack={
           step === 'times'
-            ? () => transitionTo(() => setStep('slot'))
+            ? () => navigateWithTransition('back', () => setStep('slot'))
             : step === 'details'
-              ? () => transitionTo(() => setStep('times'))
+              ? () => navigateWithTransition('back', () => setStep('times'))
               : undefined
         }
       >
@@ -343,7 +296,7 @@ export default function PublicReservePage() {
             onDate={pickDate}
             onTime={setTime}
             onGuests={setGuests}
-            onNext={() => transitionTo(() => setStep('times'))}
+            onNext={() => navigateWithTransition('forward', () => setStep('times'))}
           />
         )}
         {step === 'times' && (
@@ -359,7 +312,7 @@ export default function PublicReservePage() {
             zones={zones}
             todayStr={slotCtx.todayStr}
             onPick={(nextTime, nextZone) => {
-              transitionTo(() => {
+              navigateWithTransition('forward', () => {
                 setTime(nextTime)
                 setZoneId(nextZone)
                 setStep('details')
@@ -382,7 +335,7 @@ export default function PublicReservePage() {
             onDraft={setDetailsDraft}
             clientUuid={clientUuid}
             onSubmitted={(uuid) => {
-              transitionTo(() => {
+              navigateWithTransition('forward', () => {
                 localStorage.setItem(ACTIVE_KEY, JSON.stringify({ clientUuid: uuid, locId }))
                 setActiveUuid(uuid)
               })
@@ -399,20 +352,12 @@ export default function PublicReservePage() {
  * На переходе предыдущий React-поддерево остаётся смонтированным и уезжает
  * одновременно с новым: фото, заголовки и форма не прыгают между layout.
  */
-/* eslint-disable react-hooks/refs -- здесь ref намеренно хранит предыдущий
-   React-снимок между двумя routeKey. Он синхронно читается только для
-   одновременного рендера outgoing/current и не управляет текущим UI. */
-function Shell({
-  isRtl, info, lang, hero, routeKey, transitionPhase = 'idle',
-  outgoingScrollY = 0, onBack, children,
-}: {
+function Shell({ isRtl, info, lang, hero, routeKey, onBack, children }: {
   isRtl: boolean
   info?: ReserveInfo
   lang: Lang
   hero?: boolean
   routeKey?: string
-  transitionPhase?: ReserveRoutePhase
-  outgoingScrollY?: number
   onBack?: () => void
   children: React.ReactNode
 }) {
@@ -461,58 +406,26 @@ function Shell({
       {hero && loc && <ReserveFooter loc={loc} lang={lang} />}
     </div>
   )
-  const latestRoute = useRef<{ key: string; node: React.ReactNode }>({
-    key: currentRouteKey,
-    node: currentRoute,
-  })
-  const outgoingRoute = useRef<{ key: string; node: React.ReactNode } | null>(null)
   const focusRoute = useRef(currentRouteKey)
 
-  if (latestRoute.current.key !== currentRouteKey) {
-    outgoingRoute.current = latestRoute.current
-  }
-  latestRoute.current = { key: currentRouteKey, node: currentRoute }
-  const visibleOutgoing =
-    transitionPhase === 'enter' && outgoingRoute.current?.key !== currentRouteKey
-      ? outgoingRoute.current
-      : null
-
   useEffect(() => {
-    if (transitionPhase !== 'idle' || focusRoute.current === currentRouteKey) return
+    if (focusRoute.current === currentRouteKey) return
     const timer = window.setTimeout(() => {
       document
-        .querySelector<HTMLElement>('.public-reserve-route-layer.is-current .public-reserve-route-focus')
+        .querySelector<HTMLElement>('.public-reserve-route-focus')
         ?.focus({ preventScroll: true })
       focusRoute.current = currentRouteKey
     }, 0)
     return () => window.clearTimeout(timer)
-  }, [currentRouteKey, transitionPhase])
+  }, [currentRouteKey])
 
+  // Один живой слой: анимацию перехода рисует браузер по снапшотам.
   return (
     <div dir={isRtl ? 'rtl' : 'ltr'} className="public-reserve-shell">
-      <div
-        data-transition={transitionPhase}
-        aria-busy={transitionPhase !== 'idle'}
-        className="public-reserve-screen"
-      >
-        {visibleOutgoing && (
-          <div
-            key={visibleOutgoing.key}
-            aria-hidden="true"
-            className="public-reserve-route-layer is-outgoing"
-            style={{ insetBlockStart: -outgoingScrollY }}
-          >
-            {visibleOutgoing.node}
-          </div>
-        )}
-        <div key={currentRouteKey} className="public-reserve-route-layer is-current">
-          {currentRoute}
-        </div>
-      </div>
+      <div className="public-reserve-screen">{currentRoute}</div>
     </div>
   )
 }
-/* eslint-enable react-hooks/refs */
 
 /**
  * Подвал страницы брони (066): часы работы (свободный текст) и соцкнопки

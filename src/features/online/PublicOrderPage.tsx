@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
@@ -9,6 +9,7 @@ import {
   type PublicItem, type PublicMenu, type PublicStatus, type PublicOrderType,
 } from './publicApi'
 import { parsePublicOrderQuery } from './orderContext'
+import { navigateWithTransition } from './viewTransition'
 import { useIdleReset } from './useIdleReset'
 import StillHereDialog from './StillHereDialog'
 import { reconcileCart } from './reconcileCart'
@@ -56,14 +57,6 @@ interface CartLine {
   qty: number
 }
 
-type RouteDirection = 'forward' | 'back'
-type RouteTransitionPhase = 'idle' | 'enter'
-type RouteTransitionKind = 'hero' | 'route'
-
-// Небольшой запас после CSS-анимации не даёт React снять animation:both
-// на несколько пикселей раньше последнего кадра compositor-а.
-const ROUTE_ENTER_MS = 600
-const HERO_ENTER_MS = 660
 const ITEM_SHEET_EXIT_MS = 480
 const HERO_SYSTEM_UI_COLOR = '#202124'
 const DEFAULT_MENU_SYSTEM_UI_COLOR = '#f8f9fb'
@@ -111,65 +104,12 @@ export default function PublicOrderPage() {
   // список получает вторую анимацию и визуально «мигает».
   const [categoryMotion, setCategoryMotion] = useState(false)
   const reducedMotion = usePrefersReducedMotion()
-  const [routeTransition, setRouteTransition] = useState<{
-    phase: RouteTransitionPhase
-    direction: RouteDirection
-    kind: RouteTransitionKind
-    outgoingScrollY: number
-  }>({ phase: 'idle', direction: 'forward', kind: 'route', outgoingScrollY: 0 })
-  const routeTransitionBusy = useRef(false)
-  const routeEnterTimer = useRef<number | undefined>(undefined)
   const itemCloseTimer = useRef<number | undefined>(undefined)
   const itemTrigger = useRef<HTMLElement | null>(null)
 
   useEffect(() => () => {
-    if (routeEnterTimer.current !== undefined) window.clearTimeout(routeEnterTimer.current)
     if (itemCloseTimer.current !== undefined) window.clearTimeout(itemCloseTimer.current)
   }, [])
-
-  /**
-   * Переход коммитится сразу: отдельной exit-фазы и паузы между экранами
-   * нет. Оба полноэкранных слоя двигаются синхронно и с одной кривой —
-   * это сохраняет общий стык и не оставляет неподвижную нижнюю панель
-   * под уезжающим экраном.
-   */
-  const transitionTo = useCallback((
-    direction: RouteDirection,
-    kind: RouteTransitionKind,
-    commit: () => void,
-  ) => {
-    if (routeTransitionBusy.current) return
-    if (reducedMotion) {
-      window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
-      commit()
-      return
-    }
-
-    routeTransitionBusy.current = true
-    const outgoingScrollY = window.scrollY
-    const deferScrollReset = kind === 'hero' && direction === 'back'
-    commit()
-    setRouteTransition({ phase: 'enter', direction, kind, outgoingScrollY })
-    // Обычный новый экран начинает с верхней границы. Исходящий слой
-    // компенсирует прежний scrollY в Shell, поэтому перед движением он
-    // остаётся ровно в том кадре, где гость нажал кнопку.
-    // При возврате из прокрученного каталога hero уже закреплён к viewport.
-    // Не сбрасываем scroll под ним до конца анимации: иначе видимый каталог
-    // прыгает к началу в тот же кадр, когда обложка только начинает входить.
-    if (!deferScrollReset) {
-      window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
-    }
-    routeEnterTimer.current = window.setTimeout(() => {
-      if (deferScrollReset) {
-        // Hero уже полностью закрыл экран, поэтому скрытый каталог можно
-        // безопасно вернуть наверх без видимого вертикального скачка.
-        window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
-      }
-      routeTransitionBusy.current = false
-      setRouteTransition({ phase: 'idle', direction, kind, outgoingScrollY: 0 })
-      routeEnterTimer.current = undefined
-    }, kind === 'hero' ? HERO_ENTER_MS : ROUTE_ENTER_MS)
-  }, [reducedMotion])
 
   const finishConfigClose = useCallback(() => {
     setConfigItem(null)
@@ -318,14 +258,10 @@ export default function PublicOrderPage() {
   // На выходе оставляем тёмный canvas до последнего кадра hero. На
   // возврате включаем его сразу: Safari 26 берёт оттенок нижнего glass-bar
   // из фона html/body, а старые Safari — из meta theme-color.
-  const heroSystemUiActive = !!menu && view === 'menu' && (
-    !hasStarted
-    || (
-      routeTransition.phase === 'enter'
-      && routeTransition.kind === 'hero'
-      && routeTransition.direction === 'forward'
-    )
-  )
+  // Смена канваса при переходе hero↔меню происходит под снапшотами
+  // View Transition, поэтому отдельной задержки «до последнего кадра»
+  // больше не нужно: достаточно факта «hero сейчас показан».
+  const heroSystemUiActive = !!menu && view === 'menu' && !hasStarted
   useLayoutEffect(() => {
     const root = document.documentElement
     const themeMeta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')
@@ -513,16 +449,23 @@ export default function PublicOrderPage() {
     setCategoryMotion(false)
   }
 
-  function openItem(item: PublicItem) {
-    // Карточка товара — часть витрины: любой товар сначала раскрывается
-    // крупно с фото, описанием и ценой. Это сохраняет предсказуемый UX и
-    // не добавляет простые позиции в корзину неожиданно по тапу по карточке.
+  // Карточка товара — часть витрины: любой товар сначала раскрывается
+  // крупно с фото, описанием и ценой. Это сохраняет предсказуемый UX и
+  // не добавляет простые позиции в корзину неожиданно по тапу по карточке.
+  const openItem = useCallback((item: PublicItem) => {
+    setConfigClosing(false)
+    setConfigItem(item)
+  }, [])
+
+  // Кто открыл карточку — запоминаем в эффекте, а не в обработчике:
+  // запись ref из функции, переданной в проп, линтер считает чтением
+  // во время рендера. Фокус на момент открытия ещё на карточке товара.
+  useEffect(() => {
+    if (!configItem || itemTrigger.current) return
     itemTrigger.current = document.activeElement instanceof HTMLElement
       ? document.activeElement
       : null
-    setConfigClosing(false)
-    setConfigItem(item)
-  }
+  }, [configItem])
 
   function selectCategory(id: string) {
     if (!menu || id === activeCat) return
@@ -604,12 +547,8 @@ export default function PublicOrderPage() {
       heroVideo={menu.location.hero_video_url ?? BRANDED_HERO_VIDEOS[locId] ?? null}
       bgImg={menuBackground}
       routeKey={routeKey}
-      transitionPhase={routeTransition.phase}
-      transitionDirection={routeTransition.direction}
-      transitionKind={routeTransition.kind}
-      outgoingScrollY={routeTransition.outgoingScrollY}
       onHeroStart={() => {
-        transitionTo('forward', 'hero', () => {
+        navigateWithTransition('forward', () => {
           setCategoryMotion(false)
           setHasStarted(true)
           setActiveCat(menu.categories[0]?.id ?? null)
@@ -621,12 +560,10 @@ export default function PublicOrderPage() {
       onBack={
         view === 'checkout'
           ? checkoutStage === 'payment'
-            ? () => transitionTo('back', 'route', () => setCheckoutStage('cart'))
-            : () => transitionTo('back', 'route', () => setView('menu'))
+            ? () => navigateWithTransition('back', () => setCheckoutStage('cart'))
+            : () => navigateWithTransition('back', () => setView('menu'))
           : hasStarted
-            ? () => transitionTo('back', 'hero', () => {
-                setHasStarted(false)
-              })
+            ? () => navigateWithTransition('back', () => setHasStarted(false))
             : undefined
       }
       backLabel={t(lang, 'back')}
@@ -680,7 +617,7 @@ export default function PublicOrderPage() {
           total={cartTotal}
           bumping={bumping}
           onOpen={() => {
-            transitionTo('forward', 'route', () => {
+            navigateWithTransition('forward', () => {
               setCheckoutStage('cart')
               setView('checkout')
             })
@@ -736,8 +673,8 @@ export default function PublicOrderPage() {
                 : 'pubTableQrExpired')
               : null
           }
-          onAddItems={() => transitionTo('back', 'route', () => setView('menu'))}
-          onContinue={() => transitionTo('forward', 'route', () => setCheckoutStage('payment'))}
+          onAddItems={() => navigateWithTransition('back', () => setView('menu'))}
+          onContinue={() => navigateWithTransition('forward', () => setCheckoutStage('payment'))}
           onQty={updateQty}
           onEditLine={editCartLine}
           onRecommend={openItem}
@@ -808,8 +745,7 @@ export default function PublicOrderPage() {
  */
 function Shell({
   isRtl, title, logo, hero, headerImg, heroVideo, bgImg, onHeroStart, onBack, backLabel,
-  routeKey, transitionPhase = 'idle', transitionDirection = 'forward',
-  transitionKind = 'route', outgoingScrollY = 0, children,
+  routeKey, children,
 }: {
   isRtl: boolean
   title?: string
@@ -824,11 +760,6 @@ function Shell({
   backLabel?: string
   /** Семантический экран для восстановления фокуса после перехода. */
   routeKey?: string
-  transitionPhase?: RouteTransitionPhase
-  transitionDirection?: RouteDirection
-  transitionKind?: RouteTransitionKind
-  /** Сохраняет визуальную позицию длинного исходящего экрана после scrollTo(0). */
-  outgoingScrollY?: number
   children: React.ReactNode
 }) {
   const hasBg = !!bgImg
@@ -836,38 +767,11 @@ function Shell({
   const hasHeroMedia = !!heroVideo || !!headerImg
   const frameRef = useRef<HTMLDivElement>(null)
   const focusedRoute = useRef(routeKey)
-  const heroTransitionActive = transitionKind === 'hero' && transitionPhase === 'enter'
-  const leavingHero = heroTransitionActive && !hero && transitionDirection === 'forward'
-  const enteringHero = heroTransitionActive && !!hero && transitionDirection === 'back'
-  const showHero = !!hero || leavingHero
-  // Hero, компактная шапка и весь каталог (включая нижнюю панель) образуют
-  // два соседних полноэкранных слоя. Они едут с одной скоростью, поэтому
-  // между ними нет скачка и из-под hero не выглядывает отдельная корзина.
+  const showHero = !!hero
   const showCompactHeader = true
-  const heroTransitionRole = leavingHero ? 'leaving' : enteringHero ? 'entering' : 'idle'
-  const compactTransitionRole = leavingHero ? 'entering' : enteringHero ? 'leaving' : 'idle'
-  const currentRouteKey = routeKey ?? '__default__'
-  const currentRouteChildren = children
-  const latestRouteChildren = useRef<React.ReactNode>(currentRouteChildren)
-  const latestRouteKey = useRef(currentRouteKey)
-  const outgoingRoute = useRef<{ key: string; children: React.ReactNode } | null>(null)
-
-  if (latestRouteKey.current !== currentRouteKey) {
-    outgoingRoute.current = {
-      key: latestRouteKey.current,
-      children: latestRouteChildren.current,
-    }
-    latestRouteKey.current = currentRouteKey
-  }
-  latestRouteChildren.current = currentRouteChildren
-
-  const visibleOutgoingRoute =
-    transitionPhase === 'enter' && outgoingRoute.current?.key !== currentRouteKey
-      ? outgoingRoute.current
-      : null
 
   useEffect(() => {
-    if (!routeKey || routeKey === focusedRoute.current || transitionPhase !== 'idle') return
+    if (!routeKey || routeKey === focusedRoute.current) return
     const timer = window.setTimeout(() => {
       frameRef.current
         ?.querySelector<HTMLElement>('.public-menu-route-focus')
@@ -875,7 +779,7 @@ function Shell({
       focusedRoute.current = routeKey
     }, 0)
     return () => window.clearTimeout(timer)
-  }, [routeKey, transitionPhase])
+  }, [routeKey])
 
   // Пока hero полностью закрывает каталог, запрещаем прокрутку скрытого
   // слоя. При нажатии «Начать» блокировка снимается до движения обложки.
@@ -904,16 +808,8 @@ function Shell({
         className={`public-menu-frame relative mx-auto min-h-screen flex flex-col ${hasBg ? '' : 'bg-white'}`}
       >
         {showHero && (
-          <div
-            key="hero"
-            data-transition-role={heroTransitionRole}
-            className="public-menu-hero-viewport"
-          >
-            <header
-              data-transition-role={heroTransitionRole}
-              data-nav={transitionDirection}
-              className={`public-menu-hero${hasHeroMedia ? ' has-media' : ' is-brand-only'}`}
-            >
+          <div key="hero" className="public-menu-hero-viewport">
+            <header className={`public-menu-hero${hasHeroMedia ? ' has-media' : ' is-brand-only'}`}>
               {heroVideo ? (
                 <video
                   key={heroVideo}
@@ -961,8 +857,6 @@ function Shell({
         {showCompactHeader && (
           <header
             key="compact"
-            data-transition-role={compactTransitionRole}
-            data-nav={transitionDirection}
             className="public-menu-compact-header sticky top-0 z-10 bg-white border-b border-gray-100 px-4 flex items-center justify-center relative"
             style={{
               height: 'calc(3.5rem + env(safe-area-inset-top))',
@@ -990,27 +884,11 @@ function Shell({
             </span>
           </header>
         )}
-        <div
-          data-transition={transitionPhase}
-          data-nav={transitionDirection}
-          data-transition-kind={transitionKind}
-          aria-busy={transitionPhase !== 'idle'}
-          className="public-menu-screen flex-1 flex flex-col"
-          style={{ '--public-outgoing-scroll-y': `${outgoingScrollY}px` } as CSSProperties}
-        >
-          {visibleOutgoingRoute && (
-            <div
-              key={visibleOutgoingRoute.key}
-              aria-hidden="true"
-              className="public-menu-route-layer is-outgoing"
-              style={{ '--public-outgoing-scroll-y': `${outgoingScrollY}px` } as CSSProperties}
-            >
-              {visibleOutgoingRoute.children}
-            </div>
-          )}
-          <div key={currentRouteKey} className="public-menu-route-layer is-current">
-            {currentRouteChildren}
-          </div>
+        {/* Один живой слой. Анимацию перехода рисует браузер по снапшотам
+            (view-transition-name ниже в CSS): клонировать экран в DOM и
+            компенсировать его скролл больше не нужно. */}
+        <div className="public-menu-screen flex-1 flex flex-col">
+          {children}
         </div>
       </div>
     </div>
@@ -1237,18 +1115,17 @@ function ItemRow({ item, lang, onTap, layout = 'row', priority = false }: {
 }) {
   const prices = item.variants.length > 0 ? item.variants.map((v) => v.price) : [item.price]
   const minPrice = Math.min(...prices)
-  const [imageState, setImageState] = useState<'loading' | 'ready' | 'error'>(
-    item.image_url
-      ? decodedPublicMenuImages.has(item.image_url) ? 'ready' : 'loading'
-      : 'error'
-  )
-  useEffect(() => {
-    setImageState(
-      item.image_url
-        ? decodedPublicMenuImages.has(item.image_url) ? 'ready' : 'loading'
-        : 'error'
-    )
-  }, [item.image_url])
+  const initialImageState = item.image_url
+    ? decodedPublicMenuImages.has(item.image_url) ? 'ready' : 'loading'
+    : 'error'
+  // Состояние, производное от пропса: при смене фото сбрасываем его в
+  // рендере, а не эффектом — эффект давал лишний проход и мигание.
+  const [imageSrc, setImageSrc] = useState(item.image_url)
+  const [imageState, setImageState] = useState<'loading' | 'ready' | 'error'>(initialImageState)
+  if (imageSrc !== item.image_url) {
+    setImageSrc(item.image_url)
+    setImageState(initialImageState)
+  }
 
   function revealImage(image: HTMLImageElement) {
     const markReady = () => {
