@@ -568,7 +568,10 @@ export default function PublicOrderPage() {
       }
       backLabel={t(lang, 'back')}
     >
-      {view === 'menu' && visibleCategoryId && (() => {
+      {/* Каталог не существует, пока показан hero: раньше он лежал под
+          обложкой ради слоя-клона в анимации, и на iOS просвечивал в
+          зоне под плавающим тулбаром. Снапшот «до» браузер снимает сам. */}
+      {view === 'menu' && hasStarted && visibleCategoryId && (() => {
         const cat = menu.categories.find((c) => c.id === visibleCategoryId)
         if (!cat) return null
         return (

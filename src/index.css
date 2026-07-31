@@ -2205,11 +2205,6 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
       max-width: 48rem;
     }
 
-    .public-menu-screen[data-transition='enter'][data-transition-kind='route'],
-    .public-menu-screen[data-transition='enter'][data-transition-kind='hero'] {
-      max-width: 48rem;
-    }
-
     /* Планшет: 3 колонки и все 6 карточек — два полных ряда */
     .public-menu-checkout-recommendations.is-large > div {
       grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -3049,7 +3044,7 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
 ::view-transition-new(root) {
   /* Свои keyframes вместо дефолтного кросс-фейда: снимки едут вбок,
      как настоящие экраны, и не просвечивают друг сквозь друга. */
-  animation-duration: 260ms;
+  animation-duration: 200ms;
   animation-timing-function: cubic-bezier(.32, .72, 0, 1);
   animation-fill-mode: both;
   mix-blend-mode: normal;
