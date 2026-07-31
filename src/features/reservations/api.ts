@@ -34,7 +34,14 @@ export interface Reservation {
   /** Депозит (063, плейсхолдер) */
   deposit_amount: number
   deposit_status: 'none' | 'required' | 'paid' | 'refunded' | 'forfeited'
+  /** Момент посадки гостя (119); POS дополнительно отмечает её order_id */
+  arrived_at?: string | null
+  /** Все столы визита, включая объединение (119) — источник для таймлайна */
+  tables_link?: { table_id: string; is_primary: boolean }[]
 }
+
+/** Статусы, которые терминальны для веб-стола хостес (102) */
+export type ReservationStatusFull = ReservationStatus | 'completed' | 'no_show'
 
 /** CRM-история гостя по телефону (063): визиты, отмены, заметки */
 export interface GuestHistory {
@@ -208,4 +215,82 @@ export function subscribeReservations(onChange: () => void) {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'reservations' }, onChange)
     .subscribe()
   return () => { supabase.removeChannel(channel) }
+}
+
+// ── Таймлайн хостес (Phase 3, 119) ───────────────────────────
+
+const TIMELINE_SELECT =
+  '*, table:table_id ( id, label ), zone:table_zones!reservations_zone_fk ( id, name ), '
+  + 'tables_link:reservation_tables ( table_id, is_primary )'
+
+/**
+ * Брони, попадающие в сутки таймлайна. Берём с запасом в сутки назад:
+ * ночная смена начинается вчера и заканчивается сегодня, а фильтровать
+ * по концу визита через PostgREST нельзя — длительность у каждой своя.
+ * Лишнее отсечёт раскладка по окну дня.
+ */
+export async function fetchTimelineReservations(
+  fromMs: number, toMs: number,
+): Promise<Reservation[]> {
+  const { data, error } = await supabase
+    .from('reservations')
+    .select(TIMELINE_SELECT)
+    .gte('reserved_at', new Date(fromMs - 24 * 3600_000).toISOString())
+    .lt('reserved_at', new Date(toMs).toISOString())
+    .order('reserved_at', { ascending: true })
+    .limit(500)
+  if (error) throw new Error(error.message)
+  return data as unknown as Reservation[]
+}
+
+/**
+ * Набор столов брони одним действием (119): назначить, объединить,
+ * разъединить. Пустой массив снимает столы. Первый становится основным —
+ * в него сажает касса.
+ */
+export async function setReservationTables(
+  id: string, staffId: string, tableIds: string[],
+): Promise<void> {
+  const { error } = await supabase.rpc('set_reservation_tables', {
+    p_id: id,
+    p_staff_id: staffId,
+    p_table_ids: tableIds,
+  })
+  if (error) throw new Error(error.message)
+}
+
+export interface ReservationPatch {
+  reservedAt?: string | null
+  partySize?: number | null
+  note?: string | null
+  zoneId?: string | null
+  durationMin?: number | null
+}
+
+/** Правка брони со стола хостес (119). Незаданные поля не меняются. */
+export async function updateReservation(
+  id: string, staffId: string, patch: ReservationPatch,
+): Promise<void> {
+  const { error } = await supabase.rpc('update_reservation', {
+    p_id: id,
+    p_staff_id: staffId,
+    p_reserved_at: patch.reservedAt ?? null,
+    p_party_size: patch.partySize ?? null,
+    p_note: patch.note ?? null,
+    p_zone_id: patch.zoneId ?? null,
+    p_duration: patch.durationMin ?? null,
+  })
+  if (error) throw new Error(error.message)
+}
+
+/**
+ * Отметить, что гость сел (119). Для точки без POS это и есть посадка:
+ * счёт не открывается, стол остаётся занят до завершения визита.
+ */
+export async function markReservationArrived(id: string, staffId: string): Promise<void> {
+  const { error } = await supabase.rpc('mark_reservation_arrived', {
+    p_id: id,
+    p_staff_id: staffId,
+  })
+  if (error) throw new Error(error.message)
 }

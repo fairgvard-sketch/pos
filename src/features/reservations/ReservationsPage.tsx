@@ -11,10 +11,11 @@ import { fetchCurrentLocation } from '../auth/api'
 import AppSidebar from '../../components/AppSidebar'
 import {
   fetchReservations, fetchReservationHistory, acceptReservation, rejectReservation,
-  setReservationTable, seatReservation,
+  setReservationTable, seatReservation, markReservationArrived,
   createReservation, fetchGuestHistory, type CreateReservationInput,
   type Reservation, type HistoryPeriod,
 } from './api'
+import TimelineView from './TimelineView'
 import { TabSwitch, HistoryFilters } from '../../components/HistoryTabs'
 import type { Table } from '../../types'
 
@@ -40,6 +41,10 @@ export default function ReservationsPage() {
   const [creating, setCreating] = useState(false)
 
   // ── Вкладка «История» (113): прошедшие брони за период + поиск ──
+  // Таймлайн — вид по умолчанию: хостес открывает экран, чтобы увидеть
+  // зал, а не список. Список остаётся вторым видом, а не удаляется (плана
+  // Phase 3, п.4): по нему удобно решать заявки и искать по имени.
+  const [view, setView] = useState<'timeline' | 'list'>('timeline')
   const [tab, setTab] = useState<'active' | 'history'>('active')
   const [period, setPeriod] = useState<HistoryPeriod>('today')
   const [search, setSearch] = useState('')
@@ -70,10 +75,15 @@ export default function ReservationsPage() {
   const invalidateAll = () => {
     qc.invalidateQueries({ queryKey: ['reservations'] })
     qc.invalidateQueries({ queryKey: ['reservations_today'] })
+    // Таймлайн живёт на своём ключе: без этого действие из списка не
+    // отражалось бы на полотне до перезагрузки.
+    qc.invalidateQueries({ queryKey: ['reservation_timeline'] })
   }
 
   // ── Подтвердить (пикер стола открыт) / сменить стол ──
   const [picking, setPicking] = useState<{ r: Reservation; mode: 'accept' | 'change' } | null>(null)
+  // Бронь, открытая тапом по блоку таймлайна
+  const [detail, setDetail] = useState<Reservation | null>(null)
   const accept = useMutation({
     mutationFn: ({ r, tableId }: { r: Reservation; tableId: string | null }) =>
       acceptReservation(r.id, staff!.id, tableId),
@@ -109,6 +119,16 @@ export default function ReservationsPage() {
       const m = (e as Error).message
       toast.error(m.includes('table_busy') ? t(lang, 'resSeatBusy') : m)
     },
+  })
+
+  // ── Гость сел (119): для точки без POS это и есть посадка ──
+  const arrive = useMutation({
+    mutationFn: (r: Reservation) => markReservationArrived(r.id, staff!.id),
+    onSuccess: () => {
+      toast.success(t(lang, 'rsvArrivedToast'))
+      invalidateAll()
+    },
+    onError: (e) => toast.error((e as Error).message),
   })
 
   // ── Отклонить / отменить бронь (двухшагово + необязательная причина) ──
@@ -159,6 +179,22 @@ export default function ReservationsPage() {
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
           <div className="flex items-center gap-3">
             <h1 className="text-xl font-bold text-gray-900">{t(lang, 'reservationsTitle')}</h1>
+            {tab === 'active' && (
+              <div className="flex rounded-xl border border-gray-200 p-0.5">
+                {(['timeline', 'list'] as const).map((v) => (
+                  <button
+                    key={v}
+                    type="button"
+                    onClick={() => setView(v)}
+                    className={`h-9 px-3 rounded-lg text-sm font-semibold transition-colors ${
+                      view === v ? 'bg-gray-900 text-white' : 'text-gray-600'
+                    }`}
+                  >
+                    {t(lang, v === 'timeline' ? 'rsvTimeline' : 'rsvListView')}
+                  </button>
+                ))}
+              </div>
+            )}
             <TabSwitch
               value={tab}
               onChange={setTab}
@@ -211,6 +247,15 @@ export default function ReservationsPage() {
                 </div>
               )}
             </>
+          ) : view === 'timeline' ? (
+            <TimelineView
+              lang={lang}
+              isRtl={isRtl}
+              tables={tables}
+              settings={(location?.settings as { reservations?: unknown }) ?? null}
+              tz={location?.timezone || 'Asia/Jerusalem'}
+              onOpen={setDetail}
+            />
           ) : reservations.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-center">
               <p className="font-bold text-gray-900">{t(lang, 'resEmpty')}</p>
@@ -334,6 +379,20 @@ export default function ReservationsPage() {
         />
       )}
 
+      {detail && staff && (
+        <BookingActionsSheet
+          lang={lang}
+          r={detail}
+          busy={accept.isPending || seat.isPending || reject.isPending || arrive.isPending}
+          onClose={() => setDetail(null)}
+          onAccept={() => { setDetail(null); setPicking({ r: detail, mode: 'accept' }) }}
+          onTables={() => { setDetail(null); setPicking({ r: detail, mode: 'change' }) }}
+          onArrive={() => { arrive.mutate(detail); setDetail(null) }}
+          onSeat={() => { seat.mutate(detail); setDetail(null) }}
+          onReject={() => { setDetail(null); setRejecting(detail.id) }}
+        />
+      )}
+
       {creating && location && staff && (
         <NewReservationSheet
           lang={lang}
@@ -353,6 +412,107 @@ export default function ReservationsPage() {
 }
 
 /** Форма ручной брони (060): телефонный звонок → бронь сразу «Подтверждена» */
+
+/**
+ * Действия над бронью, открытой с таймлайна. Набор зависит от состояния:
+ * заявку сперва подтверждают, подтверждённую — сажают. «Посадить» с
+ * открытием счёта показывается только там, где счёт есть, то есть при
+ * POS; без него остаётся отметка «гость сел» (119).
+ */
+function BookingActionsSheet({
+  lang, r, busy, onClose, onAccept, onTables, onArrive, onSeat, onReject,
+}: {
+  lang: Lang
+  r: Reservation
+  busy: boolean
+  onClose: () => void
+  onAccept: () => void
+  onTables: () => void
+  onArrive: () => void
+  onSeat: () => void
+  onReject: () => void
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  const seated = r.arrived_at != null || r.order_id != null
+  const actions: { label: string; onClick: () => void; primary?: boolean; danger?: boolean }[] = []
+
+  if (r.status === 'new') {
+    actions.push({ label: t(lang, 'resAccept'), onClick: onAccept, primary: true })
+  } else if (r.status === 'confirmed') {
+    if (!seated) {
+      actions.push({ label: t(lang, 'rsvMarkArrived'), onClick: onArrive, primary: true })
+      if (r.table_id) actions.push({ label: t(lang, 'resSeatGuest'), onClick: onSeat })
+    }
+    actions.push({ label: t(lang, 'resPickTable'), onClick: onTables })
+  }
+  if (r.status === 'new' || r.status === 'confirmed') {
+    actions.push({ label: t(lang, 'resReject'), onClick: onReject, danger: true })
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label={r.customer_name}
+    >
+      <div
+        className="w-full max-w-lg rounded-t-3xl bg-white px-4 pt-3 pb-6 shadow-xl text-start"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-gray-200" aria-hidden />
+        <div className="px-1">
+          <p className="text-lg font-bold text-gray-900">{r.customer_name}</p>
+          <p className="text-sm text-gray-500 mt-0.5">
+            {formatTime(r.reserved_at, lang)} · {r.party_size} {t(lang, 'resGuestsShort')}
+            {r.zone && ` · ${r.zone.name}`}
+            {r.table && ` · ${t(lang, 'tableLabel')} ${r.table.label}`}
+          </p>
+          {r.customer_phone && (
+            <a href={`tel:${r.customer_phone}`} className="text-sm text-gray-500 tabular-nums" dir="ltr">
+              {r.customer_phone}
+            </a>
+          )}
+          {r.note && <p className="text-sm text-gray-700 mt-2">{r.note}</p>}
+        </div>
+
+        <div className="flex flex-col gap-2 mt-4">
+          {actions.map((a) => (
+            <button
+              key={a.label}
+              type="button"
+              disabled={busy}
+              onClick={a.onClick}
+              className={`h-12 rounded-xl text-sm font-bold active:scale-[0.98] transition-all disabled:opacity-40 ${
+                a.primary
+                  ? 'bg-gray-900 text-white'
+                  : a.danger
+                    ? 'bg-red-50 text-red-700'
+                    : 'border border-gray-300 text-gray-900'
+              }`}
+            >
+              {a.label}
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={onClose}
+            className="h-12 rounded-xl bg-gray-100 text-sm font-semibold text-gray-700"
+          >
+            {t(lang, 'close')}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function NewReservationSheet({ lang, locationId, staffId, tables, onClose, onCreated }: {
   lang: Lang
   locationId: string
