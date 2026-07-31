@@ -60,10 +60,10 @@ type RouteDirection = 'forward' | 'back'
 type RouteTransitionPhase = 'idle' | 'enter'
 type RouteTransitionKind = 'hero' | 'route'
 
-// Ритм Wolt: движение быстро отвечает на жест, но долго и мягко
-// замедляется у конечной точки. Значения синхронизированы с index.css.
-const ROUTE_ENTER_MS = 420
-const HERO_ENTER_MS = 520
+// Небольшой запас после CSS-анимации не даёт React снять animation:both
+// на несколько пикселей раньше последнего кадра compositor-а.
+const ROUTE_ENTER_MS = 600
+const HERO_ENTER_MS = 660
 const ITEM_SHEET_EXIT_MS = 480
 const HERO_SYSTEM_UI_COLOR = '#202124'
 const DEFAULT_MENU_SYSTEM_UI_COLOR = '#f8f9fb'
@@ -129,10 +129,9 @@ export default function PublicOrderPage() {
 
   /**
    * Переход коммитится сразу: отдельной exit-фазы и паузы между экранами
-   * нет. Новый экран одним движением входит слева направо. Transform
-   * применяется только к прокручиваемому контенту, не к предку
-   * fixed-панелей: иначе CSS превращает viewport-fixed в «fixed
-   * относительно длинной страницы».
+   * нет. Оба полноэкранных слоя двигаются синхронно и с одной кривой —
+   * это сохраняет общий стык и не оставляет неподвижную нижнюю панель
+   * под уезжающим экраном.
    */
   const transitionTo = useCallback((
     direction: RouteDirection,
@@ -841,11 +840,12 @@ function Shell({
   const leavingHero = heroTransitionActive && !hero && transitionDirection === 'forward'
   const enteringHero = heroTransitionActive && !!hero && transitionDirection === 'back'
   const showHero = !!hero || leavingHero
-  // Каталог и его шапка всегда уже отрисованы под hero. На переходе
-  // двигается только одна цельная обложка — без трёх параллельных слоёв.
+  // Hero, компактная шапка и весь каталог (включая нижнюю панель) образуют
+  // два соседних полноэкранных слоя. Они едут с одной скоростью, поэтому
+  // между ними нет скачка и из-под hero не выглядывает отдельная корзина.
   const showCompactHeader = true
   const heroTransitionRole = leavingHero ? 'leaving' : enteringHero ? 'entering' : 'idle'
-  const compactTransitionRole = 'idle'
+  const compactTransitionRole = leavingHero ? 'entering' : enteringHero ? 'leaving' : 'idle'
   const currentRouteKey = routeKey ?? '__default__'
   const currentRouteChildren = children
   const latestRouteChildren = useRef<React.ReactNode>(currentRouteChildren)
@@ -996,6 +996,7 @@ function Shell({
           data-transition-kind={transitionKind}
           aria-busy={transitionPhase !== 'idle'}
           className="public-menu-screen flex-1 flex flex-col"
+          style={{ '--public-outgoing-scroll-y': `${outgoingScrollY}px` } as CSSProperties}
         >
           {visibleOutgoingRoute && (
             <div

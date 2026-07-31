@@ -298,20 +298,21 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   }
 
   .public-menu-hero[data-transition-role='leaving'] {
-    animation: public-hero-exit 520ms cubic-bezier(.22, .62, .28, 1) both;
+    animation: public-hero-exit 620ms cubic-bezier(.4, 0, .2, 1) both;
   }
 
   .public-menu-hero[data-transition-role='entering'] {
-    animation: public-hero-enter 520ms cubic-bezier(.22, .62, .28, 1) both;
+    animation: public-hero-enter 620ms cubic-bezier(.4, 0, .2, 1) both;
   }
 
   .public-menu-compact-header[data-transition-role='leaving'] {
     pointer-events: none;
-    animation: public-header-exit 420ms cubic-bezier(.25, .65, .3, 1) both;
+    animation: public-header-exit 620ms cubic-bezier(.4, 0, .2, 1) both;
   }
 
   .public-menu-compact-header[data-transition-role='entering'] {
-    animation: public-header-enter 420ms cubic-bezier(.25, .65, .3, 1) both;
+    pointer-events: none;
+    animation: public-header-enter 620ms cubic-bezier(.4, 0, .2, 1) both;
   }
 
   @keyframes public-hero-enter {
@@ -1951,7 +1952,8 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     pointer-events: none;
   }
 
-  .public-menu-screen[data-transition='enter'][data-transition-kind='route'] {
+  .public-menu-screen[data-transition='enter'][data-transition-kind='route'],
+  .public-menu-screen[data-transition='enter'][data-transition-kind='hero'] {
     position: fixed;
     z-index: 9;
     top: calc(3.5rem + env(safe-area-inset-top));
@@ -1962,11 +1964,18 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     max-width: 32rem;
     margin-inline: auto;
     overflow: hidden;
-    background: transparent;
+    background-color: var(--public-menu-theme-color, #fff);
+    background-image: var(--public-menu-background-image);
+    background-position: center top;
+    background-size: 100% auto;
+    background-repeat: repeat-y;
     contain: strict;
+    pointer-events: none;
   }
 
   .public-menu-screen[data-transition='enter'][data-transition-kind='route']
+  > .public-menu-route-layer,
+  .public-menu-screen[data-transition='enter'][data-transition-kind='hero']
   > .public-menu-route-layer {
     position: absolute;
     inset: 0;
@@ -1997,18 +2006,42 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
 
   .public-menu-screen[data-transition='enter'][data-transition-kind='route']
   > .public-menu-route-layer.is-current {
-    animation: public-route-enter 420ms cubic-bezier(.25, .65, .3, 1) both;
+    animation: public-route-enter 560ms cubic-bezier(.4, 0, .2, 1) both;
   }
 
   .public-menu-screen[data-transition='enter'][data-transition-kind='route']
   > .public-menu-route-layer.is-outgoing {
-    animation: public-route-exit 420ms cubic-bezier(.25, .65, .3, 1) both;
+    animation: public-route-exit 560ms cubic-bezier(.4, 0, .2, 1) both;
+  }
+
+  /* Hero и каталог — два соседних экрана. На входе в меню каталог едет
+     слева, пока hero уходит вправо; при возврате оба направления точно
+     меняются местами. Одинаковые duration/easing удерживают их стык на
+     одной координате в каждом кадре. */
+  .public-menu-screen[data-transition='enter'][data-transition-kind='hero'][data-nav='forward']
+  > .public-menu-route-layer.is-current {
+    animation: public-route-enter 620ms cubic-bezier(.4, 0, .2, 1) both;
+  }
+
+  .public-menu-screen[data-transition='enter'][data-transition-kind='hero'][data-nav='back']
+  > .public-menu-route-layer.is-current {
+    animation: public-route-exit 620ms cubic-bezier(.4, 0, .2, 1) both;
+  }
+
+  /* При возврате на hero сохраняем видимый участок прокрученного меню до
+     момента, когда обложка полностью закроет viewport. */
+  .public-menu-screen[data-transition='enter'][data-transition-kind='hero'][data-nav='back']
+  > .public-menu-route-layer.is-current
+  > .public-menu-route-motion {
+    margin-block-start: calc(-1 * var(--public-outgoing-scroll-y, 0px));
   }
 
   /* Route-layer сам является containing block высотой с viewport. Поэтому
      fixed-панели корзины/оплаты остаются у его нижней кромки и едут вместе
      с экраном, а не отдельной анимацией с другим layout-tick. */
   .public-menu-screen[data-transition='enter'][data-transition-kind='route']
+  > .public-menu-route-layer .public-menu-checkout-submitbar,
+  .public-menu-screen[data-transition='enter'][data-transition-kind='hero']
   > .public-menu-route-layer .public-menu-checkout-submitbar {
     max-width: none;
   }
@@ -2375,11 +2408,13 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     }
 
     .public-menu-frame,
+    .public-menu-hero-viewport,
     .public-menu-checkout-submitbar {
       max-width: 48rem;
     }
 
-    .public-menu-screen[data-transition='enter'][data-transition-kind='route'] {
+    .public-menu-screen[data-transition='enter'][data-transition-kind='route'],
+    .public-menu-screen[data-transition='enter'][data-transition-kind='hero'] {
       max-width: 48rem;
     }
 
@@ -3046,6 +3081,7 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
      полностью, а не ускоряем. Контент при этом остаётся видимым (both в
      animation мог бы оставить его в начальном, полупрозрачном кадре). */
   .public-menu-route-motion,
+  .public-menu-route-layer,
   .public-menu-category-content,
   .public-menu-hero,
   .public-menu-compact-header,
