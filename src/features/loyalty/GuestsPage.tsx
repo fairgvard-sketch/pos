@@ -130,6 +130,10 @@ function GuestDetailSheet({
   // серверное значение. Так не нужен эффект-синхронизатор (он давал
   // каскадный рендер) и ввод не затирается ответом сервера.
   const [notesDraft, setNotesDraft] = useState<string | null>(null)
+  // Метки: черновик живёт рядом с заметкой и уходит тем же сохранением —
+  // отдельная кнопка на каждую мелочь только мешает.
+  const [tagsDraft, setTagsDraft] = useState<string[] | null>(null)
+  const [tagInput, setTagInput] = useState('')
   const [openOrder, setOpenOrder] = useState<string | null>(null)
   const [tab, setTab] = useState<'orders' | 'events'>('orders')
 
@@ -142,24 +146,28 @@ function GuestDetailSheet({
   const notes = notesDraft ?? serverNotes
 
   const save = useMutation({
-    mutationFn: () => updateGuest(guest.id, { name, notes }),
+    mutationFn: () => updateGuest(guest.id, { name, notes, tags: tagList }),
     onSuccess: () => {
       toast.success(t(lang, 'saved'))
       // Сохранённое значение снова берём с сервера
       setNotesDraft(null)
+      setTagsDraft(null)
+      setTagInput('')
       qc.invalidateQueries({ queryKey: ['guests'] })
       qc.invalidateQueries({ queryKey: ['guest_card', guest.id] })
     },
     onError: (e) => toast.error((e as Error).message),
   })
 
-  const dirty = name.trim() !== (guest.name ?? '').trim()
-    || notes.trim() !== serverNotes.trim()
-
   const orders = card?.orders ?? []
   const favorites = card?.favorites ?? []
   const rsv = card?.reservations
-  const tags = card?.tags ?? []
+  const serverTags = card?.tags ?? []
+  const tagList = tagsDraft ?? serverTags
+
+  const dirty = name.trim() !== (guest.name ?? '').trim()
+    || notes.trim() !== serverNotes.trim()
+    || tagList.join('|') !== serverTags.join('|')
   const events = card?.events ?? []
 
   return (
@@ -211,14 +219,54 @@ function GuestDetailSheet({
           </div>
         )}
 
-        {/* Метки — внутренние, наружу не уходят */}
-        {tags.length > 0 && (
-          <div className="mt-4 flex flex-wrap gap-1.5">
-            {tags.map((tag) => (
-              <span key={tag} className="badge-gray">{tag}</span>
+        {/* Метки — внутренние: гостю они не показываются нигде */}
+        <div className="mt-4">
+          <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">
+            {t(lang, 'guestTags')}
+          </h3>
+          <div className="flex flex-wrap gap-1.5">
+            {tagList.map((tag) => (
+              <button
+                key={tag}
+                type="button"
+                onClick={() => setTagsDraft(tagList.filter((x) => x !== tag))}
+                className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full bg-gray-100 text-xs font-semibold text-gray-700 active:scale-[0.97] transition-all"
+                aria-label={`${t(lang, 'delete')} ${tag}`}
+              >
+                {tag}
+                <span aria-hidden className="text-gray-400">✕</span>
+              </button>
             ))}
           </div>
-        )}
+          <div className="flex gap-2 mt-2">
+            <input
+              className="input flex-1 !h-10"
+              value={tagInput}
+              maxLength={24}
+              placeholder={t(lang, 'guestTagPh')}
+              onChange={(e) => setTagInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key !== 'Enter') return
+                e.preventDefault()
+                const v = tagInput.trim()
+                if (v && !tagList.includes(v)) setTagsDraft([...tagList, v])
+                setTagInput('')
+              }}
+            />
+            <button
+              type="button"
+              className="btn-secondary !h-10 !px-4"
+              disabled={!tagInput.trim() || tagList.includes(tagInput.trim())}
+              onClick={() => {
+                const v = tagInput.trim()
+                if (v && !tagList.includes(v)) setTagsDraft([...tagList, v])
+                setTagInput('')
+              }}
+            >
+              {t(lang, 'add')}
+            </button>
+          </div>
+        </div>
 
         {/* Любимые позиции — бариста сразу видит, что человек берёт обычно */}
         {favorites.length > 0 && (
