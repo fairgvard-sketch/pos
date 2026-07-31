@@ -312,17 +312,21 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     }
 
     /* Низ hero уходит под browser chrome, а CTA остаётся в visual viewport.
-       Safari обычно корректно даёт lvh−dvh. Chrome на iOS приравнивает
-       innerHeight к видимой высоте, поэтому и lvh−dvh, и JS-inset выходят
-       нулевыми — кнопка пряталась под панелью. Последний член берёт
-       высоту visual viewport из JS и сравнивает её с lvh уже в CSS:
-       фактическое значение единицы знает только браузер. */
+       Решает первый член: lvh−svh — высота динамических панелей браузера.
+       svh считается при РАЗВЁРНУТЫХ панелях, поэтому это гарантированно
+       видимая зона независимо от текущего состояния UI.
+       Почему не хватило остальных: dvh и VisualViewport описывают
+       СУЖЕНИЕ вьюпорта, а Chrome на iOS рисует нижнюю панель поверх него,
+       ничего не сужая — все эти члены давали ноль, и кнопка оставалась
+       под панелью. Они сохранены для случаев, где панель действительно
+       сужает вьюпорт. */
     .public-menu-hero-scroll {
       bottom: calc(
-        4.5rem
+        1.4rem
         + env(safe-area-inset-bottom)
         + max(
           0px,
+          calc(100lvh - 100svh),
           calc(100lvh - 100dvh),
           var(--public-menu-visual-bottom-inset, 0px),
           calc(100lvh - var(--public-menu-visual-height, 100lvh))
@@ -332,10 +336,11 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
 
     .public-menu-hero.has-media .public-menu-hero-copy {
       bottom: calc(
-        8.7rem
+        5.6rem
         + env(safe-area-inset-bottom)
         + max(
           0px,
+          calc(100lvh - 100svh),
           calc(100lvh - 100dvh),
           var(--public-menu-visual-bottom-inset, 0px),
           calc(100lvh - var(--public-menu-visual-height, 100lvh))
@@ -3048,7 +3053,7 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
 ::view-transition-new(root) {
   /* Свои keyframes вместо дефолтного кросс-фейда: снимки едут вбок,
      как настоящие экраны, и не просвечивают друг сквозь друга. */
-  animation-duration: 350ms;
+  animation-duration: 450ms;
   animation-timing-function: cubic-bezier(.32, .72, 0, 1);
   animation-fill-mode: both;
   mix-blend-mode: normal;
