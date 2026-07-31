@@ -150,7 +150,7 @@ export default function AppSidebar({ active }: { active: SidebarPage }) {
           <SideLink
             active={active === 'hall'}
             label={t(lang, 'hall')}
-            iconName="customers"
+            iconName="hall"
             // Выход в зал сбрасывает контекст стола → «Продажа» снова скрывается,
             // пустой счёт отменяется, черновик дозаказа отбрасывается.
             onClick={goHall}
@@ -160,29 +160,29 @@ export default function AppSidebar({ active }: { active: SidebarPage }) {
           <SideLink
             active={active === 'reservations'}
             label={t(lang, 'reservationsTitle')}
-            iconName="note"
+            iconName="reservations"
             badge={newResCount}
             onClick={() => navigate('/reservations')}
           />
         )}
         {showSell && (
-          <SideLink active={active === 'sell'} label={t(lang, 'sell')} iconName="orders" onClick={() => navigate('/sell')} />
+          <SideLink active={active === 'sell'} label={t(lang, 'sell')} iconName="register" onClick={() => navigate('/sell')} />
         )}
-        <SideLink active={active === 'queue'} label={t(lang, 'queue')} iconName="queue" onClick={() => navigate('/queue')} />
+        <SideLink active={active === 'queue'} label={t(lang, 'queue')} iconName="orderQueue" onClick={() => navigate('/queue')} />
         <SideLink
           active={active === 'online'}
           label={t(lang, 'onlineTitle')}
-          iconName="orders"
+          iconName="online"
           badge={newOnlineCount}
           onClick={() => navigate('/online')}
         />
-        <SideLink active={active === 'transactions'} label={t(lang, 'transactions')} iconName="card" onClick={() => navigate('/transactions')} />
-        <SideLink active={active === 'shift'} label={t(lang, 'shift')} iconName="shift" onClick={() => navigate('/shift')} />
+        <SideLink active={active === 'transactions'} label={t(lang, 'transactions')} iconName="transactions" onClick={() => navigate('/transactions')} />
+        <SideLink active={active === 'shift'} label={t(lang, 'shift')} iconName="workShift" onClick={() => navigate('/shift')} />
         {/* Склад (055): виден тем, кому доступен приход (право точки),
             и только если учёт остатков не выключен тумблером точки */}
         {location?.settings?.interface?.inventory_enabled !== false &&
           can(staff.role, 'stock_receive', location?.settings, staff.role_perms) && (
-          <SideLink active={active === 'inventory'} label={t(lang, 'inventory')} iconName="note" onClick={() => navigate('/inventory')} />
+          <SideLink active={active === 'inventory'} label={t(lang, 'inventory')} iconName="inventory" onClick={() => navigate('/inventory')} />
         )}
         {/* Менеджерский блок отделён. Витрина правится на экране продажи
             (стоп-лист/порядок); админка меню, отчёты и настройки точки —
@@ -192,7 +192,7 @@ export default function AppSidebar({ active }: { active: SidebarPage }) {
             Пункт появляется только при включённой программе, чтобы не
             занимать место в меню у тех, кто лояльностью не пользуется. */}
         {isManager && (location?.loyalty_mode ?? 'off') !== 'off' && (
-          <SideLink active={active === 'guests'} label={t(lang, 'guestsTitle')} iconName="customers" onClick={() => navigate('/guests')} />
+          <SideLink active={active === 'guests'} label={t(lang, 'guestsTitle')} iconName="guest" onClick={() => navigate('/guests')} />
         )}
         {isManager && (
           <SideLink active={active === 'settings'} label={t(lang, 'settings')} iconName="settings" onClick={() => navigate('/settings')} />
@@ -241,7 +241,7 @@ function SideLink({ label, iconName, active, badge = 0, onClick }: { label: stri
         active ? 'bg-gray-200 text-gray-900' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
       }`}
     >
-      <Icon name={iconName} isActive={active} size={19} />
+      <Icon name={iconName} isActive={active} size={20} />
       <span className="w-full text-center truncate">{label}</span>
       {badge > 0 && (
         <span className="absolute top-1.5 end-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-gray-900 text-white text-[10px] font-bold flex items-center justify-center tabular-nums">
