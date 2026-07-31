@@ -88,8 +88,12 @@ export default function PublicReservePage() {
   // Гостевая страница — всегда иврит (бронь he-first), без переключения языка.
   const lang: Lang = 'he'
   useEffect(() => {
-    // <html lang> решает RTL в проде: start/end скомпилированы через :lang(he)
+    // <html lang> решает RTL в проде: start/end скомпилированы через :lang(he).
+    // dir выставляем тоже: langStore пишет туда язык КАССЫ (по умолчанию ru →
+    // ltr), и на ивритской гостевой странице оставался бы `dir="ltr"` —
+    // документ считался бы левосторонним, хотя весь контент правосторонний.
     document.documentElement.lang = lang
+    document.documentElement.dir = 'rtl'
   }, [])
   const isRtl = true
 
