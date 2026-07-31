@@ -312,37 +312,36 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     }
 
     /* Низ hero уходит под browser chrome, а CTA остаётся в visual viewport.
-       Chrome на iOS рисует нижнюю панель ПОВЕРХ вьюпорта, не сужая его:
-       lvh, svh, dvh и VisualViewport там дают одно и то же значение, и
-       любая вычисленная компенсация выходит нулевой — кнопка оставалась
-       под панелью. Поэтому первым членом идёт безусловные 5rem: запас
-       больше самой высокой панели среди мобильных браузеров.
-       Остальные члены оставлены для браузеров, которые вьюпорт реально
-       сужают — там max() возьмёт их фактическое значение. */
+       Safari обычно корректно даёт lvh−dvh. Chrome на iOS 26 иногда
+       возвращает ноль, поэтому берём максимум с фактическим inset из
+       VisualViewport API (выставляется в PublicOrderPage).
+
+       ВНИМАНИЕ: в Chrome на iOS кнопка всё равно остаётся под нижней
+       панелью — там все эти члены дают ноль. Пробовали также lvh−svh и
+       высоту visualViewport: тот же результат. Причина не в величине
+       отступа, поэтому наращивать его бессмысленно (проверено запасом
+       в 5rem — не помогло). Нужна диагностика фактических значений
+       единиц на самом устройстве. */
     .public-menu-hero-scroll {
       bottom: calc(
-        1.4rem
+        4.5rem
         + env(safe-area-inset-bottom)
         + max(
-          5rem,
-          calc(100lvh - 100svh),
+          0px,
           calc(100lvh - 100dvh),
-          var(--public-menu-visual-bottom-inset, 0px),
-          calc(100lvh - var(--public-menu-visual-height, 100lvh))
+          var(--public-menu-visual-bottom-inset, 0px)
         )
       );
     }
 
     .public-menu-hero.has-media .public-menu-hero-copy {
       bottom: calc(
-        5.6rem
+        8.7rem
         + env(safe-area-inset-bottom)
         + max(
-          5rem,
-          calc(100lvh - 100svh),
+          0px,
           calc(100lvh - 100dvh),
-          var(--public-menu-visual-bottom-inset, 0px),
-          calc(100lvh - var(--public-menu-visual-height, 100lvh))
+          var(--public-menu-visual-bottom-inset, 0px)
         )
       );
     }
