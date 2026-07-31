@@ -60,9 +60,11 @@ type RouteDirection = 'forward' | 'back'
 type RouteTransitionPhase = 'idle' | 'enter'
 type RouteTransitionKind = 'hero' | 'route'
 
-const ROUTE_ENTER_MS = 320
-const HERO_ENTER_MS = 320
-const ITEM_SHEET_EXIT_MS = 280
+// Ритм Wolt: движение быстро отвечает на жест, но долго и мягко
+// замедляется у конечной точки. Значения синхронизированы с index.css.
+const ROUTE_ENTER_MS = 420
+const HERO_ENTER_MS = 420
+const ITEM_SHEET_EXIT_MS = 360
 /** URL попадает сюда только после load/decode — карточка может показать
  * уже подготовленный bitmap в первом кадре, без повторного shimmer. */
 const decodedPublicMenuImages = new Set<string>()
@@ -102,6 +104,10 @@ export default function PublicOrderPage() {
   const [editingKey, setEditingKey] = useState<string | null>(null)
   // null = hero; id = экран позиций категории
   const [activeCat, setActiveCat] = useState<string | null>(null)
+  // Категория слегка сдвигается только после тапа по соседнему чипу.
+  // Нельзя выводить это из routeTransition.phase: иначе после hero → menu
+  // список получает вторую анимацию и визуально «мигает».
+  const [categoryMotion, setCategoryMotion] = useState(false)
   const reducedMotion = usePrefersReducedMotion()
   const [routeTransition, setRouteTransition] = useState<{
     phase: RouteTransitionPhase
@@ -202,6 +208,7 @@ export default function PublicOrderPage() {
     setConfigItem(null)
     setConfigClosing(false)
     setActiveCat(null)
+    setCategoryMotion(false)
     setCheckoutStage('cart')
     setView('menu')
     setHasStarted(false)
@@ -431,6 +438,7 @@ export default function PublicOrderPage() {
     setView('menu')
     setHasStarted(false)
     setActiveCat(null)
+    setCategoryMotion(false)
   }
 
   function openItem(item: PublicItem) {
@@ -449,6 +457,7 @@ export default function PublicOrderPage() {
     // Сбрасываем позицию до React-коммита: новый список сразу появляется
     // от заголовка, без кадра в старом scrollY и последующего прыжка.
     window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+    setCategoryMotion(true)
     setActiveCat(id)
   }
 
@@ -529,6 +538,7 @@ export default function PublicOrderPage() {
       outgoingScrollY={routeTransition.outgoingScrollY}
       onHeroStart={() => {
         transitionTo('forward', 'hero', () => {
+          setCategoryMotion(false)
           setHasStarted(true)
           setActiveCat(menu.categories[0]?.id ?? null)
         })
@@ -559,8 +569,11 @@ export default function PublicOrderPage() {
             <CategoryChips categories={menu.categories} activeCat={activeCat} onSelect={selectCategory} />
             <div
               key={activeCat}
-              data-category-motion={routeTransition.phase === 'idle' ? 'on' : 'off'}
+              data-category-motion={categoryMotion ? 'on' : 'off'}
               className="public-menu-category-content"
+              onAnimationEnd={(event) => {
+                if (event.animationName === 'public-category-enter') setCategoryMotion(false)
+              }}
             >
               <div className="public-menu-products-section px-4 pb-4">
                 <div className="public-menu-section-heading">
