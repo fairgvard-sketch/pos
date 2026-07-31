@@ -63,8 +63,8 @@ type RouteTransitionKind = 'hero' | 'route'
 // Ритм Wolt: движение быстро отвечает на жест, но долго и мягко
 // замедляется у конечной точки. Значения синхронизированы с index.css.
 const ROUTE_ENTER_MS = 420
-const HERO_ENTER_MS = 420
-const ITEM_SHEET_EXIT_MS = 360
+const HERO_ENTER_MS = 520
+const ITEM_SHEET_EXIT_MS = 480
 /** URL попадает сюда только после load/decode — карточка может показать
  * уже подготовленный bitmap в первом кадре, без повторного shimmer. */
 const decodedPublicMenuImages = new Set<string>()
@@ -188,12 +188,6 @@ export default function PublicOrderPage() {
       finishConfigClose()
     }, ITEM_SHEET_EXIT_MS)
   }, [finishConfigClose, reducedMotion])
-
-  useEffect(() => {
-    if (view === 'menu' && !hasStarted && routeTransition.phase === 'idle' && activeCat) {
-      setActiveCat(null)
-    }
-  }, [activeCat, hasStarted, routeTransition.phase, view])
 
   /**
    * Киоск-режим: планшет на столе не должен хранить заказ ушедшего гостя.
@@ -517,11 +511,11 @@ export default function PublicOrderPage() {
       : requestedType && orderTypes.includes(requestedType)
       ? requestedType
       : orderTypes[0] ?? 'takeaway'
-  const routeKey = view === 'checkout'
-    ? checkoutStage
-    : hasStarted
-      ? 'menu'
-      : 'hero'
+  // Hero — обложка над уже готовым каталогом, а не отдельный route.
+  // Благодаря стабильному ключу каталог не перемонтируется и не мигает
+  // при открытии или возврате на заставку.
+  const routeKey = view === 'checkout' ? checkoutStage : 'menu'
+  const visibleCategoryId = activeCat ?? menu.categories[0]?.id ?? null
   return (
     <Shell
       isRtl={isRtl}
@@ -559,16 +553,16 @@ export default function PublicOrderPage() {
       }
       backLabel={t(lang, 'back')}
     >
-      {view === 'menu' && activeCat && (() => {
-        const cat = menu.categories.find((c) => c.id === activeCat)
+      {view === 'menu' && visibleCategoryId && (() => {
+        const cat = menu.categories.find((c) => c.id === visibleCategoryId)
         if (!cat) return null
         return (
           <div className="public-menu-route-motion">
             {/* Навигация не перемонтируется при смене категории: движется
                 активный чип и обновляется только список товаров. */}
-            <CategoryChips categories={menu.categories} activeCat={activeCat} onSelect={selectCategory} />
+            <CategoryChips categories={menu.categories} activeCat={visibleCategoryId} onSelect={selectCategory} />
             <div
-              key={activeCat}
+              key={visibleCategoryId}
               data-category-motion={categoryMotion ? 'on' : 'off'}
               className="public-menu-category-content"
               onAnimationEnd={(event) => {
@@ -768,11 +762,13 @@ function Shell({
   const leavingHero = heroTransitionActive && !hero && transitionDirection === 'forward'
   const enteringHero = heroTransitionActive && !!hero && transitionDirection === 'back'
   const showHero = !!hero || leavingHero
-  const showCompactHeader = !hero || enteringHero
+  // Каталог и его шапка всегда уже отрисованы под hero. На переходе
+  // двигается только одна цельная обложка — без трёх параллельных слоёв.
+  const showCompactHeader = true
   const heroTransitionRole = leavingHero ? 'leaving' : enteringHero ? 'entering' : 'idle'
-  const compactTransitionRole = leavingHero ? 'entering' : enteringHero ? 'leaving' : 'idle'
+  const compactTransitionRole = 'idle'
   const currentRouteKey = routeKey ?? '__default__'
-  const currentRouteChildren = enteringHero ? null : children
+  const currentRouteChildren = children
   const latestRouteChildren = useRef<React.ReactNode>(currentRouteChildren)
   const latestRouteKey = useRef(currentRouteKey)
   const outgoingRoute = useRef<{ key: string; children: React.ReactNode } | null>(null)
@@ -802,6 +798,17 @@ function Shell({
     return () => window.clearTimeout(timer)
   }, [routeKey, transitionPhase])
 
+  // Пока hero полностью закрывает каталог, запрещаем прокрутку скрытого
+  // слоя. При нажатии «Начать» блокировка снимается до движения обложки.
+  useEffect(() => {
+    if (!hero) return
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = previousOverflow
+    }
+  }, [hero])
+
   return (
     // ВАЖНО (iOS Safari): не вешать overflow-x-clip на корень — clip на
     // предке ломает position:fixed у потомков (иконка корзины и нижняя
@@ -822,9 +829,7 @@ function Shell({
             key="hero"
             data-transition-role={heroTransitionRole}
             data-nav={transitionDirection}
-            className={`public-menu-hero${hasHeroMedia ? ' has-media' : ' is-brand-only'}${
-              heroTransitionRole !== 'idle' ? ' is-transition-overlay' : ''
-            }`}
+            className={`public-menu-hero is-viewport-overlay${hasHeroMedia ? ' has-media' : ' is-brand-only'}`}
           >
             {heroVideo ? (
               <video

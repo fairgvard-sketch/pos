@@ -258,20 +258,23 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     background-size: cover;
   }
 
-  .public-menu-hero.is-transition-overlay {
+  .public-menu-hero.is-viewport-overlay {
     position: absolute;
     inset-block-start: 0;
     inset-inline: 0;
     z-index: 40;
+  }
+
+  .public-menu-hero.is-viewport-overlay[data-transition-role='leaving'] {
     pointer-events: none;
   }
 
   .public-menu-hero[data-transition-role='leaving'] {
-    animation: public-hero-exit 420ms cubic-bezier(.25, .65, .3, 1) both;
+    animation: public-hero-exit 520ms cubic-bezier(.22, .62, .28, 1) both;
   }
 
   .public-menu-hero[data-transition-role='entering'] {
-    animation: public-hero-enter 420ms cubic-bezier(.25, .65, .3, 1) both;
+    animation: public-hero-enter 520ms cubic-bezier(.22, .62, .28, 1) both;
   }
 
   .public-menu-compact-header[data-transition-role='leaving'] {
@@ -1818,7 +1821,7 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     max-height: 100svh;
     flex-direction: column;
     border-radius: 0;
-    animation: sheet-in 440ms cubic-bezier(.25, .65, .3, 1) both;
+    animation: sheet-in 600ms cubic-bezier(.2, .58, .25, 1) both;
     backface-visibility: hidden;
     contain: paint;
     will-change: transform;
@@ -1829,7 +1832,7 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   }
 
   .public-menu-item-overlay[data-state='closing'] .public-menu-item-sheet {
-    animation: sheet-out 360ms cubic-bezier(.4, 0, .6, 1) both;
+    animation: sheet-out 480ms cubic-bezier(.42, 0, .7, .4) both;
   }
 
   @keyframes sheet-in {
@@ -1889,7 +1892,7 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     outline: none;
   }
 
-  .public-menu-screen[data-transition='enter']
+  .public-menu-screen[data-transition='enter'][data-transition-kind='route']
   > .public-menu-route-layer.is-current
   > .public-menu-route-motion,
   .public-menu-screen[data-transition='enter']
@@ -1899,7 +1902,7 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     animation: public-route-enter 420ms cubic-bezier(.25, .65, .3, 1) both;
   }
 
-  .public-menu-screen[data-transition='enter']
+  .public-menu-screen[data-transition='enter'][data-transition-kind='route']
   > .public-menu-route-layer.is-outgoing
   > .public-menu-route-motion,
   .public-menu-screen[data-transition='enter']
@@ -1909,7 +1912,7 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     animation: public-route-exit 420ms cubic-bezier(.25, .65, .3, 1) both;
   }
 
-  .public-menu-screen[data-transition='enter']
+  .public-menu-screen[data-transition='enter'][data-transition-kind='route']
   > .public-menu-route-layer.is-current
   > .public-menu-checkout-submitbar,
   .public-menu-screen[data-transition='enter']
@@ -1919,7 +1922,7 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     animation: public-route-bar-enter 420ms cubic-bezier(.25, .65, .3, 1) both;
   }
 
-  .public-menu-screen[data-transition='enter']
+  .public-menu-screen[data-transition='enter'][data-transition-kind='route']
   > .public-menu-route-layer.is-outgoing
   > .public-menu-checkout-submitbar,
   .public-menu-screen[data-transition='enter']
