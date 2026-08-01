@@ -121,12 +121,14 @@ SELECT throws_ok(
 
 RESET ROLE;
 
--- ── Контракт функции не изменился (касса зовёт ту же сигнатуру) ──
+-- ── Контракт функции (133: добавлен охват по точкам) ──
+-- Прежние четыре параметра сохранены со значениями по умолчанию, поэтому
+-- вызов кабинета без охвата продолжает работать.
 SELECT has_function('sales_report',
-  ARRAY['timestamptz','timestamptz','text','uuid']);
+  ARRAY['timestamptz','timestamptz','text','uuid','uuid[]']);
 SELECT ok(
   NOT has_function_privilege('anon',
-    'sales_report(timestamptz,timestamptz,text,uuid)', 'EXECUTE'),
+    'sales_report(timestamptz,timestamptz,text,uuid,uuid[])', 'EXECUTE'),
   'anon не вызывает sales_report'
 );
 

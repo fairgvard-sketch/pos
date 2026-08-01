@@ -4,6 +4,11 @@
 -- перепутаны, воронка считается сессиями, загрузка берёт знаменателем
 -- расписание, а чужая точка не показывается ни при каком наборе
 -- параметров.
+--
+-- ⚠️ «Сегодня» — В ЗОНЕ ТОЧКИ, а не сервера. С (NOW() AT TIME ZONE 'Asia/Jerusalem')::date (UTC) тест
+-- падал между полуночью и тремя часами ночи по Иерусалиму: события
+-- фикстуры писались через NOW() и оказывались уже «завтра», а окно
+-- отчёта строилось на вчерашней календарной дате.
 
 BEGIN;
 SELECT plan(18);
@@ -56,16 +61,16 @@ SELECT is(
   reservation_open_minutes(
     reservation_schedule((SELECT settings FROM locations
                           WHERE id = 'e1000000-0000-4000-8000-000000000001')),
-    CURRENT_DATE),
+    (NOW() AT TIME ZONE 'Asia/Jerusalem')::date),
   720, 'окно 10:00–22:00 = 720 минут приёма');
 SELECT is(
-  reservation_open_minutes('{"weekly":{}}'::jsonb, CURRENT_DATE),
+  reservation_open_minutes('{"weekly":{}}'::jsonb, (NOW() AT TIME ZONE 'Asia/Jerusalem')::date),
   0, 'неописанный день закрыт, а не круглосуточен');
 SELECT is(
   reservation_open_minutes(
     jsonb_build_object('weekly', (SELECT jsonb_object_agg(i::TEXT, '[["20:00","02:00"]]'::jsonb)
                                   FROM generate_series(0, 6) i)),
-    CURRENT_DATE),
+    (NOW() AT TIME ZONE 'Asia/Jerusalem')::date),
   360, 'окно через полночь считается как шесть часов, а не отрицательное');
 
 -- ── Данные периода ───────────────────────────────────────────
@@ -77,19 +82,19 @@ VALUES
   ('e6000000-0000-4000-8000-000000000001',
    'e0000000-0000-4000-8000-000000000001', 'e1000000-0000-4000-8000-000000000001',
    'e7000000-0000-4000-8000-000000000001', 'Пришёл', '0501111111', 2,
-   (CURRENT_DATE + TIME '19:00') AT TIME ZONE 'Asia/Jerusalem', 90,
+   ((NOW() AT TIME ZONE 'Asia/Jerusalem')::date + TIME '19:00') AT TIME ZONE 'Asia/Jerusalem', 90,
    'confirmed', TRUE, 'qr', NOW(), 'e2000000-0000-4000-8000-000000000001'),
   -- Неявка сегодня же: попадает в визиты и в no_show_rate.
   ('e6000000-0000-4000-8000-000000000002',
    'e0000000-0000-4000-8000-000000000001', 'e1000000-0000-4000-8000-000000000001',
    'e7000000-0000-4000-8000-000000000002', 'Не пришёл', '0502222222', 4,
-   (CURRENT_DATE + TIME '20:00') AT TIME ZONE 'Asia/Jerusalem', 90,
+   ((NOW() AT TIME ZONE 'Asia/Jerusalem')::date + TIME '20:00') AT TIME ZONE 'Asia/Jerusalem', 90,
    'no_show', FALSE, 'instagram', NOW(), 'e2000000-0000-4000-8000-000000000002'),
   -- Бронь ДО 124: канала нет вовсе.
   ('e6000000-0000-4000-8000-000000000003',
    'e0000000-0000-4000-8000-000000000001', 'e1000000-0000-4000-8000-000000000001',
    'e7000000-0000-4000-8000-000000000003', 'Старая', '0503333333', 2,
-   (CURRENT_DATE + TIME '13:00') AT TIME ZONE 'Asia/Jerusalem', 90,
+   ((NOW() AT TIME ZONE 'Asia/Jerusalem')::date + TIME '13:00') AT TIME ZONE 'Asia/Jerusalem', 90,
    'confirmed', TRUE, NULL, NOW(), NULL);
 
 -- Чужая организация: тот же день, те же метрики — не должна просочиться.
@@ -98,7 +103,7 @@ INSERT INTO reservations (id, org_id, location_id, client_uuid, customer_name,
 VALUES ('e6000000-0000-4000-8000-000000000009',
         'e0000000-0000-4000-8000-000000000002', 'e1000000-0000-4000-8000-000000000002',
         'e7000000-0000-4000-8000-000000000009', 'Чужой', '0509999999', 8,
-        (CURRENT_DATE + TIME '19:00') AT TIME ZONE 'Asia/Jerusalem', 'confirmed');
+        ((NOW() AT TIME ZONE 'Asia/Jerusalem')::date + TIME '19:00') AT TIME ZONE 'Asia/Jerusalem', 'confirmed');
 
 -- Воронка: одна сессия прошла до конца, вторая упёрлась в отсутствие мест
 -- на две разные даты — это ДВЕ строки спроса, но ОДНА сессия.
@@ -108,15 +113,15 @@ SELECT track_reserve_event('e1000000-0000-4000-8000-000000000001',
   'e8000000-0000-4000-8000-000000000001', 'form_started', 'qr');
 SELECT track_reserve_event('e1000000-0000-4000-8000-000000000001',
   'e8000000-0000-4000-8000-000000000001', 'submitted', 'qr', '{}'::jsonb,
-  2, CURRENT_DATE, TIME '19:00', NULL, 'e6000000-0000-4000-8000-000000000001');
+  2, (NOW() AT TIME ZONE 'Asia/Jerusalem')::date, TIME '19:00', NULL, 'e6000000-0000-4000-8000-000000000001');
 SELECT track_reserve_event('e1000000-0000-4000-8000-000000000001',
   'e8000000-0000-4000-8000-000000000002', 'page_view', 'instagram');
 SELECT track_reserve_event('e1000000-0000-4000-8000-000000000001',
   'e8000000-0000-4000-8000-000000000002', 'no_slots', 'instagram', '{}'::jsonb,
-  6, CURRENT_DATE + 1);
+  6, (NOW() AT TIME ZONE 'Asia/Jerusalem')::date + 1);
 SELECT track_reserve_event('e1000000-0000-4000-8000-000000000001',
   'e8000000-0000-4000-8000-000000000002', 'no_slots', 'instagram', '{}'::jsonb,
-  6, CURRENT_DATE + 2);
+  6, (NOW() AT TIME ZONE 'Asia/Jerusalem')::date + 2);
 
 INSERT INTO waitlist_entries (org_id, location_id, client_uuid, customer_name,
                               customer_phone, party_size, wanted_date,
@@ -124,10 +129,10 @@ INSERT INTO waitlist_entries (org_id, location_id, client_uuid, customer_name,
 VALUES
   ('e0000000-0000-4000-8000-000000000001', 'e1000000-0000-4000-8000-000000000001',
    'e9000000-0000-4000-8000-000000000001', 'Ждёт', '0504444444', 2,
-   CURRENT_DATE + 1, TIME '18:00', TIME '21:00', 'waiting'),
+   (NOW() AT TIME ZONE 'Asia/Jerusalem')::date + 1, TIME '18:00', TIME '21:00', 'waiting'),
   ('e0000000-0000-4000-8000-000000000001', 'e1000000-0000-4000-8000-000000000001',
    'e9000000-0000-4000-8000-000000000002', 'Дождался', '0505555555', 2,
-   CURRENT_DATE + 1, TIME '18:00', TIME '21:00', 'converted');
+   (NOW() AT TIME ZONE 'Asia/Jerusalem')::date + 1, TIME '18:00', TIME '21:00', 'converted');
 
 -- ── Отчёт под владельцем A ───────────────────────────────────
 SET LOCAL ROLE authenticated;
@@ -138,7 +143,7 @@ SELECT set_config(
 );
 
 CREATE FUNCTION pg_temp.report() RETURNS JSON LANGUAGE sql STABLE AS $$
-  SELECT reserve_analytics_web(NULL, CURRENT_DATE, CURRENT_DATE)
+  SELECT reserve_analytics_web(NULL, (NOW() AT TIME ZONE 'Asia/Jerusalem')::date, (NOW() AT TIME ZONE 'Asia/Jerusalem')::date)
 $$;
 
 SELECT is((pg_temp.report() -> 'visits' ->> 'total')::INT, 3,
@@ -185,7 +190,7 @@ SELECT is(
 SELECT is(
   (SELECT json_array_length(
      reserve_analytics_web(ARRAY['e1000000-0000-4000-8000-000000000002']::UUID[],
-                           CURRENT_DATE, CURRENT_DATE) -> 'range' -> 'locations')),
+                           (NOW() AT TIME ZONE 'Asia/Jerusalem')::date, (NOW() AT TIME ZONE 'Asia/Jerusalem')::date) -> 'range' -> 'locations')),
   0,
   'явно запрошенная чужая точка просто не попадает в отчёт');
 

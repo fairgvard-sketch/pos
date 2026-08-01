@@ -120,9 +120,12 @@ SELECT is(
 RESET ROLE;
 
 -- ── Контракт: anon не вызывает ──
+-- 133: сигнатура расширена фильтрами (диапазон, тип, сотрудник, терминал,
+-- поиск); прежние четыре параметра сохранены со значениями по умолчанию.
 SELECT ok(
   NOT has_function_privilege('anon',
-    'get_activity_feed(integer,timestamptz,uuid,uuid)', 'EXECUTE'),
+    'get_activity_feed(integer,timestamptz,uuid,uuid,timestamptz,timestamptz,text[],uuid,uuid,text)',
+    'EXECUTE'),
   'anon не вызывает get_activity_feed');
 
 SELECT * FROM finish();
