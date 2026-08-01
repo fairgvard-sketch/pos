@@ -25,9 +25,12 @@ SELECT ok(
 -- ── Колонка заметки и колоночные гранты ────────────────────
 SELECT has_column('guests', 'notes');
 
+-- 131: заметка правится через set_guest_profile, колоночный грант отозван —
+-- иначе право на правку проверялось бы только в RPC, а обойти его можно
+-- было прямым UPDATE.
 SELECT ok(
-  has_column_privilege('authenticated', 'guests', 'notes', 'UPDATE'),
-  'клиент правит заметку гостя'
+  NOT has_column_privilege('authenticated', 'guests', 'notes', 'UPDATE'),
+  'заметка гостя правится только через RPC'
 );
 
 -- Балансы по-прежнему server-only (инвариант 031)

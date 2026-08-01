@@ -6,7 +6,7 @@ import { supabase } from './supabase'
  * миграции: порядок релиза «миграции → функции → фронт» гарантирует, что база
  * не отстаёт от выложенного фронта.
  */
-export const MIN_SCHEMA_VERSION = 130
+export const MIN_SCHEMA_VERSION = 131
 
 export type SchemaCheck =
   | { status: 'ok'; version: number }

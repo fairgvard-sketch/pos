@@ -157,9 +157,11 @@ SELECT is(
 SELECT ok(
   NOT has_column_privilege('authenticated', 'guests', 'tags', 'UPDATE'),
   'клиенту не выдан UPDATE на метки — только через RPC');
+-- 131: колоночный грант на заметку отозван, путь один — set_guest_profile.
+-- Аудит-триггер при этом остаётся: он ловит любую правку, а не только RPC.
 SELECT ok(
-  has_column_privilege('authenticated', 'guests', 'notes', 'UPDATE'),
-  'заметка остаётся прямо редактируемой (грант 114), и её ловит аудит-триггер');
+  NOT has_column_privilege('authenticated', 'guests', 'notes', 'UPDATE'),
+  'заметка тоже правится только через RPC');
 
 SELECT lives_ok($$
   SELECT set_guest_profile(

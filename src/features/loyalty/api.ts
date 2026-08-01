@@ -33,10 +33,18 @@ export function formatPhone(digits: string): string {
   return digits
 }
 
-/** Поиск: цифры → по телефону (вхождение), иначе — по имени */
+/**
+ * Поиск: цифры → по телефону (вхождение), иначе — по имени.
+ * Объединённые и стёртые профили (131) не показываем: первый — указатель
+ * на другой профиль, второй — запись без личных данных.
+ */
 export async function searchGuests(query: string): Promise<Guest[]> {
   const q = query.trim()
-  let req = supabase.from('guests').select(GUEST_COLS)
+  let req = supabase
+    .from('guests')
+    .select(GUEST_COLS)
+    .is('merged_into', null)
+    .is('anonymized_at', null)
   const digits = normalizePhone(q)
   if (q === '') {
     req = req.order('last_visit_at', { ascending: false, nullsFirst: false }).limit(20)
