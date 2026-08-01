@@ -33,7 +33,12 @@ INSERT INTO tables (id, org_id, location_id, label, zone_id, seats, sort_order) 
 
 UPDATE locations SET settings = jsonb_build_object('reservations',
   jsonb_build_object('enabled', TRUE, 'instant', TRUE, 'waitlist', TRUE,
-    'duration_min', 90, 'buffer_min', 0, 'confirm_window_h', 24,
+    -- Окно просьб подтвердить — 48 часов, а не продуктовые 24: бронь
+    -- фикстуры стоит на ЗАВТРА 19:00, то есть от 19 до 44 часов вперёд
+    -- в зависимости от часа прогона. С 24 часами тест проходил только
+    -- вечером, а утром request_reservation_confirmations честно
+    -- возвращал 0 — падал тест, а не код.
+    'duration_min', 90, 'buffer_min', 0, 'confirm_window_h', 48,
     'schedule', jsonb_build_object(
       'weekly', (SELECT jsonb_object_agg(i::TEXT, '[["00:00","23:59"]]'::jsonb)
                  FROM generate_series(0, 6) i),

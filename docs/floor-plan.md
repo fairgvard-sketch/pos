@@ -47,10 +47,28 @@
 только выбранной зоны. Список зон и столов входит в offline read-cache, поэтому
 переключение зон работает без сети после первого успешного входа.
 
+## Зал без кассы (123)
+
+Точка, купившая только Reserve, кассового конструктора не имеет — а без
+столов бронь бесполезна. Миграция `123_floor_plan_web.sql` даёт веб-зеркала
+всех операций зала (`*_web`): право — членство owner/manager, точка приходит
+параметром, гейт — `reservations_desk` **или** `pos_operate`. Экран —
+ANGLE → Reservations → Floor plan.
+
+Веб-путь строже кассового в двух местах: стол не снимается с плана, пока на
+нём открытый счёт (`table_in_use`) или живая бронь впереди (`table_booked`),
+и дубль названия стола отклоняется (`table_exists`). Подробности и мотив —
+[reservations.md](reservations.md), раздел «План зала из кабинета (123)».
+
+Визуальная раскладка (`pos_x`, `pos_y`, форма, размер) остаётся только в
+кассе: веб-редактор работает со списком столов, а не с полотном.
+
 ## Основные файлы
 
 - `src/features/tables/FloorPlanEditorPage.tsx` — конструктор;
 - `src/features/tables/HallPage.tsx` — рабочий план с вкладками зон;
 - `src/features/tables/api.ts` — CRUD зон, столов и раскладки;
 - `supabase/migrations/066_table_zones.sql` — схема и перенос данных;
-- `supabase/migrations/067_table_zone_order.sql` — сохранение порядка зон.
+- `supabase/migrations/067_table_zone_order.sql` — сохранение порядка зон;
+- `supabase/migrations/123_floor_plan_web.sql` — веб-зеркала зон и столов;
+- `anglesite/backoffice/src/FloorPlanEditor.jsx` — редактор в кабинете.

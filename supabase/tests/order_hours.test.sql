@@ -190,25 +190,32 @@ SET settings = jsonb_build_object('online_orders', jsonb_build_object('hours',
       to_char(NOW() AT TIME ZONE 'Asia/Jerusalem' - INTERVAL '3 hours', 'HH24:MI'),
       to_char(NOW() AT TIME ZONE 'Asia/Jerusalem' - INTERVAL '2 hours', 'HH24:MI')
     )),
-    -- Завтра: КОНКРЕТНОЕ окно, а не круглые сутки. «Весь день» ломал
-    -- проверку «предзаказ на закрытый момент» за полчаса до полуночи:
-    -- NOW()+30 минут попадал уже в завтра и оказывался внутри окна.
-    EXTRACT(DOW FROM (NOW() + INTERVAL '1 day') AT TIME ZONE 'Asia/Jerusalem')::INT::TEXT,
-    jsonb_build_array(jsonb_build_array('12:00', '14:00'))
+    -- Окно предзаказа привязано к МОМЕНТУ NOW() + 23 часа, а не к
+    -- календарным «завтра, 12:00»: 116 отклоняет pickup дальше 24 часов
+    -- ('invalid_pickup'), и фиксированное время принималось только при
+    -- прогоне после полудня. Полчаса шириной — чтобы окно не поймало
+    -- NOW()+30 минут из проверки «предзаказ на закрытый момент» ниже.
+    --
+    -- До 01:00 ночи NOW()+23 часа — ещё СЕГОДНЯШНИЙ день недели, и ключ
+    -- совпадает с закрытым окном выше: jsonb_build_object оставит
+    -- последнее значение. Это не ломает проверок — «сейчас» вне обоих
+    -- окон в любом случае.
+    EXTRACT(DOW FROM (NOW() + INTERVAL '23 hours') AT TIME ZONE 'Asia/Jerusalem')::INT::TEXT,
+    jsonb_build_array(jsonb_build_array(
+      to_char((NOW() + INTERVAL '23 hours') AT TIME ZONE 'Asia/Jerusalem', 'HH24:MI'),
+      to_char((NOW() + INTERVAL '23 hours 30 minutes') AT TIME ZONE 'Asia/Jerusalem', 'HH24:MI')
+    ))
   )
 ))
 WHERE id = 'c1000000-0000-4000-8000-000000000001';
 
--- Время берётся ЯВНО внутри завтрашнего окна, а не «через 20 часов»:
--- смещение от NOW() зависит от часа прогона и однажды промахнётся.
 SELECT lives_ok($$
   SELECT submit_online_order(
     'c1000000-0000-4000-8000-000000000001',
     'c6000000-0000-4000-8000-000000000005',
     'Гость', '0501234567',
     '[{"menu_item_id":"c3000000-0000-4000-8000-000000000011","qty":1}]'::jsonb,
-    (((NOW() AT TIME ZONE 'Asia/Jerusalem')::DATE + 1 + TIME '13:00')
-      AT TIME ZONE 'Asia/Jerusalem')
+    NOW() + INTERVAL '23 hours'
   )
 $$, 'закрыто сейчас — предзаказ на завтрашнее окно принимается (116)');
 

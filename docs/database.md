@@ -389,7 +389,9 @@ capability (что технически разрешено), entitlement (что
   `online_orders`; `submit_reservation`/`reservation_availability`/
   `get_reservation_status` — `public_reservations`;
   `set_online_order_status_web` — `orders_desk`;
-  `set_reservation_status_web` — `reservations_desk`; `open_shift` и
+  `set_reservation_status_web` — `reservations_desk`; план зала из
+  кабинета (`*_table*_web`, 123) — `reservations_desk` **или**
+  `pos_operate`: столы нужны обоим продуктам; `open_shift` и
   обёртки горячего потока (`place_order`, `pay_order`,
   `open_or_get_table_order`, `append_to_order`) — `pos_operate`;
   `sales_report` — `pos_reports`; `save_menu_item`/`reorder_menu` —
