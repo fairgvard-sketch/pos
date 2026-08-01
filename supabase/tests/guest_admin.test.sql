@@ -9,7 +9,7 @@
 --   * профиль правится только через RPC: колоночных грантов больше нет.
 
 BEGIN;
-SELECT plan(54);
+SELECT plan(56);
 
 -- ── Фикстура ─────────────────────────────────────────────────
 INSERT INTO orgs (id, name) VALUES
@@ -206,6 +206,14 @@ SELECT is(
   (SELECT cardinality(tags) FROM guests WHERE id = 'e2000000-0000-4000-8000-000000000001'),
   2, 'метки обоих профилей объединены');
 
+-- Объединённый профиль клиенту БОЛЬШЕ НЕ ВИДЕН (132), поэтому смотрим на
+-- него вне роли: иначе сравнивали бы с NULL и «проверка» проходила бы
+-- при любой ошибке слияния.
+SELECT is(
+  (SELECT COUNT(*)::INTEGER FROM guests),
+  3, 'касса не видит объединённый профиль даже прямым запросом к таблице');
+
+RESET ROLE;
 SELECT results_eq($$
   SELECT visits, total_spent, points, stamps
   FROM guests WHERE id = 'e2000000-0000-4000-8000-000000000002'
@@ -215,6 +223,7 @@ SELECT is(
   (SELECT merged_into FROM guests WHERE id = 'e2000000-0000-4000-8000-000000000002'),
   'e2000000-0000-4000-8000-000000000001',
   'исходный остаётся указателем, а не удаляется');
+SET LOCAL ROLE authenticated;
 
 SELECT ok(
   (SELECT 'e4000000-0000-4000-8000-000000000001' = ANY(orders) FROM guest_merges
@@ -278,6 +287,13 @@ SELECT is(
     ->> 'reservations',
   '1', 'стирание обезличивает прошлые визиты');
 
+-- Стёртый профиль клиенту тоже не виден (132): это тот же случай, что и
+-- объединённый — старая сборка кассы не должна показывать его никогда.
+SELECT is(
+  (SELECT COUNT(*)::INTEGER FROM guests),
+  2, 'касса не видит стёртый профиль даже прямым запросом к таблице');
+
+RESET ROLE;
 SELECT results_eq($$
   SELECT name, notes, cardinality(tags), anonymized_at IS NOT NULL
   FROM guests WHERE id = 'e2000000-0000-4000-8000-000000000003'
@@ -286,6 +302,7 @@ $$, $$ VALUES (NULL::TEXT, NULL::TEXT, 0, TRUE) $$,
 SELECT ok(
   (SELECT phone LIKE 'deleted:%' FROM guests WHERE id = 'e2000000-0000-4000-8000-000000000003'),
   'телефон заменён на заведомо не-номер');
+SET LOCAL ROLE authenticated;
 SELECT is(
   (SELECT customer_phone FROM reservations WHERE id = 'e6000000-0000-4000-8000-000000000003'),
   '', 'контакт в прошлой брони стёрт');
