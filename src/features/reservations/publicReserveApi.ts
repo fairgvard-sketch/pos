@@ -25,6 +25,12 @@ export interface ReserveInfo {
     logo_url?: string | null
     /** false = владелец не включил приём броней (тумблер 053, default off) */
     accepting: boolean
+    /** Предпросмотр владельца (126): страница открыта по секретной ссылке.
+     *  Гость её не получает; отправка заявки запрещена. */
+    preview?: boolean
+    /** Настоящее состояние тумблера приёма. В предпросмотре невыложенной
+     *  точки live-доступности нет — показываем сетку расписания. */
+    published?: boolean
     /** instant-режим (063): гость видит live-доступность и бронь
      *  подтверждается сразу. false → прежний флоу заявка→касса. */
     instant?: boolean
@@ -72,9 +78,15 @@ export interface ReserveInfo {
   }
 }
 
-export async function fetchReserveInfo(locId: string): Promise<ReserveInfo> {
+export async function fetchReserveInfo(
+  locId: string, previewToken?: string | null,
+): Promise<ReserveInfo> {
   const loc = await resolveLocationId(locId)
-  const res = await fetch(`${FN_BASE}/public-reserve?loc=${encodeURIComponent(loc)}`, { headers })
+  const qs = new URLSearchParams({ loc })
+  // Секрет предпросмотра (126) уходит на сервер: решение «показывать ли
+  // невыложенную страницу» принимает он, а не клиент.
+  if (previewToken) qs.set('preview', previewToken)
+  const res = await fetch(`${FN_BASE}/public-reserve?${qs}`, { headers })
   if (!res.ok) await parseError(res)
   return res.json()
 }

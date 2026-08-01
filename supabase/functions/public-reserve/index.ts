@@ -148,6 +148,19 @@ Deno.serve(async (req) => {
     const loc = params.get('loc')
     if (loc !== null) {
       if (!UUID_RE.test(loc)) return json({ error: 'invalid_location' }, 400)
+      // Предпросмотр владельца (126): по секретной ссылке страница
+      // открывается даже при ВЫКЛЮЧЕННОМ приёме — иначе увидеть её до
+      // публикации нельзя, а публикация вслепую и есть та ошибка,
+      // которую чеклист запуска пытается предотвратить.
+      const previewToken = params.get('preview')
+      let preview = false
+      if (previewToken) {
+        const { data: ok } = await supabase.rpc('reserve_preview_valid', {
+          p_location_id: loc,
+          p_token: previewToken,
+        })
+        preview = ok === true
+      }
       // Наружу — только флаг брони и баннер, НЕ весь settings (там права ролей)
       const { data, error } = await supabase
         .from('locations')
@@ -179,7 +192,7 @@ Deno.serve(async (req) => {
       // Зоны зала (072): наружу — только живые зоны, в которых есть активные
       // столы (пустая зона гостю бесполезна). Гость видит выбор от двух зон.
       let zones: { id: string; name: string }[] = []
-      if (rsv?.enabled === true) {
+      if (rsv?.enabled === true || preview) {
         const [zoneRes, tableRes] = await Promise.all([
           supabase.from('table_zones').select('id, name')
             .eq('location_id', loc).eq('is_active', true).order('sort_order'),
@@ -204,8 +217,17 @@ Deno.serve(async (req) => {
               data.receipt_business_name ||
               data.name,
             logo_url: data.logo_url ?? null,
-            // Тумблер 053: отсутствие ключа = бронирование ВЫКЛЮЧЕНО
-            accepting: rsv?.enabled === true,
+            // Тумблер 053: отсутствие ключа = бронирование ВЫКЛЮЧЕНО.
+            // В предпросмотре страница ведёт себя как открытая, но
+            // помечена: `preview` ниже включает баннер и запрещает
+            // отправку — гость такой ссылки не получает.
+            accepting: rsv?.enabled === true || preview,
+            preview,
+            // Настоящее состояние тумблера. В предпросмотре невыложенной
+            // точки live-доступность спрашивать бесполезно (RPC отдаст
+            // 'disabled'), и страница показывает сетку расписания —
+            // владелец проверяет часы, зоны и вид, а не занятость.
+            published: rsv?.enabled === true,
             // instant-режим (063): гость видит live-доступность, бронь сразу confirmed
             instant: rsv?.instant === true,
             // Часы приёма (059): устаревшая пара на все семь дней. Оставлена
@@ -243,7 +265,9 @@ Deno.serve(async (req) => {
           },
         },
         200,
-        { 'Cache-Control': 'public, max-age=30' }
+        // Предпросмотр не кэшируем: владелец правит настройки и тут же
+        // перезагружает страницу, чтобы увидеть результат.
+        { 'Cache-Control': preview ? 'no-store' : 'public, max-age=30' }
       )
     }
 

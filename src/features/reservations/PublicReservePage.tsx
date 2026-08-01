@@ -119,11 +119,18 @@ export default function PublicReservePage() {
   // Незавершённая бронь переживает перезагрузку страницы
   const [activeUuid, setActiveUuid] = useState<string | null>(() => readBookingKey(locId))
 
+  // Предпросмотр владельца (126). Секрет читается из адреса один раз:
+  // страница переписывает URL, получив бронь, и параметр бы потерялся.
+  const [previewToken] = useState(
+    () => new URLSearchParams(window.location.search).get('preview'),
+  )
+
   const { data: info, isLoading, isError } = useQuery({
-    queryKey: ['public_reserve_info', locId],
-    queryFn: () => fetchReserveInfo(locId),
+    queryKey: ['public_reserve_info', locId, previewToken],
+    queryFn: () => fetchReserveInfo(locId, previewToken),
     staleTime: 30_000,
   })
+  const preview = info?.location.preview === true
 
   // Заголовок вкладки и имя устанавливаемого приложения (118). До этого в
   // обоих местах стояло родовое «Angle — Digital Menu»: гость сохранял на
@@ -207,7 +214,11 @@ export default function PublicReservePage() {
 
   // Live-доступность (063): только в instant-режиме. Множество СВОБОДНЫХ
   // времён на выбранную дату+число гостей; занятые в UI дизейблятся.
+  // Live-доступность требует включённого приёма: в предпросмотре
+  // невыложенной точки RPC отдаст 'disabled', поэтому показываем сетку
+  // расписания. Владелец здесь проверяет часы, зоны и вид, а не занятость.
   const instant = info?.location.instant === true
+    && (info?.location.published !== false)
   const {
     data: avail,
     isPending: availabilityPending,
@@ -229,11 +240,14 @@ export default function PublicReservePage() {
 
   // ── Воронка (124) ──────────────────────────────────────────
   // Вершина: страница открыта и приём включён. Закрытую страницу не
-  // считаем — это не отказ гостя, а решение заведения.
+  // считаем — это не отказ гостя, а решение заведения. Предпросмотр
+  // владельца не считаем тем более: он испортил бы конверсию точки,
+  // которая ещё не приняла ни одного настоящего гостя.
   const accepting = info?.location.accepting === true
+  const counted = accepting && !preview
   useEffect(() => {
-    if (accepting) trackReserveStep(locId, 'page_view')
-  }, [accepting, locId])
+    if (counted) trackReserveStep(locId, 'page_view')
+  }, [counted, locId])
 
   // Спрос по дате и компании — и главное, НЕудовлетворённый спрос.
   // Считается и в instant-режиме (сервер знает занятость), и без него
@@ -243,12 +257,12 @@ export default function PublicReservePage() {
     ? (avail ? avail.slots.filter((s) => s.free).length : null)
     : timeSlots.length
   useEffect(() => {
-    if (!accepting || freeCount === null) return
+    if (!counted || freeCount === null) return
     trackReserveStep(locId, 'availability', { party_size: guests, wanted_date: date })
     if (freeCount === 0) {
       trackReserveStep(locId, 'no_slots', { party_size: guests, wanted_date: date })
     }
-  }, [accepting, freeCount, locId, guests, date])
+  }, [counted, freeCount, locId, guests, date])
 
   // Сверки во время рендера (реком. React вместо эффекта):
   // 1) Выбранный день закрыт или уже прошёл — переходим на ближайший день,
@@ -429,6 +443,7 @@ export default function PublicReservePage() {
             zoneId={zoneId}
             zoneName={zoneName}
             todayStr={todayStr}
+            preview={preview}
             reservedAt={selectedAt}
             draft={detailsDraft}
             onDraft={setDetailsDraft}
@@ -454,6 +469,8 @@ export default function PublicReservePage() {
           />
         )}
       </Shell>
+
+      {preview && <PreviewBar lang={lang} published={info.location.published !== false} />}
 
       {waitlistOpen && info && (
         <WaitlistSheet
@@ -610,6 +627,27 @@ function dayOptionLabel(dateStr: string, todayStr: string, lang: Lang): string {
   const d = new Date(`${dateStr}T12:00:00`)
   const wd = d.toLocaleDateString(lang === 'he' ? 'he-IL' : 'ru-RU', { weekday: 'short' })
   return `${wd} ${d.getDate()}/${d.getMonth() + 1}`
+}
+
+/**
+ * Полоса предпросмотра (126). Внизу и фиксированно: владелец должен
+ * видеть её на любом шаге, а не только на первом экране — иначе,
+ * пролистав до формы, он решит, что смотрит боевую страницу.
+ *
+ * Тёмная и без кнопок: это не элемент интерфейса гостя, а метка режима.
+ */
+function PreviewBar({ lang, published }: { lang: Lang; published: boolean }) {
+  return (
+    <div
+      className="fixed inset-x-0 bottom-0 z-50 bg-gray-900 text-white px-4 py-3 text-center"
+      role="status"
+    >
+      <p className="text-sm font-semibold">{t(lang, 'rsvPreviewBanner')}</p>
+      {!published && (
+        <p className="text-xs text-gray-300 mt-1">{t(lang, 'rsvPreviewUnpublished')}</p>
+      )}
+    </div>
+  )
 }
 
 function ReserveProgress({ lang, step }: { lang: Lang; step: 1 | 2 | 3 }) {
@@ -1259,7 +1297,7 @@ function reserveErrorText(lang: Lang, code: string): string {
 }
 
 function DetailsScreen({
-  lang, locId, date, time, guests, instant, zoneId, zoneName, todayStr,
+  lang, locId, date, time, guests, instant, zoneId, zoneName, todayStr, preview,
   reservedAt, draft, onDraft, clientUuid, onSubmitted, onConflict,
 }: {
   lang: Lang
@@ -1267,6 +1305,8 @@ function DetailsScreen({
   date: string
   time: string
   guests: number
+  /** Предпросмотр владельца (126): форма проходится, но заявка не уходит */
+  preview: boolean
   /** instant-режим (063): CTA — «Подтвердить бронь», не «Отправить заявку» */
   instant: boolean
   /** Пожелание зоны (072); null = без предпочтений */
@@ -1324,6 +1364,13 @@ function DetailsScreen({
     const at = reservedAt
     if (!at || Number.isNaN(at.getTime())) {
       setError(t(lang, 'rsvErrTime'))
+      return
+    }
+    // Предпросмотр доходит до последнего шага и честно останавливается:
+    // владелец видит всю форму, но настоящая бронь отсюда не появляется.
+    // Тестовая бронь делается в кабинете и помечается is_test (126).
+    if (preview) {
+      setError(t(lang, 'rsvPreviewBlocked'))
       return
     }
     setBusy(true)
