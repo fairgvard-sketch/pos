@@ -32,6 +32,11 @@
  *   → { reservation_id, public_token, status } | { error }
  * POST { action:'confirm_attendance', client_uuid }
  *   → { confirmed } | { error }
+ * POST { action:'track', loc, session_id, step, src?, utm?, party_size?,
+ *        wanted_date?, wanted_time?, zone_id?, reservation_id? }
+ *   → { ok: true }   воронка и атрибуция (124)
+ *   Всегда 200 и всегда ok: телеметрия не имеет права влиять на бронь,
+ *   а гостю нечего сообщать про её отказ. Отсев и лимиты — в БД.
  *
  * Вся валидация, анти-спам и идемпотентность — в БД
  * (submit_reservation и др., SECURITY DEFINER, только service_role).
@@ -358,6 +363,44 @@ Deno.serve(async (req) => {
       return json({ error: code }, code === 'unknown' ? 500 : 400)
     }
     return json(data)
+  }
+
+  // Шаг воронки (124). Отдельная ветка ДО остальных проверок формата:
+  // ответ здесь всегда один и тот же, а решение принимает БД.
+  if (action === 'track') {
+    const {
+      loc, session_id, step, src, utm, party_size,
+      wanted_date, wanted_time, zone_id, reservation_id,
+    } = body as {
+      loc?: string; session_id?: string; step?: string; src?: string
+      utm?: Record<string, unknown>; party_size?: number
+      wanted_date?: string; wanted_time?: string
+      zone_id?: string; reservation_id?: string
+    }
+    if (UUID_RE.test(loc ?? '') && UUID_RE.test(session_id ?? '') && typeof step === 'string') {
+      // Метки чистим до пяти известных ключей и коротких строк: utm
+      // приходит из адреса, то есть от кого угодно.
+      const marks: Record<string, string> = {}
+      if (utm && typeof utm === 'object') {
+        for (const key of ['source', 'medium', 'campaign', 'content', 'term']) {
+          const value = (utm as Record<string, unknown>)[key]
+          if (typeof value === 'string' && value.trim()) marks[key] = value.trim().slice(0, 64)
+        }
+      }
+      await supabase.rpc('track_reserve_event', {
+        p_location_id: loc,
+        p_session_id: session_id,
+        p_step: step.slice(0, 32),
+        p_src: typeof src === 'string' ? src.slice(0, 32) : null,
+        p_utm: marks,
+        p_party_size: typeof party_size === 'number' ? Math.floor(party_size) : null,
+        p_wanted_date: /^\d{4}-\d{2}-\d{2}$/.test(wanted_date ?? '') ? wanted_date : null,
+        p_wanted_time: /^\d{2}:\d{2}$/.test(wanted_time ?? '') ? wanted_time : null,
+        p_zone_id: UUID_RE.test(zone_id ?? '') ? zone_id : null,
+        p_reservation_id: UUID_RE.test(reservation_id ?? '') ? reservation_id : null,
+      })
+    }
+    return json({ ok: true })
   }
 
   // Гость подтверждает, что придёт (122).

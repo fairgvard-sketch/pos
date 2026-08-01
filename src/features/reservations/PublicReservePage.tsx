@@ -10,6 +10,7 @@ import {
   joinWaitlist, confirmAttendance,
   type ReserveInfo, type ReservationView,
 } from './publicReserveApi'
+import { trackReserveStep, resetFunnelSession } from './funnel'
 import BrandSplash from '../../components/ui/BrandSplash'
 import {
   hasBookableSlot, normalizeSchedule, partsInZone, shiftDate, slotGrid,
@@ -226,6 +227,29 @@ export default function PublicReservePage() {
   const zones = useMemo(() => info?.location.zones ?? [], [info])
   const zoneName = zoneId ? zones.find((z) => z.id === zoneId)?.name ?? null : null
 
+  // ── Воронка (124) ──────────────────────────────────────────
+  // Вершина: страница открыта и приём включён. Закрытую страницу не
+  // считаем — это не отказ гостя, а решение заведения.
+  const accepting = info?.location.accepting === true
+  useEffect(() => {
+    if (accepting) trackReserveStep(locId, 'page_view')
+  }, [accepting, locId])
+
+  // Спрос по дате и компании — и главное, НЕудовлетворённый спрос.
+  // Считается и в instant-режиме (сервер знает занятость), и без него
+  // (пустой день по расписанию), потому что для владельца это одно и то
+  // же: гость спросил время, и его не оказалось.
+  const freeCount = instant
+    ? (avail ? avail.slots.filter((s) => s.free).length : null)
+    : timeSlots.length
+  useEffect(() => {
+    if (!accepting || freeCount === null) return
+    trackReserveStep(locId, 'availability', { party_size: guests, wanted_date: date })
+    if (freeCount === 0) {
+      trackReserveStep(locId, 'no_slots', { party_size: guests, wanted_date: date })
+    }
+  }, [accepting, freeCount, locId, guests, date])
+
   // Сверки во время рендера (реком. React вместо эффекта):
   // 1) Выбранный день закрыт или уже прошёл — переходим на ближайший день,
   //    у которого слоты есть. С недельным расписанием (117) закрытым может
@@ -263,6 +287,9 @@ export default function PublicReservePage() {
       setZoneId(null)
       setDetailsDraft({ name: '', phone: '', note: '' })
       setClientUuid(crypto.randomUUID())
+      // Вторая бронь — вторая воронка: иначе она склеилась бы с первой и
+      // выглядела бы как один гость, дошедший до конца дважды.
+      resetFunnelSession()
     })
   }
 
@@ -376,6 +403,12 @@ export default function PublicReservePage() {
             todayStr={todayStr}
             conflict={conflict}
             onPick={(nextTime, nextZone) => {
+              trackReserveStep(locId, 'slot_selected', {
+                party_size: guests,
+                wanted_date: date,
+                wanted_time: nextTime,
+                zone_id: nextZone,
+              })
               navigateWithTransition('forward', () => {
                 setConflict(false)
                 setTime(nextTime)
@@ -1263,6 +1296,16 @@ function DetailsScreen({
   const phoneValid = phoneDigits.length >= 9
   const valid = nameValid && phoneValid
 
+  /**
+   * Первое касание формы (124). Отличает «не нашёл подходящего времени»
+   * от «начал оформлять и передумал» — а это разные проблемы заведения.
+   * Повторные нажатия отсекаются дедупликацией шага.
+   */
+  function editDraft(next: { name: string; phone: string; note: string }) {
+    trackReserveStep(locId, 'form_started', { party_size: guests, wanted_date: date })
+    onDraft(next)
+  }
+
   async function submit() {
     if (busy) return
     setShowValidation(true)
@@ -1295,6 +1338,15 @@ function DetailsScreen({
         reserved_at: at.toISOString(),
         note: note.trim() || null,
         zone_id: zoneId,
+      })
+      // Конец воронки (124). Здесь, а не в onSubmitted: `reservation_id`
+      // есть только тут, и именно он связывает канал привода с бронью.
+      trackReserveStep(locId, 'submitted', {
+        party_size: guests,
+        wanted_date: date,
+        wanted_time: time,
+        zone_id: zoneId,
+        reservation_id: result.reservation_id,
       })
       // Старый сервер (до 118) токена не вернёт — тогда ключом остаётся
       // client_uuid, и страница работает как раньше.
@@ -1343,7 +1395,7 @@ function DetailsScreen({
             value={name}
             aria-invalid={showValidation && !nameValid}
             aria-describedby={showValidation && !nameValid ? 'reserve-name-error' : undefined}
-            onChange={(event) => onDraft({ ...draft, name: event.target.value })}
+            onChange={(event) => editDraft({ ...draft, name: event.target.value })}
           />
           {showValidation && !nameValid && (
             <small id="reserve-name-error">{t(lang, 'rsvErrName')}</small>
@@ -1360,7 +1412,7 @@ function DetailsScreen({
             value={phone}
             aria-invalid={showValidation && !phoneValid}
             aria-describedby={showValidation && !phoneValid ? 'reserve-phone-error' : undefined}
-            onChange={(event) => onDraft({ ...draft, phone: event.target.value })}
+            onChange={(event) => editDraft({ ...draft, phone: event.target.value })}
           />
           {showValidation && !phoneValid && (
             <small id="reserve-phone-error">{t(lang, 'rsvErrPhone')}</small>
@@ -1372,7 +1424,7 @@ function DetailsScreen({
             rows={3}
             maxLength={200}
             value={note}
-            onChange={(event) => onDraft({ ...draft, note: event.target.value })}
+            onChange={(event) => editDraft({ ...draft, note: event.target.value })}
           />
           <em>{note.length}/200</em>
         </label>
@@ -1924,6 +1976,9 @@ function WaitlistSheet({ lang, locId, date, guests, zones, draft, onDraft, onClo
         zone_ids: pickedZones,
         note: draft.note.trim() || null,
       })
+      // Лист ожидания — тоже исход воронки, а не её обрыв (124): гость
+      // никуда не ушёл, ему просто нечего было забронировать.
+      trackReserveStep(locId, 'waitlisted', { party_size: guests, wanted_date: date })
       setDone(true)
     } catch (e) {
       const code = e instanceof PublicApiError ? e.code : 'unknown'
