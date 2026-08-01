@@ -73,21 +73,11 @@ const HOUR_MS = 3_600_000
 const DEFAULT_FROM_MIN = 8 * 60
 const DEFAULT_TO_MIN = 24 * 60
 
-/**
- * Видимое окно дня. Основа — расписание точки: показывать сутки целиком
- * бессмысленно, хостес смотрит на смену. Окно расширяется под брони,
- * выпадающие за расписание (ручная бронь на нерабочее время разрешена, и
- * она обязана быть видна, а не молча исчезнуть).
- */
-export function timelineWindow(
-  dateStr: string,
-  tz: string,
+/** Минуты видимого окна от расписания точки */
+function windowMinutes(
   schedule: ReserveSchedule | null,
-  bookings: TimelineBooking[] = [],
-): TimelineWindow {
-  let fromMin = DEFAULT_FROM_MIN
-  let toMin = DEFAULT_TO_MIN
-
+  dateStr: string,
+): { fromMin: number; toMin: number } {
   const windows = schedule ? dayWindows(schedule, dateStr) : []
   const parsed = windows
     .map((w) => {
@@ -99,24 +89,74 @@ export function timelineWindow(
     })
     .filter((w): w is { from: number; to: number } => w !== null)
 
-  if (parsed.length > 0) {
-    fromMin = Math.min(...parsed.map((w) => w.from))
-    toMin = Math.max(...parsed.map((w) => w.to))
-    // Дышим по получасу с обеих сторон: гость приходит чуть раньше, а
-    // визит, начатый в последний слот, кончается уже после закрытия.
-    fromMin -= 30
-    toMin += 90
+  if (parsed.length === 0) return { fromMin: DEFAULT_FROM_MIN, toMin: DEFAULT_TO_MIN }
+  // Дышим по получасу с обеих сторон: гость приходит чуть раньше, а
+  // визит, начатый в последний слот, кончается уже после закрытия.
+  return {
+    fromMin: Math.min(...parsed.map((w) => w.from)) - 30,
+    toMin: Math.max(...parsed.map((w) => w.to)) + 90,
   }
+}
+
+/**
+ * Границы выбранного «ресторанного дня» в зоне точки: от полуночи до
+ * полуночи, а при ночной смене — до конца её окна (18:00–02:00 → до 02:00
+ * следующих суток вместе с запасом).
+ *
+ * Это ответ на вопрос «чей это визит». Брони приходят с запасом в сутки
+ * назад (ночная смена начинается вчера), и без границ одна вчерашняя
+ * бронь растягивала полотно на 34 часа.
+ */
+export function dayBounds(
+  dateStr: string,
+  tz: string,
+  schedule: ReserveSchedule | null,
+): TimelineWindow {
+  const { toMin } = windowMinutes(schedule, dateStr)
+  return {
+    startMs: zonedToUtc(dateStr, 0, tz).getTime(),
+    endMs: zonedToUtc(dateStr, Math.max(1440, toMin), tz).getTime(),
+  }
+}
+
+/** Брони выбранного дня: занятость пересекается с его границами */
+export function bookingsForDay(
+  bookings: TimelineBooking[],
+  bounds: TimelineWindow,
+): TimelineBooking[] {
+  return bookings.filter((b) => b.endMs > bounds.startMs && b.startMs < bounds.endMs)
+}
+
+/**
+ * Видимое окно дня. Основа — расписание точки: показывать сутки целиком
+ * бессмысленно, хостес смотрит на смену. Окно расширяется под брони,
+ * выпадающие за расписание (ручная бронь на нерабочее время разрешена, и
+ * она обязана быть видна, а не молча исчезнуть), но только под брони
+ * ЭТОГО дня и не дальше его границ: визит, зацепивший полночь, рисуется
+ * обрезанным с края.
+ */
+export function timelineWindow(
+  dateStr: string,
+  tz: string,
+  schedule: ReserveSchedule | null,
+  bookings: TimelineBooking[] = [],
+): TimelineWindow {
+  const bounds = dayBounds(dateStr, tz, schedule)
+  const { fromMin, toMin } = windowMinutes(schedule, dateStr)
 
   let startMs = zonedToUtc(dateStr, Math.max(0, fromMin), tz).getTime()
   let endMs = zonedToUtc(dateStr, toMin, tz).getTime()
 
-  for (const b of bookings) {
+  for (const b of bookingsForDay(bookings, bounds)) {
     if (b.startMs < startMs) startMs = b.startMs
     if (b.endMs > endMs) endMs = b.endMs
   }
+
+  startMs = Math.max(startMs, bounds.startMs)
+  endMs = Math.min(endMs, bounds.endMs)
   if (!(endMs > startMs)) {
-    endMs = startMs + 12 * HOUR_MS
+    endMs = Math.min(startMs + 12 * HOUR_MS, bounds.endMs)
+    if (!(endMs > startMs)) endMs = startMs + 12 * HOUR_MS
   }
   return { startMs, endMs }
 }
@@ -139,15 +179,21 @@ export function positionOf(
   }
 }
 
-/** Часовые отметки шкалы: подписи и их позиции */
-export function hourTicks(win: TimelineWindow, tz: string): { label: string; leftPct: number }[] {
+/**
+ * Часовые отметки шкалы: подписи и их позиции. `ts` — ключ отметки:
+ * в день перевода часов одна подпись встречается дважды.
+ */
+export function hourTicks(
+  win: TimelineWindow, tz: string,
+): { ts: number; label: string; leftPct: number }[] {
   const span = win.endMs - win.startMs
   if (span <= 0) return []
-  const out: { label: string; leftPct: number }[] = []
+  const out: { ts: number; label: string; leftPct: number }[] = []
   // Первая круглая точка не раньше начала окна
   const first = Math.ceil(win.startMs / HOUR_MS) * HOUR_MS
   for (let ts = first; ts <= win.endMs; ts += HOUR_MS) {
     out.push({
+      ts,
       label: hourLabelInZone(ts, tz),
       leftPct: ((ts - win.startMs) / span) * 100,
     })

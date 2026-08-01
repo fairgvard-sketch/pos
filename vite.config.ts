@@ -58,6 +58,22 @@ export default defineConfig(({ mode }) => {
           // грузится из кэша и не белеет. Данные Supabase — офлайн-очередь фазы 7.
           globPatterns: ['**/*.{js,css,html,svg,webmanifest,woff,woff2}'],
           navigateFallback: '/index.html',
+          /**
+           * Гостевые страницы идут в сеть, а не из precache.
+           *
+           * `/order/*` и `/reserve/*` отдаются с `frame-ancestors *`
+           * (vercel.json) — их встраивают в сайт ресторана и в превью
+           * кабинета. Закешированный же `/index.html` несёт
+           * `frame-ancestors 'self'`, и в браузере с установленным SW
+           * навигация внутри iframe получала именно его: Chrome
+           * блокировал кадр («refused to connect»). Заголовок ответа —
+           * часть контракта страницы, поэтому подменять её оболочкой
+           * из кэша здесь нельзя.
+           *
+           * Ассеты гостевой страницы остаются в precache, offline от
+           * этого не страдает: без сети меню всё равно нечем наполнить.
+           */
+          navigateFallbackDenylist: [/^\/order\//, /^\/reserve\//],
           cleanupOutdatedCaches: true,
         },
       }),

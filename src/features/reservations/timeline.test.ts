@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { normalizeSchedule } from './schedule'
 import {
-  blockState, buildRows, groupByZone, hourTicks, nowMarkerPct, occupancySummary,
-  positionOf, timelineWindow,
+  blockState, bookingsForDay, buildRows, dayBounds, groupByZone, hourTicks,
+  nowMarkerPct, occupancySummary, positionOf, timelineWindow,
   type TimelineBooking, type TimelineTable,
 } from './timeline'
 
@@ -61,6 +61,97 @@ describe('окно дня', () => {
     } as never)
     const win = timelineWindow(DATE, TZ, closed)
     expect(win.endMs).toBeGreaterThan(win.startMs)
+  })
+})
+
+describe('сутки не смешиваются', () => {
+  // Брони приходят с запасом в сутки назад — окно обязано их отфильтровать
+  const prevAt = (h: number, m = 0) => Date.UTC(2027, 2, 13, h - 2, m)
+  const nextAt = (h: number, m = 0) => Date.UTC(2027, 2, 15, h - 2, m)
+  const overnight = normalizeSchedule({
+    schedule: {
+      weekly: { '0': [['18:00', '02:00']] },
+      exceptions: {}, lead_min: 30, horizon_days: 30,
+    },
+  } as never)
+
+  it('границы дня — от полуночи до полуночи в зоне точки', () => {
+    const bounds = dayBounds(DATE, TZ, SCHEDULE)
+    expect(bounds.startMs).toBe(at(0))
+    expect(bounds.endMs).toBe(nextAt(0))
+  })
+
+  it('ночная смена продлевает границы дня за полночь', () => {
+    const bounds = dayBounds(DATE, TZ, overnight)
+    expect(bounds.endMs).toBe(nextAt(3, 30)) // 02:00 + 90 минут запаса
+  })
+
+  it('вчерашняя бронь не растягивает полотно на чужие сутки', () => {
+    const leaked = { ...booking('leaked', ['t1'], 0, 0), startMs: prevAt(14), endMs: prevAt(15, 30) }
+    const win = timelineWindow(DATE, TZ, SCHEDULE, [leaked])
+    expect(win.startMs).toBe(at(7, 30))
+    expect(win.endMs).toBe(at(21, 30))
+  })
+
+  it('вчерашняя бронь не попадает в строки таймлайна', () => {
+    const leaked = { ...booking('leaked', ['t1'], 0, 0), startMs: prevAt(14), endMs: prevAt(15, 30) }
+    const mine = booking('mine', ['t1'], 12, 13)
+    const win = timelineWindow(DATE, TZ, SCHEDULE, [leaked, mine])
+    const rows = buildRows([table('t1', '1')], [leaked, mine], win)
+    expect(rows[0].blocks.map((b) => b.booking.id)).toEqual(['mine'])
+  })
+
+  it('визит через полночь остаётся видимым и помечается обрезанным', () => {
+    const night = { ...booking('night', ['t1'], 0, 0), startMs: prevAt(23), endMs: at(2) }
+    const win = timelineWindow(DATE, TZ, SCHEDULE, [night])
+    expect(win.startMs).toBe(at(0))
+    const rows = buildRows([table('t1', '1')], [night], win)
+    expect(rows[0].blocks[0].clipsStart).toBe(true)
+    expect(rows[0].blocks[0].leftPct).toBe(0)
+  })
+
+  it('ночная смена показывает свой визит после полуночи целиком', () => {
+    const night = { ...booking('night', ['t1'], 0, 0), startMs: at(23), endMs: nextAt(1) }
+    const win = timelineWindow(DATE, TZ, overnight, [night])
+    const rows = buildRows([table('t1', '1')], [night], win)
+    expect(rows[0].blocks[0].clipsEnd).toBe(false)
+  })
+
+  it('длинный визит не выносит правую границу за сутки', () => {
+    const long = { ...booking('long', ['t1'], 0, 0), startMs: at(20), endMs: nextAt(4) }
+    const win = timelineWindow(DATE, TZ, SCHEDULE, [long])
+    expect(win.endMs).toBe(nextAt(0))
+    const rows = buildRows([table('t1', '1')], [long], win)
+    expect(rows[0].blocks[0].clipsEnd).toBe(true)
+  })
+
+  it('bookingsForDay отбирает по пересечению, а не по дате начала', () => {
+    const bounds = dayBounds(DATE, TZ, SCHEDULE)
+    const kept = bookingsForDay([
+      { ...booking('yesterday', ['t1'], 0, 0), startMs: prevAt(14), endMs: prevAt(15, 30) },
+      { ...booking('crossing', ['t1'], 0, 0), startMs: prevAt(23), endMs: at(1) },
+      booking('today', ['t1'], 12, 13),
+    ], bounds)
+    expect(kept.map((b) => b.id)).toEqual(['crossing', 'today'])
+  })
+
+  it('день перевода часов: границы 23 часа, ключи отметок уникальны', () => {
+    // Израиль: 26 марта 2027, 02:00 → 03:00
+    const dst = '2027-03-26'
+    const bounds = dayBounds(dst, TZ, null)
+    expect((bounds.endMs - bounds.startMs) / 3_600_000).toBe(23)
+    const ticks = hourTicks(bounds, TZ)
+    expect(new Set(ticks.map((t) => t.ts)).size).toBe(ticks.length)
+  })
+
+  it('день возврата на зимнее время: подписи повторяются, ключи — нет', () => {
+    // Израиль: 31 октября 2027, 02:00 → 01:00
+    const dst = '2027-10-31'
+    const bounds = dayBounds(dst, TZ, null)
+    expect((bounds.endMs - bounds.startMs) / 3_600_000).toBe(25)
+    const ticks = hourTicks(bounds, TZ)
+    expect(new Set(ticks.map((t) => t.label)).size).toBeLessThan(ticks.length)
+    expect(new Set(ticks.map((t) => t.ts)).size).toBe(ticks.length)
   })
 })
 

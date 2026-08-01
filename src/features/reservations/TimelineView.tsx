@@ -244,7 +244,7 @@ export default function TimelineView({
                 <div className="relative h-9" style={{ width: trackWidth }}>
                   {ticks.map((tick) => (
                     <span
-                      key={tick.label}
+                      key={tick.ts}
                       className="absolute top-2 -translate-x-1/2 rtl:translate-x-1/2 text-xs font-semibold text-gray-500 tabular-nums"
                       style={{ insetInlineStart: `${tick.leftPct}%` }}
                     >
@@ -287,7 +287,7 @@ export default function TimelineView({
                         {/* Часовая сетка */}
                         {ticks.map((tick) => (
                           <span
-                            key={tick.label}
+                            key={tick.ts}
                             className="absolute inset-y-0 w-px bg-gray-100"
                             style={{ insetInlineStart: `${tick.leftPct}%` }}
                             aria-hidden

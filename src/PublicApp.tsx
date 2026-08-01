@@ -1,4 +1,4 @@
-import { Suspense } from 'react'
+import { Suspense, useEffect } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import RouteErrorBoundary from './components/RouteErrorBoundary'
@@ -44,7 +44,32 @@ function PublicLandingPage() {
   )
 }
 
+/**
+ * Сигнал «страница поднялась» родительскому окну.
+ *
+ * Встраивание — заявленный сценарий (сайт ресторана, превью в кабинете),
+ * а у кросс-доменного iframe нет ни одного способа отличить отрисованную
+ * страницу от заблокированного кадра: браузер показывает свою ошибку, и
+ * снаружи она неотличима от пустой страницы. Одно сообщение без данных
+ * закрывает этот вопрос — родитель показывает честное состояние вместо
+ * молчаливого белого прямоугольника.
+ */
+function useEmbedReadySignal() {
+  useEffect(() => {
+    if (window.parent === window) return
+    try {
+      window.parent.postMessage(
+        { source: 'angle-public', type: 'ready', path: window.location.pathname },
+        '*'
+      )
+    } catch {
+      // Родитель недоступен — молча живём дальше, гостю это не мешает
+    }
+  }, [])
+}
+
 export default function PublicApp() {
+  useEmbedReadySignal()
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
