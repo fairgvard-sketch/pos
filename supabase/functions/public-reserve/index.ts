@@ -72,8 +72,15 @@ const KNOWN_ERRORS = [
   'not_confirmed',
 ]
 
+// Сначала САМЫЕ ДЛИННЫЕ коды: сопоставление идёт по подстроке, а
+// 'waitlist_disabled' и 'module_disabled' содержат внутри себя 'disabled'.
+// Без сортировки специфичная причина подменялась общей, и гость видел
+// «бронирование выключено» вместо «лист ожидания не ведётся» —
+// поймано живой проверкой на проде.
+const ERROR_CODES_BY_SPECIFICITY = [...KNOWN_ERRORS].sort((a, b) => b.length - a.length)
+
 function errorCode(message: string): string {
-  for (const code of KNOWN_ERRORS) if (message.includes(code)) return code
+  for (const code of ERROR_CODES_BY_SPECIFICITY) if (message.includes(code)) return code
   return 'unknown'
 }
 
