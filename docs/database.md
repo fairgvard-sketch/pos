@@ -689,7 +689,22 @@ ANGLE → Locations → Fiscal export.
   членство владельца/менеджера ИЛИ `require_staff_perm(session,'manage')`;
   `SECURITY INVOKER`, чтение под RLS `devices_select` (чужая org недостижима).
   Стеки ошибок (`client_errors`) СЮДА НЕ ВХОДЯТ — остаются операторским
-  каналом.
+  каналом;
+- `rename_device_web`, `set_device_archived_web` (130) — имя и архив из
+  кабинета. Архив ничего не отключает: строка, телеметрия и отчёты
+  остаются, действие обратимо;
+- `delete_device_web(device_id, staff_session)` (135) — окончательное
+  удаление терминала. Удаляет строку парка И учётку терминала: одного
+  DELETE мало, потому что `register_device` идемпотентна и касса с живой
+  сессией зарегистрируется заново. Учётка удаляется, только если это
+  действительно учётка терминала — на ней нет других устройств и она не
+  является членством в бэкофисе; иначе возвращается
+  `access_revoked: false` с причиной (`account_shared`,
+  `account_is_member`, `no_account`). Отказы: `not_archived` (сначала
+  архив), `outbox_pending` (в очереди неотправленные деньги),
+  `not_found` (чужая org). Заказы, смены и события журнала остаются:
+  `activity_events.device_id` обнуляется каскадом. Инварианты —
+  `supabase/tests/device_delete.test.sql`.
 
 ### Лента активности (098)
 
