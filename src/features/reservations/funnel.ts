@@ -66,13 +66,23 @@ function writeStore(key: string, value: string): void {
   }
 }
 
-/** Идентификатор вкладки. Переживает шаги флоу, но не закрытие вкладки. */
+/**
+ * Идентификатор вкладки. Переживает шаги флоу, но не закрытие вкладки.
+ *
+ * Запасной вариант в памяти обязателен. В приватном режиме и во
+ * встроенном кадре `sessionStorage` недоступен, и без него КАЖДЫЙ шаг
+ * получал свежий uuid: отчёт видел не одного гостя, прошедшего воронку,
+ * а пять разных, каждый ровно с одним шагом.
+ */
+let memorySession: string | null = null
+
 function sessionId(): string {
   const saved = readStore(SESSION_KEY)
   if (saved) return saved
-  const fresh = crypto.randomUUID()
-  writeStore(SESSION_KEY, fresh)
-  return fresh
+  if (memorySession) return memorySession
+  memorySession = crypto.randomUUID()
+  writeStore(SESSION_KEY, memorySession)
+  return memorySession
 }
 
 /**
@@ -149,8 +159,16 @@ export function trackReserveStep(
   })()
 }
 
-/** Новая заявка после завершённой — новая сессия и чистая воронка. */
+/**
+ * Новая заявка после завершённой — новая сессия и чистая воронка.
+ *
+ * Вызывающий ОБЯЗАН заново отправить вершину (`page_view`): сессия без
+ * неё попадает в отчёт с середины, и шаг «выбрал время» оказывается
+ * многочисленнее шага «открыл страницу» — воронка перестаёт сходиться.
+ * Здесь этого не сделать: точка не известна модулю.
+ */
 export function resetFunnelSession(): void {
   sent.clear()
-  writeStore(SESSION_KEY, crypto.randomUUID())
+  memorySession = crypto.randomUUID()
+  writeStore(SESSION_KEY, memorySession)
 }

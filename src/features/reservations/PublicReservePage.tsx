@@ -245,9 +245,14 @@ export default function PublicReservePage() {
   // которая ещё не приняла ни одного настоящего гостя.
   const accepting = info?.location.accepting === true
   const counted = accepting && !preview
+  // Вторая заявка начинает вторую воронку с новой сессией (см. startNew).
+  // Эпоха входит в зависимости шагов, иначе новая сессия попадала бы в
+  // отчёт без вершины: «выбрал время» насчитывалось бы больше, чем
+  // «открыл страницу», и доля выходила бы больше ста процентов.
+  const [funnelEpoch, setFunnelEpoch] = useState(0)
   useEffect(() => {
     if (counted) trackReserveStep(locId, 'page_view')
-  }, [counted, locId])
+  }, [counted, locId, funnelEpoch])
 
   // Спрос по дате и компании — и главное, НЕудовлетворённый спрос.
   // Считается и в instant-режиме (сервер знает занятость), и без него
@@ -262,7 +267,7 @@ export default function PublicReservePage() {
     if (freeCount === 0) {
       trackReserveStep(locId, 'no_slots', { party_size: guests, wanted_date: date })
     }
-  }, [counted, freeCount, locId, guests, date])
+  }, [counted, freeCount, locId, guests, date, funnelEpoch])
 
   // Сверки во время рендера (реком. React вместо эффекта):
   // 1) Выбранный день закрыт или уже прошёл — переходим на ближайший день,
@@ -302,8 +307,11 @@ export default function PublicReservePage() {
       setDetailsDraft({ name: '', phone: '', note: '' })
       setClientUuid(crypto.randomUUID())
       // Вторая бронь — вторая воронка: иначе она склеилась бы с первой и
-      // выглядела бы как один гость, дошедший до конца дважды.
+      // выглядела бы как один гость, дошедший до конца дважды. Эпоха
+      // заставляет новую сессию заново отправить вершину и доступность —
+      // без этого её шаги попадали в отчёт без начала.
       resetFunnelSession()
+      setFunnelEpoch((epoch) => epoch + 1)
     })
   }
 
