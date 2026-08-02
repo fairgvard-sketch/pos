@@ -39,8 +39,31 @@ export default defineConfig(({ mode }) => {
         targets: ['chrome >= 52'],
       }),
       VitePWA({
-        // SW обновляется сам, без диалогов — касса всегда на свежей версии
-        registerType: 'autoUpdate',
+        /**
+         * `prompt`, а не `autoUpdate`.
+         *
+         * В `autoUpdate` плагин (а) вставляет в SW `self.skipWaiting()`, и
+         * новый воркер активируется сам, снося чужой precache под работающей
+         * страницей, и (б) в клиентском хелпере не подключает `onNeedRefresh`
+         * вовсе, а `updateSW(true)` делает НИЧЕГО — см.
+         * `vite-plugin-pwa/dist/client/build/register.js`. То есть плашка
+         * обновления была недостижима, а единственный сценарий обновления —
+         * молчаливый `location.reload()` в произвольный момент, в том числе
+         * посреди оплаты.
+         *
+         * В `prompt` воркер ждёт, пока приложение не пришлёт `SKIP_WAITING`,
+         * старый precache остаётся целым, и момент перезагрузки выбирает
+         * кассир. Весь жизненный цикл — в `src/lib/swUpdate.ts`.
+         */
+        registerType: 'prompt',
+        /**
+         * Регистрация ровно одна — из приложения. Плагин иначе вставляет в
+         * index.html свой `registerSW.js` с голым `navigator.serviceWorker
+         * .register()`: он ничего не слушает и ни о чём не сообщает, а в
+         * POS-сборке (ветка PublicApp вырезается Rollup) он был ЕДИНСТВЕННЫМ
+         * кодом про SW — касса физически не могла узнать про новую версию.
+         */
+        injectRegister: null,
         includeAssets: [
           'favicon.svg',
           'icons.svg',
@@ -74,7 +97,16 @@ export default defineConfig(({ mode }) => {
            * этого не страдает: без сети меню всё равно нечем наполнить.
            */
           navigateFallbackDenylist: [/^\/order\//, /^\/reserve\//],
+          // Старые precache-хранилища сносятся при АКТИВАЦИИ нового воркера,
+          // то есть уже после подтверждения кассиром: работающая страница не
+          // теряет свои чанки на середине операции.
           cleanupOutdatedCaches: true,
+          // Ждём команды из приложения. Workbox в этом режиме добавляет в SW
+          // обработчик сообщения SKIP_WAITING (sw-template.js).
+          skipWaiting: false,
+          // Активировавшись, воркер сразу берёт управление вкладками — иначе
+          // после перезагрузки документ снова достался бы старому.
+          clientsClaim: true,
         },
       }),
     ],

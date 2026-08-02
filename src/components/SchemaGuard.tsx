@@ -1,7 +1,8 @@
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { checkSchemaVersion, MIN_SCHEMA_VERSION } from '../lib/schemaVersion'
 import { useLangStore } from '../store/langStore'
+import { useUpdateStore } from '../store/updateStore'
 import { t } from '../lib/i18n'
 
 // Блокирующий экран показывается только при живом ответе сервера (offline →
@@ -24,6 +25,16 @@ export default function SchemaGuard({ children }: { children: React.ReactNode })
     staleTime: Infinity,
     gcTime: Infinity,
   })
+
+  /**
+   * База впереди фронта — терминал не забрал сборку. Работу не
+   * останавливаем (в окне релиза так выглядят все кассы), но плашку
+   * обновления делаем обязательной: именно это состояние раньше
+   * проходило совершенно молча.
+   */
+  useEffect(() => {
+    if (data?.status === 'stale') useUpdateStore.getState().markBehindSchema()
+  }, [data?.status])
 
   if (data?.status !== 'outdated') return <>{children}</>
 

@@ -13,6 +13,9 @@ import { bridgeAvailable } from '../../../lib/androidBridge'
 import { orientationSupport } from '../../../lib/orientation'
 import { printCanvasWithRetry } from '../../receipt/printFailure'
 import { syncDeviceNow, useDeviceSyncStore } from '../../../lib/deviceSync'
+import { checkForUpdate } from '../../../lib/swUpdate'
+import { hardReload, updateDiagnosticsText } from '../../../lib/appUpdate'
+import { useUpdateStore } from '../../../store/updateStore'
 import { t } from '../../../lib/i18n'
 import { Group, InputRow, NavRow, SegmentRow, ToggleRow } from '../ui'
 import LangToggle from '../../../components/ui/LangToggle'
@@ -45,6 +48,80 @@ function chromeMajor(): number | null {
  * помечаем: работает, но каждая фича платит налог совместимости.
  */
 const WEBVIEW_FRESH_MAJOR = 80
+
+/**
+ * Обновления: состояние в одну строку для кассира и полная диагностика
+ * кнопкой для поддержки.
+ *
+ * Кассиру не нужны слова «service worker» — ему нужен ответ «свежая у меня
+ * версия или нет» и кнопка. Техническая строка (состояние SW, адрес
+ * скрипта, время последней проверки, UA) уходит в буфер обмена целиком:
+ * её отправляют в поддержку, а не читают с экрана.
+ */
+function UpdateRows({ lang }: { lang: 'ru' | 'he' }) {
+  const ready = useUpdateStore((s) => s.ready)
+  const behindSchema = useUpdateStore((s) => s.behindSchema)
+  const [checking, setChecking] = useState(false)
+  const [failed, setFailed] = useState(false)
+
+  const status = ready || behindSchema
+    ? t(lang, 'updateStatusReady')
+    : checking
+      ? t(lang, 'updateStatusChecking')
+      : failed
+        ? t(lang, 'updateStatusOffline')
+        : t(lang, 'updateStatusUpToDate')
+
+  async function check() {
+    setChecking(true)
+    setFailed(false)
+    const found = await checkForUpdate()
+    if (found) useUpdateStore.getState().markReady()
+    else setFailed(!navigator.onLine)
+    setChecking(false)
+  }
+
+  async function copyDiagnostics() {
+    const text = updateDiagnosticsText()
+    try {
+      await navigator.clipboard.writeText(text)
+      toast.success(t(lang, 'updateCopied'))
+    } catch {
+      // Clipboard API нет (старый WebView терминала) — показываем текст,
+      // его можно выделить руками. Молча терять диагностику нельзя.
+      window.prompt(t(lang, 'updateCopyDiagnostics'), text)
+    }
+  }
+
+  return (
+    <>
+      <InputRow label={t(lang, 'updateStatusTitle')}>
+        <div className="flex items-center gap-3">
+          <span className={`text-sm ${ready || behindSchema ? 'text-amber-600 font-semibold' : 'text-gray-500'}`}>
+            {status}
+          </span>
+          <button
+            onClick={() => void check()}
+            disabled={checking}
+            className="btn-ghost !py-2 !px-3 text-sm"
+          >
+            {t(lang, 'updateCheckNow')}
+          </button>
+        </div>
+      </InputRow>
+      <InputRow label={t(lang, 'updateForce')} hint={t(lang, 'updateForceHint')}>
+        <div className="flex items-center gap-3">
+          <button onClick={() => void copyDiagnostics()} className="btn-ghost !py-2 !px-3 text-sm">
+            {t(lang, 'updateCopyDiagnostics')}
+          </button>
+          <button onClick={() => void hardReload()} className="btn-ghost !py-2 !px-3 text-sm text-red-600">
+            {t(lang, 'updateForce')}
+          </button>
+        </div>
+      </InputRow>
+    </>
+  )
+}
 export default function DeviceSection({ location }: { location: Location | undefined }) {
   const lang = useLangStore((s) => s.lang)
   const navigate = useNavigate()
@@ -314,6 +391,7 @@ export default function DeviceSection({ location }: { location: Location | undef
         <InputRow label={t(lang, 'appVersion')}>
           <span className="text-sm text-gray-500 tabular-nums">{__APP_VERSION__}</span>
         </InputRow>
+        <UpdateRows lang={lang} />
         <InputRow
           label={t(lang, 'browserEngine')}
           hint={engine !== null && engine < WEBVIEW_FRESH_MAJOR ? t(lang, 'webviewOutdatedHint') : undefined}

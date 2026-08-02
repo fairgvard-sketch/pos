@@ -16,6 +16,7 @@ import PinLoginPage from './features/auth/PinLoginPage'
 import ProtectedRoute from './features/auth/ProtectedRoute'
 import SellPage from './features/sell/SellPage'
 import AutoLock from './components/AutoLock'
+import PosUpdateToast from './components/PosUpdateToast'
 import BrandSplash from './components/ui/BrandSplash'
 import RouteErrorBoundary from './components/RouteErrorBoundary'
 import SuspenseFallback from './components/ui/SuspenseFallback'
@@ -143,6 +144,9 @@ export default function App() {
     >
       <BrowserRouter>
         <AutoLock />
+        {/* Касса на терминале не закрывается неделями: без этой плашки
+            обновление не наступало вообще — см. lib/swUpdate.ts */}
+        <PosUpdateToast />
         {/* ErrorBoundary ловит краш lazy-роута (устаревший чанк после деплоя,
             runtime-краш страницы) — иначе всё дерево срывается в белый экран */}
         <RouteErrorBoundary>

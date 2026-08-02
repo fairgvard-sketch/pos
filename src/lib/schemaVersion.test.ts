@@ -7,7 +7,19 @@ describe('interpretSchemaResponse', () => {
       status: 'ok',
       version: MIN_SCHEMA_VERSION,
     })
-    expect(interpretSchemaResponse(MIN_SCHEMA_VERSION + 5, null).status).toBe('ok')
+  })
+
+  /**
+   * База впереди фронта = терминал не забрал сборку. Раньше это молча
+   * считалось 'ok', и касса месяцами крутила старый бандл — ровно тот
+   * случай, из-за которого чинился жизненный цикл SW.
+   */
+  it('база ушла вперёд — stale, а не ok', () => {
+    expect(interpretSchemaResponse(MIN_SCHEMA_VERSION + 1, null)).toEqual({
+      status: 'stale',
+      version: MIN_SCHEMA_VERSION + 1,
+    })
+    expect(interpretSchemaResponse(MIN_SCHEMA_VERSION + 5, null).status).toBe('stale')
   })
 
   it('отстающая база — outdated', () => {

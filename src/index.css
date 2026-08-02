@@ -3007,6 +3007,23 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   font-size: .75rem;
 }
 
+.app-update-toast__action:disabled {
+  opacity: .5;
+}
+
+/* Обязательное обновление: янтарный, а не чёрный — его нельзя закрыть,
+   и кассир должен видеть разницу с обычной плашкой. Кнопка касания
+   остаётся 44 px: это горячий поток. */
+.app-update-toast--required {
+  border-color: rgb(180 114 14 / 45%);
+  background: #7c4a03;
+}
+
+.app-update-toast--required .app-update-toast__action {
+  min-height: 44px;
+  padding-inline: 1.1rem;
+}
+
 /* ── Print (термолента 80мм) ──────────────────────────────── */
 @media print {
   @page { size: 80mm auto; margin: 0; }

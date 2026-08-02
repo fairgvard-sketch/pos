@@ -11,6 +11,18 @@ export const MIN_SCHEMA_VERSION = 134
 export type SchemaCheck =
   | { status: 'ok'; version: number }
   | { status: 'outdated'; version: number }
+  /**
+   * База УШЛА ВПЕРЁД: миграции применены, а этот бандл собран под более
+   * раннюю схему. По порядку релиза «миграции → функции → фронт» так
+   * выглядит терминал, который не забрал новую сборку.
+   *
+   * Не блокируем: между накаткой миграции и деплоем фронта проходят
+   * минуты, и в это окно так выглядят ВСЕ кассы — блокирующий экран
+   * останавливал бы торговлю на каждом релизе. Но и молчать нельзя:
+   * именно в этом состоянии касса месяцами крутила старый бандл и
+   * никто об этом не знал. Показываем обязательную плашку обновления.
+   */
+  | { status: 'stale'; version: number }
   /** Сеть/офлайн/неожиданный ответ — работу не блокируем, каталог отдаёт кэш */
   | { status: 'unknown' }
 
@@ -31,9 +43,10 @@ export function interpretSchemaResponse(
   if (data == null) return { status: 'unknown' }
   const version = typeof data === 'number' ? data : Number(data)
   if (!Number.isFinite(version)) return { status: 'unknown' }
-  return version >= MIN_SCHEMA_VERSION
-    ? { status: 'ok', version }
-    : { status: 'outdated', version }
+  if (version < MIN_SCHEMA_VERSION) return { status: 'outdated', version }
+  return version > MIN_SCHEMA_VERSION
+    ? { status: 'stale', version }
+    : { status: 'ok', version }
 }
 
 export async function checkSchemaVersion(): Promise<SchemaCheck> {
