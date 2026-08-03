@@ -489,13 +489,16 @@ ANGLE → Locations → Fiscal export.
 
 - `submit_online_order`, `get_online_order_status`, `accept_online_order`,
   `reject_online_order`, `set_online_pause`, `set_online_prep_range`;
-- `get_online_orders_web` (141) — рабочий стол заказов кабинета одним вызовом:
+- `get_online_orders_web` (141, правило долга уточнено в 142) — рабочий стол
+  заказов кабинета одним вызовом:
   разрезы `active` / `older` / `scheduled` / `all` в сутках ТОЧКИ, серверные
   фильтры, поиск (номер заявки, номер на кассе, гость, стол, заметка, позиции)
   и пагинация, счётчики вкладок, режим точки и `can_manage`. Право на действие
   считает сервер по тем же правилам, что и `set_online_order_status_web`, —
   кабинет больше не выводит его из списка продуктов и не показывает кнопок,
-  которые сервер отклонит;
+  которые сервер отклонит. Заявка с `order_id` (принятая на кассе) долгом не
+  считается: её судьба решена в момент приёмки, а `online_orders.status`
+  остаётся `accepted` навсегда — двигать его больше нечему;
 - `submit_reservation`, `reservation_availability`, `create_reservation`,
   `accept_reservation`, `reject_reservation`, `set_reservation_table`,
   `seat_reservation`, `cancel_reservation`, `guest_history`.
