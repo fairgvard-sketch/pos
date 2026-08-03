@@ -5,7 +5,7 @@
 -- поверх чужого визита должны падать, а не создавать двойную посадку.
 
 BEGIN;
-SELECT plan(19);
+SELECT plan(20);
 
 INSERT INTO orgs (id, name) VALUES
   ('c0000000-0000-4000-8000-000000000001', 'pgTAP host desk');
@@ -51,9 +51,19 @@ SELECT is(
   (SELECT status FROM reservations LIMIT 1),
   'confirmed', 'ручная бронь сразу подтверждена — хостес уже согласовал её с гостем');
 
+/*
+ * До 136 эта проверка требовала source='backoffice'. Так и было — и
+ * это была ошибка: `source` хранит КАНАЛ ПРИВОДА гостя (124), рядом с
+ * instagram и qr, а «backoffice» каналом не является. Путь переехал в
+ * `created_via` (136), а канал у телефонного звонка честно пустой.
+ */
+SELECT is(
+  (SELECT created_via FROM reservations LIMIT 1),
+  'backoffice', 'путь отделяет ручные визиты от гостевых');
+
 SELECT is(
   (SELECT source FROM reservations LIMIT 1),
-  'backoffice', 'источник отделяет ручные визиты от гостевых в воронке');
+  NULL, 'канал привода не засоряется словом «backoffice»');
 
 SELECT isnt(
   (SELECT table_id FROM reservations LIMIT 1),
