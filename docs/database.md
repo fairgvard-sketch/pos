@@ -177,7 +177,17 @@ supabase test db
 - `suppliers`, `supply_docs`, `supply_packagings` — поставщики, приходные
   накладные и фасовки (077). Накладная неизменяема, её `id` = `batch_id`
   строк журнала; `total` — снапшот суммы строк в агоротах;
-- `online_orders` — входящие гостевые заказы;
+- `online_orders` — входящие гостевые заказы. С 139 у заявки есть свой
+  человеческий номер `order_number`: сквозной в пределах точки, не
+  сбрасывается по дням (счётчик `online_order_counters`, выдача триггером
+  `trg_online_orders_number`, нумерация с 1001). Это не `orders.daily_number`:
+  тот отвечает на вопрос «какой ты сегодня у стойки» и обнуляется каждый день;
+- `online_order_events` (140) — append-only история переходов заявки: статус,
+  причина, автор (`guest`/`backoffice`/`pos`/`system`) и снимок его имени.
+  Пишется триггером `trg_online_orders_events`, поэтому покрывает и кассу, и
+  кабинет; клиенту доступно только чтение. У заявок, созданных до 140,
+  восстановимы лишь «получена» и последнее решение — промежуточных шагов у них
+  не записывалось;
 - `reservations` — заявки и подтверждённые брони;
 - `client_errors` — журнал клиентских ошибок телеметрии (074): дедупликация по
   `fingerprint` в пределах дня, retention 30 дней, закрыта для клиентов
@@ -479,6 +489,13 @@ ANGLE → Locations → Fiscal export.
 
 - `submit_online_order`, `get_online_order_status`, `accept_online_order`,
   `reject_online_order`, `set_online_pause`, `set_online_prep_range`;
+- `get_online_orders_web` (141) — рабочий стол заказов кабинета одним вызовом:
+  разрезы `active` / `older` / `scheduled` / `all` в сутках ТОЧКИ, серверные
+  фильтры, поиск (номер заявки, номер на кассе, гость, стол, заметка, позиции)
+  и пагинация, счётчики вкладок, режим точки и `can_manage`. Право на действие
+  считает сервер по тем же правилам, что и `set_online_order_status_web`, —
+  кабинет больше не выводит его из списка продуктов и не показывает кнопок,
+  которые сервер отклонит;
 - `submit_reservation`, `reservation_availability`, `create_reservation`,
   `accept_reservation`, `reject_reservation`, `set_reservation_table`,
   `seat_reservation`, `cancel_reservation`, `guest_history`.
