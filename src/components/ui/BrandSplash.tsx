@@ -6,8 +6,11 @@ import './BrandSplash.css'
  * Сплэш Angle. Хореография (~3 с, затем растворение):
  *  1. знак-стрелка влетает снизу-слева, закладывает мёртвую петлю
  *     (непрерывный оборот -360° вокруг точки над знаком) и приземляется;
- *  2. из-за знака выезжают буквы NGLE — складывается словограмма ANGLE,
- *     короткая выдержка — и экран уходит в fade.
+ *  2. из-за знака выезжает слово ANGLE целиком, короткая выдержка — и
+ *     экран уходит в fade.
+ *
+ * Слово пишется полностью, а не «NGLE» под знаком-стрелкой: знак читается
+ * как «A» только тем, кто уже знает бренд, а остальные видели «NGLE».
  *
  * По умолчанию исчезает сам после полного проигрыша (старт кассы).
  * Режим загрузки (онлайн-меню): передай done={false}, пока данные не готовы —
@@ -40,15 +43,19 @@ export default function BrandSplash({ done = true }: { done?: boolean }) {
 
   return (
     <div dir="ltr" aria-hidden="true" className={`brand-splash${leaving ? ' brand-splash--leave' : ''}`}>
-      <div className="brand-splash__group">
-        <span className="brand-splash__fly">
-          <span className="brand-splash__loop">
-            <img className="brand-splash__mark" src={logoUrl} alt="" draggable={false} />
+      {/* Сцена нужна ради масштаба на узком телефоне: у группы свой
+          transform под хореографию, и второй туда не положить */}
+      <div className="brand-splash__stage">
+        <div className="brand-splash__group">
+          <span className="brand-splash__fly">
+            <span className="brand-splash__loop">
+              <img className="brand-splash__mark" src={logoUrl} alt="" draggable={false} />
+            </span>
           </span>
-        </span>
-        <span className="brand-splash__clip">
-          <span className="brand-splash__text">NGLE</span>
-        </span>
+          <span className="brand-splash__clip">
+            <span className="brand-splash__text">ANGLE</span>
+          </span>
+        </div>
       </div>
     </div>
   )

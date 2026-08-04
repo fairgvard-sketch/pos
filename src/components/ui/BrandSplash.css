@@ -21,6 +21,17 @@
   pointer-events: none;
 }
 
+/* Слово из пяти букв шире прежнего «NGLE»: лок-ап (95 + 5 + 258 px) на узком
+   телефоне упирается в края экрана. Уменьшаем сцену целиком — у группы свой
+   transform под хореографию, второй туда не положить. */
+.brand-splash__stage {
+  display: block;
+}
+
+@media (max-width: 420px) {
+  .brand-splash__stage { transform: scale(0.72); }
+}
+
 /* Пока буквы спрятаны, группа сдвинута вправо — знак стоит по центру экрана;
    вместе с выездом букв группа уезжает в финальное центрированное положение */
 .brand-splash__group {
@@ -98,15 +109,18 @@
   100% { transform: translate(0, 0); }
 }
 
+/* Сдвиг — половина блока букв: пока они спрятаны, знак стоит по центру
+   экрана. Слово выросло с NGLE до ANGLE (Archivo Black 64px: 206 → 258px),
+   поэтому половина блока прибавила 26px: 118 → 144. */
 @keyframes bs-group {
-  from { transform: translateX(118px); }
+  from { transform: translateX(144px); }
   to { transform: translateX(0); }
 }
 
 /* Сдвиг в px, не в %: композитная анимация запекает % в пиксели по ширине
    fallback-шрифта, и после догрузки Archivo Black (блок шире) хвост «E»
-   вылезал из-под клипа. 240px покрывает NGLE любым шрифтом. */
+   вылезал из-под клипа. 300px покрывает ANGLE любым шрифтом. */
 @keyframes bs-text {
-  from { transform: translateX(-240px); }
+  from { transform: translateX(-300px); }
   to { transform: translateX(0); }
 }
