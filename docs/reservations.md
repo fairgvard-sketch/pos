@@ -105,6 +105,13 @@ instant-блок (`instant`/`combine`/`duration_min`/`buffer_min`), депози
 `src/features/settings/sections/ReservationsDetail.tsx` и
 `backoffice/src/QrChannels.jsx`.
 
+Вкладка брони в кабинете (август 2026) устроена как соседняя вкладка меню:
+компактная шапка канала со ссылкой и QR (`src=qr` — канал привода, Kassa
+124), пять раскрывающихся строк настроек и справа липкое превью
+**настоящей** страницы `/reserve/<slug>`. Кадр разрешён заголовком
+`frame-ancestors *` (`vercel.json`), а готовность подтверждает сам
+`PublicApp` сообщением `angle-public/ready` — тем же, что у меню.
+
 ## Веб-стол хостес без POS (102)
 
 Standalone-модуль ANGLE Reserve: полный цикл брони ведётся из кабинета
