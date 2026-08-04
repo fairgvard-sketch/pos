@@ -120,24 +120,22 @@ export default function HallPage() {
     return map
   }, [upcomingRes])
 
-  // Зоны работают как вкладки Square: на плане одновременно виден только
-  // выбранный участок (зал / терраса / бар). Старые данные без зон не теряем.
-  // «Все зоны» — тот же режим, что в кабинете: зал целиком, одним взглядом.
+  // Зоны — вкладки-фильтр: зал открывается целиком, а участок (терраса,
+  // бар) выбирают, когда нужно смотреть только на него. Старые данные без
+  // зон не теряем — у них своя вкладка.
   const [requestedZoneId, setRequestedZoneId] = useState('')
   const unassignedCount = tables.filter((table) => !table.zone_id).length
   const requestedZoneIsValid = zones.some((zone) => zone.id === requestedZoneId)
     || requestedZoneId === ALL_ZONES
     || (requestedZoneId === UNASSIGNED_ZONE && unassignedCount > 0)
-  const activeZoneId = requestedZoneIsValid
-    ? requestedZoneId
-    : zones[0]?.id ?? (unassignedCount > 0 ? UNASSIGNED_ZONE : '')
+  // По умолчанию — весь зал: бариста открывает экран, чтобы увидеть все
+  // столы сразу, а не участок, который система выбрала за него.
+  const activeZoneId = requestedZoneIsValid ? requestedZoneId : ALL_ZONES
   const visibleTables = activeZoneId === ALL_ZONES
     ? tables
     : activeZoneId === UNASSIGNED_ZONE
       ? tables.filter((table) => !table.zone_id)
-      : activeZoneId
-        ? tables.filter((table) => table.zone_id === activeZoneId)
-        : tables
+      : tables.filter((table) => table.zone_id === activeZoneId)
 
   // Раскладка на холсте: у неразмещённых столов (pos_x=null) — дефолтная
   // полоса внизу, чтобы их можно было увидеть и растащить в конструкторе.

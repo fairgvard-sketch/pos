@@ -393,7 +393,7 @@ export default function FloorPlanEditorPage() {
                 onPointerUp={endPointer}
                 onPointerCancel={endPointer}
                 onPointerDown={(e) => { if (e.target === e.currentTarget) setSelectedId(null) }}
-                className="floor-canvas touch-none"
+                className="floor-canvas floor-canvas--grid touch-none"
               >
                 {layout.map((box) => {
                   const tb = box.table

@@ -2785,11 +2785,16 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   /* ── План зала ───────────────────────────────────────── */
   /* Холст тот же, что в кабинете (ANGLE → Floor plan): пропорции 16/10 и
      проценты вместо пикселей, поэтому зал, расставленный там, на кассе
-     выглядит так же. Сетка тихая — помогает прицелиться, а не рисует
-     миллиметровку поверх зала. */
+     выглядит так же. */
   .floor-canvas {
     @apply relative w-full aspect-[16/10] rounded-2xl border border-gray-200
            bg-white overflow-hidden;
+  }
+
+  /* Сетка — принадлежность конструктора: она нужна, чтобы прицелиться при
+     расстановке. На рабочем экране зала двигать нечего, и разлиновка
+     остаётся шумом поверх единственного вопроса «какой стол свободен». */
+  .floor-canvas--grid {
     background-image:
       linear-gradient(to right, #eef0f2 1px, transparent 1px),
       linear-gradient(to bottom, #eef0f2 1px, transparent 1px);
