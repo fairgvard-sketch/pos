@@ -131,9 +131,11 @@ export default function TimelineView({
   const timelineTables = useMemo<TimelineTable[]>(() => tables.map((tb) => ({
     id: tb.id,
     label: tb.label,
-    seats: (tb as Table & { seats?: number }).seats ?? 2,
-    zoneId: (tb as Table & { zone_id?: string | null }).zone_id ?? null,
-    zoneName: (tb as Table & { zone?: { name?: string } | null }).zone?.name ?? null,
+    seats: tb.seats ?? 2,
+    zoneId: tb.zone_id ?? null,
+    // `tables.zone` — текстовый снимок названия зоны (066), а не объект:
+    // читая его как `zone.name`, полотно называло каждую зону «Без зоны»
+    zoneName: tb.zone ?? null,
     sortOrder: tb.sort_order ?? 0,
     blocked: !tb.is_active || tb.status === 'disabled',
   })), [tables])
@@ -214,7 +216,7 @@ export default function TimelineView({
             className="h-11 w-11 rounded-xl border border-gray-300 text-gray-700 active:scale-[0.97] transition-all"
             onClick={() => setDate((d) => shiftDate(d, -1))}
           >
-            <span className="rtl:hidden">‹</span><span className="hidden rtl:inline">›</span>
+            <Chevron flipped={isRtl} />
           </button>
           <button
             type="button"
@@ -233,7 +235,7 @@ export default function TimelineView({
             className="h-11 w-11 rounded-xl border border-gray-300 text-gray-700 active:scale-[0.97] transition-all"
             onClick={() => setDate((d) => shiftDate(d, 1))}
           >
-            <span className="rtl:hidden">›</span><span className="hidden rtl:inline">‹</span>
+            <Chevron flipped={!isRtl} />
           </button>
         </div>
 
@@ -467,6 +469,29 @@ export default function TimelineView({
         </div>
       )}
     </div>
+  )
+}
+
+/**
+ * Стрелка дня. Рисуется SVG, а не символом «‹»: у угловых кавычек включено
+ * bidi-зеркалирование, и в иврите браузер разворачивает глиф сам. Вместе с
+ * ручной подменой символа получалось два разворота, то есть стрелки внутрь.
+ * Направление задаётся здесь явно и от одного признака — раскладки.
+ */
+function Chevron({ flipped }: { flipped: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className={`w-5 h-5 mx-auto ${flipped ? 'rotate-180' : ''}`}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2.5}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M15 5l-7 7 7 7" />
+    </svg>
   )
 }
 
