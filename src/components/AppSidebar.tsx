@@ -70,6 +70,10 @@ export default function AppSidebar({ active }: { active: SidebarPage }) {
     return subscribeReservations(() => {
       qc.invalidateQueries({ queryKey: ['reservations'] })
       qc.invalidateQueries({ queryKey: ['reservations_today'] })
+      // Полотно и лента броней живут на своих ключах: бронь, заведённую с
+      // другого устройства, хостес обязан увидеть без перезагрузки
+      qc.invalidateQueries({ queryKey: ['reservation_timeline'] })
+      qc.invalidateQueries({ queryKey: ['reservation_list'] })
     })
   }, [qc, tablesMode])
   // Незапоздавшие новые заявки — правило секции «Новые» экрана броней.

@@ -38,6 +38,15 @@ export interface Reservation {
   arrived_at?: string | null
   /** Все столы визита, включая объединение (119) — источник для таймлайна */
   tables_link?: { table_id: string; is_primary: boolean }[]
+  /** Пожелание зоны как id (072) — когда вложенный объект zone не запрошен */
+  zone_id?: string | null
+  /**
+   * Путь заведения визита (136): кто нажал кнопку — гость, касса, кабинет
+   * или согласие из листа ожидания. null у броней, заведённых до 136.
+   */
+  created_via?: 'public' | 'pos' | 'backoffice' | 'waitlist' | null
+  /** Тестовая бронь запуска (126): настоящая, но не попадает в отчёты */
+  is_test?: boolean
 }
 
 /** Статусы, которые терминальны для веб-стола хостес (102) */
@@ -255,6 +264,37 @@ export async function fetchTimelineReservations(
     .limit(500)
   if (error) throw new Error(error.message)
   return data as unknown as Reservation[]
+}
+
+/** Сколько броней лента забирает за один заход */
+const RANGE_LIMIT = 500
+
+export interface ReservationRange {
+  rows: Reservation[]
+  /** Упёрлись в лимит: часть периода не показана, и об этом говорим вслух */
+  capped: boolean
+}
+
+/**
+ * Брони за отрезок времени — лента списка (день / ближайшие 7 / прошедшие 7).
+ *
+ * Отдельно от `fetchReservations`: тому нужны заявки и будущее, а ленте —
+ * произвольное окно, включая прошедшие дни. Столы приходят связью 119,
+ * поэтому зона визита считается по факту рассадки, а не по пожеланию.
+ */
+export async function fetchReservationsRange(
+  fromMs: number, toMs: number,
+): Promise<ReservationRange> {
+  const { data, error } = await supabase
+    .from('reservations')
+    .select(TIMELINE_SELECT)
+    .gte('reserved_at', new Date(fromMs).toISOString())
+    .lt('reserved_at', new Date(toMs).toISOString())
+    .order('reserved_at', { ascending: true })
+    .limit(RANGE_LIMIT)
+  if (error) throw new Error(error.message)
+  const rows = (data ?? []) as unknown as Reservation[]
+  return { rows, capped: rows.length >= RANGE_LIMIT }
 }
 
 /**

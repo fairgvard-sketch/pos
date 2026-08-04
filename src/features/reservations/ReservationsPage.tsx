@@ -5,7 +5,7 @@ import toast from 'react-hot-toast'
 import { useLangStore } from '../../store/langStore'
 import { useAuthStore } from '../../store/authStore'
 import { useCartStore } from '../../store/cartStore'
-import { t, formatDate, formatTime, formatElapsed, type Lang } from '../../lib/i18n'
+import { t, formatDate, formatTime, type Lang } from '../../lib/i18n'
 import { fetchTables } from '../tables/api'
 import { fetchCurrentLocation } from '../auth/api'
 import AppSidebar from '../../components/AppSidebar'
@@ -16,6 +16,7 @@ import {
   type Reservation, type HistoryPeriod,
 } from './api'
 import TimelineView from './TimelineView'
+import ReservationListView from './ReservationListView'
 import { TabSwitch, HistoryFilters } from '../../components/HistoryTabs'
 import type { Table } from '../../types'
 
@@ -75,9 +76,10 @@ export default function ReservationsPage() {
   const invalidateAll = () => {
     qc.invalidateQueries({ queryKey: ['reservations'] })
     qc.invalidateQueries({ queryKey: ['reservations_today'] })
-    // Таймлайн живёт на своём ключе: без этого действие из списка не
-    // отражалось бы на полотне до перезагрузки.
+    // Таймлайн и лента живут на своих ключах: без этого действие из окна
+    // брони не отражалось бы там до перезагрузки.
     qc.invalidateQueries({ queryKey: ['reservation_timeline'] })
+    qc.invalidateQueries({ queryKey: ['reservation_list'] })
   }
 
   // ── Подтвердить (пикер стола открыт) / сменить стол ──
@@ -132,7 +134,10 @@ export default function ReservationsPage() {
   })
 
   // ── Отклонить / отменить бронь (двухшагово + необязательная причина) ──
-  const [rejecting, setRejecting] = useState<string | null>(null)
+  // Форма живёт на уровне экрана: отменяют и с таймлайна, и из ленты, а
+  // раньше она была только внутри карточки списка — с полотна отмена
+  // молча ничего не показывала.
+  const [rejecting, setRejecting] = useState<Reservation | null>(null)
   const [rejectReason, setRejectReason] = useState('')
   const reject = useMutation({
     mutationFn: (r: Reservation) => rejectReservation(r.id, staff!.id, rejectReason.trim() || undefined),
@@ -144,32 +149,18 @@ export default function ReservationsPage() {
     onError: (e) => toast.error((e as Error).message),
   })
 
-  // Секции: прошедшее = визит был больше 2 часов назад.
-  // Будущие подтверждённые — группами по дню визита.
-  const { fresh, today, futureByDay, history } = useMemo(() => {
+  // Счётчик в шапке: подтверждённые визиты сегодня, которые ещё впереди
+  // (прошедшим считается визит старше двух часов).
+  const today = useMemo(() => {
     const passedTs = nowTs - 2 * 3600_000
     const now = new Date(nowTs)
-    const isPast = (r: Reservation) => new Date(r.reserved_at).getTime() < passedTs
-    const fresh = reservations.filter((r) => r.status === 'new' && !isPast(r))
-    const today = reservations.filter(
-      (r) => r.status === 'confirmed' && !isPast(r) && isSameDay(new Date(r.reserved_at), now)
-    )
-    const future = reservations.filter(
-      (r) => r.status === 'confirmed' && !isPast(r) && !isSameDay(new Date(r.reserved_at), now)
-    )
-    const history = reservations
-      .filter((r) => !fresh.includes(r) && !today.includes(r) && !future.includes(r))
-      .sort((a, b) => b.reserved_at.localeCompare(a.reserved_at))
-    const futureByDay = new Map<string, Reservation[]>()
-    for (const r of future) {
-      const key = dayLabel(r.reserved_at, lang)
-      const list = futureByDay.get(key)
-      if (list) list.push(r)
-      else futureByDay.set(key, [r])
-    }
-    return { fresh, today, futureByDay, history }
-  }, [reservations, nowTs, lang])
-  const [showHistory, setShowHistory] = useState(false)
+    return reservations.filter((r) => (
+      r.status === 'confirmed'
+      && new Date(r.reserved_at).getTime() >= passedTs
+      && isSameDay(new Date(r.reserved_at), now)
+    ))
+  }, [reservations, nowTs])
+
 
   return (
     <div dir={isRtl ? 'rtl' : 'ltr'} className="h-screen bg-[#eceef1] flex gap-3 p-3 overflow-hidden">
@@ -256,109 +247,13 @@ export default function ReservationsPage() {
               tz={location?.timezone || 'Asia/Jerusalem'}
               onOpen={setDetail}
             />
-          ) : reservations.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-center">
-              <p className="font-bold text-gray-900">{t(lang, 'resEmpty')}</p>
-              <p className="text-sm text-gray-500 mt-1">{t(lang, 'resEmptyHint')}</p>
-            </div>
           ) : (
-            <div className="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-6 items-start">
-              {fresh.length > 0 && (
-                <Section title={t(lang, 'resSectionNew')}>
-                  {fresh.map((r) => (
-                    <div key={r.id} className="card p-4 border-2 border-gray-900">
-                      <ReservationHead r={r} lang={lang} nowTs={nowTs} showDay />
-                      {rejecting === r.id ? (
-                        <RejectForm
-                          lang={lang}
-                          reason={rejectReason}
-                          setReason={setRejectReason}
-                          busy={reject.isPending}
-                          onCancel={() => { setRejecting(null); setRejectReason('') }}
-                          onConfirm={() => reject.mutate(r)}
-                        />
-                      ) : (
-                        <div className="flex gap-2 mt-3">
-                          <button className="btn-secondary h-12 px-6" onClick={() => setRejecting(r.id)}>
-                            {t(lang, 'resReject')}
-                          </button>
-                          <button className="btn-primary flex-1 h-12" onClick={() => setPicking({ r, mode: 'accept' })}>
-                            {t(lang, 'resAccept')}
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </Section>
-              )}
-
-              {today.length > 0 && (
-                <Section title={t(lang, 'resSectionToday')}>
-                  {today.map((r) => (
-                    <ConfirmedCard
-                      key={r.id} r={r} lang={lang} nowTs={nowTs}
-                      rejecting={rejecting === r.id}
-                      rejectReason={rejectReason} setRejectReason={setRejectReason}
-                      rejectBusy={reject.isPending}
-                      onStartReject={() => setRejecting(r.id)}
-                      onCancelReject={() => { setRejecting(null); setRejectReason('') }}
-                      onConfirmReject={() => reject.mutate(r)}
-                      onPickTable={() => setPicking({ r, mode: 'change' })}
-                      onSeat={() => seat.mutate(r)}
-                      seatBusy={seat.isPending}
-                    />
-                  ))}
-                </Section>
-              )}
-
-              {[...futureByDay.entries()].map(([day, list]) => (
-                <Section key={day} title={`${t(lang, 'resSectionFuture')} · ${day}`}>
-                  {list.map((r) => (
-                    <ConfirmedCard
-                      key={r.id} r={r} lang={lang} nowTs={nowTs}
-                      rejecting={rejecting === r.id}
-                      rejectReason={rejectReason} setRejectReason={setRejectReason}
-                      rejectBusy={reject.isPending}
-                      onStartReject={() => setRejecting(r.id)}
-                      onCancelReject={() => { setRejecting(null); setRejectReason('') }}
-                      onConfirmReject={() => reject.mutate(r)}
-                      onPickTable={() => setPicking({ r, mode: 'change' })}
-                    />
-                  ))}
-                </Section>
-              ))}
-
-              {history.length > 0 && (
-                <section>
-                  <button
-                    className="min-h-11 text-sm font-bold text-gray-500 uppercase tracking-wide mb-3 flex items-center gap-2"
-                    onClick={() => setShowHistory((v) => !v)}
-                  >
-                    {t(lang, 'resSectionHistory')} · {history.length}
-                    <span className="text-gray-500">{showHistory ? '▴' : '▾'}</span>
-                  </button>
-                  {showHistory && (
-                    <div className="space-y-3">
-                      {history.map((r) => (
-                        <div key={r.id} className="card p-4 flex items-center gap-3">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-baseline gap-2">
-                              <span className="font-bold tabular-nums text-gray-900">
-                                {dayLabel(r.reserved_at, lang)} {formatTime(r.reserved_at, lang)}
-                              </span>
-                              <span className="text-sm font-semibold text-gray-900 truncate">{r.customer_name}</span>
-                              <span className="text-xs text-gray-500 tabular-nums">{r.party_size} {t(lang, 'resGuestsShort')}</span>
-                            </div>
-                            {r.reject_reason && <div className="text-xs text-gray-500 mt-1">{r.reject_reason}</div>}
-                          </div>
-                          <HistoryBadge r={r} lang={lang} />
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </section>
-              )}
-            </div>
+            <ReservationListView
+              lang={lang}
+              tz={location?.timezone || 'Asia/Jerusalem'}
+              tables={tables}
+              onOpen={setDetail}
+            />
           )}
         </div>
       </main>
@@ -389,8 +284,35 @@ export default function ReservationsPage() {
           onTables={() => { setDetail(null); setPicking({ r: detail, mode: 'change' }) }}
           onArrive={() => { arrive.mutate(detail); setDetail(null) }}
           onSeat={() => { seat.mutate(detail); setDetail(null) }}
-          onReject={() => { setDetail(null); setRejecting(detail.id) }}
+          onReject={() => { setDetail(null); setRejecting(detail) }}
         />
+      )}
+
+      {/* Отказ по заявке и отмена подтверждённой брони — одна форма с
+          необязательной причиной: её увидит гость */}
+      {rejecting && (
+        <div
+          dir={isRtl ? 'rtl' : 'ltr'}
+          className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center p-4"
+          onClick={() => { setRejecting(null); setRejectReason('') }}
+        >
+          <div className="card w-full max-w-sm p-6" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-lg font-black text-gray-900">
+              {rejecting.status === 'new' ? t(lang, 'resReject') : t(lang, 'resCancelBooking')}
+            </h2>
+            <p className="text-sm text-gray-500 mt-1">
+              {rejecting.customer_name} · {formatTime(rejecting.reserved_at, lang)} · {rejecting.party_size} {t(lang, 'resGuestsShort')}
+            </p>
+            <RejectForm
+              lang={lang}
+              reason={rejectReason}
+              setReason={setRejectReason}
+              busy={reject.isPending}
+              onCancel={() => { setRejecting(null); setRejectReason('') }}
+              onConfirm={() => reject.mutate(rejecting)}
+            />
+          </div>
+        </div>
       )}
 
       {creating && location && staff && (
@@ -479,6 +401,9 @@ function BookingActionsSheet({
               {r.customer_phone}
             </a>
           )}
+          {/* Подсказка о госте (063/121) переехала сюда из карточек списка:
+              лента отвечает за отбор, окно брони — за подробности */}
+          <GuestBadge phone={r.customer_phone} currentId={r.id} lang={lang} />
           {r.note && <p className="text-sm text-gray-700 mt-2">{r.note}</p>}
         </div>
 
@@ -619,59 +544,8 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   )
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <section>
-      <h2 className="text-sm font-bold text-gray-500 uppercase tracking-wide mb-3">{title}</h2>
-      <div className="space-y-3">{children}</div>
-    </section>
-  )
-}
-
 function isSameDay(a: Date, b: Date): boolean {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
-}
-
-/** «пт, 18 июл.» — короткая дата дня визита */
-function dayLabel(iso: string, lang: Lang): string {
-  return new Date(iso).toLocaleDateString(lang === 'he' ? 'he-IL' : 'ru-RU', {
-    weekday: 'short', day: 'numeric', month: 'short',
-  })
-}
-
-/** «5 мин назад»; «только что» — без хвоста «назад» */
-function agoText(iso: string, nowTs: number, lang: Lang): string {
-  const s = formatElapsed(iso, nowTs, lang)
-  return s === t(lang, 'justNow') ? s : `${s} ${t(lang, 'ago')}`
-}
-
-/** Шапка карточки: время визита крупно, имя, телефон, гости, комментарий */
-function ReservationHead({ r, lang, nowTs, showDay }: {
-  r: Reservation; lang: Lang; nowTs: number; showDay?: boolean
-}) {
-  return (
-    <div className="min-w-0">
-      <div className="flex items-baseline gap-2 flex-wrap">
-        <span className="text-xl font-black tabular-nums text-gray-900">
-          {showDay && !isSameDay(new Date(r.reserved_at), new Date(nowTs)) && `${dayLabel(r.reserved_at, lang)} `}
-          {formatTime(r.reserved_at, lang)}
-        </span>
-        <span className="font-bold text-gray-900 truncate">{r.customer_name}</span>
-        <span className="badge-gray tabular-nums shrink-0">{r.party_size} {t(lang, 'resGuestsShort')}</span>
-        {r.zone && <span className="badge-gray shrink-0">{r.zone.name}</span>}
-        {r.table && <span className="badge-blue shrink-0">{t(lang, 'tableLabel')} {r.table.label}</span>}
-        {r.auto && <span className="badge-gray shrink-0">{t(lang, 'resAutoBadge')}</span>}
-      </div>
-      <div className="text-sm text-gray-500 mt-1">
-        <a href={`tel:${r.customer_phone}`} dir="ltr" className="tabular-nums underline decoration-gray-300">
-          {r.customer_phone}
-        </a>
-        {' '}· {agoText(r.created_at, nowTs, lang)}
-      </div>
-      <GuestBadge phone={r.customer_phone} currentId={r.id} lang={lang} />
-      {r.note && <div className="text-sm text-gray-700 mt-1">«{r.note}»</div>}
-    </div>
-  )
 }
 
 /**
@@ -748,53 +622,6 @@ function RejectForm({ lang, reason, setReason, busy, onCancel, onConfirm }: {
           {t(lang, 'resRejectConfirm')}
         </button>
       </div>
-    </div>
-  )
-}
-
-/** Подтверждённая бронь: стол можно сменить, бронь — отменить, гостя — посадить */
-function ConfirmedCard({ r, lang, nowTs, rejecting, rejectReason, setRejectReason, rejectBusy, onStartReject, onCancelReject, onConfirmReject, onPickTable, onSeat, seatBusy }: {
-  r: Reservation; lang: Lang; nowTs: number
-  rejecting: boolean; rejectReason: string; setRejectReason: (v: string) => void
-  rejectBusy: boolean
-  onStartReject: () => void; onCancelReject: () => void; onConfirmReject: () => void
-  onPickTable: () => void
-  /** Посадить гостя (только для секции «сегодня»); undefined — кнопки нет */
-  onSeat?: () => void
-  seatBusy?: boolean
-}) {
-  return (
-    <div className="card p-4">
-      <ReservationHead r={r} lang={lang} nowTs={nowTs} />
-      {r.order_id ? (
-        // Посажены (057): счётом дальше управляют из зала
-        <div className="mt-3">
-          <span className="badge-green">{t(lang, 'resSeatedBadge')}</span>
-        </div>
-      ) : rejecting ? (
-        <RejectForm
-          lang={lang}
-          reason={rejectReason}
-          setReason={setRejectReason}
-          busy={rejectBusy}
-          onCancel={onCancelReject}
-          onConfirm={onConfirmReject}
-        />
-      ) : (
-        <div className="flex gap-2 mt-3">
-          <button className="btn-secondary h-11 px-5" onClick={onStartReject}>
-            {t(lang, 'resCancelBooking')}
-          </button>
-          <button className="btn-secondary h-11 px-5" onClick={onPickTable}>
-            {r.table ? `${t(lang, 'tableLabel')} ${r.table.label}` : t(lang, 'resPickTable')}
-          </button>
-          {onSeat && r.table && (
-            <button className="btn-primary flex-1 h-11" disabled={seatBusy} onClick={onSeat}>
-              {t(lang, 'resSeatGuest')}
-            </button>
-          )}
-        </div>
-      )}
     </div>
   )
 }
