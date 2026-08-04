@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { normalizeSchedule } from './schedule'
 import {
-  blockState, bookingsForDay, buildRows, dayBounds, groupByZone, hourTicks,
+  blockState, bookingsForDay, buildRows, dayBounds, groupByZone, halfHourMarks, hourTicks,
   nowMarkerPct, occupancySummary, positionOf, timelineWindow,
   type TimelineBooking, type TimelineTable,
 } from './timeline'
@@ -36,7 +36,7 @@ function booking(
 ): TimelineBooking {
   return {
     id, tableIds, startMs: at(fromH), endMs: at(toH),
-    state: 'confirmed', guestName: 'Гость', partySize: 2,
+    state: 'confirmed', guestName: 'Гость', phone: '', partySize: 2,
     posSeated: false, zoneName: 'Зал', note: null, ...over,
   }
 }
@@ -189,6 +189,18 @@ describe('позиционирование', () => {
     const ticks = hourTicks({ startMs: at(8, 30), endMs: at(11) }, TZ)
     expect(ticks.map((t) => t.label)).toEqual(['09:00', '10:00', '11:00'])
     expect(ticks[0].leftPct).toBeGreaterThan(0)
+  })
+
+  it('получас размечает и полосу до первой часовой отметки', () => {
+    const window = { startMs: at(8, 30), endMs: at(11) }
+    const marks = halfHourMarks(hourTicks(window, TZ), window)
+    // 08:30 — начало окна (не отметка), дальше 09:30 и 10:30
+    expect(marks.map((m) => m.ts)).toEqual([at(9, 30), at(10, 30)])
+    expect(marks.every((m) => m.leftPct > 0 && m.leftPct < 100)).toBe(true)
+  })
+
+  it('без часовых отметок делений тоже нет', () => {
+    expect(halfHourMarks([], { startMs: at(8), endMs: at(9) })).toEqual([])
   })
 })
 

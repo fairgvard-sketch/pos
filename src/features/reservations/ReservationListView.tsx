@@ -74,25 +74,29 @@ export interface ReservationListViewProps {
   /** Часовой пояс точки: сутки ленты — её сутки, а не устройства */
   tz: string
   tables: Table[]
+  /** Поиск из шапки экрана — общий с полотном */
+  query?: string
   onOpen: (reservation: Reservation) => void
 }
 
-export default function ReservationListView({ lang, tz, tables, onOpen }: ReservationListViewProps) {
+export default function ReservationListView({
+  lang, tz, tables, query = '', onOpen,
+}: ReservationListViewProps) {
   const [rangeKey, setRangeKey] = useState<RangeKey>('day')
   const [state, setState] = useState<VisitState | ''>('')
   const [zone, setZone] = useState('')
   const [via, setVia] = useState<CreatedVia | ''>('')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
-  const [search, setSearch] = useState('')
-  const [searchQ, setSearchQ] = useState('')
   const [page, setPage] = useState(1)
 
-  // Ввод не перебирает список на каждую букву
-  useEffect(() => {
-    // Сузили отбор — третья страница могла исчезнуть; возвращаемся к первой
-    const id = setTimeout(() => { setSearchQ(search); setPage(1) }, 300)
-    return () => clearTimeout(id)
-  }, [search])
+  // Сузили отбор — третья страница могла исчезнуть; возвращаемся к первой.
+  // Правка состояния прямо в рендере, а не эффектом: так страница уже
+  // верна на первом же кадре после нового запроса.
+  const [prevQuery, setPrevQuery] = useState(query)
+  if (query !== prevQuery) {
+    setPrevQuery(query)
+    setPage(1)
+  }
 
   const range = RANGES.find((r) => r.key === rangeKey) ?? RANGES[0]
 
@@ -142,9 +146,9 @@ export default function ReservationListView({ lang, tz, tables, onOpen }: Reserv
     state: state || null,
     zone: zone || null,
     via: via || null,
-    query: searchQ,
+    query,
     zoneByTable,
-  }), sortDir), [rows, state, zone, via, searchQ, zoneByTable, sortDir])
+  }), sortDir), [rows, state, zone, via, query, zoneByTable, sortDir])
 
   const slice = paginate(visible, page, PAGE_SIZE)
   const groups = useMemo(() => groupByDay(slice.items, tz, todayStr), [slice.items, tz, todayStr])
@@ -156,7 +160,7 @@ export default function ReservationListView({ lang, tz, tables, onOpen }: Reserv
     [rows],
   )
 
-  const filtersOn = !!(state || zone || via || searchQ.trim())
+  const filtersOn = !!(state || zone || via || query.trim())
 
   const tablesOf = (r: Reservation) => {
     const labels = tableIdsOf(r).map((id) => tableById.get(id)?.label).filter(Boolean)
@@ -204,12 +208,6 @@ export default function ReservationListView({ lang, tz, tables, onOpen }: Reserv
           <option value="">{t(lang, 'rsvAnyOrigin')}</option>
           {VIA_KEYS.map((v) => <option key={v} value={v}>{t(lang, VIA_LABEL[v])}</option>)}
         </select>
-        <input
-          className="input w-auto min-w-[12rem] flex-1 max-w-xs"
-          placeholder={t(lang, 'historySearchPh')}
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
         {pendingCount > 0 && (
           <button
             type="button"

@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { t, type Lang } from '../../lib/i18n'
+import { t, type Lang, type TranslationKey } from '../../lib/i18n'
 import { normalizeSchedule, shiftDate, partsInZone } from './schedule'
 import {
-  blockState, buildRows, groupByZone, hourTicks, nowMarkerPct, occupancySummary,
-  timelineWindow,
+  blockState, buildRows, groupByZone, halfHourMarks, hourTicks, nowMarkerPct,
+  occupancySummary, timelineWindow,
   type BlockState, type PositionedBlock, type TimelineBooking, type TimelineTable,
 } from './timeline'
 import { fetchTimelineReservations, type Reservation } from './api'
@@ -42,6 +42,15 @@ function stateLabel(lang: Lang, state: BlockState): string {
   }
 }
 
+/** Легенда состояний: цвет — подсказка, подпись — то, что читают */
+const LEGEND: { state: BlockState | 'conflict'; dot: string; key: TranslationKey }[] = [
+  { state: 'pending', dot: 'bg-amber-400', key: 'rsvPendingShort' },
+  { state: 'confirmed', dot: 'bg-gray-900', key: 'resConfirmedBadge' },
+  { state: 'arrived', dot: 'bg-emerald-600', key: 'rsvSeatedShort' },
+  { state: 'done', dot: 'bg-gray-300', key: 'rsvDoneShort' },
+  { state: 'conflict', dot: 'ring-2 ring-red-500 bg-white', key: 'rsvConflict' },
+]
+
 export interface TimelineViewProps {
   lang: Lang
   isRtl: boolean
@@ -49,11 +58,13 @@ export interface TimelineViewProps {
   /** Настройки брони точки — из них берётся окно дня и часовой пояс */
   settings: { reservations?: unknown } | null
   tz: string
+  /** Поиск из шапки экрана: несовпавшие визиты гаснут, но остаются на месте */
+  query?: string
   onOpen: (reservation: Reservation) => void
 }
 
 export default function TimelineView({
-  lang, isRtl, tables, settings, tz, onOpen,
+  lang, isRtl, tables, settings, tz, query = '', onOpen,
 }: TimelineViewProps) {
   const [nowMs, setNowMs] = useState(() => Date.now())
   useEffect(() => {
@@ -84,7 +95,7 @@ export default function TimelineView({
     [date, tz, schedule]
   )
 
-  const { data: raw = [], isLoading } = useQuery({
+  const { data: raw = [], isLoading, isFetching, refetch } = useQuery({
     queryKey: ['reservation_timeline', date],
     queryFn: () => fetchTimelineReservations(baseWindow.startMs, baseWindow.endMs),
     staleTime: 15_000,
@@ -104,6 +115,7 @@ export default function TimelineView({
       endMs: start + (r.duration_min || 90) * 60_000,
       state: blockState(r.status, r.arrived_at ?? null, r.order_id),
       guestName: r.customer_name,
+      phone: r.customer_phone ?? '',
       partySize: r.party_size,
       posSeated: r.order_id != null,
       zoneName: r.zone?.name ?? null,
@@ -127,11 +139,40 @@ export default function TimelineView({
   })), [tables])
 
   const rows = useMemo(() => buildRows(timelineTables, bookings, win), [timelineTables, bookings, win])
-  const zones = useMemo(() => groupByZone(rows), [rows])
+
+  // Выключенный стол не часть текущей работы: пустыми строками он делал
+  // зал больше и свободнее, чем он есть. Строку сохраняем, только если на
+  // таком столе осталась бронь дня — её терять нельзя.
+  const operationalRows = useMemo(
+    () => rows.filter((row) => !row.table.blocked || row.blocks.length > 0),
+    [rows]
+  )
+  const hiddenTables = rows.length - operationalRows.length
+  const zones = useMemo(() => groupByZone(operationalRows), [operationalRows])
   const visibleZones = zoneFilter === null ? zones : zones.filter((z) => z.id === zoneFilter)
   const summary = useMemo(() => occupancySummary(rows, nowMs), [rows, nowMs])
 
+  // Поиск не убирает визиты с полотна: пропавший визит хостес считает
+  // несуществующим и зря звонит гостю. Несовпавшие гаснут, место суток
+  // остаётся видимым.
+  const needle = query.trim().toLowerCase()
+  const matchesQuery = useCallback((booking: TimelineBooking) => {
+    if (!needle) return true
+    return `${booking.guestName} ${booking.phone}`.toLowerCase().includes(needle)
+  }, [needle])
+  const found = useMemo(() => {
+    if (!needle) return null
+    const ids = new Set<string>()
+    for (const row of operationalRows) {
+      for (const block of row.blocks) {
+        if (matchesQuery(block.booking)) ids.add(block.booking.id)
+      }
+    }
+    return ids.size
+  }, [needle, matchesQuery, operationalRows])
+
   const ticks = useMemo(() => hourTicks(win, tz), [win, tz])
+  const halves = useMemo(() => halfHourMarks(ticks, win), [ticks, win])
   const markerPct = date === todayStr ? nowMarkerPct(nowMs, win) : null
   const trackWidth = Math.max(720, ((win.endMs - win.startMs) / 3_600_000) * HOUR_PX)
 
@@ -139,14 +180,28 @@ export default function TimelineView({
   // НЕ трогает: контейнер не перемонтируется, а эффект завязан на дату.
   const scrollRef = useRef<HTMLDivElement>(null)
   const scrolledFor = useRef<string | null>(null)
-  useEffect(() => {
-    if (scrolledFor.current === date) return
+  const scrollToNow = useCallback((smooth = true) => {
     const el = scrollRef.current
     if (!el || markerPct === null) return
+    const target = Math.max(0, (markerPct / 100) * trackWidth - el.clientWidth / 3)
+    // RTL: прокрутка идёт в отрицательную сторону — знак решает направление
+    el.scrollTo({ left: isRtl ? -target : target, behavior: smooth ? 'smooth' : 'auto' })
+  }, [markerPct, trackWidth, isRtl])
+
+  useEffect(() => {
+    if (scrolledFor.current === date) return
+    if (markerPct === null || !scrollRef.current) return
     scrolledFor.current = date
-    const target = (markerPct / 100) * trackWidth - el.clientWidth / 3
-    el.scrollLeft = isRtl ? -Math.max(0, target) : Math.max(0, target)
-  }, [date, markerPct, trackWidth, isRtl])
+    scrollToNow(false)
+  }, [date, markerPct, scrollToNow])
+
+  /** Пролистать полотно на треть экрана: сутки не листают по пикселю */
+  function pan(direction: 1 | -1) {
+    const el = scrollRef.current
+    if (!el) return
+    const step = Math.max(240, el.clientWidth * 0.72) * (isRtl ? -direction : direction)
+    el.scrollBy({ left: step, behavior: 'smooth' })
+  }
 
   return (
     <div className="flex flex-col gap-3">
@@ -226,6 +281,65 @@ export default function TimelineView({
         </div>
       </div>
 
+      {/* Легенда и навигация по суткам. Состояние всегда названо словом:
+          цвет — подсказка для тех, кто смотрит на экран целиком, а на
+          солнце и в спешке читают подпись. */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          {LEGEND.map((item) => (
+            <span key={item.state} className="flex items-center gap-1.5 text-xs text-gray-500">
+              <span className={`w-2.5 h-2.5 rounded-full ${item.dot}`} aria-hidden />
+              {t(lang, item.key)}
+            </span>
+          ))}
+        </div>
+
+        <div className="ms-auto flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => pan(-1)}
+            className="h-11 px-3 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-100 active:scale-[0.97]"
+          >
+            {t(lang, 'rsvEarlier')}
+          </button>
+          {markerPct !== null && (
+            <button
+              type="button"
+              onClick={() => scrollToNow()}
+              className="h-11 px-3 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-100 active:scale-[0.97]"
+            >
+              {t(lang, 'rsvNow')}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => pan(1)}
+            className="h-11 px-3 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-100 active:scale-[0.97]"
+          >
+            {t(lang, 'rsvLater')}
+          </button>
+          <button
+            type="button"
+            onClick={() => void refetch()}
+            disabled={isFetching}
+            className="h-11 px-3 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-100 active:scale-[0.97] disabled:opacity-40"
+          >
+            {t(lang, 'rsvRefresh')}
+          </button>
+        </div>
+      </div>
+
+      {(hiddenTables > 0 || found !== null) && (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500">
+          {found !== null && (
+            <span role="status">
+              {found === 0 ? t(lang, 'rsvSearchNone') : `${found} ${t(lang, 'rsvSearchMatches')}`}
+            </span>
+          )}
+          {hiddenTables > 0 && <span>{t(lang, 'rsvHiddenTables')}: {hiddenTables}</span>}
+        </div>
+      )}
+
       {isLoading && (
         <div className="py-10 text-center text-gray-500">{t(lang, 'loading')}</div>
       )}
@@ -251,6 +365,16 @@ export default function TimelineView({
                       {tick.label}
                     </span>
                   ))}
+                  {/* «Сейчас» подписано, а не только прочерчено: линия без
+                      подписи читается как чужая разметка */}
+                  {markerPct !== null && (
+                    <span
+                      className="absolute bottom-0 -translate-x-1/2 rtl:translate-x-1/2 rounded-md bg-blue-600 px-1.5 py-0.5 text-[10px] font-bold text-white"
+                      style={{ insetInlineStart: `${markerPct}%` }}
+                    >
+                      {t(lang, 'rsvNow')}
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -284,7 +408,16 @@ export default function TimelineView({
                         className={`relative h-14 ${row.table.blocked ? 'bg-gray-100' : ''}`}
                         style={{ width: trackWidth }}
                       >
-                        {/* Часовая сетка */}
+                        {/* Часовая сетка и получас — тише часа: он помогает
+                            прицелиться, а не читается как отметка времени */}
+                        {halves.map((mark) => (
+                          <span
+                            key={mark.ts}
+                            className="absolute inset-y-0 w-px bg-gray-50"
+                            style={{ insetInlineStart: `${mark.leftPct}%` }}
+                            aria-hidden
+                          />
+                        ))}
                         {ticks.map((tick) => (
                           <span
                             key={tick.ts}
@@ -302,7 +435,7 @@ export default function TimelineView({
 
                         {markerPct !== null && (
                           <span
-                            className="absolute inset-y-0 w-0.5 bg-red-500 z-10"
+                            className="absolute inset-y-0 w-0.5 bg-blue-600 z-10"
                             style={{ insetInlineStart: `${markerPct}%` }}
                             aria-hidden
                           />
@@ -313,6 +446,7 @@ export default function TimelineView({
                             key={block.booking.id}
                             lang={lang}
                             block={block}
+                            dimmed={!matchesQuery(block.booking)}
                             onOpen={() => {
                               const source = raw.find((r) => r.id === block.booking.id)
                               if (source) onOpen(source)
@@ -347,9 +481,11 @@ function Stat({ label, value, accent }: { label: string; value: string; accent?:
   )
 }
 
-function BookingBlock({ lang, block, onOpen }: {
+function BookingBlock({ lang, block, dimmed, onOpen }: {
   lang: Lang
   block: PositionedBlock
+  /** Не попал в поиск: гаснет, но остаётся на месте */
+  dimmed?: boolean
   onOpen: () => void
 }) {
   const b = block.booking
@@ -360,6 +496,7 @@ function BookingBlock({ lang, block, onOpen }: {
       title={`${b.guestName} · ${b.partySize}`}
       className={`absolute top-1.5 bottom-1.5 rounded-lg border px-2 text-start overflow-hidden
         active:scale-[0.99] transition-transform ${STATE_STYLE[b.state]}
+        ${dimmed ? 'opacity-30' : ''}
         ${block.conflict ? 'ring-2 ring-red-500 ring-offset-1' : ''}
         ${block.clipsStart ? 'rounded-s-none' : ''} ${block.clipsEnd ? 'rounded-e-none' : ''}`}
       style={{ insetInlineStart: `${block.leftPct}%`, width: `${block.widthPct}%`, minWidth: 44 }}

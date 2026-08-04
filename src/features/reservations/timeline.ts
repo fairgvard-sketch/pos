@@ -33,6 +33,8 @@ export interface TimelineBooking {
   endMs: number
   state: BlockState
   guestName: string
+  /** Телефон гостя — по нему ищут чаще, чем по имени (гость звонит) */
+  phone: string
   partySize: number
   /** Бронь посажена в POS-заказ — её ведёт касса */
   posSeated: boolean
@@ -210,6 +212,30 @@ function hourLabelInZone(ts: number, tz: string): string {
     const d = new Date(ts)
     return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
   }
+}
+
+/**
+ * Получасовые деления между часовыми отметками.
+ *
+ * Визит редко начинается ровно в час, и прицелиться взглядом «это в
+ * половине четвёртого» по одним часовым линиям нельзя. Деление рисуется
+ * тише часа: оно помогает мерить, а не читается как отметка времени.
+ */
+export function halfHourMarks(
+  ticks: { ts: number }[], win: TimelineWindow,
+): { ts: number; leftPct: number }[] {
+  const span = win.endMs - win.startMs
+  if (ticks.length === 0 || span <= 0) return []
+  const half = HOUR_MS / 2
+  const out: { ts: number; leftPct: number }[] = []
+  // Первое деление слева от первой отметки: начало окна редко приходится
+  // ровно на час, и полоса до него не должна остаться без разметки
+  for (const tick of [{ ts: ticks[0].ts - HOUR_MS }, ...ticks]) {
+    const ts = tick.ts + half
+    if (ts <= win.startMs || ts >= win.endMs) continue
+    out.push({ ts, leftPct: ((ts - win.startMs) / span) * 100 })
+  }
+  return out
 }
 
 /** Метка «сейчас» — null, если текущий момент вне окна дня */

@@ -56,6 +56,15 @@ export default function ReservationsPage() {
     return () => clearTimeout(id)
   }, [search])
 
+  // Поиск шапки для активной вкладки — один на полотно и ленту: гость
+  // звонит один раз, а не отдельно «в таймлайн» и отдельно «в список».
+  const [activeSearch, setActiveSearch] = useState('')
+  const [activeSearchQ, setActiveSearchQ] = useState('')
+  useEffect(() => {
+    const id = setTimeout(() => setActiveSearchQ(activeSearch), 300)
+    return () => clearTimeout(id)
+  }, [activeSearch])
+
   const { data: pastRes = [], isFetching: pastLoading } = useQuery({
     queryKey: ['reservation_history', period, searchQ],
     queryFn: () => fetchReservationHistory(period, searchQ),
@@ -196,9 +205,19 @@ export default function ReservationsPage() {
               <span className="badge-blue tabular-nums">{today.length} {t(lang, 'resTodayCount')}</span>
             )}
           </div>
-          <button className="btn-primary !py-2.5 !px-5" onClick={() => setCreating(true)}>
-            {t(lang, 'resNewBooking')}
-          </button>
+          <div className="flex items-center gap-3">
+            {tab === 'active' && (
+              <input
+                className="input w-64"
+                placeholder={t(lang, 'historySearchPh')}
+                value={activeSearch}
+                onChange={(e) => setActiveSearch(e.target.value)}
+              />
+            )}
+            <button className="btn-primary !py-2.5 !px-5 shrink-0" onClick={() => setCreating(true)}>
+              {t(lang, 'resNewBooking')}
+            </button>
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto p-6">
@@ -245,6 +264,7 @@ export default function ReservationsPage() {
               tables={tables}
               settings={(location?.settings as { reservations?: unknown }) ?? null}
               tz={location?.timezone || 'Asia/Jerusalem'}
+              query={activeSearchQ}
               onOpen={setDetail}
             />
           ) : (
@@ -252,6 +272,7 @@ export default function ReservationsPage() {
               lang={lang}
               tz={location?.timezone || 'Asia/Jerusalem'}
               tables={tables}
+              query={activeSearchQ}
               onOpen={setDetail}
             />
           )}
