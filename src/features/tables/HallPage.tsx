@@ -20,10 +20,12 @@ import LoadErrorState from '../../components/LoadErrorState'
 import { failedNoCache } from '../../lib/queryState'
 import ShiftGate from '../shift/ShiftGate'
 import TableActionSheet from './TableActionSheet'
+import { tableBoxStyle, withDefaultPositions } from './floorPlanUtils'
 
 /** Порог «стол сидит долго» (мин): до него жёлтая рамка, после — красная */
 const TABLE_WARN_MIN = 30
 const UNASSIGNED_ZONE = '__unassigned__'
+const ALL_ZONES = '__all__'
 
 /** Счётчик для уникального имени realtime-канала (см. useEffect ниже) */
 let hallChannelSeq = 0
@@ -120,22 +122,27 @@ export default function HallPage() {
 
   // Зоны работают как вкладки Square: на плане одновременно виден только
   // выбранный участок (зал / терраса / бар). Старые данные без зон не теряем.
+  // «Все зоны» — тот же режим, что в кабинете: зал целиком, одним взглядом.
   const [requestedZoneId, setRequestedZoneId] = useState('')
   const unassignedCount = tables.filter((table) => !table.zone_id).length
   const requestedZoneIsValid = zones.some((zone) => zone.id === requestedZoneId)
+    || requestedZoneId === ALL_ZONES
     || (requestedZoneId === UNASSIGNED_ZONE && unassignedCount > 0)
   const activeZoneId = requestedZoneIsValid
     ? requestedZoneId
     : zones[0]?.id ?? (unassignedCount > 0 ? UNASSIGNED_ZONE : '')
-  const visibleTables = activeZoneId === UNASSIGNED_ZONE
-    ? tables.filter((table) => !table.zone_id)
-    : activeZoneId
-      ? tables.filter((table) => table.zone_id === activeZoneId)
-      : tables
+  const visibleTables = activeZoneId === ALL_ZONES
+    ? tables
+    : activeZoneId === UNASSIGNED_ZONE
+      ? tables.filter((table) => !table.zone_id)
+      : activeZoneId
+        ? tables.filter((table) => table.zone_id === activeZoneId)
+        : tables
 
   // Раскладка на холсте: у неразмещённых столов (pos_x=null) — дефолтная
-  // сетка, чтобы их можно было увидеть и растащить. Размещённые — как есть.
-  const layout = useMemo(() => tablesWithLayout(visibleTables), [visibleTables])
+  // полоса внизу, чтобы их можно было увидеть и растащить в конструкторе.
+  // Размещённые — как есть, теми же координатами, что показывает кабинет.
+  const layout = useMemo(() => withDefaultPositions(visibleTables), [visibleTables])
 
   // Занятый стол, по которому открыто меню действий (долгий тап)
   const [actionTable, setActionTable] = useState<{ table: Table; occ: TableOccupancy } | null>(null)
@@ -271,6 +278,14 @@ export default function HallPage() {
 
         {modeOk && (zones.length > 1 || unassignedCount > 0) && (
           <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-1">
+            <button
+              onClick={() => setRequestedZoneId(ALL_ZONES)}
+              className={`h-11 px-4 rounded-xl text-sm font-bold whitespace-nowrap transition-colors active:scale-[0.97] ${
+                activeZoneId === ALL_ZONES ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              {t(lang, 'allZones')}
+            </button>
             {zones.map((zone) => (
               <button
                 key={zone.id}
@@ -320,70 +335,70 @@ export default function HallPage() {
             )}
           </div>
         ) : (
-          <>
-            {/* Холст плана: столы позиционируются в % от его размера */}
-            <div className="relative w-full aspect-[16/10] rounded-2xl">
-              {layout.map(({ table: tb, x: baseX, y: baseY }) => {
-                const x = baseX
-                const y = baseY
-                const occ = occupancyByTable.get(tb.id)
-                const busy = !!occ
-                const disabled = !busy && tb.status === 'disabled'
-                // Резерв: ручной флаг стола ИЛИ подтверждённая бронь в ближайшие 2ч
-                const upcomingAt = reservationByTable.get(tb.id)
-                const reserved = !busy && (tb.status === 'reserved' || !!upcomingAt)
-                // Возраст счёта красит стол: до 30 мин — жёлтый, дальше — красный
-                const ageMin = occ ? Math.floor((nowTs - new Date(occ.opened_at).getTime()) / 60000) : 0
-                const overdue = ageMin >= TABLE_WARN_MIN
-                const border = busy
-                  ? overdue ? 'border-red-500' : 'border-amber-400'
-                  : reserved
-                    ? 'border-blue-500'
-                    : disabled
-                      ? 'border-gray-200 opacity-50'
-                      : 'border-emerald-500 hover:border-emerald-600'
-                return (
-                  <button
-                    key={tb.id}
-                    onClick={() => {
-                      if (!disabled) openTable(tb.id, tb.label)
-                    }}
-                    onPointerDown={() => startHold(tb)}
-                    onPointerUp={cancelHold}
-                    onPointerLeave={cancelHold}
-                    onContextMenu={(e) => e.preventDefault()}
-                    style={{
-                      left: `${x}%`,
-                      top: `${y}%`,
-                      width: `${tb.width}%`,
-                      height: `${tb.height}%`,
-                      transform: 'translate(-50%, -50%)',
-                    }}
-                    className={`absolute border-2 bg-white p-2 flex flex-col items-center justify-center gap-0.5 select-none touch-none text-gray-900 transition-shadow ${
-                      tb.shape === 'circle' ? 'rounded-full' : 'rounded-2xl'
-                    } ${border} active:scale-[0.97]`}
-                  >
-                    <span className="text-xl font-black tabular-nums leading-none">{tb.label}</span>
-                    {/* Карточка чистая: только статус, детали — в окне стола (долгий тап) */}
-                    {busy ? (
-                      <span className={`text-[11px] font-semibold ${overdue ? 'text-red-500' : 'text-amber-600'}`}>
-                        {t(lang, 'tableBusy')} · {formatElapsed(occ!.opened_at, nowTs, lang)}
-                      </span>
-                    ) : reserved ? (
-                      <span className="text-[11px] font-semibold text-blue-500">
-                        {t(lang, 'tableReserved')}
-                        {upcomingAt && <> · {formatTime(upcomingAt, lang)}</>}
-                      </span>
-                    ) : disabled ? (
-                      <span className="text-[11px] text-gray-400">{t(lang, 'tableDisabled')}</span>
-                    ) : (
-                      <span className="text-[11px] text-emerald-600">{t(lang, 'tableFree')}</span>
-                    )}
-                  </button>
-                )
-              })}
-            </div>
-          </>
+          /* Холст плана: тот же, что в кабинете — столы стоят в % от его
+             размера, поэтому раскладка совпадает пиксель в пиксель */
+          <div className="floor-canvas">
+            {layout.map((box) => {
+              const tb = box.table
+              const occ = occupancyByTable.get(tb.id)
+              const busy = !!occ
+              const disabled = !busy && tb.status === 'disabled'
+              // Резерв: ручной флаг стола ИЛИ подтверждённая бронь в ближайшие 2ч
+              const upcomingAt = reservationByTable.get(tb.id)
+              const reserved = !busy && (tb.status === 'reserved' || !!upcomingAt)
+              // Возраст счёта красит стол: до 30 мин — жёлтый, дальше — красный
+              const ageMin = occ ? Math.floor((nowTs - new Date(occ.opened_at).getTime()) / 60000) : 0
+              const overdue = ageMin >= TABLE_WARN_MIN
+              const border = busy
+                ? overdue ? 'border-red-500' : 'border-amber-400'
+                : reserved
+                  ? 'border-blue-500'
+                  : disabled
+                    ? 'border-gray-300 text-gray-400'
+                    : 'border-emerald-500 hover:border-emerald-600'
+              return (
+                <button
+                  key={tb.id}
+                  onClick={() => {
+                    if (!disabled) openTable(tb.id, tb.label)
+                  }}
+                  onPointerDown={() => startHold(tb)}
+                  onPointerUp={cancelHold}
+                  onPointerLeave={cancelHold}
+                  onContextMenu={(e) => e.preventDefault()}
+                  style={tableBoxStyle(box)}
+                  className={`absolute min-w-11 min-h-11 border-2 bg-white p-2 flex flex-col items-center justify-center gap-0.5 select-none touch-none text-gray-900 transition-shadow ${
+                    tb.shape === 'circle' ? 'rounded-full' : 'rounded-2xl'
+                  } ${disabled ? 'floor-table-off border-dashed' : ''} ${border} active:scale-[0.97]`}
+                >
+                  {/* Вместимость — как на плане в кабинете: хостес выбирает
+                      стол по числу мест, а не по одному номеру */}
+                  <span className="absolute top-1 end-1.5 flex items-center gap-0.5 text-[10px] font-semibold text-gray-400 tabular-nums">
+                    <svg viewBox="0 0 16 16" className="w-2.5 h-2.5" fill="currentColor" aria-hidden>
+                      <path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm0 1.5c-2.8 0-5 1.4-5 3.2V14h10v-1.3c0-1.8-2.2-3.2-5-3.2Z" />
+                    </svg>
+                    {tb.seats}
+                  </span>
+                  <span className="text-xl font-black tabular-nums leading-none">{tb.label}</span>
+                  {/* Карточка чистая: только статус, детали — в окне стола (долгий тап) */}
+                  {busy ? (
+                    <span className={`text-[11px] font-semibold ${overdue ? 'text-red-500' : 'text-amber-600'}`}>
+                      {t(lang, 'tableBusy')} · {formatElapsed(occ!.opened_at, nowTs, lang)}
+                    </span>
+                  ) : reserved ? (
+                    <span className="text-[11px] font-semibold text-blue-500">
+                      {t(lang, 'tableReserved')}
+                      {upcomingAt && <> · {formatTime(upcomingAt, lang)}</>}
+                    </span>
+                  ) : disabled ? (
+                    <span className="text-[11px] text-gray-400">{t(lang, 'tableDisabled')}</span>
+                  ) : (
+                    <span className="text-[11px] text-emerald-600">{t(lang, 'tableFree')}</span>
+                  )}
+                </button>
+              )
+            })}
+          </div>
         )}
       </main>
 
@@ -436,24 +451,4 @@ export default function HallPage() {
 
     </div>
   )
-}
-
-/**
- * Позиции столов на холсте (%). Размещённые (pos_x!=null) — как есть.
- * Неразмещённые раскладываем дефолтной сеткой в свободные слоты, чтобы их
- * было видно и можно было растащить; при первом drag позиция сохранится.
- */
-function tablesWithLayout(tables: Table[]): { table: Table; x: number; y: number }[] {
-  const placed = tables.filter((t) => t.pos_x !== null && t.pos_y !== null)
-  const unplaced = tables.filter((t) => t.pos_x === null || t.pos_y === null)
-  const result = placed.map((t) => ({ table: t, x: t.pos_x!, y: t.pos_y! }))
-
-  // Сетка для неразмещённых: 6 колонок, шаг ~15%, старт от 10%/12%
-  const COLS = 6
-  unplaced.forEach((t, i) => {
-    const col = i % COLS
-    const row = Math.floor(i / COLS)
-    result.push({ table: t, x: 10 + col * 15, y: 12 + row * 20 })
-  })
-  return result
 }

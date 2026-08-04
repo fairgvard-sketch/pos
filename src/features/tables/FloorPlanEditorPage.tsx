@@ -29,9 +29,11 @@ import {
   updateTable,
 } from './api'
 import type { Table, TableShape, TableZone } from '../../types'
-import { nextTableLabel } from './floorPlanUtils'
+import { boxHeight, nextTableLabel, tableBoxStyle, withDefaultPositions } from './floorPlanUtils'
 
 const UNASSIGNED = '__unassigned__'
+/** Весь зал на одном холсте — так же, как в кабинете */
+const ALL_ZONES = '__all__'
 const SIZES = [
   { key: 'sm', width: 8, height: 8 },
   { key: 'md', width: 11, height: 11 },
@@ -45,6 +47,7 @@ type ResizeState = {
   cx: number
   cy: number
   axis: 'both' | 'x' | 'y'
+  shape: TableShape
 }
 
 type TableDraft = {
@@ -73,6 +76,7 @@ export default function FloorPlanEditorPage() {
   )
 
   const requestedZoneIsValid = zones.some((zone) => zone.id === requestedZoneId)
+    || requestedZoneId === ALL_ZONES
     || (requestedZoneId === UNASSIGNED && unassignedCount > 0)
   const activeZoneId = requestedZoneIsValid
     ? requestedZoneId
@@ -84,11 +88,15 @@ export default function FloorPlanEditorPage() {
   }
 
   const activeZone = zones.find((zone) => zone.id === activeZoneId)
+  // «Все зоны» — зал целиком: только так видно, что терраса не наехала на
+  // бар. Координаты у столов общие на точку, зоны их не разделяют.
   const visibleTables = useMemo(
-    () => tables.filter((tb) => activeZoneId === UNASSIGNED ? !tb.zone_id : tb.zone_id === activeZoneId),
+    () => tables.filter((tb) => activeZoneId === ALL_ZONES ? true
+      : activeZoneId === UNASSIGNED ? !tb.zone_id
+        : tb.zone_id === activeZoneId),
     [activeZoneId, tables],
   )
-  const layout = useMemo(() => tablesWithLayout(visibleTables), [visibleTables])
+  const layout = useMemo(() => withDefaultPositions(visibleTables), [visibleTables])
   const selected = tables.find((tb) => tb.id === selectedId) ?? null
 
   const canvasRef = useRef<HTMLDivElement | null>(null)
@@ -208,7 +216,13 @@ export default function FloorPlanEditorPage() {
     e.stopPropagation()
     setSelectedId(tb.id)
     ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
-    dragRef.current = { id: tb.id, x, y, width: tb.width, height: tb.height }
+    // Высота круга считается из ширины, поэтому в границы холста упирается
+    // именно она — иначе круглый стол наполовину уезжает за край
+    dragRef.current = {
+      id: tb.id, x, y,
+      width: tb.width,
+      height: boxHeight({ w: tb.width, h: tb.height, shape: tb.shape }),
+    }
     setDragId(tb.id)
   }
 
@@ -238,7 +252,7 @@ export default function FloorPlanEditorPage() {
     e.stopPropagation()
     setSelectedId(tb.id)
     ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
-    setResize({ id: tb.id, width: tb.width, height: tb.height, cx, cy, axis })
+    setResize({ id: tb.id, width: tb.width, height: tb.height, cx, cy, axis, shape: tb.shape })
   }
 
   function onResizeMove(e: React.PointerEvent) {
@@ -249,7 +263,11 @@ export default function FloorPlanEditorPage() {
     setResize((current) => current ? {
       ...current,
       width: current.axis === 'y' ? current.width : clamp(Math.abs(px - current.cx) * 2, 5, 30),
-      height: current.axis === 'x' ? current.height : clamp(Math.abs(py - current.cy) * 2, 5, 40),
+      // У круга высота производная от ширины: тянуть её отдельно значило бы
+      // обещать овал, которого план не покажет
+      height: current.shape === 'circle' || current.axis === 'x'
+        ? current.height
+        : clamp(Math.abs(py - current.cy) * 2, 5, 40),
     } : null)
   }
 
@@ -304,6 +322,20 @@ export default function FloorPlanEditorPage() {
               <span className="text-xs font-semibold text-gray-400 tabular-nums">{zones.length}</span>
             </div>
             <div className="space-y-1">
+              {/* Зал целиком: зоны — фильтр, а координаты у столов общие,
+                  и наложение терассы на бар видно только отсюда */}
+              {(zones.length > 1 || unassignedCount > 0) && (
+                <button
+                  onClick={() => selectZone(ALL_ZONES)}
+                  className={`w-full h-12 px-3 rounded-xl flex items-center gap-3 text-start transition-colors ${
+                    activeZoneId === ALL_ZONES ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${activeZoneId === ALL_ZONES ? 'bg-white' : 'bg-gray-300'}`} />
+                  <span className="flex-1 min-w-0 text-sm font-bold truncate">{t(lang, 'allZones')}</span>
+                  <span className={`text-xs tabular-nums ${activeZoneId === ALL_ZONES ? 'text-gray-300' : 'text-gray-500'}`}>{tables.length}</span>
+                </button>
+              )}
               <DndContext sensors={zoneSensors} collisionDetection={closestCenter} onDragEnd={handleZoneDragEnd}>
                 <SortableContext items={zones.map((zone) => zone.id)} strategy={verticalListSortingStrategy}>
                   {zones.map((zone) => (
@@ -344,85 +376,85 @@ export default function FloorPlanEditorPage() {
           <section className="flex-1 min-w-0 bg-gray-50 p-4 flex flex-col">
             <div className="h-10 flex items-center justify-between px-2 mb-2">
               <div>
-                <span className="text-sm font-bold text-gray-900">{activeZone?.name ?? t(lang, 'unassignedZone')}</span>
+                <span className="text-sm font-bold text-gray-900">
+                  {activeZoneId === ALL_ZONES ? t(lang, 'allZones') : activeZone?.name ?? t(lang, 'unassignedZone')}
+                </span>
                 <span className="text-xs text-gray-500 ms-2">{visibleTables.length} {t(lang, 'tablesCountSuffix')}</span>
               </div>
               <span className="text-xs text-gray-500">{t(lang, 'floorPlanDragHint')}</span>
             </div>
 
-            <div
-              ref={canvasRef}
-              onPointerMove={onPointerMove}
-              onPointerUp={endPointer}
-              onPointerCancel={endPointer}
-              onPointerDown={(e) => { if (e.target === e.currentTarget) setSelectedId(null) }}
-              className="relative flex-1 min-h-0 rounded-2xl border border-gray-200 bg-white overflow-hidden touch-none"
-              style={{
-                backgroundImage: 'radial-gradient(circle, #d1d5db 1px, transparent 1px)',
-                backgroundSize: '24px 24px',
-              }}
-            >
-              {layout.map(({ table: tb, x, y }) => {
-                const rz = resize?.id === tb.id ? resize : null
-                const width = rz?.width ?? tb.width
-                const height = rz?.height ?? tb.height
-                const selectedNow = selectedId === tb.id
-                const dragging = dragId === tb.id || !!rz
-                return (
-                  <button
-                    key={tb.id}
-                    ref={(el) => {
-                      if (el) tableEls.current.set(tb.id, el)
-                      else tableEls.current.delete(tb.id)
-                    }}
-                    onPointerDown={(e) => startDrag(e, tb, x, y)}
-                    style={{
-                      left: `${x}%`,
-                      top: `${y}%`,
-                      width: `${width}%`,
-                      height: `${height}%`,
-                      transform: 'translate(-50%, -50%)',
-                    }}
-                    className={`absolute min-w-[48px] min-h-[48px] border-2 bg-white flex items-center justify-center select-none touch-none text-gray-900 ${
-                      tb.shape === 'circle' ? 'rounded-full' : 'rounded-xl'
-                    } ${selectedNow ? 'border-gray-900 shadow-lg z-10' : 'border-gray-300 hover:border-gray-500'} ${
-                      dragging ? '' : 'transition-shadow'
-                    }`}
-                  >
-                    <span className="text-lg font-black tabular-nums truncate px-2">{tb.label}</span>
-                    {selectedNow && (
-                      <>
-                        <span
-                          onPointerDown={(e) => startResize(e, tb, x, y, 'x')}
-                          className="absolute top-1/2 -end-2 -translate-y-1/2 w-4 h-8 rounded-full bg-white border-2 border-gray-900 z-20"
-                        />
-                        <span
-                          onPointerDown={(e) => startResize(e, tb, x, y, 'y')}
-                          className="absolute -bottom-2 start-1/2 -translate-x-1/2 w-8 h-4 rounded-full bg-white border-2 border-gray-900 z-20"
-                        />
-                        <span
-                          onPointerDown={(e) => startResize(e, tb, x, y, 'both')}
-                          className="absolute -bottom-2 -end-2 w-5 h-5 rounded-full bg-white border-2 border-gray-900 z-20"
-                        />
-                      </>
-                    )}
-                  </button>
-                )
-              })}
+            {/* Холст той же геометрии, что зал и кабинет: что расставили
+                здесь, то бариста и хостес увидят один в один */}
+            <div className="flex-1 min-h-0 overflow-auto">
+              <div
+                ref={canvasRef}
+                onPointerMove={onPointerMove}
+                onPointerUp={endPointer}
+                onPointerCancel={endPointer}
+                onPointerDown={(e) => { if (e.target === e.currentTarget) setSelectedId(null) }}
+                className="floor-canvas touch-none"
+              >
+                {layout.map((box) => {
+                  const tb = box.table
+                  const { x, y } = box
+                  const rz = resize?.id === tb.id ? resize : null
+                  const selectedNow = selectedId === tb.id
+                  const dragging = dragId === tb.id || !!rz
+                  return (
+                    <button
+                      key={tb.id}
+                      ref={(el) => {
+                        if (el) tableEls.current.set(tb.id, el)
+                        else tableEls.current.delete(tb.id)
+                      }}
+                      onPointerDown={(e) => startDrag(e, tb, x, y)}
+                      style={tableBoxStyle({ ...box, w: rz?.width ?? box.w, h: rz?.height ?? box.h })}
+                      className={`absolute min-w-12 min-h-12 border-2 bg-white flex flex-col items-center justify-center gap-0.5 select-none touch-none text-gray-900 ${
+                        tb.shape === 'circle' ? 'rounded-full' : 'rounded-xl'
+                      } ${selectedNow ? 'border-gray-900 shadow-lg z-10' : 'border-gray-300 hover:border-gray-500'} ${
+                        dragging ? '' : 'transition-shadow'
+                      }`}
+                    >
+                      <span className="text-lg font-black tabular-nums truncate px-2 leading-none">{tb.label}</span>
+                      <span className="text-[10px] text-gray-500 tabular-nums leading-none">{tb.seats}</span>
+                      {selectedNow && (
+                        <>
+                          <span
+                            onPointerDown={(e) => startResize(e, tb, x, y, 'x')}
+                            className="absolute top-1/2 -end-2 -translate-y-1/2 w-4 h-8 rounded-full bg-white border-2 border-gray-900 z-20"
+                          />
+                          {/* Круг тянется только по ширине: высота у него производная */}
+                          {tb.shape !== 'circle' && (
+                            <span
+                              onPointerDown={(e) => startResize(e, tb, x, y, 'y')}
+                              className="absolute -bottom-2 start-1/2 -translate-x-1/2 w-8 h-4 rounded-full bg-white border-2 border-gray-900 z-20"
+                            />
+                          )}
+                          <span
+                            onPointerDown={(e) => startResize(e, tb, x, y, 'both')}
+                            className="absolute -bottom-2 -end-2 w-5 h-5 rounded-full bg-white border-2 border-gray-900 z-20"
+                          />
+                        </>
+                      )}
+                    </button>
+                  )
+                })}
 
-              {!loading && activeZoneId && visibleTables.length === 0 && (
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="text-center max-w-xs">
-                    <p className="font-bold text-gray-900">{t(lang, 'zoneEmpty')}</p>
-                    <p className="text-sm text-gray-500 mt-1">{t(lang, 'zoneEmptyHint')}</p>
-                    {activeZone && (
-                      <button onClick={() => addTable.mutate(activeZone)} className="btn-primary !py-2.5 !px-5 mt-4">
-                        {t(lang, 'addTable')}
-                      </button>
-                    )}
+                {!loading && activeZoneId && visibleTables.length === 0 && (
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="text-center max-w-xs">
+                      <p className="font-bold text-gray-900">{t(lang, 'zoneEmpty')}</p>
+                      <p className="text-sm text-gray-500 mt-1">{t(lang, 'zoneEmptyHint')}</p>
+                      {activeZone && (
+                        <button onClick={() => addTable.mutate(activeZone)} className="btn-primary !py-2.5 !px-5 mt-4">
+                          {t(lang, 'addTable')}
+                        </button>
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           </section>
 
@@ -454,6 +486,14 @@ export default function FloorPlanEditorPage() {
                 tableCount={visibleTables.length}
                 onDeleted={() => selectZone('')}
               />
+            ) : activeZoneId === ALL_ZONES ? (
+              <div>
+                <h2 className="text-lg font-black text-gray-900">{t(lang, 'allZones')}</h2>
+                <p className="text-xs text-gray-500 mt-1 mb-5">
+                  {zones.length} {t(lang, 'zonesTitle').toLocaleLowerCase()} · {tables.length} {t(lang, 'tablesCountSuffix')}
+                </p>
+                <p className="text-sm text-gray-500">{t(lang, 'floorPlanDragHint')}</p>
+              </div>
             ) : (
               <div className="h-full flex items-center justify-center text-center">
                 <div>
@@ -779,19 +819,6 @@ function nearestSize(width: number, height: number): (typeof SIZES)[number]['key
     const bestDistance = Math.abs(best.width - width) + Math.abs(best.height - height)
     return distance < bestDistance ? item : best
   }, SIZES[1]).key
-}
-
-function tablesWithLayout(tables: Table[]): { table: Table; x: number; y: number }[] {
-  const placed = tables.filter((table) => table.pos_x !== null && table.pos_y !== null)
-  const unplaced = tables.filter((table) => table.pos_x === null || table.pos_y === null)
-  const result = placed.map((table) => ({ table, x: table.pos_x!, y: table.pos_y! }))
-  const columns = 5
-  unplaced.forEach((table, index) => {
-    const col = index % columns
-    const row = Math.floor(index / columns)
-    result.push({ table, x: 12 + col * 19, y: 15 + row * 22 })
-  })
-  return result
 }
 
 function clamp(value: number, min: number, max: number): number {

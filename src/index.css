@@ -2781,6 +2781,27 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   .divider {
     @apply border-t border-gray-100;
   }
+
+  /* ── План зала ───────────────────────────────────────── */
+  /* Холст тот же, что в кабинете (ANGLE → Floor plan): пропорции 16/10 и
+     проценты вместо пикселей, поэтому зал, расставленный там, на кассе
+     выглядит так же. Сетка тихая — помогает прицелиться, а не рисует
+     миллиметровку поверх зала. */
+  .floor-canvas {
+    @apply relative w-full aspect-[16/10] rounded-2xl border border-gray-200
+           bg-white overflow-hidden;
+    background-image:
+      linear-gradient(to right, #eef0f2 1px, transparent 1px),
+      linear-gradient(to bottom, #eef0f2 1px, transparent 1px);
+    background-size: 5% 8%;
+  }
+
+  /* Стол вне обслуживания виден, но заштрихован: он остаётся частью зала,
+     и «его нет на плане» — неверный вывод. */
+  .floor-table-off {
+    background-image: repeating-linear-gradient(
+      45deg, #fff, #fff 6px, #f4f5f7 6px, #f4f5f7 12px);
+  }
 }
 
 /* ── Rise-in (появление строк корзины, оверлеев) ─────────── */
