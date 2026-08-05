@@ -66,7 +66,7 @@ export default function GuestsPage() {
               {isFetching ? t(lang, 'loading') : t(lang, 'guestNotFound')}
             </p>
           ) : (
-            <div className="space-y-2 max-w-3xl">
+            <div className="space-y-2">
               {guests.map((g) => (
                 <button
                   key={g.id}

@@ -233,7 +233,7 @@ export default function ReservationsPage() {
                   {pastLoading ? t(lang, 'loading') : t(lang, 'historyEmpty')}
                 </p>
               ) : (
-                <div className="space-y-2 max-w-3xl">
+                <div className="space-y-2">
                   {pastRes.map((r) => (
                     <div key={r.id} className="card p-4 flex items-center gap-3">
                       <div className="flex-1 min-w-0">

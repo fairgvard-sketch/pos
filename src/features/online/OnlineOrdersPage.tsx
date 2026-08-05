@@ -455,7 +455,7 @@ function HistoryPanel({
           {loading ? t(lang, 'loading') : t(lang, 'historyEmpty')}
         </p>
       ) : (
-        <div className="space-y-2 max-w-3xl">
+        <div className="space-y-2">
           {rows.map((o) => (
             <div key={o.id} className="card p-4 flex items-center gap-3">
               <div className="flex-1 min-w-0">
