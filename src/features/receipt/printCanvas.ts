@@ -658,6 +658,139 @@ export function renderTestPrintCanvas(
   return out
 }
 
+// ── Табель сотрудника ─────────────────────────────────────
+
+/** Один день табеля; строк больше одной, если день разбит перерывом */
+export interface TimesheetPrintDay {
+  /** Готовая дата DD.MM.YYYY — арифметику дат делает hours.ts */
+  date: string
+  /** Буква дня недели на иврите (א…ש) */
+  dow: string
+  rows: { range: string; hours: string }[]
+}
+
+export interface TimesheetPrintData {
+  staffName: string
+  /** Период DD.MM.YYYY — DD.MM.YYYY */
+  periodFrom: string
+  periodTo: string
+  days: TimesheetPrintDay[]
+  totalHours: string
+  daysCount: number
+  shiftsCount: number
+}
+
+/**
+ * Печатный табель сотрудника: строка на смену в формате
+ * «01.08.2026 א 07:00 - 15:00» — тот же вид, что на экране кассы.
+ *
+ * Колонки фиксированы и рисуются отдельными fillText: склеенная строка
+ * с ивритской буквой и латинскими цифрами переставляется двунаправленным
+ * алгоритмом, и дата уезжала бы в середину.
+ *
+ * Как и чек, печатается ТОЛЬКО на иврите — независимо от языка кассы:
+ * бумагу читает бухгалтер, а не кассир. На ленте 58 мм колонка часов
+ * снимается: четыре колонки в 384 px не помещаются, а сумма всё равно
+ * стоит в итоге.
+ */
+export function renderTimesheetCanvas(d: TimesheetPrintData, tape?: TapeWidth): HTMLCanvasElement {
+  const tapeMm = tape ?? currentTape()
+  const { W, MX, RIGHT, fs } = tapeLayout(tapeMm)
+  const F = (size: number, bold = false) => RAW_FONT(fs(size), bold)
+  const rowCount = d.days.reduce((s, day) => s + day.rows.length, 0)
+  const tall = document.createElement('canvas')
+  tall.width = W
+  tall.height = scratchHeight(700, rowCount, 40)
+  const ctx = tall.getContext('2d')!
+  ctx.fillStyle = '#fff'
+  ctx.fillRect(0, 0, W, tall.height)
+  ctx.fillStyle = '#000'
+
+  let y = 30
+  const center = (text: string, size: number, bold = false, gap = 8) => {
+    ctx.font = F(size, bold)
+    ctx.textAlign = 'center'
+    ctx.fillText(text, W / 2, y)
+    y += size + gap
+  }
+  const metaRow = (label: string, value: string, size = 26, bold = false) => {
+    ctx.font = F(size, bold)
+    ctx.textAlign = 'right'
+    ctx.fillText(label, RIGHT, y)
+    ctx.textAlign = 'left'
+    ctx.fillText(value, MX, y)
+    y += size + 8
+  }
+  const divider = () => {
+    ctx.save()
+    ctx.strokeStyle = '#000'
+    ctx.setLineDash([6, 6])
+    ctx.beginPath()
+    ctx.moveTo(MX, y - 8)
+    ctx.lineTo(RIGHT, y - 8)
+    ctx.stroke()
+    ctx.restore()
+    y += 16
+  }
+
+  center('דו"ח שעות עבודה', 32, true, 8)
+  center(d.staffName, 28, true, 6)
+  center(`${d.periodFrom} — ${d.periodTo}`, 24, false, 4)
+  divider()
+
+  // Колонки считаются от ширины знака: шрифт моноширинный, поэтому
+  // ширина даты предсказуема и на 58, и на 80 мм.
+  const ROW = 24
+  ctx.font = F(ROW)
+  const ch = ctx.measureText('0').width
+  const showHours = tapeMm === 80
+  const dowRight = RIGHT - ch * 11
+  const rangeLeft = showHours ? MX + ch * 6 : MX
+
+  for (const day of d.days) {
+    day.rows.forEach((row, i) => {
+      ctx.font = F(ROW)
+      if (i === 0) {
+        ctx.textAlign = 'right'
+        ctx.fillText(day.date, RIGHT, y)
+        ctx.fillText(day.dow, dowRight, y)
+      }
+      ctx.textAlign = 'left'
+      ctx.fillText(row.range, rangeLeft, y)
+      if (showHours) {
+        ctx.font = F(ROW, true)
+        ctx.fillText(row.hours, MX, y)
+      }
+      y += ROW + 10
+    })
+  }
+
+  if (d.days.length === 0) center('אין רישומי נוכחות', 24, false, 8)
+
+  y += 6
+  divider()
+  metaRow('ימי עבודה:', String(d.daysCount))
+  metaRow('משמרות:', String(d.shiftsCount))
+  metaRow('סה"כ שעות:', d.totalHours, 30, true)
+
+  divider()
+  const now = new Date()
+  center(
+    `הודפס ${now.toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' })} ${now.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}`,
+    20, false, 4
+  )
+  center('חתימת העובד/ת: ____________', 22, false, 4)
+
+  const out = document.createElement('canvas')
+  out.width = W
+  out.height = Math.min(tall.height, y + 24)
+  const octx = out.getContext('2d')!
+  octx.fillStyle = '#fff'
+  octx.fillRect(0, 0, out.width, out.height)
+  octx.drawImage(tall, 0, 0)
+  return out
+}
+
 // ── Тикет на кухню/бар ────────────────────────────────────
 
 export interface KitchenTicketLine {

@@ -6,6 +6,7 @@ import {
   renderZReportCanvas,
   renderTestPrintCanvas,
   renderQrFlyerCanvas,
+  renderTimesheetCanvas,
   type ZReportData,
 } from './printCanvas'
 import { useDeviceStore } from '../../store/deviceStore'
@@ -133,6 +134,45 @@ describe('renderRefundReceiptCanvas — высота по контенту', () 
     const short = renderRefundReceiptCanvas(baseRefund(1), undefined)
     const long = renderRefundReceiptCanvas(baseRefund(100), undefined)
     expect(long.height).toBeGreaterThan(short.height)
+  })
+})
+
+describe('renderTimesheetCanvas — табель за месяц', () => {
+  const mkTimesheet = (dayCount: number, rowsPerDay = 1) => ({
+    staffName: 'אנה',
+    periodFrom: '01.08.2026',
+    periodTo: '31.08.2026',
+    days: Array.from({ length: dayCount }, (_, i) => ({
+      date: `${String((i % 28) + 1).padStart(2, '0')}.08.2026`,
+      dow: 'א',
+      rows: Array.from({ length: rowsPerDay }, () => ({ range: '07:00 - 15:00', hours: '8:00' })),
+    })),
+    totalHours: '168:00',
+    daysCount: dayCount,
+    shiftsCount: dayCount * rowsPerDay,
+  })
+
+  it('месяц не обрезается: высота растёт с числом дней', () => {
+    const week = renderTimesheetCanvas(mkTimesheet(7), 80)
+    const month = renderTimesheetCanvas(mkTimesheet(31), 80)
+    expect(month.height).toBeGreaterThan(week.height)
+    expect(month.height).toBeLessThanOrEqual(20000)
+  })
+
+  it('день с перерывом даёт две строки и растит холст', () => {
+    const single = renderTimesheetCanvas(mkTimesheet(10), 80)
+    const split = renderTimesheetCanvas(mkTimesheet(10, 2), 80)
+    expect(split.height).toBeGreaterThan(single.height)
+  })
+
+  it('период без смен всё равно печатается (шапка и итог)', () => {
+    const empty = renderTimesheetCanvas(mkTimesheet(0), 80)
+    expect(empty.height).toBeGreaterThan(0)
+  })
+
+  it('ширина следует ленте устройства', () => {
+    expect(renderTimesheetCanvas(mkTimesheet(3), 58).width).toBe(384)
+    expect(renderTimesheetCanvas(mkTimesheet(3), 80).width).toBe(576)
   })
 })
 

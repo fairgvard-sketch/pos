@@ -1,15 +1,28 @@
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { saveTimeEntry, deleteTimeEntry, type TimeEntryRow } from './api'
+import { saveTimeEntry, deleteTimeEntry } from './api'
 import { useAuthStore } from '../../store/authStore'
 import { useLangStore } from '../../store/langStore'
 import { t } from '../../lib/i18n'
 
-/** Правим существующую запись либо добавляем смену сотруднику задним числом */
-type Target = { entry: TimeEntryRow } | { staffId: string; staffName: string }
+/**
+ * Минимум полей записи для правки. Один и тот же диалог открывают лента
+ * табеля (TimeEntryRow) и карточка сотрудника (StaffHoursEntry) — общий
+ * набор полей избавляет от второго такого же диалога.
+ */
+export interface EditableEntry {
+  id: string
+  staff_id: string
+  clock_in: string
+  clock_out: string | null
+  note: string | null
+}
 
-function isExisting(x: Target): x is { entry: TimeEntryRow } {
+/** Правим существующую запись либо добавляем смену сотруднику задним числом */
+type Target = { entry: EditableEntry; staffName: string } | { staffId: string; staffName: string }
+
+function isExisting(x: Target): x is { entry: EditableEntry; staffName: string } {
   return 'entry' in x
 }
 
@@ -48,7 +61,7 @@ export default function EntryEditSheet({ target, onClose }: Props) {
   const existing = isExisting(target)
 
   const entry = existing ? target.entry : null
-  const staffName = existing ? target.entry.staff_name : target.staffName
+  const staffName = target.staffName
 
   const [date, setDate] = useState(() => toDateInput(entry ? new Date(entry.clock_in) : new Date()))
   const [inTime, setInTime] = useState(() => (entry ? toTimeInput(new Date(entry.clock_in)) : ''))
@@ -59,6 +72,9 @@ export default function EntryEditSheet({ target, onClose }: Props) {
 
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ['timesheet'] })
+    // Карточка сотрудника читает отдельный отчёт (143) — её тоже освежаем,
+    // иначе исправленная смена осталась бы старой прямо под диалогом
+    qc.invalidateQueries({ queryKey: ['staffHours'] })
     toast.success(t(lang, 'tsSaved'))
     onClose()
   }

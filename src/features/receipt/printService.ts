@@ -1,5 +1,8 @@
 import { fetchReceipt, fetchRefundReceipt, type Receipt } from './api'
-import { renderReceiptCanvas, renderRefundReceiptCanvas, renderKitchenTicketCanvas, type KitchenTicketData } from './printCanvas'
+import {
+  renderReceiptCanvas, renderRefundReceiptCanvas, renderKitchenTicketCanvas, renderTimesheetCanvas,
+  type KitchenTicketData, type TimesheetPrintData,
+} from './printCanvas'
 import { hasSilentPrintPath } from '../../lib/escpos'
 import { printCanvasWithRetry } from './printFailure'
 import type { Location } from '../../types'
@@ -73,6 +76,20 @@ export async function autoPrintRefundReceipt(
       () => renderRefundReceiptCanvas(receipt, location),
       allowRawbt,
     )
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Печать табеля сотрудника за период (кнопка, не автопечать). Тихий путь —
+ * мост APK / RawBT; если его нет, возвращает false, и экран уходит в
+ * браузерный диалог по .receipt-print, как X/Z-отчёт.
+ */
+export async function printTimesheet(data: TimesheetPrintData, allowRawbt: boolean): Promise<boolean> {
+  try {
+    if (!hasSilentPrintPath(allowRawbt)) return false
+    return await printCanvasWithRetry(() => renderTimesheetCanvas(data), allowRawbt)
   } catch {
     return false
   }

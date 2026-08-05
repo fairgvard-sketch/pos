@@ -1,4 +1,5 @@
 import { supabase } from '../../lib/supabase'
+import { currentStaffToken } from '../../store/authStore'
 import type { Role } from '../../types'
 
 /**
@@ -60,10 +61,79 @@ export async function fetchTimesheetReport(from: Date, to: Date): Promise<Timesh
   return data as TimesheetReport
 }
 
+// ── Часы по дням (143) ──────────────────────────────────────
+
+/** Одна смена в отчёте по часам. День и день недели считает сервер. */
+export interface StaffHoursEntry {
+  id: string
+  /** YYYY-MM-DD — календарный день НАЧАЛА смены в поясе точки */
+  day: string
+  /** 0 = воскресенье (א) … 6 = суббота (ש) */
+  dow: number
+  clock_in: string
+  clock_out: string | null
+  seconds: number
+  is_open: boolean
+  note: string | null
+  edited_at: string | null
+  edited_by_name: string | null
+  location_id: string
+  location_name: string | null
+}
+
+/** Сотрудник с его сменами за период */
+export interface StaffHours {
+  staff_id: string
+  name: string
+  role: Role
+  is_active: boolean
+  seconds: number
+  days: number
+  shifts: number
+  has_open: boolean
+  entries: StaffHoursEntry[]
+}
+
+export interface StaffHoursReport {
+  scope: { from: string; to: string; tz: string; location_ids: string[] | null }
+  staff: StaffHours[]
+  totals: { seconds: number; shifts: number; days: number; staff: number }
+}
+
+/** YYYY-MM-DD в локальном поясе (toISOString сдвинул бы дату) */
+export function toDateKey(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+}
+
+/**
+ * Часы за период по дням (143). Границы — КАЛЕНДАРНЫЕ даты включительно:
+ * сервер сам режет сутки по поясу точки, поэтому ночная смена не уезжает
+ * на соседний день и печать сходится с экраном.
+ */
+export async function fetchStaffHours(params: {
+  from: Date
+  to: Date
+  staffIds?: string[]
+  locationIds?: string[]
+  tz?: string
+}): Promise<StaffHoursReport> {
+  const { data, error } = await supabase.rpc('staff_hours_report', {
+    p_from: toDateKey(params.from),
+    p_to: toDateKey(params.to),
+    p_tz: params.tz ?? 'Asia/Jerusalem',
+    p_staff_ids: params.staffIds ?? null,
+    p_location_ids: params.locationIds ?? null,
+    p_staff_session: currentStaffToken(),
+  })
+  if (error) throw new Error(error.message)
+  return data as StaffHoursReport
+}
+
 /**
  * Правка табеля менеджером (027): добавить смену задним числом
  * (entryId = null) или исправить время существующей. actorId — кто правит;
- * сервер сверяет роль manager/owner.
+ * право сверяется по manage-сессии (143), actorId остаётся автором в аудите.
  */
 export async function saveTimeEntry(params: {
   entryId: string | null
@@ -80,6 +150,7 @@ export async function saveTimeEntry(params: {
     p_clock_out: params.clockOut ? params.clockOut.toISOString() : null,
     p_actor_id: params.actorId,
     p_note: params.note ?? null,
+    p_staff_session: currentStaffToken(),
   })
   if (error) throw new Error(error.message)
 }
@@ -116,6 +187,7 @@ export async function deleteTimeEntry(entryId: string, actorId: string): Promise
   const { error } = await supabase.rpc('delete_time_entry', {
     p_entry_id: entryId,
     p_actor_id: actorId,
+    p_staff_session: currentStaffToken(),
   })
   if (error) throw new Error(error.message)
 }

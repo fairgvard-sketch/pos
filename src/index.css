@@ -3050,6 +3050,13 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   padding-inline: 1.1rem;
 }
 
+/* Источник браузерной печати (табель): на экране его нет, в печать уходит
+   как .receipt-print. Нужен, когда тихого пути к принтеру нет — например,
+   табель печатают из браузера, а не с терминала. */
+@media screen {
+  .print-source { display: none; }
+}
+
 /* ── Print (термолента 80мм) ──────────────────────────────── */
 @media print {
   @page { size: 80mm auto; margin: 0; }

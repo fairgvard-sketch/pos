@@ -160,7 +160,9 @@ supabase test db
 - `shifts`, `cash_movements`, `z_counters` — смены и касса;
 - `table_zones` — зоны плана зала и их порядок;
 - `tables` — столы, ссылка на зону, координаты, статус, вместимость и объединяемость;
-- `time_entries` — табель;
+- `time_entries` — табель. Записи не удаляются: «удалить» = `deleted_at`,
+  правка помечается `edited_at` и автором — `edited_by` (кассовый путь) или
+  `edited_by_user` (правка из кабинета веб-аккаунтом без staff-строки, 143);
 - `guests`, `loyalty_events` — клиентская база и лояльность. С 131 у профиля
   есть три состояния: живой, объединённый (`merged_into`, `merged_at`) и
   стёртый по просьбе клиента (`anonymized_at`). Объединённый профиль
@@ -450,6 +452,14 @@ capability (что технически разрешено), entitlement (что
 - `open_shift`, `current_shift`, `shift_report`, `close_shift`;
 - `add_cash_movement`;
 - `punch_by_pin`, `clock_out`, `save_time_entry`, `time_entries_report`;
+- `staff_hours_report` (143) — часы по дням за КАЛЕНДАРНЫЙ период. День и
+  день недели считает сервер в часовом поясе точки (`p_tz`), а не браузер:
+  ночная смена принадлежит дню прихода, и распечатка кассы сходится с
+  таблицей кабинета. Фильтры по сотрудникам и точкам, гейт — право `manage`
+  (веб-владелец кабинета — по членству 088). `save_time_entry` и
+  `delete_time_entry` с 143 пускают кабинет тем же гейтом
+  (`require_backoffice_or_staff`), принимают точку параметром и пишут автора
+  правки в `edited_by` (касса) либо `edited_by_user` (веб-аккаунт);
 - `sales_report`.
 
 ### Склад

@@ -7,7 +7,8 @@ import { useLangStore } from '../../store/langStore'
 import { t, type Lang } from '../../lib/i18n'
 import { useNetStore } from '../../lib/offline/net'
 import AppSidebar from '../../components/AppSidebar'
-import EntryEditSheet from './EntryEditSheet'
+import EntryEditSheet, { type EditableEntry } from './EntryEditSheet'
+import StaffHoursSheet from './StaffHoursSheet'
 
 type Period = 'today' | 'week' | 'month' | 'custom'
 const PIN_LENGTH = 4
@@ -175,8 +176,15 @@ export default function TimesheetPage() {
 
   // Правка менеджером: существующая запись или новая смена сотрудника
   const [editTarget, setEditTarget] = useState<
-    { entry: TimeEntryRow } | { staffId: string; staffName: string } | null
+    { entry: EditableEntry; staffName: string } | { staffId: string; staffName: string } | null
   >(null)
+
+  /**
+   * Карточка часов сотрудника (143). Открывается только менеджеру: отчёт по
+   * дням — зарплатные данные, сервер требует право manage, и барista получил
+   * бы отказ вместо экрана.
+   */
+  const [card, setCard] = useState<{ staffId: string; staffName: string } | null>(null)
 
   return (
     <div dir={isRtl ? 'rtl' : 'ltr'} className="h-screen bg-[#eceef1] flex gap-3 p-3 overflow-hidden">
@@ -309,6 +317,15 @@ export default function TimesheetPage() {
                             </span>
                           </button>
 
+                          {/* Карточка часов: месяц по дням, печать и выгрузка */}
+                          {isManager && (
+                            <button
+                              onClick={() => setCard({ staffId: row.staff_id, staffName: row.name })}
+                              className="w-full border-t border-gray-100 py-2.5 text-sm font-semibold text-gray-400 hover:text-gray-900 hover:bg-gray-50 text-start px-4">
+                              {t(lang, 'tsCard')} →
+                            </button>
+                          )}
+
                           {isOpen && detail && (
                             <div className="border-t border-gray-100 px-4 py-2 divide-y divide-gray-50">
                               {detail.entries.map((e) => (
@@ -328,7 +345,7 @@ export default function TimesheetPage() {
                                     {fmtDuration(e.seconds ?? liveSeconds(e))}
                                   </span>
                                   {isManager && (
-                                    <button onClick={() => setEditTarget({ entry: e })}
+                                    <button onClick={() => setEditTarget({ entry: e, staffName: e.staff_name })}
                                       className="w-8 h-8 rounded-lg text-gray-400 hover:text-gray-900 hover:bg-gray-100 shrink-0"
                                       aria-label={t(lang, 'edit')}>
                                       ✎
@@ -355,6 +372,17 @@ export default function TimesheetPage() {
           </main>
       </div>
 
+      {card && (
+        <StaffHoursSheet
+          staffId={card.staffId}
+          staffName={card.staffName}
+          onClose={() => setCard(null)}
+          // В отчёте по дням сотрудник задан карточкой, в самой смене его id
+          // не дублируется — подставляем владельца карточки
+          onEdit={(e) => setEditTarget({ entry: { ...e, staff_id: card.staffId }, staffName: card.staffName })}
+          onAdd={() => setEditTarget({ staffId: card.staffId, staffName: card.staffName })}
+        />
+      )}
       {editTarget && <EntryEditSheet target={editTarget} onClose={() => setEditTarget(null)} />}
     </div>
   )
