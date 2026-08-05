@@ -103,6 +103,40 @@ export function sumDays(days: HoursDay[]): { seconds: number; days: number } {
   return { seconds: days.reduce((s, d) => s + d.seconds, 0), days: days.length }
 }
 
+// ── Кто ещё есть в штате ────────────────────────────────────
+
+/** Строка штата: минимум, по которому решают, показывать ли человека */
+export interface RosterMember {
+  id: string
+  name: string
+  is_active: boolean
+  location_id: string | null
+}
+
+/**
+ * Сотрудники точки, которых НЕТ в отчёте за период — их дописывают в
+ * список нулевой строкой.
+ *
+ * Отчёт отвечает «кто сколько отработал», поэтому человека в отпуске, в
+ * выходной или забывшего отметиться в нём не существует. А открыть надо
+ * именно его: посмотреть другой месяц или дописать пропущенную смену.
+ *
+ * Уволенные не добавляются — но если у них есть смены периода, они уже
+ * пришли из отчёта и останутся: часы отработаны, из табеля их не
+ * вычёркивают. Сотрудник без точки работает на всех, включая эту.
+ */
+export function idleStaff(
+  worked: { staff_id: string }[],
+  roster: RosterMember[],
+  locationId: string | null = null,
+): RosterMember[] {
+  const seen = new Set(worked.map((w) => w.staff_id))
+  return roster
+    .filter((s) => s.is_active && !seen.has(s.id))
+    .filter((s) => !locationId || !s.location_id || s.location_id === locationId)
+    .sort((a, b) => a.name.localeCompare(b.name))
+}
+
 // ── Выгрузка для Excel ──────────────────────────────────────
 
 export interface HoursCsvLabels {

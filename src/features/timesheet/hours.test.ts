@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   groupByDay, formatDay, formatTime, formatHm, decimalHours,
-  formatRanges, formatDayLine, sumDays, buildHoursCsv, monthRange,
+  formatRanges, formatDayLine, sumDays, buildHoursCsv, monthRange, idleStaff,
   HEBREW_DOW, RU_DOW,
 } from './hours'
 import type { StaffHours, StaffHoursEntry } from './api'
@@ -141,6 +141,44 @@ describe('выгрузка для Excel', () => {
     const csv = buildHoursCsv([person], TZ, labels)
     expect(csv).toContain('Аня;1;1;8:00;8,00')
     expect(csv).toContain('Итого;;;8:00;8,00')
+  })
+})
+
+describe('штат без смен', () => {
+  const roster = [
+    { id: 's1', name: 'Аня', is_active: true, location_id: null },
+    { id: 's2', name: 'Борис', is_active: true, location_id: 'loc-1' },
+    { id: 's3', name: 'Вика', is_active: true, location_id: 'loc-2' },
+    { id: 's4', name: 'Гриша', is_active: false, location_id: 'loc-1' },
+  ]
+
+  it('добавляет тех, кого нет в отчёте — иначе их не открыть', () => {
+    expect(idleStaff([], roster, 'loc-1').map((s) => s.id)).toEqual(['s1', 's2'])
+  })
+
+  it('отработавшего второй раз не добавляет', () => {
+    expect(idleStaff([{ staff_id: 's2' }], roster, 'loc-1').map((s) => s.id)).toEqual(['s1'])
+  })
+
+  it('уволенного в список не поднимает', () => {
+    expect(idleStaff([], roster, 'loc-1').some((s) => s.id === 's4')).toBe(false)
+  })
+
+  it('сотрудник чужой точки на этом терминале не показывается', () => {
+    expect(idleStaff([], roster, 'loc-1').some((s) => s.id === 's3')).toBe(false)
+  })
+
+  it('сотрудник без точки работает на всех', () => {
+    expect(idleStaff([], roster, 'loc-2').map((s) => s.id)).toEqual(['s1', 's3'])
+  })
+
+  it('без выбранной точки видно весь активный штат', () => {
+    expect(idleStaff([], roster, null).map((s) => s.id)).toEqual(['s1', 's2', 's3'])
+  })
+
+  it('порядок — по имени, а не по дате приёма', () => {
+    const shuffled = [roster[2], roster[0], roster[1]]
+    expect(idleStaff([], shuffled, null).map((s) => s.name)).toEqual(['Аня', 'Борис', 'Вика'])
   })
 })
 

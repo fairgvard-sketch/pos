@@ -2,6 +2,9 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { fetchTimesheetReport, punchByPin, type TimeEntryRow, type TimesheetReport } from './api'
+import { idleStaff } from './hours'
+import { fetchStaffList } from '../staff/api'
+import { fetchCurrentLocation } from '../auth/api'
 import { useAuthStore } from '../../store/authStore'
 import { useLangStore } from '../../store/langStore'
 import { t, type Lang } from '../../lib/i18n'
@@ -93,6 +96,10 @@ export default function TimesheetPage() {
     refetchInterval: 30_000,
   })
 
+  // Штат точки — чтобы в списке был и тот, кто в этом периоде не работал
+  const { data: staffList = [] } = useQuery({ queryKey: ['staff_list'], queryFn: fetchStaffList })
+  const { data: location } = useQuery({ queryKey: ['current_location'], queryFn: fetchCurrentLocation })
+
   // Тик для живых таймеров открытых записей
   const [, setTick] = useState(0)
   useEffect(() => {
@@ -151,7 +158,7 @@ export default function TimesheetPage() {
   // Стабильная ссылка: `?? []` иначе даёт новый массив каждый рендер и рушит
   // мемоизацию byStaff ниже
   const entries = useMemo(() => report?.entries ?? [], [report?.entries])
-  const totals = report?.totals ?? []
+  const totals = useMemo(() => report?.totals ?? [], [report?.totals])
   const openEntries = entries.filter((e) => e.clock_out === null)
 
   // ── Статистика периода ──
@@ -170,6 +177,22 @@ export default function TimesheetPage() {
     }
     return map
   }, [entries])
+
+  /**
+   * Список людей = смены за период ПЛЮС остальной штат точки с нулём.
+   *
+   * Раньше в списке был только тот, кто в этом периоде отметился: человека
+   * в отпуске, в выходной или просто забывшего отметиться на экране не
+   * существовало — а именно его и надо открыть, чтобы посмотреть часы или
+   * дописать пропущенную смену. Уволенные (`is_active = false`) не
+   * добавляются, но если у них есть смены периода, они остаются: часы
+   * отработаны, из табеля их не вычёркивают.
+   */
+  const rows = useMemo(() => [
+    ...totals,
+    ...idleStaff(totals, staffList, location?.id ?? null)
+      .map((s) => ({ staff_id: s.id, name: s.name, seconds: 0, on_shift: false })),
+  ], [totals, staffList, location?.id])
 
   const multiDay = period !== 'today'
   const [expanded, setExpanded] = useState<string | null>(null)
@@ -276,7 +299,7 @@ export default function TimesheetPage() {
                 </div>
               )}
 
-              {totals.length === 0 ? (
+              {rows.length === 0 ? (
                 <p className="text-sm text-gray-500">{t(lang, 'noEntriesYet')}</p>
               ) : (
                 <>
@@ -287,20 +310,28 @@ export default function TimesheetPage() {
                     <Stat label={t(lang, 'tsStaffCount')} value={String(totals.length)} />
                   </div>
 
-                  {/* По сотрудникам, тап — детализация смен */}
+                  {/* По сотрудникам, тап — детализация смен. Люди без смен
+                      в этом периоде идут следом, тише и с прочерком: их
+                      открывают, чтобы посмотреть другой месяц или дописать
+                      пропущенную отметку. */}
                   <div className="space-y-2">
-                    {totals.map((row) => {
+                    {rows.map((row) => {
                       const detail = byStaff.get(row.staff_id)
                       const days = detail?.days ?? 0
+                      const worked = detail !== undefined
                       const isOpen = expanded === row.staff_id
                       return (
-                        <div key={row.staff_id} className="rounded-2xl border border-gray-200 overflow-hidden">
+                        <div key={row.staff_id} className={`rounded-2xl border overflow-hidden ${
+                          worked ? 'border-gray-200' : 'border-gray-100'
+                        }`}>
                           <button
                             onClick={() => setExpanded(isOpen ? null : row.staff_id)}
                             className="w-full flex items-center justify-between gap-3 p-4 text-start hover:bg-gray-50 transition-colors">
                             <span className="flex items-center gap-2 min-w-0">
                               {row.on_shift && <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />}
-                              <span className="font-bold text-gray-900 truncate">{row.name}</span>
+                              <span className={`font-bold truncate ${worked ? 'text-gray-900' : 'text-gray-500'}`}>
+                                {row.name}
+                              </span>
                               {multiDay && days > 0 && (
                                 <span className="text-xs text-gray-500 shrink-0">
                                   {days} {t(lang, 'tsDaysShort')}
@@ -313,7 +344,9 @@ export default function TimesheetPage() {
                                   {fmtDuration(Math.round(row.seconds / days))} {t(lang, 'tsAvgPerDay')}
                                 </span>
                               )}
-                              <span className="tabular-nums font-black text-gray-900">{fmtDuration(row.seconds)}</span>
+                              <span className={`tabular-nums font-black ${worked ? 'text-gray-900' : 'text-gray-400'}`}>
+                                {worked ? fmtDuration(row.seconds) : '—'}
+                              </span>
                             </span>
                           </button>
 
@@ -326,9 +359,12 @@ export default function TimesheetPage() {
                             </button>
                           )}
 
-                          {isOpen && detail && (
+                          {isOpen && (
                             <div className="border-t border-gray-100 px-4 py-2 divide-y divide-gray-50">
-                              {detail.entries.map((e) => (
+                              {!worked && (
+                                <p className="py-2 text-sm text-gray-500">{t(lang, 'noEntriesYet')}</p>
+                              )}
+                              {(detail?.entries ?? []).map((e) => (
                                 <div key={e.id} className="flex items-center justify-between gap-3 py-2 text-sm">
                                   <span className="text-gray-600 shrink-0">
                                     {fmtDay(e.clock_in, locale)}
