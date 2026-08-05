@@ -1,7 +1,8 @@
 import { fetchReceipt, fetchRefundReceipt, type Receipt } from './api'
 import {
-  renderReceiptCanvas, renderRefundReceiptCanvas, renderKitchenTicketCanvas, renderTimesheetCanvas,
-  type KitchenTicketData, type TimesheetPrintData,
+  renderReceiptCanvas, renderRefundReceiptCanvas, renderKitchenTicketCanvas,
+  renderTimesheetCanvas, renderHoursSummaryCanvas,
+  type KitchenTicketData, type TimesheetPrintData, type HoursSummaryPrintData,
 } from './printCanvas'
 import { hasSilentPrintPath } from '../../lib/escpos'
 import { printCanvasWithRetry } from './printFailure'
@@ -90,6 +91,19 @@ export async function printTimesheet(data: TimesheetPrintData, allowRawbt: boole
   try {
     if (!hasSilentPrintPath(allowRawbt)) return false
     return await printCanvasWithRetry(() => renderTimesheetCanvas(data), allowRawbt)
+  } catch {
+    return false
+  }
+}
+
+/** Печать свода часов по всем сотрудникам за период */
+export async function printHoursSummary(
+  data: HoursSummaryPrintData,
+  allowRawbt: boolean,
+): Promise<boolean> {
+  try {
+    if (!hasSilentPrintPath(allowRawbt)) return false
+    return await printCanvasWithRetry(() => renderHoursSummaryCanvas(data), allowRawbt)
   } catch {
     return false
   }

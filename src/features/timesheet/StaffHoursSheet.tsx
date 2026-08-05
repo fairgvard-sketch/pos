@@ -16,6 +16,9 @@ import type { TimesheetPrintData } from '../receipt/printCanvas'
 interface Props {
   staffId: string
   staffName: string
+  /** Период из формы отчёта; без него — текущий месяц */
+  initialFrom?: Date
+  initialTo?: Date
   onClose: () => void
   /** Правка смены (менеджер): открывает EntryEditSheet у родителя */
   onEdit?: (entry: StaffHoursEntry) => void
@@ -40,15 +43,38 @@ const TZ = 'Asia/Jerusalem'
  * Период по умолчанию — текущий месяц: за месяц считают зарплату. Стрелки
  * листают месяцы, «Даты» открывают произвольный диапазон.
  */
-export default function StaffHoursSheet({ staffId, staffName, onClose, onEdit, onAdd }: Props) {
+export default function StaffHoursSheet({
+  staffId, staffName, initialFrom, initialTo, onClose, onEdit, onAdd,
+}: Props) {
   const lang = useLangStore((s) => s.lang)
   const isRtl = lang === 'he'
   const locale = isRtl ? 'he-IL' : 'ru-RU'
   const printMode = useDeviceStore((s) => s.printMode)
 
   const now = new Date()
-  const [cursor, setCursor] = useState({ year: now.getFullYear(), month: now.getMonth() })
-  const [custom, setCustom] = useState<{ from: string; to: string } | null>(null)
+  /*
+   * Период из формы отчёта разбирается обратно: целый календарный месяц
+   * остаётся месяцем (стрелки листают дальше), а произвольный диапазон
+   * открывается режимом дат. Иначе «прошлый месяц» превращался бы в пару
+   * дат, которую нельзя пролистать.
+   */
+  const initialMonth = useMemo(() => {
+    if (!initialFrom || !initialTo) return null
+    const [mFrom, mTo] = monthRange(initialFrom.getFullYear(), initialFrom.getMonth())
+    const same = (a: Date, b: Date) => toDateKey(a) === toDateKey(b)
+    return same(initialFrom, mFrom) && same(initialTo, mTo)
+      ? { year: initialFrom.getFullYear(), month: initialFrom.getMonth() }
+      : null
+  }, [initialFrom, initialTo])
+
+  const [cursor, setCursor] = useState(
+    initialMonth ?? { year: (initialFrom ?? now).getFullYear(), month: (initialFrom ?? now).getMonth() },
+  )
+  const [custom, setCustom] = useState<{ from: string; to: string } | null>(
+    initialFrom && initialTo && !initialMonth
+      ? { from: toDateKey(initialFrom), to: toDateKey(initialTo) }
+      : null,
+  )
 
   const [from, to] = useMemo<[Date, Date]>(() => {
     if (custom) {

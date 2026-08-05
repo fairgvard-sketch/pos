@@ -7,6 +7,7 @@ import {
   renderTestPrintCanvas,
   renderQrFlyerCanvas,
   renderTimesheetCanvas,
+  renderHoursSummaryCanvas,
   type ZReportData,
 } from './printCanvas'
 import { useDeviceStore } from '../../store/deviceStore'
@@ -174,6 +175,34 @@ describe('renderTimesheetCanvas — табель за месяц', () => {
   it('ширина следует ленте устройства', () => {
     expect(renderTimesheetCanvas(mkTimesheet(3), 58).width).toBe(384)
     expect(renderTimesheetCanvas(mkTimesheet(3), 80).width).toBe(576)
+  })
+})
+
+describe('renderHoursSummaryCanvas — свод по всем', () => {
+  const mkSummary = (people: number) => ({
+    periodFrom: '01.08.2026',
+    periodTo: '31.08.2026',
+    rows: Array.from({ length: people }, (_, i) => ({
+      name: `עובד ${i}`, days: 21, hours: '168:00', decimal: '168,00',
+    })),
+    totalHours: '336:00',
+    totalDecimal: '336,00',
+  })
+
+  it('высота растёт с числом сотрудников', () => {
+    const few = renderHoursSummaryCanvas(mkSummary(2), 80)
+    const many = renderHoursSummaryCanvas(mkSummary(40), 80)
+    expect(many.height).toBeGreaterThan(few.height)
+    expect(many.height).toBeLessThanOrEqual(20000)
+  })
+
+  it('период без смен печатается шапкой и итогом', () => {
+    expect(renderHoursSummaryCanvas(mkSummary(0), 80).height).toBeGreaterThan(0)
+  })
+
+  it('ширина следует ленте устройства', () => {
+    expect(renderHoursSummaryCanvas(mkSummary(3), 58).width).toBe(384)
+    expect(renderHoursSummaryCanvas(mkSummary(3), 80).width).toBe(576)
   })
 })
 

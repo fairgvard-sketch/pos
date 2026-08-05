@@ -805,6 +805,118 @@ export function renderTimesheetCanvas(d: TimesheetPrintData, tape?: TapeWidth): 
   return out
 }
 
+/** Свод часов по всем сотрудникам за период */
+export interface HoursSummaryPrintData {
+  locationName?: string
+  periodFrom: string
+  periodTo: string
+  rows: { name: string; days: number; hours: string; decimal: string }[]
+  totalHours: string
+  totalDecimal: string
+}
+
+/**
+ * Печатный свод часов: строка на человека — имя, отработанные дни и часы.
+ * Тот же документ, что «דוח שעות עובדים מרוכז» в кассе, к которой привык
+ * владелец: его несут бухгалтеру вместе с личными табелями.
+ *
+ * Имя — справа (RTL), числа — слева отдельными колонками: склеенная
+ * строка «Аня 21 168:30» переставляется двунаправленным алгоритмом.
+ */
+export function renderHoursSummaryCanvas(
+  d: HoursSummaryPrintData,
+  tape?: TapeWidth
+): HTMLCanvasElement {
+  const tapeMm = tape ?? currentTape()
+  const { W, MX, RIGHT, fs } = tapeLayout(tapeMm)
+  const F = (size: number, bold = false) => RAW_FONT(fs(size), bold)
+  const tall = document.createElement('canvas')
+  tall.width = W
+  tall.height = scratchHeight(600, d.rows.length, 40)
+  const ctx = tall.getContext('2d')!
+  ctx.fillStyle = '#fff'
+  ctx.fillRect(0, 0, W, tall.height)
+  ctx.fillStyle = '#000'
+
+  let y = 30
+  const center = (text: string, size: number, bold = false, gap = 8) => {
+    ctx.font = F(size, bold)
+    ctx.textAlign = 'center'
+    ctx.fillText(text, W / 2, y)
+    y += size + gap
+  }
+  const metaRow = (label: string, value: string, size = 26, bold = false) => {
+    ctx.font = F(size, bold)
+    ctx.textAlign = 'right'
+    ctx.fillText(label, RIGHT, y)
+    ctx.textAlign = 'left'
+    ctx.fillText(value, MX, y)
+    y += size + 8
+  }
+  const divider = () => {
+    ctx.save()
+    ctx.strokeStyle = '#000'
+    ctx.setLineDash([6, 6])
+    ctx.beginPath()
+    ctx.moveTo(MX, y - 8)
+    ctx.lineTo(RIGHT, y - 8)
+    ctx.stroke()
+    ctx.restore()
+    y += 16
+  }
+
+  center('ריכוז שעות עובדים', 32, true, 8)
+  if (d.locationName) center(d.locationName, 24, false, 4)
+  center(`${d.periodFrom} — ${d.periodTo}`, 24, false, 4)
+  divider()
+
+  const ROW = 24
+  ctx.font = F(ROW)
+  const ch = ctx.measureText('0').width
+  // Дни на 58мм снимаются: имя и часы важнее, а трёх колонок в 384px нет
+  const showDays = tapeMm === 80
+  const nameMax = RIGHT - MX - ch * (showDays ? 13 : 9)
+
+  for (const r of d.rows) {
+    ctx.font = F(ROW)
+    ctx.textAlign = 'right'
+    let name = r.name
+    while (name.length > 1 && ctx.measureText(name).width > nameMax) name = name.slice(0, -1)
+    ctx.fillText(name, RIGHT, y)
+    if (showDays) {
+      ctx.textAlign = 'left'
+      ctx.fillText(String(r.days), MX + ch * 7, y)
+    }
+    ctx.font = F(ROW, true)
+    ctx.textAlign = 'left'
+    ctx.fillText(r.hours, MX, y)
+    y += ROW + 10
+  }
+
+  if (d.rows.length === 0) center('אין רישומי נוכחות', 24, false, 8)
+
+  y += 6
+  divider()
+  metaRow('סה"כ שעות:', d.totalHours, 30, true)
+  metaRow('סה"כ עשרוני:', d.totalDecimal, 26)
+
+  divider()
+  const now = new Date()
+  center(
+    `הודפס ${now.toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' })} ${now.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}`,
+    20, false, 4
+  )
+
+  const out = document.createElement('canvas')
+  out.width = W
+  out.height = Math.min(tall.height, y + 24)
+  const octx = out.getContext('2d')!
+  octx.fillStyle = '#fff'
+  octx.fillRect(0, 0, out.width, out.height)
+  octx.drawImage(tall, 0, 0)
+  return out
+}
+
 // ── Тикет на кухню/бар ────────────────────────────────────
 
 export interface KitchenTicketLine {

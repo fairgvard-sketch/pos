@@ -12,6 +12,8 @@ import { useNetStore } from '../../lib/offline/net'
 import AppSidebar from '../../components/AppSidebar'
 import EntryEditSheet, { type EditableEntry } from './EntryEditSheet'
 import StaffHoursSheet from './StaffHoursSheet'
+import HoursReportSheet, { type HoursReportRequest } from './HoursReportSheet'
+import HoursSummarySheet from './HoursSummarySheet'
 
 type Period = 'today' | 'week' | 'month' | 'custom'
 const PIN_LENGTH = 4
@@ -207,7 +209,23 @@ export default function TimesheetPage() {
    * дням — зарплатные данные, сервер требует право manage, и барista получил
    * бы отказ вместо экрана.
    */
-  const [card, setCard] = useState<{ staffId: string; staffName: string } | null>(null)
+  const [card, setCard] = useState<
+    { staffId: string; staffName: string; from?: Date; to?: Date } | null
+  >(null)
+
+  /**
+   * Отчёты по часам открываются плитками, как в кассе, к которой привык
+   * владелец: сначала «какой отчёт», потом форма «кто и за когда», потом
+   * сам отчёт. Плитки видит только менеджер — сервер требует право manage.
+   */
+  const [reportForm, setReportForm] = useState<'staff' | 'summary' | null>(null)
+  const [summary, setSummary] = useState<{ from: Date; to: Date } | null>(null)
+
+  function runReport(req: HoursReportRequest) {
+    setReportForm(null)
+    if (req.staffId) setCard({ staffId: req.staffId, staffName: req.staffName, from: req.from, to: req.to })
+    else setSummary({ from: req.from, to: req.to })
+  }
 
   return (
     <div dir={isRtl ? 'rtl' : 'ltr'} className="h-screen bg-[#eceef1] flex gap-3 p-3 overflow-hidden">
@@ -265,6 +283,24 @@ export default function TimesheetPage() {
                 </div>
               )}
             </section>
+
+            {isManager && (
+              <section className="mb-8">
+                <h2 className="text-base font-bold text-gray-900 mb-3">{t(lang, 'tsReports')}</h2>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <ReportTile
+                    title={t(lang, 'tsReportStaff')}
+                    hint={t(lang, 'tsReportStaffHint')}
+                    onClick={() => setReportForm('staff')}
+                  />
+                  <ReportTile
+                    title={t(lang, 'tsReportSummary')}
+                    hint={t(lang, 'tsReportSummaryHint')}
+                    onClick={() => setReportForm('summary')}
+                  />
+                </div>
+              </section>
+            )}
 
             <section>
               <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
@@ -408,10 +444,33 @@ export default function TimesheetPage() {
           </main>
       </div>
 
+      {reportForm && (
+        <HoursReportSheet
+          mode={reportForm}
+          staff={rows}
+          onCancel={() => setReportForm(null)}
+          onSubmit={runReport}
+        />
+      )}
+
+      {summary && (
+        <HoursSummarySheet
+          from={summary.from}
+          to={summary.to}
+          onClose={() => setSummary(null)}
+          // Из свода открывается личный табель с тем же периодом: цифра,
+          // которую нельзя развернуть, вызывает вопрос без ответа
+          onOpenStaff={(staffId, staffName) =>
+            setCard({ staffId, staffName, from: summary.from, to: summary.to })}
+        />
+      )}
+
       {card && (
         <StaffHoursSheet
           staffId={card.staffId}
           staffName={card.staffName}
+          initialFrom={card.from}
+          initialTo={card.to}
           onClose={() => setCard(null)}
           // В отчёте по дням сотрудник задан карточкой, в самой смене его id
           // не дублируется — подставляем владельца карточки
@@ -480,6 +539,16 @@ function exportCsv(
   a.download = `timesheet_${toDateInput(from)}_${toDateInput(addDays(to, -1))}.csv`
   a.click()
   URL.revokeObjectURL(a.href)
+}
+
+/** Плитка отчёта: крупная цель под палец, название и что внутри */
+function ReportTile({ title, hint, onClick }: { title: string; hint: string; onClick: () => void }) {
+  return (
+    <button onClick={onClick} className="card-hover p-4 text-start min-h-[4.5rem] active:scale-[0.98]">
+      <div className="font-bold text-gray-900">{title}</div>
+      <div className="text-xs text-gray-500 mt-0.5">{hint}</div>
+    </button>
+  )
 }
 
 function Stat({ label, value }: { label: string; value: string }) {
