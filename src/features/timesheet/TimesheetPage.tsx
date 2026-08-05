@@ -386,15 +386,9 @@ export default function TimesheetPage() {
                             </span>
                           </button>
 
-                          {/* Карточка часов: месяц по дням, печать и выгрузка */}
-                          {isManager && (
-                            <button
-                              onClick={() => setCard({ staffId: row.staff_id, staffName: row.name })}
-                              className="w-full border-t border-gray-100 py-2.5 text-sm font-semibold text-gray-400 hover:text-gray-900 hover:bg-gray-50 text-start px-4">
-                              {t(lang, 'tsCard')} →
-                            </button>
-                          )}
-
+                          {/* Личный табель открывается плиткой отчёта, а не
+                              отсюда: два входа в один документ — это два
+                              разных ответа на вопрос «где смотреть часы» */}
                           {isOpen && (
                             <div className="border-t border-gray-100 px-4 py-2 divide-y divide-gray-50">
                               {!worked && (
