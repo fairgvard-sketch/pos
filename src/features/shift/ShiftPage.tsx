@@ -21,6 +21,7 @@ import { useOutboxStore, pendingOpsCount } from '../../lib/offline/outboxStore'
 import { useNetStore } from '../../lib/offline/net'
 import { formatMoney, parseMoney } from '../../lib/money'
 import AppSidebar from '../../components/AppSidebar'
+import FormSheet from '../../components/ui/FormSheet'
 import BackButton from '../../components/BackButton'
 import LoadErrorState from '../../components/LoadErrorState'
 import { failedNoCache } from '../../lib/queryState'
@@ -468,7 +469,6 @@ export default function ShiftPage() {
       {movementType && (
         <CashMovementDialog
           lang={lang}
-          isRtl={isRtl}
           type={movementType}
           busy={addMovement.isPending}
           onCancel={() => setMovementType(null)}
@@ -483,10 +483,9 @@ export default function ShiftPage() {
 
 /** Модалка внесения/изъятия наличных: сумма + причина (своя, не window.confirm — APK) */
 function CashMovementDialog({
-  lang, isRtl, type, busy, onCancel, onConfirm,
+  lang, type, busy, onCancel, onConfirm,
 }: {
   lang: 'ru' | 'he'
-  isRtl: boolean
   type: 'in' | 'out'
   busy: boolean
   onCancel: () => void
@@ -498,19 +497,29 @@ function CashMovementDialog({
   const valid = amount !== null && amount > 0
 
   return (
-    <div dir={isRtl ? 'rtl' : 'ltr'} className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-      <form
-        onSubmit={(e) => { e.preventDefault(); if (valid) onConfirm(amount!, reason.trim()) }}
-        className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 animate-[rise-in_0.2s_ease-out]"
-      >
-        <h2 className="text-lg font-black text-gray-900 mb-1">
-          {t(lang, type === 'in' ? 'cashInBtn' : 'cashOutBtn')}
-        </h2>
-        <p className="text-sm text-gray-500 mb-4">
-          {t(lang, type === 'in' ? 'cashInHint' : 'cashOutHint')}
-        </p>
-
-        <label className="text-xs font-medium text-gray-500 mb-1 block">{t(lang, 'cashMoveAmount')}</label>
+    <FormSheet
+      lang={lang}
+      title={t(lang, type === 'in' ? 'cashInBtn' : 'cashOutBtn')}
+      subtitle={t(lang, type === 'in' ? 'cashInHint' : 'cashOutHint')}
+      onClose={onCancel}
+      footer={
+        <>
+          <button type="button" onClick={onCancel} disabled={busy} className="btn-secondary flex-1 h-12">
+            {t(lang, 'cancel')}
+          </button>
+          <button
+            type="button"
+            onClick={() => { if (valid) onConfirm(amount!, reason.trim()) }}
+            disabled={!valid || busy}
+            className="btn-primary flex-1 h-12"
+          >
+            {t(lang, type === 'in' ? 'cashInBtn' : 'cashOutBtn')}
+          </button>
+        </>
+      }
+    >
+      <form onSubmit={(e) => { e.preventDefault(); if (valid) onConfirm(amount!, reason.trim()) }}>
+        <label className="text-xs font-semibold text-gray-500 mb-1.5 block">{t(lang, 'cashMoveAmount')}</label>
         <div className="relative mb-3">
           <input
             className="input tabular-nums text-lg pe-8"
@@ -524,22 +533,15 @@ function CashMovementDialog({
         </div>
 
         <input
-          className="input mb-5"
+          className="input"
           placeholder={t(lang, 'cashMoveReason')}
           value={reason}
           onChange={(e) => setReason(e.target.value)}
         />
-
-        <div className="flex gap-2">
-          <button type="submit" disabled={!valid || busy} className="btn-primary flex-1 !rounded-2xl">
-            {t(lang, type === 'in' ? 'cashInBtn' : 'cashOutBtn')}
-          </button>
-          <button type="button" onClick={onCancel} disabled={busy} className="btn-secondary">
-            {t(lang, 'cancel')}
-          </button>
-        </div>
+        {/* Enter в поле суммы отправляет форму, кнопка живёт в нижней панели */}
+        <button type="submit" className="hidden" tabIndex={-1} aria-hidden />
       </form>
-    </div>
+    </FormSheet>
   )
 }
 

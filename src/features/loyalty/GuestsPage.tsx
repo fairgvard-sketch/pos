@@ -6,6 +6,7 @@ import { t, formatDate } from '../../lib/i18n'
 import { formatMoney } from '../../lib/money'
 import { fetchCurrentLocation } from '../auth/api'
 import AppSidebar from '../../components/AppSidebar'
+import FormSheet from '../../components/ui/FormSheet'
 import {
   searchGuests, fetchGuestCard, updateGuest, formatPhone, type Guest,
 } from './api'
@@ -171,15 +172,26 @@ function GuestDetailSheet({
   const events = card?.events ?? []
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center p-4" onClick={onClose}>
-      <div
-        className="card w-full max-w-lg p-6 max-h-[92vh] overflow-y-auto animate-[rise-in_0.2s_ease-out]"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h2 className="text-lg font-black text-gray-900">{guest.name || formatPhone(guest.phone)}</h2>
-        <p className="text-sm text-gray-500 tabular-nums mt-0.5" dir="ltr">{formatPhone(guest.phone)}</p>
-
-        <div className="grid grid-cols-3 gap-2 mt-4">
+    <FormSheet
+      lang={lang}
+      title={guest.name || formatPhone(guest.phone)}
+      subtitle={<span className="tabular-nums" dir="ltr">{formatPhone(guest.phone)}</span>}
+      onClose={onClose}
+      footer={
+        <>
+          <button onClick={onClose} className="btn-secondary flex-1 h-12">{t(lang, 'close')}</button>
+          <button
+            className="btn-primary flex-1 h-12"
+            disabled={save.isPending || !dirty}
+            onClick={() => save.mutate()}
+          >
+            {t(lang, 'save')}
+          </button>
+        </>
+      }
+    >
+      <>
+        <div className="grid grid-cols-3 gap-2">
           <Stat
             label={mode === 'stamps' ? t(lang, 'stampsBalance') : t(lang, 'pointsBalance')}
             value={mode === 'stamps' ? `${guest.stamps}/${stampsGoal}` : formatMoney(guest.points, lang)}
@@ -303,14 +315,6 @@ function GuestDetailSheet({
           />
         </label>
 
-        <button
-          className="btn-secondary w-full mt-3"
-          disabled={save.isPending || !dirty}
-          onClick={() => save.mutate()}
-        >
-          {t(lang, 'save')}
-        </button>
-
         {/* Заказы / движения баллов */}
         <div className="inline-flex rounded-xl border border-gray-100 bg-gray-50 p-0.5 gap-0.5 mt-6">
           {([['orders', 'guestLastOrders'], ['events', 'guestPointsLog']] as const).map(([v, key]) => (
@@ -400,9 +404,8 @@ function GuestDetailSheet({
           )}
         </div>
 
-        <button onClick={onClose} className="btn-ghost w-full mt-4">{t(lang, 'close')}</button>
-      </div>
-    </div>
+      </>
+    </FormSheet>
   )
 }
 

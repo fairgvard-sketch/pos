@@ -14,6 +14,7 @@ import {
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import AppSidebar from '../../components/AppSidebar'
+import FormSheet from '../../components/ui/FormSheet'
 import { useLangStore } from '../../store/langStore'
 import { t } from '../../lib/i18n'
 import {
@@ -726,7 +727,6 @@ function AddZoneDialog({
   onClose: () => void
 }) {
   const lang = useLangStore((s) => s.lang)
-  const isRtl = lang === 'he'
   const qc = useQueryClient()
   const zoneId = useRef(crypto.randomUUID()).current
   const [name, setName] = useState('')
@@ -746,11 +746,21 @@ function AddZoneDialog({
   })
 
   return (
-    <div dir={isRtl ? 'rtl' : 'ltr'} className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="card w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
-        <h2 className="text-xl font-black text-gray-900">{t(lang, 'newZoneTitle')}</h2>
-        <p className="text-sm text-gray-500 mt-1 mb-5">{t(lang, 'newZoneHint')}</p>
-
+    <FormSheet
+      lang={lang}
+      title={t(lang, 'newZoneTitle')}
+      subtitle={t(lang, 'newZoneHint')}
+      onClose={onClose}
+      footer={
+        <>
+          <button onClick={onClose} className="btn-secondary flex-1 h-12">{t(lang, 'cancel')}</button>
+          <button onClick={() => create.mutate()} disabled={create.isPending || !name.trim()} className="btn-primary flex-1 h-12">
+            {t(lang, 'createZone')}
+          </button>
+        </>
+      }
+    >
+      <>
         <Field label={t(lang, 'zoneNameField')}>
           <input autoFocus className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder={t(lang, 'zoneNamePlaceholder')} />
         </Field>
@@ -767,15 +777,8 @@ function AddZoneDialog({
           <input className="input" value={prefix} onChange={(e) => setPrefix(e.target.value)} placeholder={t(lang, 'tablePrefixPlaceholder')} />
           <p className="text-xs text-gray-500 mt-2">{t(lang, 'tablePrefixPreview')}: {prefix.trim()}1, {prefix.trim()}2, {prefix.trim()}3…</p>
         </Field>
-
-        <div className="flex gap-2 mt-6">
-          <button onClick={onClose} className="btn-secondary flex-1 !py-3">{t(lang, 'cancel')}</button>
-          <button onClick={() => create.mutate()} disabled={create.isPending || !name.trim()} className="btn-primary flex-1 !py-3">
-            {t(lang, 'createZone')}
-          </button>
-        </div>
-      </div>
-    </div>
+      </>
+    </FormSheet>
   )
 }
 

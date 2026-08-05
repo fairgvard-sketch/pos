@@ -9,6 +9,7 @@ import { t, formatDate, formatTime, type Lang } from '../../lib/i18n'
 import { fetchTables } from '../tables/api'
 import { fetchCurrentLocation } from '../auth/api'
 import AppSidebar from '../../components/AppSidebar'
+import FormSheet from '../../components/ui/FormSheet'
 import {
   fetchReservations, fetchReservationHistory, acceptReservation, rejectReservation,
   setReservationTable, seatReservation, markReservationArrived,
@@ -312,28 +313,16 @@ export default function ReservationsPage() {
       {/* Отказ по заявке и отмена подтверждённой брони — одна форма с
           необязательной причиной: её увидит гость */}
       {rejecting && (
-        <div
-          dir={isRtl ? 'rtl' : 'ltr'}
-          className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center p-4"
-          onClick={() => { setRejecting(null); setRejectReason('') }}
-        >
-          <div className="card w-full max-w-sm p-6" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-lg font-black text-gray-900">
-              {rejecting.status === 'new' ? t(lang, 'resReject') : t(lang, 'resCancelBooking')}
-            </h2>
-            <p className="text-sm text-gray-500 mt-1">
-              {rejecting.customer_name} · {formatTime(rejecting.reserved_at, lang)} · {rejecting.party_size} {t(lang, 'resGuestsShort')}
-            </p>
-            <RejectForm
-              lang={lang}
-              reason={rejectReason}
-              setReason={setRejectReason}
-              busy={reject.isPending}
-              onCancel={() => { setRejecting(null); setRejectReason('') }}
-              onConfirm={() => reject.mutate(rejecting)}
-            />
-          </div>
-        </div>
+        <RejectForm
+          lang={lang}
+          title={rejecting.status === 'new' ? t(lang, 'resReject') : t(lang, 'resCancelBooking')}
+          subtitle={`${rejecting.customer_name} · ${formatTime(rejecting.reserved_at, lang)} · ${rejecting.party_size} ${t(lang, 'resGuestsShort')}`}
+          reason={rejectReason}
+          setReason={setRejectReason}
+          busy={reject.isPending}
+          onCancel={() => { setRejecting(null); setRejectReason('') }}
+          onConfirm={() => reject.mutate(rejecting)}
+        />
       )}
 
       {creating && location && staff && (
@@ -467,7 +456,6 @@ function NewReservationSheet({ lang, locationId, staffId, tables, onClose, onCre
   onClose: () => void
   onCreated: () => void
 }) {
-  const isRtl = lang === 'he'
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
   const [dateStr, setDateStr] = useState(() => {
@@ -504,55 +492,52 @@ function NewReservationSheet({ lang, locationId, staffId, tables, onClose, onCre
   }
 
   return (
-    <div
-      dir={isRtl ? 'rtl' : 'ltr'}
-      className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center p-4"
-      onClick={onClose}
+    <FormSheet
+      lang={lang}
+      title={t(lang, 'resNewBooking')}
+      onClose={onClose}
+      footer={
+        <>
+          <button onClick={onClose} className="btn-secondary flex-1 h-12">{t(lang, 'cancel')}</button>
+          <button onClick={submit} disabled={create.isPending} className="btn-primary flex-1 h-12 disabled:opacity-50">{t(lang, 'save')}</button>
+        </>
+      }
     >
-      <div className="card w-full max-w-md p-6 animate-[rise-in_0.2s_ease-out] max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-        <h2 className="text-lg font-black text-gray-900 mb-4">{t(lang, 'resNewBooking')}</h2>
-
-        <div className="space-y-4">
-          <Field label={t(lang, 'resGuestName')}>
-            <input className="input" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+      <div className="space-y-4">
+        <Field label={t(lang, 'resGuestName')}>
+          <input className="input" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+        </Field>
+        <Field label={t(lang, 'resPhoneLabel')}>
+          <input type="tel" inputMode="tel" dir="ltr" className="input" value={phone} onChange={(e) => setPhone(e.target.value)} />
+        </Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label={t(lang, 'resDate')}>
+            <input type="date" className="input" value={dateStr} onChange={(e) => setDateStr(e.target.value)} />
           </Field>
-          <Field label={t(lang, 'resPhoneLabel')}>
-            <input type="tel" inputMode="tel" dir="ltr" className="input" value={phone} onChange={(e) => setPhone(e.target.value)} />
+          <Field label={t(lang, 'resTimeLabel')}>
+            <input type="time" className="input" value={timeStr} onChange={(e) => setTimeStr(e.target.value)} />
           </Field>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label={t(lang, 'resDate')}>
-              <input type="date" className="input" value={dateStr} onChange={(e) => setDateStr(e.target.value)} />
-            </Field>
-            <Field label={t(lang, 'resTimeLabel')}>
-              <input type="time" className="input" value={timeStr} onChange={(e) => setTimeStr(e.target.value)} />
-            </Field>
+        </div>
+        <Field label={t(lang, 'resPartySize')}>
+          <div className="flex items-center gap-3">
+            <button onClick={() => setGuests((g) => Math.max(1, g - 1))} className="w-11 h-11 rounded-xl border border-gray-200 text-xl font-bold text-gray-700 hover:border-gray-400 active:scale-[0.95]">−</button>
+            <span className="text-lg font-black text-gray-900 tabular-nums w-8 text-center">{guests}</span>
+            <button onClick={() => setGuests((g) => Math.min(20, g + 1))} className="w-11 h-11 rounded-xl border border-gray-200 text-xl font-bold text-gray-700 hover:border-gray-400 active:scale-[0.95]">+</button>
           </div>
-          <Field label={t(lang, 'resPartySize')}>
-            <div className="flex items-center gap-3">
-              <button onClick={() => setGuests((g) => Math.max(1, g - 1))} className="w-11 h-11 rounded-xl border border-gray-200 text-xl font-bold text-gray-700 hover:border-gray-400 active:scale-[0.95]">−</button>
-              <span className="text-lg font-black text-gray-900 tabular-nums w-8 text-center">{guests}</span>
-              <button onClick={() => setGuests((g) => Math.min(20, g + 1))} className="w-11 h-11 rounded-xl border border-gray-200 text-xl font-bold text-gray-700 hover:border-gray-400 active:scale-[0.95]">+</button>
-            </div>
-          </Field>
-          <Field label={t(lang, 'resTable')}>
-            <select className="input" value={tableId ?? ''} onChange={(e) => setTableId(e.target.value || null)}>
-              <option value="">{t(lang, 'resNoTable')}</option>
-              {tables.map((tb) => (
-                <option key={tb.id} value={tb.id}>{tb.label}{tb.zone ? ` · ${tb.zone}` : ''}</option>
-              ))}
-            </select>
-          </Field>
-          <Field label={t(lang, 'resNote')}>
-            <input className="input" value={note} onChange={(e) => setNote(e.target.value)} />
-          </Field>
-        </div>
-
-        <div className="flex gap-2 mt-6">
-          <button onClick={onClose} className="btn-ghost flex-1">{t(lang, 'cancel')}</button>
-          <button onClick={submit} disabled={create.isPending} className="btn-primary flex-1 disabled:opacity-50">{t(lang, 'save')}</button>
-        </div>
+        </Field>
+        <Field label={t(lang, 'resTable')}>
+          <select className="input" value={tableId ?? ''} onChange={(e) => setTableId(e.target.value || null)}>
+            <option value="">{t(lang, 'resNoTable')}</option>
+            {tables.map((tb) => (
+              <option key={tb.id} value={tb.id}>{tb.label}{tb.zone ? ` · ${tb.zone}` : ''}</option>
+            ))}
+          </select>
+        </Field>
+        <Field label={t(lang, 'resNote')}>
+          <input className="input" value={note} onChange={(e) => setNote(e.target.value)} />
+        </Field>
       </div>
-    </div>
+    </FormSheet>
   )
 }
 
@@ -622,12 +607,28 @@ function GuestBadge({ phone, currentId, lang }: { phone: string; currentId: stri
   )
 }
 
-function RejectForm({ lang, reason, setReason, busy, onCancel, onConfirm }: {
-  lang: Lang; reason: string; setReason: (v: string) => void
+function RejectForm({ lang, title, subtitle, reason, setReason, busy, onCancel, onConfirm }: {
+  lang: Lang; title: string; subtitle: string
+  reason: string; setReason: (v: string) => void
   busy: boolean; onCancel: () => void; onConfirm: () => void
 }) {
   return (
-    <div className="mt-3 space-y-2">
+    <FormSheet
+      lang={lang}
+      title={title}
+      subtitle={subtitle}
+      onClose={onCancel}
+      footer={
+        <>
+          <button className="btn-secondary flex-1 h-12" onClick={onCancel}>
+            {t(lang, 'cancel')}
+          </button>
+          <button className="btn-danger flex-1 h-12" disabled={busy} onClick={onConfirm}>
+            {t(lang, 'resRejectConfirm')}
+          </button>
+        </>
+      }
+    >
       <input
         className="input w-full"
         placeholder={t(lang, 'resRejectReasonPh')}
@@ -635,15 +636,7 @@ function RejectForm({ lang, reason, setReason, busy, onCancel, onConfirm }: {
         onChange={(e) => setReason(e.target.value)}
         autoFocus
       />
-      <div className="flex gap-2">
-        <button className="btn-secondary flex-1 h-11" onClick={onCancel}>
-          {t(lang, 'cancel')}
-        </button>
-        <button className="btn-danger flex-1 h-11" disabled={busy} onClick={onConfirm}>
-          {t(lang, 'resRejectConfirm')}
-        </button>
-      </div>
-    </div>
+    </FormSheet>
   )
 }
 

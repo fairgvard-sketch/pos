@@ -4,6 +4,7 @@ import toast from 'react-hot-toast'
 import { fetchRefundableItems, issueRefund, type Transaction } from './api'
 import { payMethodIcon, payMethodLabel, type PayMethodId } from '../../lib/payMethods'
 import Icon from '../../components/Icon'
+import FormSheet from '../../components/ui/FormSheet'
 import { useAuthStore } from '../../store/authStore'
 import { useLangStore } from '../../store/langStore'
 import { t } from '../../lib/i18n'
@@ -28,7 +29,6 @@ type ReasonKey = (typeof REASONS)[number]
  */
 export default function RefundSheet({ tx, remaining, onClose, onDone }: Props) {
   const lang = useLangStore((s) => s.lang)
-  const isRtl = lang === 'he'
   const staff = useAuthStore((s) => s.staff)
   const qc = useQueryClient()
 
@@ -121,30 +121,37 @@ export default function RefundSheet({ tx, remaining, onClose, onDone }: Props) {
   })
 
   return (
-    <div
-      dir={isRtl ? 'rtl' : 'ltr'}
-      className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center p-4"
-      onClick={onClose}
-    >
-      <div
-        className="card w-full max-w-md p-6 max-h-[92vh] overflow-y-auto animate-[rise-in_0.2s_ease-out]"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Шапка: назад/закрыть + сумма */}
-        <div className="flex items-center gap-3 mb-4">
+    <FormSheet
+      lang={lang}
+      title={`${t(lang, 'issueRefund')}${amount > 0 ? ` ${formatMoney(amount, lang)}` : ''}`}
+      onClose={onClose}
+      footer={
+        step === 1 ? (
           <button
-            onClick={() => (step === 2 ? setStep(1) : onClose())}
-            className="w-11 h-11 rounded-xl hover:bg-gray-100 active:scale-[0.97] flex items-center justify-center shrink-0 text-xl text-gray-500"
-            aria-label={t(lang, step === 2 ? 'back' : 'cancel')}
+            onClick={() => setStep(2)}
+            disabled={!amountValid}
+            className="btn-primary flex-1 h-12 disabled:opacity-40"
           >
-            {step === 2 ? (isRtl ? '→' : '←') : '✕'}
+            {t(lang, 'refundNext')}
           </button>
-          <h2 className="text-lg font-black text-gray-900">
-            {t(lang, 'issueRefund')}
-            {amount > 0 && ` ${formatMoney(amount, lang)}`}
-          </h2>
-        </div>
-
+        ) : (
+          <>
+            {/* Шаг 2 возвращается к выбору позиций; закрытие — только «×» в шапке */}
+            <button onClick={() => setStep(1)} className="btn-secondary h-12">
+              {t(lang, 'back')}
+            </button>
+            <button
+              onClick={() => refund.mutate()}
+              disabled={refund.isPending || !amountValid || !methodValid || !reasonKey}
+              className="btn-danger flex-1 h-12 disabled:opacity-40"
+            >
+              {t(lang, 'refundConfirmBtn')} {formatMoney(amount, lang)}
+            </button>
+          </>
+        )
+      }
+    >
+      <>
         {step === 1 ? (
           <>
             {/* Таб: позиции / сумма */}
@@ -207,14 +214,6 @@ export default function RefundSheet({ tx, remaining, onClose, onDone }: Props) {
                 </p>
               </div>
             )}
-
-            <button
-              onClick={() => setStep(2)}
-              disabled={!amountValid}
-              className="btn-primary w-full !py-3.5 !rounded-2xl disabled:opacity-40"
-            >
-              {t(lang, 'refundNext')}
-            </button>
           </>
         ) : (
           <>
@@ -285,17 +284,9 @@ export default function RefundSheet({ tx, remaining, onClose, onDone }: Props) {
                 />
               )}
             </div>
-
-            <button
-              onClick={() => refund.mutate()}
-              disabled={refund.isPending || !amountValid || !methodValid || !reasonKey}
-              className="btn-danger w-full !py-3.5 !rounded-2xl disabled:opacity-40"
-            >
-              {t(lang, 'refundConfirmBtn')} {formatMoney(amount, lang)}
-            </button>
           </>
         )}
-      </div>
-    </div>
+      </>
+    </FormSheet>
   )
 }

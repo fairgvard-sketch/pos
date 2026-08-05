@@ -3,6 +3,7 @@ import { useQuery, useMutation } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { useLangStore } from '../../store/langStore'
 import { t } from '../../lib/i18n'
+import FormSheet from '../../components/ui/FormSheet'
 import { formatMoney, parseMoney } from '../../lib/money'
 import type { CartGuest, CartRedeem } from '../../store/cartStore'
 import { searchGuests, createGuest, normalizePhone, formatPhone, type Guest } from './api'
@@ -81,10 +82,34 @@ export default function GuestSheet({
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center p-4">
-      <div className="card w-full max-w-md p-6 short:p-4 max-h-[92vh] overflow-y-auto animate-[rise-in_0.2s_ease-out]">
-        <h2 className="text-lg font-black text-gray-900 mb-4">{t(lang, 'guestTitle')}</h2>
-
+    <FormSheet
+      lang={lang}
+      title={t(lang, 'guestTitle')}
+      onClose={onCancel}
+      footer={
+        sel ? (
+          <>
+            {current && (
+              <button onClick={() => onApply(null, null)} className="btn-secondary h-12 !text-red-600">
+                {t(lang, 'detachGuest')}
+              </button>
+            )}
+            <button
+              onClick={apply}
+              disabled={pointsStr !== '' && mode === 'points' && !pointsValid}
+              className="btn-primary flex-1 h-12"
+            >
+              {t(lang, 'applyGuest')}
+            </button>
+          </>
+        ) : (
+          <button onClick={onCancel} className="btn-secondary flex-1 h-12">
+            {t(lang, 'cancel')}
+          </button>
+        )
+      }
+    >
+      <>
         {!sel && (
           <>
             <input
@@ -236,25 +261,9 @@ export default function GuestSheet({
               </div>
             )}
 
-            <button
-              onClick={apply}
-              disabled={pointsStr !== '' && mode === 'points' && !pointsValid}
-              className="btn-primary w-full !py-3.5 !rounded-2xl mt-5"
-            >
-              {t(lang, 'applyGuest')}
-            </button>
-            {current && (
-              <button onClick={() => onApply(null, null)} className="btn-ghost w-full mt-2 !text-red-500">
-                {t(lang, 'detachGuest')}
-              </button>
-            )}
           </>
         )}
-
-        <button onClick={onCancel} className="btn-ghost w-full mt-1">
-          {t(lang, 'cancel')}
-        </button>
-      </div>
-    </div>
+      </>
+    </FormSheet>
   )
 }

@@ -11,6 +11,7 @@ import { useAuthStore } from '../../store/authStore'
 import { useLangStore } from '../../store/langStore'
 import { t } from '../../lib/i18n'
 import { formatMoney, parseMoney } from '../../lib/money'
+import FormSheet from '../../components/ui/FormSheet'
 
 /** Строка списка: товар меню или расходник, приведённые к общему виду */
 interface Row {
@@ -31,7 +32,6 @@ interface Row {
  */
 export default function ReceiveSheet({ onClose }: { onClose: () => void }) {
   const lang = useLangStore((s) => s.lang)
-  const isRtl = lang === 'he'
   const staff = useAuthStore((s) => s.staff)
   const qc = useQueryClient()
 
@@ -258,27 +258,24 @@ export default function ReceiveSheet({ onClose }: { onClose: () => void }) {
   const supplyVisible = filterRows(supplyRows)
 
   return (
-    <div
-      dir={isRtl ? 'rtl' : 'ltr'}
-      className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center p-4"
-      onClick={onClose}
+    <FormSheet
+      lang={lang}
+      title={t(lang, 'receiveTitle')}
+      subtitle={t(lang, 'receiveHint')}
+      onClose={onClose}
+      width="wide"
+      footer={
+        <button
+          onClick={() => save.mutate()}
+          disabled={save.isPending || totalQty === 0 || hasBadCost || !staff}
+          className="btn-primary flex-1 h-12 disabled:opacity-40"
+        >
+          {t(lang, 'receiveBtn')}{totalQty > 0 ? ` · ${totalQty}` : ''}
+        </button>
+      }
     >
-      <div
-        className="card w-full max-w-md p-6 max-h-[92vh] overflow-y-auto animate-[rise-in_0.2s_ease-out]"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center gap-3 mb-1">
-          <h2 className="flex-1 text-lg font-black text-gray-900">{t(lang, 'receiveTitle')}</h2>
-          <button
-            onClick={onClose}
-            aria-label={t(lang, 'close')}
-            className="w-11 h-11 rounded-xl hover:bg-gray-100 active:scale-[0.97] flex items-center justify-center text-xl text-gray-500"
-          >
-            ✕
-          </button>
-        </div>
-        <p className="text-sm text-gray-500 mb-1">{t(lang, 'receiveHint')}</p>
-        <p className="text-xs text-gray-400 mb-4">{t(lang, 'receiveAvgCostHint')}</p>
+      <>
+        <p className="text-xs text-gray-500 mb-4">{t(lang, 'receiveAvgCostHint')}</p>
 
         {/* Поставщик и номер накладной (077) */}
         <div className="flex items-center gap-2 mb-2">
@@ -337,7 +334,7 @@ export default function ReceiveSheet({ onClose }: { onClose: () => void }) {
           onChange={(e) => setSearch(e.target.value)}
         />
 
-        <div className="mb-4 max-h-[42vh] overflow-y-auto">
+        <div className="mb-4">
           {menuVisible.length > 0 && (
             <>
               <div className="text-xs font-bold text-gray-400 uppercase tracking-wide mt-1 mb-1">{t(lang, 'items')}</div>
@@ -393,20 +390,12 @@ export default function ReceiveSheet({ onClose }: { onClose: () => void }) {
         )}
 
         {totalCost > 0 && (
-          <div className="flex items-center justify-between text-sm mb-3 px-1">
+          <div className="flex items-center justify-between text-sm px-1">
             <span className="text-gray-500">{t(lang, 'receiveTotalLabel')}</span>
             <span className="font-bold text-gray-900 tabular-nums">{formatMoney(totalCost, lang)}</span>
           </div>
         )}
-
-        <button
-          onClick={() => save.mutate()}
-          disabled={save.isPending || totalQty === 0 || hasBadCost || !staff}
-          className="btn-primary w-full !py-3.5 !rounded-2xl disabled:opacity-40"
-        >
-          {t(lang, 'receiveBtn')}{totalQty > 0 ? ` · ${totalQty}` : ''}
-        </button>
-      </div>
-    </div>
+      </>
+    </FormSheet>
   )
 }

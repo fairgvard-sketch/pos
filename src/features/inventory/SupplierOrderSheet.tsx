@@ -9,6 +9,7 @@ import {
 } from './api'
 import { useLangStore } from '../../store/langStore'
 import { t } from '../../lib/i18n'
+import FormSheet from '../../components/ui/FormSheet'
 
 /** Целевой запас заявки и порог «пора заказывать», в днях расхода */
 const TARGET_DAYS = 14
@@ -64,7 +65,6 @@ function copyText(text: string): boolean {
  */
 export default function SupplierOrderSheet({ onClose }: { onClose: () => void }) {
   const lang = useLangStore((s) => s.lang)
-  const isRtl = lang === 'he'
 
   const { data: items = [] } = useQuery({ queryKey: ['menu_items'], queryFn: fetchItems })
   const { data: supplies = [] } = useQuery({ queryKey: ['supply_items'], queryFn: fetchSupplyItems })
@@ -158,27 +158,32 @@ export default function SupplierOrderSheet({ onClose }: { onClose: () => void })
   }
 
   return (
-    <div
-      dir={isRtl ? 'rtl' : 'ltr'}
-      className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center p-4"
-      onClick={onClose}
-    >
-      <div
-        className="card w-full max-w-md p-6 max-h-[92vh] overflow-y-auto animate-[rise-in_0.2s_ease-out]"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center gap-3 mb-1">
-          <h2 className="flex-1 text-lg font-black text-gray-900">{t(lang, 'supplierOrderTitle')}</h2>
+    <FormSheet
+      lang={lang}
+      title={t(lang, 'supplierOrderTitle')}
+      subtitle={t(lang, 'supplierOrderHint')}
+      onClose={onClose}
+      width="wide"
+      footer={
+        <>
           <button
-            onClick={onClose}
-            aria-label={t(lang, 'close')}
-            className="w-11 h-11 rounded-xl hover:bg-gray-100 active:scale-[0.97] flex items-center justify-center text-xl text-gray-500"
+            onClick={() => { if (copyText(orderText)) toast.success(t(lang, 'orderCopied')) }}
+            disabled={chosen.length === 0}
+            className="btn-secondary flex-1 h-12 disabled:opacity-40"
           >
-            ✕
+            {t(lang, 'orderCopy')}
           </button>
-        </div>
-        <p className="text-sm text-gray-500 mb-4">{t(lang, 'supplierOrderHint')}</p>
-
+          <button
+            onClick={openWhatsApp}
+            disabled={chosen.length === 0 || !supplierPhone}
+            className="btn-primary flex-1 h-12 disabled:opacity-40"
+          >
+            {t(lang, 'orderWhatsApp')}
+          </button>
+        </>
+      }
+    >
+      <>
         <select
           className="input !py-2.5 mb-3 text-sm"
           value={supplierId}
@@ -193,7 +198,7 @@ export default function SupplierOrderSheet({ onClose }: { onClose: () => void })
         {rows.length === 0 && !usage.isLoading ? (
           <div className="text-center py-10 text-sm text-gray-500">{t(lang, 'supplierOrderEmpty')}</div>
         ) : (
-          <div className="mb-4 max-h-[46vh] overflow-y-auto">
+          <div className="mb-4">
             {rows.map((r) => (
               <div key={r.key} className="flex items-center gap-2 min-h-[48px] border-b border-gray-100">
                 <span className="flex-1 min-w-0 truncate text-sm text-gray-900">
@@ -220,28 +225,11 @@ export default function SupplierOrderSheet({ onClose }: { onClose: () => void })
         )}
 
         {chosen.length > 0 && (
-          <div dir="rtl" className="bg-gray-50 rounded-xl px-4 py-3 mb-4 text-sm text-gray-900 whitespace-pre-wrap">
+          <div dir="rtl" className="bg-gray-50 rounded-xl px-4 py-3 text-sm text-gray-900 whitespace-pre-wrap">
             {orderText}
           </div>
         )}
-
-        <div className="flex gap-2">
-          <button
-            onClick={() => { if (copyText(orderText)) toast.success(t(lang, 'orderCopied')) }}
-            disabled={chosen.length === 0}
-            className="btn-secondary flex-1 !py-3 disabled:opacity-40"
-          >
-            {t(lang, 'orderCopy')}
-          </button>
-          <button
-            onClick={openWhatsApp}
-            disabled={chosen.length === 0 || !supplierPhone}
-            className="btn-primary flex-1 !py-3 disabled:opacity-40"
-          >
-            {t(lang, 'orderWhatsApp')}
-          </button>
-        </div>
-      </div>
-    </div>
+      </>
+    </FormSheet>
   )
 }

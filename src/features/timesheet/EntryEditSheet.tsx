@@ -5,6 +5,7 @@ import { saveTimeEntry, deleteTimeEntry } from './api'
 import { useAuthStore } from '../../store/authStore'
 import { useLangStore } from '../../store/langStore'
 import { t } from '../../lib/i18n'
+import FormSheet from '../../components/ui/FormSheet'
 
 /**
  * Минимум полей записи для правки. Один и тот же диалог открывают лента
@@ -55,7 +56,6 @@ function combine(dateStr: string, timeStr: string): Date {
  */
 export default function EntryEditSheet({ target, onClose }: Props) {
   const lang = useLangStore((s) => s.lang)
-  const isRtl = lang === 'he'
   const qc = useQueryClient()
   const actor = useAuthStore((s) => s.staff)
   const existing = isExisting(target)
@@ -110,21 +110,34 @@ export default function EntryEditSheet({ target, onClose }: Props) {
   const valid = !!date && !!inTime && combine(date, inTime) <= new Date()
 
   return (
-    <div
-      dir={isRtl ? 'rtl' : 'ltr'}
-      className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center p-4"
-      onClick={onClose}
+    <FormSheet
+      lang={lang}
+      title={t(lang, existing ? 'tsEditShift' : 'tsAddShift')}
+      subtitle={staffName}
+      onClose={onClose}
+      footer={
+        <>
+          {existing && (
+            <button
+              onClick={() => { if (confirm(t(lang, 'tsConfirmDelete'))) remove.mutate() }}
+              disabled={busy}
+              className="btn-danger h-12"
+            >
+              {t(lang, 'delete')}
+            </button>
+          )}
+          <button
+            onClick={() => save.mutate()}
+            disabled={busy || !valid}
+            className="btn-primary flex-1 h-12"
+          >
+            {t(lang, 'save')}
+          </button>
+        </>
+      }
     >
-      <div
-        className="card w-full max-w-xs p-6 max-h-[92vh] overflow-y-auto animate-[rise-in_0.2s_ease-out]"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h2 className="text-lg font-black text-gray-900 mb-1">
-          {t(lang, existing ? 'tsEditShift' : 'tsAddShift')}
-        </h2>
-        <p className="text-sm text-gray-500 mb-4">{staffName}</p>
-
-        <label className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-1">
+      <>
+        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">
           {t(lang, 'tsDate')}
         </label>
         <input
@@ -137,43 +150,25 @@ export default function EntryEditSheet({ target, onClose }: Props) {
 
         <div className="grid grid-cols-2 gap-3 mb-1">
           <div>
-            <label className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-1">
+            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">
               {t(lang, 'tsClockIn')}
             </label>
             <input type="time" className="input" value={inTime} onChange={(e) => setInTime(e.target.value)} />
           </div>
           <div>
-            <label className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-1">
+            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">
               {t(lang, 'tsClockOut')}
             </label>
             <input type="time" className="input" value={outTime} onChange={(e) => setOutTime(e.target.value)} />
           </div>
         </div>
-        <p className="text-xs text-gray-400 mb-3">{t(lang, 'tsStillOpen')}</p>
+        <p className="text-xs text-gray-500 mb-3">{t(lang, 'tsStillOpen')}</p>
 
-        <label className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-1">
+        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">
           {t(lang, 'tsNote')}
         </label>
-        <input className="input mb-4" value={note} onChange={(e) => setNote(e.target.value)} />
-
-        <button
-          onClick={() => save.mutate()}
-          disabled={busy || !valid}
-          className="btn-primary w-full !py-3.5 !rounded-2xl"
-        >
-          {t(lang, 'save')}
-        </button>
-
-        {existing && (
-          <button
-            onClick={() => { if (confirm(t(lang, 'tsConfirmDelete'))) remove.mutate() }}
-            disabled={busy}
-            className="btn-danger w-full !py-3.5 !rounded-2xl mt-2"
-          >
-            {t(lang, 'delete')}
-          </button>
-        )}
-      </div>
-    </div>
+        <input className="input" value={note} onChange={(e) => setNote(e.target.value)} />
+      </>
+    </FormSheet>
   )
 }

@@ -12,6 +12,7 @@ import { payMethodIcon, payMethodLabel, type PayMethodId } from '../../lib/payMe
 import type { PaymentInput } from './api'
 import Icon from '../../components/Icon'
 import NumPad from '../../components/NumPad'
+import FormSheet from '../../components/ui/FormSheet'
 
 /** Реквизиты покупателя-бизнеса (048): попадают на чек прямо при оплате */
 export interface OrderBuyer {
@@ -441,59 +442,60 @@ export default function PaymentSheet({ total, tip = 0, startMode = 'choose', onC
 
       {/* Мини-форма реквизитов компании поверх окна оплаты */}
       {buyerOpen && (
-        <div
-          className="fixed inset-0 z-[60] bg-black/40 flex items-center justify-center p-4"
-          onClick={() => setBuyerOpen(false)}
-        >
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-gray-900 mb-4">{t(lang, 'bizInvoiceBtn')}</h3>
-            <div className="space-y-2">
-              <input
-                className="input"
-                autoFocus
-                placeholder={t(lang, 'bizName')}
-                value={bizName}
-                onChange={(e) => setBizName(e.target.value)}
-              />
-              <input
-                className="input"
-                inputMode="numeric"
-                placeholder={t(lang, 'bizTaxId')}
-                value={bizTaxId}
-                onChange={(e) => setBizTaxId(e.target.value.replace(/\D/g, '').slice(0, 9))}
-              />
-              <p className="text-xs text-gray-500">{t(lang, 'bizInvoiceHint')}</p>
-            </div>
-            <div className="grid grid-cols-2 gap-2 mt-4">
+        <FormSheet
+          lang={lang}
+          title={t(lang, 'bizInvoiceBtn')}
+          onClose={() => setBuyerOpen(false)}
+          zClass="z-[60]"
+          footer={
+            <>
+              {buyer && (
+                <button
+                  onClick={() => {
+                    setBuyer(null)
+                    setBizName('')
+                    setBizTaxId('')
+                    setBuyerOpen(false)
+                  }}
+                  className="btn-secondary h-12"
+                >
+                  {t(lang, 'bizRemove')}
+                </button>
+              )}
+              <button onClick={() => setBuyerOpen(false)} className="btn-secondary flex-1 h-12">
+                {t(lang, 'cancel')}
+              </button>
               <button
                 onClick={() => {
                   setBuyer({ name: bizName.trim(), taxId: bizTaxId || null })
                   setBuyerOpen(false)
                 }}
                 disabled={!bizName.trim() || !taxIdValid}
-                className="btn-primary !py-3 !rounded-2xl disabled:opacity-40"
+                className="btn-primary flex-1 h-12 disabled:opacity-40"
               >
                 {t(lang, 'save')}
               </button>
-              <button onClick={() => setBuyerOpen(false)} className="btn-ghost !py-3 !rounded-2xl">
-                {t(lang, 'cancel')}
-              </button>
-            </div>
-            {buyer && (
-              <button
-                onClick={() => {
-                  setBuyer(null)
-                  setBizName('')
-                  setBizTaxId('')
-                  setBuyerOpen(false)
-                }}
-                className="btn-secondary w-full !py-3 !rounded-2xl mt-2"
-              >
-                {t(lang, 'bizRemove')}
-              </button>
-            )}
+            </>
+          }
+        >
+          <div className="space-y-2">
+            <input
+              className="input"
+              autoFocus
+              placeholder={t(lang, 'bizName')}
+              value={bizName}
+              onChange={(e) => setBizName(e.target.value)}
+            />
+            <input
+              className="input"
+              inputMode="numeric"
+              placeholder={t(lang, 'bizTaxId')}
+              value={bizTaxId}
+              onChange={(e) => setBizTaxId(e.target.value.replace(/\D/g, '').slice(0, 9))}
+            />
+            <p className="text-xs text-gray-500">{t(lang, 'bizInvoiceHint')}</p>
           </div>
-        </div>
+        </FormSheet>
       )}
     </div>
   )

@@ -6,6 +6,7 @@ import { addWaste, fetchTodayWaste } from './api'
 import { useAuthStore } from '../../store/authStore'
 import { useLangStore } from '../../store/langStore'
 import { t, formatTime } from '../../lib/i18n'
+import FormSheet from '../../components/ui/FormSheet'
 
 /**
  * Списание дня (047) — ритуал закрытия пекарни: отметить, сколько
@@ -14,7 +15,6 @@ import { t, formatTime } from '../../lib/i18n'
  */
 export default function WasteSheet({ onClose }: { onClose: () => void }) {
   const lang = useLangStore((s) => s.lang)
-  const isRtl = lang === 'he'
   const staff = useAuthStore((s) => s.staff)
   const qc = useQueryClient()
 
@@ -62,27 +62,22 @@ export default function WasteSheet({ onClose }: { onClose: () => void }) {
   })
 
   return (
-    <div
-      dir={isRtl ? 'rtl' : 'ltr'}
-      className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center p-4"
-      onClick={onClose}
+    <FormSheet
+      lang={lang}
+      title={t(lang, 'wasteTitle')}
+      subtitle={t(lang, 'wasteEmptyHint')}
+      onClose={onClose}
+      footer={
+        <button
+          onClick={() => save.mutate()}
+          disabled={save.isPending || totalQty === 0 || !staff}
+          className="btn-primary flex-1 h-12 disabled:opacity-40"
+        >
+          {t(lang, 'wasteAddBtn')}{totalQty > 0 ? ` · ${totalQty}` : ''}
+        </button>
+      }
     >
-      <div
-        className="card w-full max-w-md p-6 max-h-[92vh] overflow-y-auto animate-[rise-in_0.2s_ease-out]"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center gap-3 mb-1">
-          <h2 className="flex-1 text-lg font-black text-gray-900">{t(lang, 'wasteTitle')}</h2>
-          <button
-            onClick={onClose}
-            aria-label={t(lang, 'close')}
-            className="w-11 h-11 rounded-xl hover:bg-gray-100 active:scale-[0.97] flex items-center justify-center text-xl text-gray-500"
-          >
-            ✕
-          </button>
-        </div>
-        <p className="text-sm text-gray-500 mb-4">{t(lang, 'wasteEmptyHint')}</p>
-
+      <>
         <input
           className="input !py-2.5 mb-3"
           placeholder={t(lang, 'searchPlaceholder')}
@@ -90,7 +85,7 @@ export default function WasteSheet({ onClose }: { onClose: () => void }) {
           onChange={(e) => setSearch(e.target.value)}
         />
 
-        <div className="mb-4 max-h-[38vh] overflow-y-auto">
+        <div className="mb-4">
           {visible.map((i) => {
             const qty = qtyById[i.id] ?? 0
             return (
@@ -122,20 +117,12 @@ export default function WasteSheet({ onClose }: { onClose: () => void }) {
 
         {totalQty > 0 && (
           <input
-            className="input !py-2.5 mb-3"
+            className="input !py-2.5"
             placeholder={t(lang, 'wasteReasonPh')}
             value={reason}
             onChange={(e) => setReason(e.target.value)}
           />
         )}
-
-        <button
-          onClick={() => save.mutate()}
-          disabled={save.isPending || totalQty === 0 || !staff}
-          className="btn-primary w-full !py-3.5 !rounded-2xl disabled:opacity-40"
-        >
-          {t(lang, 'wasteAddBtn')}{totalQty > 0 ? ` · ${totalQty}` : ''}
-        </button>
 
         {today.length > 0 && (
           <div className="mt-5">
@@ -156,7 +143,7 @@ export default function WasteSheet({ onClose }: { onClose: () => void }) {
             ))}
           </div>
         )}
-      </div>
-    </div>
+      </>
+    </FormSheet>
   )
 }

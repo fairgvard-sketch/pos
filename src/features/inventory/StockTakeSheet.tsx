@@ -6,6 +6,7 @@ import { fetchSupplyItems, stockTake, type CountItem, type StockKind } from './a
 import { useAuthStore } from '../../store/authStore'
 import { useLangStore } from '../../store/langStore'
 import { t } from '../../lib/i18n'
+import FormSheet from '../../components/ui/FormSheet'
 import { formatMoney } from '../../lib/money'
 
 interface Row {
@@ -30,7 +31,6 @@ const DRAFT_KEY = 'kassa_stocktake_draft'
  */
 export default function StockTakeSheet({ onClose }: { onClose: () => void }) {
   const lang = useLangStore((s) => s.lang)
-  const isRtl = lang === 'he'
   const staff = useAuthStore((s) => s.staff)
   const qc = useQueryClient()
 
@@ -146,27 +146,23 @@ export default function StockTakeSheet({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div
-      dir={isRtl ? 'rtl' : 'ltr'}
-      className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center p-4"
-      onClick={onClose}
+    <FormSheet
+      lang={lang}
+      title={t(lang, 'stockTakeTitle')}
+      subtitle={t(lang, 'stockTakeHint')}
+      onClose={onClose}
+      width="wide"
+      footer={
+        <button
+          onClick={() => save.mutate()}
+          disabled={save.isPending || filled.length === 0 || !staff}
+          className="btn-primary flex-1 h-12 disabled:opacity-40"
+        >
+          {t(lang, 'stockTakeBtn')}{filled.length > 0 ? ` · ${filled.length}` : ''}
+        </button>
+      }
     >
-      <div
-        className="card w-full max-w-md p-6 max-h-[92vh] overflow-y-auto animate-[rise-in_0.2s_ease-out]"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center gap-3 mb-1">
-          <h2 className="flex-1 text-lg font-black text-gray-900">{t(lang, 'stockTakeTitle')}</h2>
-          <button
-            onClick={onClose}
-            aria-label={t(lang, 'close')}
-            className="w-11 h-11 rounded-xl hover:bg-gray-100 active:scale-[0.97] flex items-center justify-center text-xl text-gray-500"
-          >
-            ✕
-          </button>
-        </div>
-        <p className="text-sm text-gray-500 mb-3">{t(lang, 'stockTakeHint')}</p>
-
+      <>
         <label className="flex items-center gap-2 text-sm text-gray-500 mb-3 min-h-[44px] cursor-pointer select-none">
           <input
             type="checkbox"
@@ -184,7 +180,7 @@ export default function StockTakeSheet({ onClose }: { onClose: () => void }) {
           onChange={(e) => setSearch(e.target.value)}
         />
 
-        <div className="mb-4 max-h-[46vh] overflow-y-auto">
+        <div className="mb-4">
           {menuRows.length > 0 && (
             <>
               <div className="text-xs font-bold text-gray-400 uppercase tracking-wide mt-1 mb-1">{t(lang, 'items')}</div>
@@ -201,21 +197,13 @@ export default function StockTakeSheet({ onClose }: { onClose: () => void }) {
 
         {filled.length > 0 && (
           <input
-            className="input !py-2.5 mb-3"
+            className="input !py-2.5"
             placeholder={t(lang, 'stockTakeNotePh')}
             value={note}
             onChange={(e) => setNote(e.target.value)}
           />
         )}
-
-        <button
-          onClick={() => save.mutate()}
-          disabled={save.isPending || filled.length === 0 || !staff}
-          className="btn-primary w-full !py-3.5 !rounded-2xl disabled:opacity-40"
-        >
-          {t(lang, 'stockTakeBtn')}{filled.length > 0 ? ` · ${filled.length}` : ''}
-        </button>
-      </div>
-    </div>
+      </>
+    </FormSheet>
   )
 }

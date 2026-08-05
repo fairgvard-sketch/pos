@@ -8,6 +8,7 @@ import {
 import { useLangStore } from '../../store/langStore'
 import { t, formatTime } from '../../lib/i18n'
 import { formatMoney } from '../../lib/money'
+import FormSheet from '../../components/ui/FormSheet'
 
 /**
  * Поставки (077): лента приходных накладных — когда, от кого, на какую
@@ -114,7 +115,6 @@ function DocLines({ docId }: { docId: string }) {
 /** Справочник поставщиков: добавить, переименовать, скрыть */
 function SuppliersSheet({ onClose }: { onClose: () => void }) {
   const lang = useLangStore((s) => s.lang)
-  const isRtl = lang === 'he'
   const qc = useQueryClient()
   const { data: suppliers = [] } = useQuery({ queryKey: ['suppliers'], queryFn: fetchSuppliers })
 
@@ -140,26 +140,15 @@ function SuppliersSheet({ onClose }: { onClose: () => void }) {
   })
 
   return (
-    <div
-      dir={isRtl ? 'rtl' : 'ltr'}
-      className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center p-4"
-      onClick={onClose}
+    <FormSheet
+      lang={lang}
+      title={t(lang, 'suppliersTitle')}
+      onClose={onClose}
+      footer={
+        <button onClick={onClose} className="btn-secondary flex-1 h-12">{t(lang, 'close')}</button>
+      }
     >
-      <div
-        className="card w-full max-w-md p-6 max-h-[92vh] overflow-y-auto animate-[rise-in_0.2s_ease-out]"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center gap-3 mb-4">
-          <h2 className="flex-1 text-lg font-black text-gray-900">{t(lang, 'suppliersTitle')}</h2>
-          <button
-            onClick={onClose}
-            aria-label={t(lang, 'close')}
-            className="w-11 h-11 rounded-xl hover:bg-gray-100 active:scale-[0.97] flex items-center justify-center text-xl text-gray-500"
-          >
-            ✕
-          </button>
-        </div>
-
+      <>
         {suppliers.length === 0 && (
           <div className="text-sm text-gray-400 py-2">{t(lang, 'suppliersEmpty')}</div>
         )}
@@ -235,7 +224,7 @@ function SuppliersSheet({ onClose }: { onClose: () => void }) {
             {t(lang, 'add')}
           </button>
         </div>
-      </div>
-    </div>
+      </>
+    </FormSheet>
   )
 }
