@@ -671,13 +671,20 @@ export interface TimesheetPrintDay {
 
 export interface TimesheetPrintData {
   staffName: string
+  /** Точка — строка шапки, как «חנות» в отчёте старой системы */
+  locationName?: string
   /** Период DD.MM.YYYY — DD.MM.YYYY */
   periodFrom: string
   periodTo: string
   days: TimesheetPrintDay[]
+  /** Итог в часах и минутах («168:30») */
   totalHours: string
+  /** Он же десятичными («168.50») — в этом виде часы уходят в зарплату */
+  totalDecimal: string
   daysCount: number
   shiftsCount: number
+  /** Суммарный перерыв; строка печатается только когда он был */
+  breakHours?: string
 }
 
 /**
@@ -735,6 +742,7 @@ export function renderTimesheetCanvas(d: TimesheetPrintData, tape?: TapeWidth): 
 
   center('דו"ח שעות עבודה', 32, true, 8)
   center(d.staffName, 28, true, 6)
+  if (d.locationName) center(d.locationName, 24, false, 4)
   center(`${d.periodFrom} — ${d.periodTo}`, 24, false, 4)
   divider()
 
@@ -771,7 +779,13 @@ export function renderTimesheetCanvas(d: TimesheetPrintData, tape?: TapeWidth): 
   divider()
   metaRow('ימי עבודה:', String(d.daysCount))
   metaRow('משמרות:', String(d.shiftsCount))
+  // Перерыв печатается, только если он был: строка «00:00» в каждом
+  // табеле — шум, за которым перестают замечать настоящий перерыв
+  if (d.breakHours) metaRow('הפסקות:', d.breakHours)
   metaRow('סה"כ שעות:', d.totalHours, 30, true)
+  // То же число десятичными: в зарплату часы уходят в этом виде, и
+  // пересчитывать «8:30 → 8.5» руками бухгалтер не должен
+  metaRow('סה"כ עשרוני:', d.totalDecimal, 26)
 
   divider()
   const now = new Date()

@@ -3,7 +3,8 @@ import { useQuery } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { fetchStaffHours, toDateKey, type StaffHoursEntry } from './api'
 import {
-  groupByDay, formatDay, formatTime, formatHm, formatRanges, buildHoursCsv, downloadCsv,
+  groupByDay, formatDay, formatTime, formatHm, decimalHours, formatRanges,
+  dayBounds, dayBreakSeconds, buildHoursCsv, downloadCsv,
   monthRange, monthTitle, HEBREW_DOW, RU_DOW,
 } from './hours'
 import { useLangStore } from '../../store/langStore'
@@ -26,8 +27,15 @@ const TZ = 'Asia/Jerusalem'
 
 /**
  * Часы одного сотрудника за период — то, что распечатывают и отдают
- * бухгалтеру: строка на день в виде «01.08.2026 א 07:00 - 15:00», итог
- * снизу, печать на ленте и выгрузка в Excel.
+ * бухгалтеру.
+ *
+ * Раскладка повторяет «דוח שעות לעובד» старой системы, к которой привык
+ * владелец: шапка с периодом, человеком и точкой, затем колонки
+ * приход / уход / перерыв / итог. Перерыв касса отдельно не отбивает —
+ * он считается из разрыва между сменами дня.
+ *
+ * Итог показывается двумя числами: «8:30» читает сотрудник, «8,50» —
+ * бухгалтер. Одно из них всё равно пришлось бы пересчитывать руками.
  *
  * Период по умолчанию — текущий месяц: за месяц считают зарплату. Стрелки
  * листают месяцы, «Даты» открывают произвольный диапазон.
@@ -63,6 +71,8 @@ export default function StaffHoursSheet({ staffId, staffName, onClose, onEdit, o
 
   const person = data?.staff.find((s) => s.staff_id === staffId)
   const days = useMemo(() => groupByDay(person?.entries ?? []), [person?.entries])
+  const breakSeconds = useMemo(() => days.reduce((sum, d) => sum + dayBreakSeconds(d), 0), [days])
+  const locationName = person?.entries[0]?.location_name ?? null
 
   const periodLabel = custom
     ? `${formatDay(toDateKey(from))} — ${formatDay(toDateKey(to))}`
@@ -83,9 +93,12 @@ export default function StaffHoursSheet({ staffId, staffName, onClose, onEdit, o
           hours: formatHm(e.seconds),
         })),
       })),
+      locationName: locationName ?? undefined,
       totalHours: formatHm(person.seconds),
+      totalDecimal: decimalHours(person.seconds),
       daysCount: person.days,
       shiftsCount: person.shifts,
+      breakHours: breakSeconds > 0 ? formatHm(breakSeconds) : undefined,
     }
     const ok = await printTimesheet(payload, printMode === 'rawbt')
     if (!ok) {
@@ -100,8 +113,10 @@ export default function StaffHoursSheet({ staffId, staffName, onClose, onEdit, o
     downloadCsv(
       buildHoursCsv([person], TZ, {
         employee: t(lang, 'tsEmployee'), date: t(lang, 'tsDate'), weekday: t(lang, 'tsWeekday'),
-        clockIn: t(lang, 'tsClockIn'), clockOut: t(lang, 'tsClockOut'), hours: t(lang, 'hoursWorked'),
-        decimal: t(lang, 'tsDecimalHours'), location: t(lang, 'tsLocation'), note: t(lang, 'tsNote'),
+        clockIn: t(lang, 'tsClockIn'), clockOut: t(lang, 'tsClockOut'),
+        breakTime: t(lang, 'tsBreak'), hours: t(lang, 'hoursWorked'),
+        decimal: t(lang, 'tsDecimalHours'), ranges: t(lang, 'tsRanges'),
+        location: t(lang, 'tsLocation'), note: t(lang, 'tsNote'),
         total: t(lang, 'total'), days: t(lang, 'tsDaysShort'), shifts: t(lang, 'tsShiftsCount'),
       }, isRtl ? HEBREW_DOW : RU_DOW),
       `hours_${person.name}_${toDateKey(from)}_${toDateKey(to)}.csv`,
@@ -131,7 +146,12 @@ export default function StaffHoursSheet({ staffId, staffName, onClose, onEdit, o
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <h2 className="text-xl font-black text-gray-900 truncate">{staffName}</h2>
-              <p className="text-sm text-gray-500">{t(lang, 'tsCardHint')}</p>
+              {/* Шапка отчёта: период и точка — то, что первым спрашивает
+                  бухгалтер, глядя на бумагу */}
+              <p className="text-sm text-gray-500 tabular-nums" dir="ltr">
+                {formatDay(toDateKey(from))} — {formatDay(toDateKey(to))}
+              </p>
+              {locationName && <p className="text-sm text-gray-500 truncate">{locationName}</p>}
             </div>
             <button onClick={onClose} className="btn-ghost !h-11 !px-4 shrink-0">
               {t(lang, 'close')}
@@ -182,37 +202,65 @@ export default function StaffHoursSheet({ staffId, staffName, onClose, onEdit, o
           ) : days.length === 0 ? (
             <p className="text-sm text-gray-500">{t(lang, 'noEntriesYet')}</p>
           ) : (
-            <div className="divide-y divide-gray-50">
-              {days.map((day) => (
-                <div key={day.day} className="flex items-center gap-3 py-2.5">
-                  <span className="tabular-nums text-gray-900 font-semibold shrink-0 w-[6.5rem]" dir="ltr">
-                    {formatDay(day.day)}
-                  </span>
-                  <span className="text-gray-400 w-5 text-center shrink-0">
-                    {isRtl ? HEBREW_DOW[day.dow] : RU_DOW[day.dow]}
-                  </span>
-                  <span className="flex-1 min-w-0 tabular-nums text-gray-600 truncate" dir="ltr">
-                    {formatRanges(day, TZ)}
-                  </span>
-                  <span className={`tabular-nums font-bold shrink-0 w-14 text-end ${
-                    day.hasOpen ? 'text-emerald-600' : 'text-gray-900'
-                  }`}>
-                    {formatHm(day.seconds)}
-                  </span>
-                  {onEdit && (
-                    <span className="flex shrink-0">
-                      {day.entries.map((e) => (
-                        <button key={e.id} onClick={() => onEdit(e)}
-                          className="w-11 h-11 rounded-lg text-gray-400 hover:text-gray-900 hover:bg-gray-100"
-                          aria-label={t(lang, 'edit')}
-                          title={e.edited_at ? `${t(lang, 'tsEdited')}${e.edited_by_name ? ` · ${e.edited_by_name}` : ''}` : undefined}>
-                          {e.edited_at ? '✎*' : '✎'}
-                        </button>
-                      ))}
-                    </span>
-                  )}
-                </div>
-              ))}
+            <div>
+              {/* Колонки те же, что в отчёте, к которому привык владелец:
+                  приход, уход, перерыв, итог */}
+              <div className="flex items-center gap-3 pb-2 text-[11px] font-bold uppercase tracking-wide text-gray-400">
+                <span className="shrink-0 w-[6.5rem]">{t(lang, 'tsDate')}</span>
+                <span className="w-5 shrink-0" />
+                <span className="w-14 text-end shrink-0">{t(lang, 'tsClockIn')}</span>
+                <span className="w-14 text-end shrink-0">{t(lang, 'tsClockOut')}</span>
+                <span className="w-14 text-end shrink-0">{t(lang, 'tsBreak')}</span>
+                <span className="flex-1 text-end">{t(lang, 'total')}</span>
+                {onEdit && <span className="w-11 shrink-0" />}
+              </div>
+
+              <div className="divide-y divide-gray-50">
+                {days.map((day) => {
+                  const bounds = dayBounds(day)
+                  const gap = dayBreakSeconds(day)
+                  return (
+                    <div key={day.day} className="flex items-center gap-3 py-2.5"
+                      // Разбитый день: интервалы целиком — подсказкой, чтобы
+                      // строка осталась одной, а правда о дне не потерялась
+                      title={day.entries.length > 1 ? formatRanges(day, TZ) : undefined}>
+                      <span className="tabular-nums text-gray-900 font-semibold shrink-0 w-[6.5rem]" dir="ltr">
+                        {formatDay(day.day)}
+                      </span>
+                      <span className="text-gray-400 w-5 text-center shrink-0">
+                        {isRtl ? HEBREW_DOW[day.dow] : RU_DOW[day.dow]}
+                      </span>
+                      <span className="tabular-nums text-gray-600 w-14 text-end shrink-0" dir="ltr">
+                        {formatTime(bounds.in, TZ)}
+                      </span>
+                      <span className="tabular-nums text-gray-600 w-14 text-end shrink-0" dir="ltr">
+                        {bounds.out ? formatTime(bounds.out, TZ) : '…'}
+                      </span>
+                      <span className={`tabular-nums w-14 text-end shrink-0 ${gap > 0 ? 'text-gray-600' : 'text-gray-300'}`} dir="ltr">
+                        {formatHm(gap)}
+                      </span>
+                      <span className={`flex-1 text-end tabular-nums font-bold ${
+                        day.hasOpen ? 'text-emerald-600' : 'text-gray-900'
+                      }`} dir="ltr">
+                        {formatHm(day.seconds)}
+                        <span className="text-gray-400 font-normal ms-1.5">{decimalHours(day.seconds)}</span>
+                      </span>
+                      {onEdit && (
+                        <span className="flex shrink-0">
+                          {day.entries.map((e) => (
+                            <button key={e.id} onClick={() => onEdit(e)}
+                              className="w-11 h-11 rounded-lg text-gray-400 hover:text-gray-900 hover:bg-gray-100"
+                              aria-label={t(lang, 'edit')}
+                              title={e.edited_at ? `${t(lang, 'tsEdited')}${e.edited_by_name ? ` · ${e.edited_by_name}` : ''}` : undefined}>
+                              {e.edited_at ? '✎*' : '✎'}
+                            </button>
+                          ))}
+                        </span>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
             </div>
           )}
 
@@ -225,10 +273,17 @@ export default function StaffHoursSheet({ staffId, staffName, onClose, onEdit, o
 
         {/* ── Итог и действия ── */}
         <footer className="px-6 py-4 border-t border-gray-100">
-          <div className="grid grid-cols-3 gap-3 mb-3">
-            <Stat label={t(lang, 'hoursWorked')} value={formatHm(person?.seconds ?? 0)} />
+          <div className={`grid gap-3 mb-3 ${breakSeconds > 0 ? 'grid-cols-4' : 'grid-cols-3'}`}>
+            <Stat
+              label={t(lang, 'hoursWorked')}
+              value={formatHm(person?.seconds ?? 0)}
+              /* Десятичные — то число, которым считают зарплату; держим
+                 рядом, чтобы никто не пересчитывал «8:30 → 8.5» руками */
+              sub={decimalHours(person?.seconds ?? 0)}
+            />
             <Stat label={t(lang, 'tsDaysShort')} value={String(person?.days ?? 0)} />
             <Stat label={t(lang, 'tsShiftsCount')} value={String(person?.shifts ?? 0)} />
+            {breakSeconds > 0 && <Stat label={t(lang, 'tsBreak')} value={formatHm(breakSeconds)} />}
           </div>
           <div className="flex gap-2">
             <button onClick={print} disabled={!person || days.length === 0} className="btn-primary flex-1 !py-3.5 !rounded-2xl">
@@ -245,6 +300,7 @@ export default function StaffHoursSheet({ staffId, staffName, onClose, onEdit, o
       <div className="print-source receipt-print" dir="rtl">
         <div style={{ textAlign: 'center', fontWeight: 700 }}>דו"ח שעות עבודה</div>
         <div style={{ textAlign: 'center', fontWeight: 700 }}>{staffName}</div>
+        {locationName && <div style={{ textAlign: 'center' }}>{locationName}</div>}
         <div style={{ textAlign: 'center' }}>
           {formatDay(toDateKey(from))} — {formatDay(toDateKey(to))}
         </div>
@@ -259,12 +315,22 @@ export default function StaffHoursSheet({ staffId, staffName, onClose, onEdit, o
         ))}
         <hr />
         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+          <span dir="ltr">{person?.days ?? 0}</span>
+          <span>ימי עבודה</span>
+        </div>
+        {breakSeconds > 0 && (
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span dir="ltr">{formatHm(breakSeconds)}</span>
+            <span>הפסקות</span>
+          </div>
+        )}
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700 }}>
           <span dir="ltr">{formatHm(person?.seconds ?? 0)}</span>
           <span>סה"כ שעות</span>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-          <span dir="ltr">{person?.days ?? 0}</span>
-          <span>ימי עבודה</span>
+          <span dir="ltr">{decimalHours(person?.seconds ?? 0)}</span>
+          <span>סה"כ עשרוני</span>
         </div>
         <div style={{ marginTop: '8px' }}>חתימת העובד/ת: ____________</div>
       </div>
@@ -272,11 +338,14 @@ export default function StaffHoursSheet({ staffId, staffName, onClose, onEdit, o
   )
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
     <div className="rounded-2xl border border-gray-100 p-3">
       <div className="text-xs font-semibold text-gray-500 mb-0.5">{label}</div>
-      <div className="text-lg font-black tabular-nums text-gray-900">{value}</div>
+      <div className="text-lg font-black tabular-nums text-gray-900" dir="ltr">
+        {value}
+        {sub && <span className="text-sm font-normal text-gray-400 ms-1.5">{sub}</span>}
+      </div>
     </div>
   )
 }

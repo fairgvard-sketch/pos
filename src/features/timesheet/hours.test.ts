@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   groupByDay, formatDay, formatTime, formatHm, decimalHours,
   formatRanges, formatDayLine, sumDays, buildHoursCsv, monthRange, idleStaff,
-  HEBREW_DOW, RU_DOW,
+  dayBounds, dayBreakSeconds, HEBREW_DOW, RU_DOW,
 } from './hours'
 import type { StaffHours, StaffHoursEntry } from './api'
 
@@ -98,6 +98,40 @@ describe('форматы', () => {
   })
 })
 
+describe('границы дня и перерыв', () => {
+  it('день из одной смены: приход и уход её же, перерыва нет', () => {
+    const [day] = groupByDay([entry()])
+    expect(dayBounds(day)).toEqual({ in: '2026-08-01T04:00:00Z', out: '2026-08-01T12:00:00Z' })
+    expect(dayBreakSeconds(day)).toBe(0)
+  })
+
+  it('разрыв между сменами дня и есть перерыв', () => {
+    // 07:00–11:00 и 12:00–15:00: на работе 8 часов, отработано 7, перерыв час
+    const [day] = groupByDay([
+      entry({ id: 'a', clock_in: '2026-08-01T04:00:00Z', clock_out: '2026-08-01T08:00:00Z', seconds: 4 * 3600 }),
+      entry({ id: 'b', clock_in: '2026-08-01T09:00:00Z', clock_out: '2026-08-01T12:00:00Z', seconds: 3 * 3600 }),
+    ])
+    expect(dayBounds(day)).toEqual({ in: '2026-08-01T04:00:00Z', out: '2026-08-01T12:00:00Z' })
+    expect(dayBreakSeconds(day)).toBe(3600)
+    expect(day.seconds).toBe(7 * 3600)
+  })
+
+  it('границы берутся по времени, а не по порядку в ответе', () => {
+    const [day] = groupByDay([
+      entry({ id: 'b', clock_in: '2026-08-01T09:00:00Z', clock_out: '2026-08-01T12:00:00Z', seconds: 3 * 3600 }),
+      entry({ id: 'a', clock_in: '2026-08-01T04:00:00Z', clock_out: '2026-08-01T08:00:00Z', seconds: 4 * 3600 }),
+    ])
+    expect(dayBounds(day).in).toBe('2026-08-01T04:00:00Z')
+    expect(dayBreakSeconds(day)).toBe(3600)
+  })
+
+  it('незакрытый день перерыва не показывает — он ещё не кончился', () => {
+    const [day] = groupByDay([entry({ clock_out: null, is_open: true })])
+    expect(dayBounds(day).out).toBeNull()
+    expect(dayBreakSeconds(day)).toBe(0)
+  })
+})
+
 describe('итоги', () => {
   it('суммирует дни и секунды', () => {
     const days = groupByDay([
@@ -111,8 +145,9 @@ describe('итоги', () => {
 describe('выгрузка для Excel', () => {
   const labels = {
     employee: 'Сотрудник', date: 'Дата', weekday: 'День', clockIn: 'Приход',
-    clockOut: 'Уход', hours: 'Часы', decimal: 'Часы (дес.)', location: 'Точка',
-    note: 'Комментарий', total: 'Итого', days: 'Дней', shifts: 'Смен',
+    clockOut: 'Уход', breakTime: 'Перерыв', hours: 'Часы', decimal: 'Часы (дес.)',
+    ranges: 'Смены', location: 'Точка', note: 'Комментарий',
+    total: 'Итого', days: 'Дней', shifts: 'Смен',
   }
   const person: StaffHours = {
     staff_id: 's1', name: 'Аня', role: 'barista', is_active: true,
@@ -124,9 +159,27 @@ describe('выгрузка для Excel', () => {
     expect(buildHoursCsv([person], TZ, labels).startsWith('﻿')).toBe(true)
   })
 
-  it('строка смены содержит дату, интервал и часы', () => {
+  it('строка дня: приход, уход, перерыв и часы в двух видах', () => {
     const csv = buildHoursCsv([person], TZ, labels)
-    expect(csv).toContain('Аня;01.08.2026;сб;07:00;15:00;8:00;8,00;Главная;')
+    expect(csv).toContain('Аня;01.08.2026;сб;07:00;15:00;0:00;8:00;8,00;;Главная;')
+  })
+
+  it('день с перерывом остаётся ОДНОЙ строкой — как на экране и на бумаге', () => {
+    const split: StaffHours = {
+      ...person,
+      seconds: 7 * 3600,
+      shifts: 2,
+      entries: [
+        entry({ id: 'a', clock_in: '2026-08-01T04:00:00Z', clock_out: '2026-08-01T08:00:00Z', seconds: 4 * 3600 }),
+        entry({ id: 'b', clock_in: '2026-08-01T09:00:00Z', clock_out: '2026-08-01T12:00:00Z', seconds: 3 * 3600 }),
+      ],
+    }
+    const rows = buildHoursCsv([split], TZ, labels).split('\r\n')
+    // Шапка + одна строка дня до пустой строки перед блоком итогов
+    expect(rows[1]).toContain('07:00;15:00;1:00;7:00;7,00')
+    // Интервалы целиком — иначе не понять, откуда взялся час перерыва
+    expect(rows[1]).toContain('07:00 - 11:00, 12:00 - 15:00')
+    expect(rows[2]).toBe('')
   })
 
   it('экранирует точку с запятой в заметке', () => {

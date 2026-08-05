@@ -98,6 +98,31 @@ export function formatDayLine(day: HoursDay, tz: string, dowLetters: readonly st
   return `${formatDay(day.day)} ${dowLetters[day.dow] ?? ''} ${formatRanges(day, tz)}`.trim()
 }
 
+/**
+ * Первый приход и последний уход дня. Табель читают по границам дня
+ * («пришёл в 07:00, ушёл в 15:00»), а не по каждой отметке: разрыв между
+ * сменами показывается отдельной колонкой перерыва.
+ */
+export function dayBounds(day: HoursDay): { in: string; out: string | null } {
+  const sorted = [...day.entries].sort((a, b) => a.clock_in.localeCompare(b.clock_in))
+  const last = sorted[sorted.length - 1]
+  return { in: sorted[0].clock_in, out: last.clock_out }
+}
+
+/**
+ * Перерыв внутри дня = время «на работе» минус отработанное. Отдельных
+ * отметок перерыва касса не просит (лишний тап в спешке), поэтому он
+ * считается из разрыва между сменами: ушёл в 11:00, вернулся в 12:00 —
+ * час перерыва. Незакрытый день перерыва не показывает: сколько его
+ * будет, ещё неизвестно.
+ */
+export function dayBreakSeconds(day: HoursDay): number {
+  const { in: start, out } = dayBounds(day)
+  if (!out) return 0
+  const span = (new Date(out).getTime() - new Date(start).getTime()) / 1000
+  return Math.max(0, Math.round(span - day.seconds))
+}
+
 /** Итог по дням: сумма секунд и число отработанных дней */
 export function sumDays(days: HoursDay[]): { seconds: number; days: number } {
   return { seconds: days.reduce((s, d) => s + d.seconds, 0), days: days.length }
@@ -145,8 +170,10 @@ export interface HoursCsvLabels {
   weekday: string
   clockIn: string
   clockOut: string
+  breakTime: string
   hours: string
   decimal: string
+  ranges: string
   location: string
   note: string
   total: string
@@ -156,8 +183,12 @@ export interface HoursCsvLabels {
 
 /**
  * CSV для Excel: BOM (иврит и кириллица не рассыпаются), разделитель «;»,
- * десятичные часы с запятой. Одна строка = одна смена; в конце — итоги по
- * сотрудникам, чтобы файл можно было отдать в зарплату как есть.
+ * десятичные часы с запятой.
+ *
+ * Строка = ДЕНЬ, как на экране и на распечатке: у владельца и бухгалтера
+ * должно сойтись число строк, иначе они сверяют разные документы. День с
+ * перерывом не разбивается надвое — приход, уход, перерыв и колонка со
+ * сменами говорят о нём всё.
  */
 export function buildHoursCsv(
   staff: StaffHours[],
@@ -170,25 +201,29 @@ export function buildHoursCsv(
   const lines: string[] = [
     row([
       labels.employee, labels.date, labels.weekday, labels.clockIn, labels.clockOut,
-      labels.hours, labels.decimal, labels.location, labels.note,
+      labels.breakTime, labels.hours, labels.decimal, labels.ranges,
+      labels.location, labels.note,
     ]),
   ]
 
   for (const person of staff) {
     for (const day of groupByDay(person.entries)) {
-      for (const e of day.entries) {
-        lines.push(row([
-          person.name,
-          formatDay(day.day),
-          dowLetters[day.dow] ?? '',
-          formatTime(e.clock_in, tz),
-          e.clock_out ? formatTime(e.clock_out, tz) : '',
-          formatHm(e.seconds),
-          decimalHours(e.seconds),
-          e.location_name ?? '',
-          e.note ?? '',
-        ]))
-      }
+      const bounds = dayBounds(day)
+      lines.push(row([
+        person.name,
+        formatDay(day.day),
+        dowLetters[day.dow] ?? '',
+        formatTime(bounds.in, tz),
+        bounds.out ? formatTime(bounds.out, tz) : '',
+        formatHm(dayBreakSeconds(day)),
+        formatHm(day.seconds),
+        decimalHours(day.seconds),
+        // Разбитый перерывом день — интервалы целиком, иначе по границам
+        // дня не понять, откуда взялся перерыв
+        day.entries.length > 1 ? formatRanges(day, tz) : '',
+        day.entries[0]?.location_name ?? '',
+        day.entries.map((e) => e.note).filter(Boolean).join('; '),
+      ]))
     }
   }
 

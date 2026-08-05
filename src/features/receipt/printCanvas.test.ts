@@ -148,6 +148,7 @@ describe('renderTimesheetCanvas — табель за месяц', () => {
       rows: Array.from({ length: rowsPerDay }, () => ({ range: '07:00 - 15:00', hours: '8:00' })),
     })),
     totalHours: '168:00',
+    totalDecimal: '168,00',
     daysCount: dayCount,
     shiftsCount: dayCount * rowsPerDay,
   })
