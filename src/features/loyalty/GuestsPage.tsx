@@ -60,40 +60,60 @@ export default function GuestsPage() {
           </p>
         )}
 
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto px-6 py-4">
           {guests.length === 0 ? (
             <p className="text-sm text-gray-500 text-center pt-12">
               {isFetching ? t(lang, 'loading') : t(lang, 'guestNotFound')}
             </p>
           ) : (
-            <div className="space-y-2">
-              {guests.map((g) => (
-                <button
-                  key={g.id}
-                  onClick={() => setSelected(g)}
-                  className="card w-full p-4 flex items-center gap-3 text-start hover:border-gray-400 transition-all active:scale-[0.99]"
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="font-semibold text-gray-900 text-sm truncate">
-                      {g.name || formatPhone(g.phone)}
-                    </div>
-                    <div className="text-xs text-gray-500 mt-0.5 tabular-nums" dir="ltr">
-                      {formatPhone(g.phone)}
-                    </div>
-                  </div>
-                  <div className="text-end shrink-0">
-                    <div className="text-sm font-bold text-gray-900 tabular-nums">
+            /* Таблица, а не карточки: на ландшафтном экране колонки дают
+               сравнение клиентов по визитам и покупкам одним взглядом */
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-xs font-bold uppercase tracking-wide text-gray-500">
+                  <th scope="col" className="text-start ps-3 py-2">{t(lang, 'guestColName')}</th>
+                  <th scope="col" className="text-start w-48 py-2">{t(lang, 'guestColPhone')}</th>
+                  <th scope="col" className="text-end w-28 py-2">{t(lang, 'guestVisits')}</th>
+                  <th scope="col" className="text-end w-40 py-2">{t(lang, 'guestSpent')}</th>
+                  <th scope="col" className="text-end w-40 pe-3 py-2">
+                    {t(lang, mode === 'stamps' ? 'stampsBalance' : 'pointsBalance')}
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {guests.map((g) => (
+                  <tr
+                    key={g.id}
+                    onClick={() => setSelected(g)}
+                    className="border-t border-gray-100 cursor-pointer hover:bg-gray-50 active:bg-gray-100"
+                  >
+                    <td className="ps-3">
+                      {/* Открывает и строка (палец), и кнопка (клавиатура):
+                          role="button" на <tr> сломал бы семантику таблицы */}
+                      <button
+                        type="button"
+                        onClick={() => setSelected(g)}
+                        className="min-h-11 text-start font-semibold text-gray-900"
+                      >
+                        {g.name || formatPhone(g.phone)}
+                      </button>
+                    </td>
+                    <td className="py-3 text-gray-500 tabular-nums" dir="ltr">
+                      <span className="block text-start">{formatPhone(g.phone)}</span>
+                    </td>
+                    <td className="py-3 text-end tabular-nums text-gray-900">{g.visits}</td>
+                    <td className="py-3 text-end tabular-nums text-gray-900">
+                      {formatMoney(g.total_spent, lang)}
+                    </td>
+                    <td className="py-3 pe-3 text-end tabular-nums font-bold text-gray-900">
                       {mode === 'stamps'
                         ? `${g.stamps}/${stampsGoal} ${t(lang, 'stampsShort')}`
                         : formatMoney(g.points, lang)}
-                    </div>
-                    <div className="text-xs text-gray-500 mt-0.5 tabular-nums">
-                      {t(lang, 'guestVisits')}: {g.visits} · {formatMoney(g.total_spent, lang)}
-                    </div>
-                  </div>
-                </button>
-              ))}
-            </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           )}
         </div>
       </main>
