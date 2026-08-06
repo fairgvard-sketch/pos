@@ -26,11 +26,14 @@ interface KassaAndroidBridge {
   printBase64(data: string, jobId?: string): boolean
   /**
    * Открыть денежный ящик (v4+): нативный Sunmi-вызов, а если прошивка его
-   * не знает — тот же импульс ESC/POS изнутри APK. Возвращает, ПРИНЯТО ли
-   * задание; итог приходит в window.__kassaPrintResult(jobId, ...), как у
-   * печати. На старом мосту метода нет — импульс шлётся через printBase64.
+   * не знает — импульс ESC/POS НАПРЯМУЮ, минуя буфер печати (буфер команду
+   * ящика проглатывает — полевой факт на T2). Возвращает, принято ли
+   * задание; итог приходит в window.__kassaPrintResult(jobId, ...) и при
+   * наличии датчика отражает ФАКТ открытия (`opened`), а не только
+   * доставку команды (`sent-unverified`). На старом мосту метода нет —
+   * импульс идёт через printBase64, и до порта он не доходит.
    */
-  openDrawer?(jobId: string): boolean
+  openDrawer?(jobId: string, pin?: number): boolean
 }
 
 /** Статус задания печати от моста APK */

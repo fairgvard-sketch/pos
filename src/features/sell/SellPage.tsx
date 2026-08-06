@@ -94,8 +94,10 @@ export default function SellPage() {
 
   /** Открыть денежный ящик без продажи — с записью в журнал смены */
   async function openDrawerNoSale() {
-    const ok = await openDrawer({ reason: 'no_sale' })
-    if (ok) toast.success(t(lang, 'drawerOpened'))
+    const res = await openDrawer({ reason: 'no_sale' })
+    // «Открыт» — только когда это подтвердил датчик ящика; иначе честнее
+    // сказать, что команда ушла (см. features/drawer/service.ts)
+    if (res.ok) toast.success(t(lang, res.verified ? 'drawerOpened' : 'drawerSent'))
   }
 
   /** Выполнить действие, если хватает прав; иначе — подсказка про менеджера */

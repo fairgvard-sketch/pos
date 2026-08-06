@@ -55,6 +55,11 @@ describe('drawerPath', () => {
     expect(drawerPath(false)).toBe('bridge-pulse')
   })
 
+  it('контакт 5 тоже идёт нативным путём — импульс шлёт сам APK, минуя буфер печати', () => {
+    setBridge({ isAvailable: () => true, bridgeVersion: () => 4, openDrawer: () => true })
+    expect(drawerPath(false, 5)).toBe('bridge-native')
+  })
+
   it('без моста: RawBT включён — rawbt, выключен — пути нет', () => {
     expect(drawerPath(true)).toBe('rawbt')
     expect(drawerPath(false)).toBe('none')
@@ -72,15 +77,31 @@ describe('drawerPath', () => {
 })
 
 describe('openDrawerPhysically', () => {
-  it('нативный путь зовёт openDrawer с jobId', async () => {
+  it('нативный путь зовёт openDrawer с jobId и контактом', async () => {
     const openDrawer = vi.fn((jobId: string) => {
-      window.__kassaPrintResult?.(jobId, 'success', null)
+      window.__kassaPrintResult?.(jobId, 'success', 'opened')
       return true
     })
     setBridge({ isAvailable: () => true, bridgeVersion: () => 4, openDrawer })
-    const res = await openDrawerPhysically(false)
+    const res = await openDrawerPhysically(false, 5)
     expect(res.ok).toBe(true)
-    expect(openDrawer).toHaveBeenCalledTimes(1)
+    // 'opened' = подтверждено датчиком ящика, а не просто «команда принята»
+    expect(res.message).toBe('opened')
+    expect(openDrawer).toHaveBeenCalledWith(expect.any(String), 5)
+  })
+
+  it('датчик сказал «закрыт» — это ошибка, а не зелёный тост', async () => {
+    setBridge({
+      isAvailable: () => true,
+      bridgeVersion: () => 4,
+      openDrawer: (jobId: string) => {
+        window.__kassaPrintResult?.(jobId, 'error', 'drawer-did-not-open')
+        return true
+      },
+    })
+    const res = await openDrawerPhysically(false)
+    expect(res.ok).toBe(false)
+    expect(res.message).toBe('drawer-did-not-open')
   })
 
   it('без нативного метода уходит импульс через printBase64', async () => {

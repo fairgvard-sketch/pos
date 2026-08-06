@@ -41,13 +41,24 @@ export interface OpenDrawerOptions {
   awaitLog?: boolean
 }
 
+export interface DrawerResult {
+  /** Команда ушла и мост её не отверг */
+  ok: boolean
+  /**
+   * Открытие подтверждено ДАТЧИКОМ ящика (мост v4 + прошивка с
+   * getDrawerStatus). false — команда отправлена, но факт открытия
+   * не доказан: на T2 через буфер печати она до порта не доходит.
+   */
+  verified: boolean
+}
+
 /**
- * Открыть ящик и зафиксировать это. Возвращает, открылся ли ящик
- * физически (журнал на результат не влияет).
+ * Открыть ящик и зафиксировать это. Возвращает, ушла ли команда и
+ * подтверждено ли открытие датчиком (журнал на результат не влияет).
  */
-export async function openDrawer(opts: OpenDrawerOptions): Promise<boolean> {
+export async function openDrawer(opts: OpenDrawerOptions): Promise<DrawerResult> {
   const device = useDeviceStore.getState()
-  if (!device.cashDrawerEnabled && !opts.force) return false
+  if (!device.cashDrawerEnabled && !opts.force) return { ok: false, verified: false }
 
   const lang = useLangStore.getState().lang
   const staff = useAuthStore.getState().staff
@@ -75,7 +86,7 @@ export async function openDrawer(opts: OpenDrawerOptions): Promise<boolean> {
   })
   if (opts.awaitLog) await logged
 
-  return outcome.ok
+  return { ok: outcome.ok, verified: outcome.message === 'opened' }
 }
 
 /** Записать открытие: онлайн — сразу, иначе (или по таймауту) — в очередь */

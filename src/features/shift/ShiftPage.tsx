@@ -115,8 +115,8 @@ export default function ShiftPage() {
   /** Открытие без продажи: право то же, что у движения наличных (144) */
   async function openDrawerNoSale() {
     if (!canCashMove) { toast.error(t(lang, 'permManagerToast')); return }
-    const ok = await openDrawer({ reason: 'no_sale', awaitLog: true })
-    if (ok) toast.success(t(lang, 'drawerOpened'))
+    const res = await openDrawer({ reason: 'no_sale', awaitLog: true })
+    if (res.ok) toast.success(t(lang, res.verified ? 'drawerOpened' : 'drawerSent'))
     qc.invalidateQueries({ queryKey: ['drawer_opens', shift?.id] })
   }
   const addMovement = useMutation({

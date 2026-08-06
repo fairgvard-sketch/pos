@@ -60,14 +60,14 @@ export function drawerPulseBase64(pin: DrawerPin = 2): string {
 
 /**
  * Каким путём эта касса откроет ящик (для настроек и честных подсказок).
- * Нестандартный контакт (5) всегда идёт импульсом: нативный вызов Sunmi
- * бьёт в штатный порт и номер контакта не принимает.
+ * Контакт уезжает в мост: нестандартный контакт 5 APK шлёт импульсом сам,
+ * тоже в обход буфера печати.
  */
-export function drawerPath(allowRawbt: boolean, pin: DrawerPin = 2): DrawerPath {
+export function drawerPath(allowRawbt: boolean, _pin: DrawerPin = 2): DrawerPath {
   if (bridgeAvailable()) {
     const bridge = window.KassaAndroid
     const version = bridgeVersion() ?? 0
-    if (pin === 2 && version >= BRIDGE_DRAWER_VERSION && typeof bridge?.openDrawer === 'function') {
+    if (version >= BRIDGE_DRAWER_VERSION && typeof bridge?.openDrawer === 'function') {
       return 'bridge-native'
     }
     return 'bridge-pulse'
@@ -104,17 +104,16 @@ export async function openDrawerPhysically(
   // Приёмник результата регистрируем ДО синхронного вызова моста: быстрый
   // колбэк обязан найти jobId в Map (та же гонка, что у печати чека).
   installPrintResultReceiver()
-  // resultAware=false СОЗНАТЕЛЬНО, в отличие от печати: подтвердить
-  // физическое открытие ящика касса не может (датчика на этом пути нет),
-  // а прошивки после команды ящика колбэк присылают не всегда. Явный отказ
-  // моста (нет принтера, недоверенная страница, исключение) приезжает
-  // колбэком и станет ошибкой; молчание считаем открытием — иначе кассир
-  // видел бы «ящик не открылся» над открытым ящиком и перестал бы верить
-  // предупреждениям.
+  // resultAware=false: молчание моста считаем «команда ушла». Это НЕ
+  // доказательство открытия — доказательство даёт только датчик ящика
+  // (мост v4 отвечает 'opened'), и ровно на столько же кассир может
+  // доверять тосту. На старом мосту (импульс через печать) T2 отвечает
+  // «принято», а ящик не щёлкает — поэтому без 'opened' говорим лишь
+  // «команда отправлена».
   const result = awaitPrintResult(jobId, true, false, DRAWER_RESULT_TIMEOUT_MS)
   try {
     const accepted = path === 'bridge-native'
-      ? bridge.openDrawer!(jobId)
+      ? bridge.openDrawer!(jobId, pin)
       : bridge.printBase64(drawerPulseBase64(pin), jobId)
     if (!accepted) {
       // Мост шлёт настоящую причину асинхронно — даём ей дойти первой,

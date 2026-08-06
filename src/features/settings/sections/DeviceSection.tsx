@@ -212,8 +212,8 @@ export default function DeviceSection({ location }: { location: Location | undef
    * этой кнопкой, поэтому импульс шлём независимо от неё.
    */
   async function testDrawer() {
-    const ok = await openDrawer({ reason: 'test', force: true })
-    if (ok) toast.success(t(lang, 'drawerOpened'))
+    const res = await openDrawer({ reason: 'test', force: true })
+    if (res.ok) toast.success(t(lang, res.verified ? 'drawerOpened' : 'drawerSent'))
   }
 
   /** Тестовый оттиск: мост APK → RawBT → браузер; иначе подсказка */
@@ -389,8 +389,13 @@ export default function DeviceSection({ location }: { location: Location | undef
             />
             {/* Честный путь до железа: «нет пути» видно ДО того, как кассир
                 нажмёт «Открыть ящик» в горячем потоке */}
-            <InputRow label={t(lang, 'drawerPathTitle')}>
-              <span className={`text-sm ${drawerPathNow === 'none' ? 'text-amber-600' : 'text-gray-500'}`}>
+            <InputRow
+              label={t(lang, 'drawerPathTitle')}
+              // «Импульс через печать» на Sunmi ящик не открывает (проверено
+              // на T2): честно говорим, что нужен APK 1.7+, а не молчим
+              hint={drawerPathNow === 'bridge-pulse' ? t(lang, 'drawerPathOldApk') : undefined}
+            >
+              <span className={`text-sm ${drawerPathNow === 'bridge-native' ? 'text-gray-500' : 'text-amber-600'}`}>
                 {drawerPathLabel}
               </span>
             </InputRow>

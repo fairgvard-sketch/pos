@@ -167,21 +167,27 @@ class MainActivity : Activity() {
         fun printBase64(data: String): Boolean = printBase64(data, "legacy")
 
         /**
-         * Открыть денежный ящик (v4). Ящик висит на порту принтера, поэтому
-         * путей два:
-         *   1) штатный openDrawer сервиса печати Sunmi — берём РЕФЛЕКСИЕЙ:
-         *      метода нет в части прошивок, а падать из-за этого сборка APK
-         *      не должна;
-         *   2) импульс ESC/POS теми же байтами, что шлёт веб-часть на старых
-         *      мостах — бумага не двигается (ни растра, ни отреза).
+         * Открыть денежный ящик (v4).
          *
-         * Результат уходит в общий канал заданий window.__kassaPrintResult:
-         * веб-часть ждёт его по jobId, как у печати. Подтвердить ФИЗИЧЕСКОЕ
-         * открытие ящика мы не можем — колбэк говорит лишь о том, что
-         * команда принята принтером.
+         * Полевой факт (T2 mini, APK 1.3): импульс ESC/POS, отправленный
+         * через обычное задание печати, сервис Sunmi ПРИНИМАЕТ, но ящик не
+         * щёлкает — сырая команда до порта не доходит. Поэтому здесь:
+         *   1) штатный `openDrawer` сервиса печати Sunmi (рефлексия: метода
+         *      нет в части прошивок, а падать из-за этого сборка не должна);
+         *   2) фолбэк — тот же импульс, но НАПРЯМУЮ через sendRAWData, без
+         *      transaction-буфера (именно буфер подозревается в проглатывании);
+         *   3) контакт 5 идёт сразу импульсом: нативный вызов бьёт только в
+         *      штатный контакт.
+         *
+         * И главное — итог проверяется ДАТЧИКОМ: `getDrawerStatus` (если
+         * прошивка его отдаёт) говорит, открыт ли ящик на самом деле. Тогда
+         * касса перестаёт врать «ящик открыт» на непринятую команду.
          */
         @JavascriptInterface
-        fun openDrawer(jobId: String): Boolean {
+        fun openDrawer(jobId: String): Boolean = openDrawer(jobId, 2)
+
+        @JavascriptInterface
+        fun openDrawer(jobId: String, pin: Int): Boolean {
             if (!onAllowedPage()) {
                 emitPrintResult(jobId, "error", "not-allowed-origin")
                 return false
@@ -191,31 +197,75 @@ class MainActivity : Activity() {
                 emitPrintResult(jobId, "disconnected", "printer-disconnected")
                 return false
             }
-            try {
-                val method = p.javaClass.getMethod("openDrawer", InnerResultCallback::class.java)
-                method.invoke(p, resultCallbackFor(jobId))
-                emitPrintResult(jobId, "queued", null)
-                return true
-            } catch (e: Throwable) {
-                // Нет метода в этой версии сервиса/прошивки — идём импульсом
+
+            var sent = false
+            var lastError: String? = null
+
+            if (pin != 5) {
+                try {
+                    val method = p.javaClass.getMethod("openDrawer", InnerResultCallback::class.java)
+                    method.invoke(p, silentCallback())
+                    sent = true
+                } catch (e: Throwable) {
+                    lastError = e.message ?: "native-open-unavailable"
+                }
             }
-            return try {
-                sendChunked(p, DRAWER_PULSE, jobId)
-                emitPrintResult(jobId, "queued", null)
-                true
-            } catch (e: Exception) {
-                emitPrintResult(jobId, "error", e.message ?: "send-failed")
-                false
+            if (!sent) {
+                try {
+                    // Без enterPrinterBuffer: команда ящика — не печатное задание
+                    p.sendRAWData(drawerPulse(pin), silentCallback())
+                    sent = true
+                } catch (e: Exception) {
+                    lastError = e.message ?: "send-failed"
+                }
             }
+            if (!sent) {
+                emitPrintResult(jobId, "error", lastError ?: "drawer-send-failed")
+                return false
+            }
+
+            // Соленоид срабатывает мгновенно, но датчику нужно время осесть
+            mainHandler.postDelayed({
+                when (drawerIsOpen(p)) {
+                    true -> emitPrintResult(jobId, "success", "opened")
+                    // Датчик говорит «закрыт» — команда ушла впустую, и знать
+                    // об этом важнее, чем показать зелёный тост
+                    false -> emitPrintResult(jobId, "error", "drawer-did-not-open")
+                    // Прошивка без датчика: подтвердить нечем, честно помечаем
+                    null -> emitPrintResult(jobId, "success", "sent-unverified")
+                }
+            }, DRAWER_STATUS_DELAY_MS)
+            return true
         }
     }
 
+    /** Импульс открытия: ESC p m t1 t2 — 50 мс включения, 500 мс паузы */
+    private fun drawerPulse(pin: Int): ByteArray =
+        byteArrayOf(0x1B, 0x70, if (pin == 5) 0x01 else 0x00, 0x19, 0xFA.toByte())
+
+    /** Сколько ждём, прежде чем спросить датчик ящика */
+    private val DRAWER_STATUS_DELAY_MS = 400L
+
     /**
-     * Импульс открытия ящика: ESC p m t1 t2 — контакт 2, 50 мс включения,
-     * 500 мс паузы. Нестандартный контакт 5 задаётся в настройках кассы и
-     * приходит с веб-стороны собственным payload через printBase64.
+     * Открыт ли ящик по датчику. null — прошивка метода не отдаёт, значит
+     * подтвердить открытие нечем (это НЕ «закрыт»).
      */
-    private val DRAWER_PULSE = byteArrayOf(0x1B, 0x70, 0x00, 0x19, 0xFA.toByte())
+    private fun drawerIsOpen(p: SunmiPrinterService): Boolean? = try {
+        p.javaClass.getMethod("getDrawerStatus").invoke(p) as? Boolean
+    } catch (e: Throwable) {
+        null
+    }
+
+    /**
+     * Колбэк-заглушка: у ящика источник истины — датчик, а не факт доставки
+     * команды. Пустые методы нужны лишь потому, что API требует объект.
+     */
+    private fun silentCallback() = object : InnerResultCallback() {
+        override fun onRunResult(isSuccess: Boolean) { /* решает датчик */ }
+        override fun onReturnString(result: String?) { /* не используем */ }
+        override fun onRaiseException(code: Int, msg: String?) { /* решает датчик */ }
+        override fun onPrintResult(code: Int, msg: String?) { /* решает датчик */ }
+    }
 
     /** Порог одного чанка байтов ESC/POS (с запасом под лимит Binder ~1МБ) */
     private val CHUNK_SIZE = 100 * 1024
