@@ -5,7 +5,7 @@
 -- бронь настоящая, но из отчёта исключена.
 
 BEGIN;
-SELECT plan(15);
+SELECT plan(17);
 
 INSERT INTO orgs (id, name) VALUES
   ('f0000000-0000-4000-8000-000000000001', 'pgTAP launch A');
@@ -77,6 +77,35 @@ SELECT set_config(
 SELECT ok(pg_temp.step('tables'), 'стол заведён — шаг закрыт');
 SELECT ok(pg_temp.step('schedule'), 'явное недельное расписание засчитано');
 SELECT ok(pg_temp.step('policy'), 'правила отмены написаны');
+
+-- 146: шаг условий закрывают ДВА поля. Владелец, написавший правила
+-- визита (145) вместо текста отмены, работу сделал — и чеклист обязан
+-- это видеть, иначе он отправляет заполнять дубль уже написанного.
+RESET ROLE;
+UPDATE locations SET settings = jsonb_set(
+  settings #- '{reservations,policy}', '{reservations,rules}',
+  jsonb_build_array(jsonb_build_object('id', 'a', 'text', 'הישיבה שיתופית', 'ack', TRUE)))
+WHERE id = 'f1000000-0000-4000-8000-000000000001';
+SET LOCAL ROLE authenticated;
+
+SELECT ok(pg_temp.step('policy'), 'одни правила визита, без текста отмены, закрывают шаг');
+
+-- Пункт с пустым текстом до гостя не доезжает (145) — и шаг не закрывает
+RESET ROLE;
+UPDATE locations SET settings = jsonb_set(
+  settings, '{reservations,rules}',
+  jsonb_build_array(jsonb_build_object('id', 'a', 'text', '   ')))
+WHERE id = 'f1000000-0000-4000-8000-000000000001';
+SET LOCAL ROLE authenticated;
+
+SELECT ok(NOT pg_temp.step('policy'), 'пустой пункт правил шаг не закрывает');
+
+RESET ROLE;
+UPDATE locations SET settings = jsonb_set(
+  settings #- '{reservations,rules}', '{reservations,policy}',
+  '"Отмена не позже чем за два часа"'::jsonb)
+WHERE id = 'f1000000-0000-4000-8000-000000000001';
+SET LOCAL ROLE authenticated;
 SELECT ok(pg_temp.step('branding'), 'имя и телефон — этого достаточно гостю');
 SELECT ok(NOT pg_temp.step('link'), 'короткий адрес ещё не занят');
 

@@ -9,6 +9,7 @@ import {
 } from './list'
 import { fetchReservationsRange, type Reservation } from './api'
 import LoadErrorState from '../../components/LoadErrorState'
+import PartySize from '../../components/ui/PartySize'
 import { failedNoCache } from '../../lib/queryState'
 import type { Table } from '../../types'
 
@@ -309,7 +310,9 @@ export default function ReservationListView({
                           )}
                         </button>
                       </td>
-                      <td className="py-3 align-top tabular-nums text-gray-900">{r.party_size}</td>
+                      <td className="py-3 align-top text-gray-900">
+                        <PartySize n={r.party_size} lang={lang} />
+                      </td>
                       <td className="py-3 align-top text-gray-900">{tablesOf(r)}</td>
                       <td className="py-3 align-top">
                         <span className={STATE_BADGE[st]}>{t(lang, STATE_LABEL[st])}</span>
