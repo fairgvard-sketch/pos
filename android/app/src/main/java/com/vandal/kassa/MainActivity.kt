@@ -87,9 +87,10 @@ class MainActivity : Activity() {
         /**
          * v2: printBase64(jobId) гарантирует финальный callback результата.
          * v3: setOrientation(mode) — ориентация интерфейса из настроек кассы.
+         * v4: openDrawer(jobId) — денежный ящик на порту принтера.
          */
         @JavascriptInterface
-        fun bridgeVersion(): Int = 3
+        fun bridgeVersion(): Int = 4
 
         /**
          * Ориентация интерфейса (Настройки → Устройство): auto|landscape|portrait.
@@ -164,7 +165,57 @@ class MainActivity : Activity() {
         /** Устаревшая сигнатура (без jobId) — совместимость со старым фронтом */
         @JavascriptInterface
         fun printBase64(data: String): Boolean = printBase64(data, "legacy")
+
+        /**
+         * Открыть денежный ящик (v4). Ящик висит на порту принтера, поэтому
+         * путей два:
+         *   1) штатный openDrawer сервиса печати Sunmi — берём РЕФЛЕКСИЕЙ:
+         *      метода нет в части прошивок, а падать из-за этого сборка APK
+         *      не должна;
+         *   2) импульс ESC/POS теми же байтами, что шлёт веб-часть на старых
+         *      мостах — бумага не двигается (ни растра, ни отреза).
+         *
+         * Результат уходит в общий канал заданий window.__kassaPrintResult:
+         * веб-часть ждёт его по jobId, как у печати. Подтвердить ФИЗИЧЕСКОЕ
+         * открытие ящика мы не можем — колбэк говорит лишь о том, что
+         * команда принята принтером.
+         */
+        @JavascriptInterface
+        fun openDrawer(jobId: String): Boolean {
+            if (!onAllowedPage()) {
+                emitPrintResult(jobId, "error", "not-allowed-origin")
+                return false
+            }
+            val p = printer
+            if (p == null) {
+                emitPrintResult(jobId, "disconnected", "printer-disconnected")
+                return false
+            }
+            try {
+                val method = p.javaClass.getMethod("openDrawer", InnerResultCallback::class.java)
+                method.invoke(p, resultCallbackFor(jobId))
+                emitPrintResult(jobId, "queued", null)
+                return true
+            } catch (e: Throwable) {
+                // Нет метода в этой версии сервиса/прошивки — идём импульсом
+            }
+            return try {
+                sendChunked(p, DRAWER_PULSE, jobId)
+                emitPrintResult(jobId, "queued", null)
+                true
+            } catch (e: Exception) {
+                emitPrintResult(jobId, "error", e.message ?: "send-failed")
+                false
+            }
+        }
     }
+
+    /**
+     * Импульс открытия ящика: ESC p m t1 t2 — контакт 2, 50 мс включения,
+     * 500 мс паузы. Нестандартный контакт 5 задаётся в настройках кассы и
+     * приходит с веб-стороны собственным payload через printBase64.
+     */
+    private val DRAWER_PULSE = byteArrayOf(0x1B, 0x70, 0x00, 0x19, 0xFA.toByte())
 
     /** Порог одного чанка байтов ESC/POS (с запасом под лимит Binder ~1МБ) */
     private val CHUNK_SIZE = 100 * 1024

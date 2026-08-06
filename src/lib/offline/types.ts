@@ -1,6 +1,7 @@
 import type { CartLine, CartDiscount, OrderType } from '../../store/cartStore'
 import type { PaymentInput } from '../../features/sell/api'
 import type { Receipt } from '../../features/receipt/api'
+import type { DrawerReason } from '../../features/drawer/api'
 
 /**
  * Офлайн-очередь мутаций (фаза 7). Операция = отложенный вызов RPC
@@ -73,6 +74,19 @@ export interface QueueSetUrgentPayload {
   urgent: boolean
 }
 
+/**
+ * Открытие денежного ящика (144). Сам ящик открывается локально и сразу —
+ * в очередь едет только запись аудита: без сети журнал не должен получать
+ * дыру именно в тот момент, когда в ящик лазили.
+ */
+export interface DrawerOpenPayload {
+  reason: DrawerReason
+  /** Кто открыл — автор фиксируется на момент события, не на момент replay */
+  staffId: string | null
+  note: string | null
+  deviceUuid: string | null
+}
+
 interface OpBase {
   /** crypto.randomUUID() — уходит на сервер как p_client_uuid / p_payment_uuid / p_op_uuid */
   id: string
@@ -109,6 +123,7 @@ export type OutboxOp = OpBase &
     | { kind: 'queue.item_ready'; payload: QueueItemReadyPayload }
     | { kind: 'queue.order_ready'; payload: Record<string, never> }
     | { kind: 'queue.set_urgent'; payload: QueueSetUrgentPayload }
+    | { kind: 'drawer.open'; payload: DrawerOpenPayload }
   )
 
 export type OpKind = OutboxOp['kind']

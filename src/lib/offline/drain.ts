@@ -10,6 +10,7 @@ import {
   type TableOrderResult,
 } from '../../features/tables/api'
 import { markItemReady, markOrderReady, setOrderUrgent } from '../../features/queue/api'
+import { logDrawerOpen } from '../../features/drawer/api'
 import { supabase } from '../supabase'
 import { t } from '../i18n'
 import { useLangStore } from '../../store/langStore'
@@ -58,6 +59,10 @@ const OPS_NEED_STAFF_TOKEN: ReadonlySet<OpKind> = new Set<OpKind>([
 ])
 
 function needsStaffToken(op: OutboxOp): boolean {
+  // Ручное открытие ящика (no_sale) сервер пускает только по праву
+  // cash_movement (144) — ждём PIN. Сопутствующие открытия (продажа,
+  // возврат, инкассация, границы смены) идут в мягком режиме.
+  if (op.kind === 'drawer.open') return op.payload.reason === 'no_sale'
   return OPS_NEED_STAFF_TOKEN.has(op.kind)
 }
 
@@ -192,6 +197,21 @@ async function runOp(op: OutboxOp): Promise<string | undefined> {
       await withTimeout(setOrderUrgent(orderId, op.payload.urgent))
       return orderId
     }
+    case 'drawer.open': {
+      const p = op.payload
+      // Ссылка на заказ желательна, но не обязательна: журнал открытия
+      // ящика ценнее связи с заказом — без order_id запись всё равно уйдёт.
+      await withTimeout(logDrawerOpen({
+        opUuid: op.id,
+        reason: p.reason,
+        staffId: p.staffId,
+        orderId: resolveOrderId(op),
+        note: p.note,
+        deviceUuid: p.deviceUuid,
+        openedAt: op.createdAt,
+      }))
+      return undefined
+    }
   }
 }
 
@@ -252,6 +272,14 @@ export async function kickDrain(): Promise<void> {
           // Токен был, но протух/отозван между проверкой и вызовом — тоже
           // ждём свежий PIN, не считаем доменным сбоем (без красного бейджа).
           useOutboxStore.getState().markBlockedAuth(op.id)
+        } else if (op.kind === 'drawer.open') {
+          // Аудит ящика не может держать ДЕНЬГИ: доменный отказ журнала
+          // (например, право отозвано после открытия) не должен стопорить
+          // FIFO с неотправленными продажами. Запись теряем сознательно —
+          // но след остаётся в телеметрии, а не только в голове кассира.
+          useOutboxStore.getState().removeOp(op.id)
+          captureMessage('outbox', `drawer.open dropped: ${msg}`)
+          continue
         } else {
           useOutboxStore.getState().markFailed(op.id, msg)
           // Стоп очереди — главный сигнал здоровья кассы для оператора (074)

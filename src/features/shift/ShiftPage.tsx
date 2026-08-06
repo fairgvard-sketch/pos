@@ -26,6 +26,9 @@ import BackButton from '../../components/BackButton'
 import LoadErrorState from '../../components/LoadErrorState'
 import { failedNoCache } from '../../lib/queryState'
 import WasteSheet from './WasteSheet'
+import { fetchDrawerOpens } from '../drawer/api'
+import { drawerReasonLabel } from '../drawer/labels'
+import { openDrawer } from '../drawer/service'
 import type { Location } from '../../types'
 
 /** Данные печатного דו"ח Z из результата close_shift (поля 037 с фолбэками) */
@@ -95,9 +98,35 @@ export default function ShiftPage() {
     queryFn: () => fetchShiftMovements(shift!.id),
     enabled: !!shift,
   })
+
+  // ── Денежный ящик (144) ──
+  // Настройка «ящик подключён» — per-device, а журнал общий для точки:
+  // открытия с соседней кассы видно и здесь.
+  const drawerEnabled = useDeviceStore((s) => s.cashDrawerEnabled)
+  const drawerOnCash = useDeviceStore((s) => s.drawerOpenOnCash)
+  const autoDrawer = drawerEnabled && drawerOnCash
+  const { data: drawerOpens = [] } = useQuery({
+    queryKey: ['drawer_opens', shift?.id],
+    queryFn: () => fetchDrawerOpens(shift!.id),
+    enabled: !!shift,
+  })
+  const noSaleOpens = drawerOpens.filter((d) => d.reason === 'no_sale')
+
+  /** Открытие без продажи: право то же, что у движения наличных (144) */
+  async function openDrawerNoSale() {
+    if (!canCashMove) { toast.error(t(lang, 'permManagerToast')); return }
+    const ok = await openDrawer({ reason: 'no_sale', awaitLog: true })
+    if (ok) toast.success(t(lang, 'drawerOpened'))
+    qc.invalidateQueries({ queryKey: ['drawer_opens', shift?.id] })
+  }
   const addMovement = useMutation({
     mutationFn: (v: { type: 'in' | 'out'; amount: number; reason: string }) =>
       addCashMovement(shift!.id, staff!.id, v.type, v.amount, v.reason),
+    // Деньги кладут В ящик или достают ИЗ него — он должен быть открыт до
+    // того, как сервер ответит (onMutate, а не onSuccess).
+    onMutate: (v) => {
+      if (autoDrawer) void openDrawer({ reason: v.type === 'in' ? 'cash_in' : 'cash_out' })
+    },
     onSuccess: () => {
       setMovementType(null)
       toast.success(t(lang, 'cashMoveAdded'))
@@ -336,6 +365,11 @@ export default function ShiftPage() {
               <Line label={t(lang, 'cashOutLabel')} value={`−${formatMoney(report.cash_out!, lang)}`} />
             )}
             <Line label={t(lang, 'expectedCash')} value={formatMoney(report.expected_cash, lang)} bold />
+            {/* Открытия ящика без продажи: главный сигнал при расхождении
+                наличных — сумму они не меняют, поэтому идут отдельной строкой */}
+            {noSaleOpens.length > 0 && (
+              <Line label={t(lang, 'drawerNoSaleCount')} value={String(noSaleOpens.length)} />
+            )}
           </div>
         )}
 
@@ -365,6 +399,18 @@ export default function ShiftPage() {
                 {t(lang, 'cashOutBtn')}
               </button>
             </div>
+
+            {/* Денежный ящик (144): открытие без продажи — один тап, без
+                диалога (горячий поток), но с записью в журнал смены.
+                Работает и без сети: импульс локальный, аудит уходит в очередь. */}
+            {drawerEnabled && (
+              <button
+                onClick={() => void openDrawerNoSale()}
+                className={`btn-secondary w-full !rounded-2xl mt-2 ${canCashMove ? '' : '!opacity-40'}`}
+              >
+                {t(lang, 'drawerOpenBtn')}
+              </button>
+            )}
 
             {/* Списание дня (047): сколько выбросили — остатки и отчёт потерь.
                 Скрыто, если учёт остатков выключен тумблером точки */}
@@ -403,6 +449,35 @@ export default function ShiftPage() {
                 ))}
               </div>
             )}
+
+            {/* Журнал открытий ящика без продажи (144): открытия по продаже,
+                возврату и инкассации уже видны в отчёте и движениях — здесь
+                только то, что иначе нигде не всплывёт. */}
+            {noSaleOpens.length > 0 && (
+              <div className="mt-4">
+                <h3 className="text-xs font-bold uppercase tracking-wide text-gray-500 mb-2 px-1">
+                  {t(lang, 'drawerOpensTitle')}
+                </h3>
+                <div className="space-y-1.5">
+                  {noSaleOpens.map((d) => (
+                    <div
+                      key={d.id}
+                      className="px-4 py-2.5 rounded-xl border border-gray-100 bg-white flex items-center justify-between gap-3"
+                    >
+                      <div className="min-w-0">
+                        <div className="text-sm font-semibold text-gray-900 truncate">
+                          {d.note || drawerReasonLabel(lang, d.reason)}
+                        </div>
+                        <div className="text-xs text-gray-500 tabular-nums">
+                          {formatTime(d.opened_at, lang)}
+                          {d.staff?.name && ` · ${d.staff.name}`}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -417,6 +492,8 @@ export default function ShiftPage() {
               if (pendingOps > 0) { toast.error(`${t(lang, 'offlineCloseShiftBlocked')} (${pendingOps})`); return }
               if (!online) { toast.error(t(lang, 'offlineBlockedHint')); return }
               setClosing(true)
+              // Дальше кассир пересчитывает наличные — ящик нужен открытым
+              if (autoDrawer) void openDrawer({ reason: 'shift_close' })
             }}
             className={`btn-danger w-full !rounded-2xl ${canCloseShift && online && pendingOps === 0 ? '' : '!opacity-40'}`}
           >

@@ -10,6 +10,8 @@ import { useDeviceStore } from '../../../store/deviceStore'
 import { renderTestPrintCanvas } from '../../receipt/printCanvas'
 import { hasSilentPrintPath } from '../../../lib/escpos'
 import { bridgeAvailable } from '../../../lib/androidBridge'
+import { drawerPath } from '../../../lib/cashDrawer'
+import { openDrawer } from '../../drawer/service'
 import { orientationSupport } from '../../../lib/orientation'
 import { printCanvasWithRetry } from '../../receipt/printFailure'
 import { syncDeviceNow, useDeviceSyncStore } from '../../../lib/deviceSync'
@@ -139,6 +141,13 @@ export default function DeviceSection({ location }: { location: Location | undef
   const setOrientation = useDeviceStore((s) => s.setOrientation)
   const tapeWidth = useDeviceStore((s) => s.tapeWidth)
   const setTapeWidth = useDeviceStore((s) => s.setTapeWidth)
+  // Денежный ящик (144)
+  const cashDrawerEnabled = useDeviceStore((s) => s.cashDrawerEnabled)
+  const setCashDrawerEnabled = useDeviceStore((s) => s.setCashDrawerEnabled)
+  const drawerOpenOnCash = useDeviceStore((s) => s.drawerOpenOnCash)
+  const setDrawerOpenOnCash = useDeviceStore((s) => s.setDrawerOpenOnCash)
+  const drawerPin = useDeviceStore((s) => s.drawerPin)
+  const setDrawerPin = useDeviceStore((s) => s.setDrawerPin)
   const deviceSyncStatus = useDeviceSyncStore((s) => s.status)
   const deviceSyncError = useDeviceSyncStore((s) => s.lastError)
 
@@ -189,6 +198,23 @@ export default function DeviceSection({ location }: { location: Location | undef
     synced: t(lang, 'deviceSynced'),
     error: t(lang, 'deviceSyncError'),
   }[deviceSyncStatus]
+
+  const drawerPathNow = drawerPath(printMode === 'rawbt', drawerPin)
+  const drawerPathLabel = {
+    'bridge-native': t(lang, 'drawerPathNative'),
+    'bridge-pulse': t(lang, 'drawerPathPulse'),
+    rawbt: t(lang, 'drawerPathRawbt'),
+    none: t(lang, 'drawerPathNone'),
+  }[drawerPathNow]
+
+  /**
+   * Тест ящика: force — настройка «ящик подключён» как раз и проверяется
+   * этой кнопкой, поэтому импульс шлём независимо от неё.
+   */
+  async function testDrawer() {
+    const ok = await openDrawer({ reason: 'test', force: true })
+    if (ok) toast.success(t(lang, 'drawerOpened'))
+  }
 
   /** Тестовый оттиск: мост APK → RawBT → браузер; иначе подсказка */
   async function testPrint() {
@@ -331,6 +357,46 @@ export default function DeviceSection({ location }: { location: Location | undef
           <span className="text-sm text-gray-500">{printStatus}</span>
         </InputRow>
         <NavRow label={t(lang, 'testPrint')} onClick={testPrint} />
+      </Group>
+
+      {/* Денежный ящик (144): ящик висит на принтере, поэтому живёт рядом
+          с печатью. Настройки открываются только при подключённом ящике —
+          на кассе без него это лишний шум. */}
+      <Group title={t(lang, 'cashDrawerGroup')}>
+        <ToggleRow
+          label={t(lang, 'cashDrawerEnabled')}
+          hint={t(lang, 'cashDrawerEnabledHint')}
+          device
+          checked={cashDrawerEnabled}
+          onChange={setCashDrawerEnabled}
+        />
+        {cashDrawerEnabled && (
+          <>
+            <ToggleRow
+              label={t(lang, 'drawerAutoOpen')}
+              hint={t(lang, 'drawerAutoOpenHint')}
+              device
+              checked={drawerOpenOnCash}
+              onChange={setDrawerOpenOnCash}
+            />
+            <SegmentRow<2 | 5>
+              label={t(lang, 'drawerPinTitle')}
+              hint={t(lang, 'drawerPinHint')}
+              device
+              options={[{ value: 2, label: '2' }, { value: 5, label: '5' }]}
+              value={drawerPin}
+              onChange={setDrawerPin}
+            />
+            {/* Честный путь до железа: «нет пути» видно ДО того, как кассир
+                нажмёт «Открыть ящик» в горячем потоке */}
+            <InputRow label={t(lang, 'drawerPathTitle')}>
+              <span className={`text-sm ${drawerPathNow === 'none' ? 'text-amber-600' : 'text-gray-500'}`}>
+                {drawerPathLabel}
+              </span>
+            </InputRow>
+            <NavRow label={t(lang, 'drawerTestOpen')} onClick={() => void testDrawer()} />
+          </>
+        )}
       </Group>
 
       {/* Экраны, живущие на терминале: чек-лист запуска и план зала */}

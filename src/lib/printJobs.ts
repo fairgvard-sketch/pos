@@ -67,11 +67,15 @@ export function newPrintJobId(): string {
  * Дождаться результата задания jobId. Если мост старый (колбэк не придёт) —
  * промис отвалится по таймауту в success (accepted==напечатано, как раньше).
  * accepted=false (мост сразу отказал) → мгновенный error.
+ *
+ * timeoutMs переопределяется для заданий, где ждать 15 секунд бессмысленно
+ * (открытие ящика: результат приходит мгновенно либо не приходит вовсе).
  */
 export function awaitPrintResult(
   jobId: string,
   accepted: boolean,
   resultAware = true,
+  timeoutMs = RESULT_TIMEOUT_MS,
 ): Promise<PrintOutcome> {
   if (!accepted) {
     return Promise.resolve({ ok: false, status: 'error', message: 'not-accepted' })
@@ -86,7 +90,7 @@ export function awaitPrintResult(
       resolve(resultAware
         ? { ok: false, status: 'timeout', message: 'callback-timeout' }
         : { ok: true, status: 'success', message: 'legacy-no-callback' })
-    }, RESULT_TIMEOUT_MS)
+    }, timeoutMs)
     pending.set(jobId, { resolve, timer })
   })
 }

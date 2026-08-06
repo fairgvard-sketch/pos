@@ -13,6 +13,7 @@ import { useNetStore } from '../../lib/offline/net'
 import { t } from '../../lib/i18n'
 import { payMethodIcon, payMethodLabel } from '../../lib/payMethods'
 import { can } from '../../lib/perms'
+import { openDrawer } from '../drawer/service'
 import { formatMoney, formatMoneyList } from '../../lib/money'
 import type { MenuItem, ModifierGroup } from '../../types'
 import { usePayFlow } from './usePayFlow'
@@ -72,6 +73,7 @@ export default function SellPage() {
   const collectTips = useDeviceStore((s) => s.collectTips)
   const tipAllowCustom = useDeviceStore((s) => s.tipAllowCustom)
   const tipRoundUp = useDeviceStore((s) => s.tipRoundUp)
+  const drawerEnabled = useDeviceStore((s) => s.cashDrawerEnabled)
   const qc = useQueryClient()
   const navigate = useNavigate()
   const online = useNetStore((s) => s.online)
@@ -87,6 +89,15 @@ export default function SellPage() {
   const canDiscount = can(staff?.role, 'discount', location?.settings, staff?.role_perms)
   const canPriceEdit = can(staff?.role, 'price_edit', location?.settings, staff?.role_perms)
   const canVoidOrder = can(staff?.role, 'void_order', location?.settings, staff?.role_perms)
+  // Ящик без продажи приравнен к движению наличных (144)
+  const canCashMove = can(staff?.role, 'cash_movement', location?.settings, staff?.role_perms)
+
+  /** Открыть денежный ящик без продажи — с записью в журнал смены */
+  async function openDrawerNoSale() {
+    const ok = await openDrawer({ reason: 'no_sale' })
+    if (ok) toast.success(t(lang, 'drawerOpened'))
+  }
+
   /** Выполнить действие, если хватает прав; иначе — подсказка про менеджера */
   function requirePerm(allowed: boolean, fn: () => void) {
     if (!allowed) {
@@ -777,6 +788,17 @@ export default function SellPage() {
                 dimmed: false,
                 onClick: () => { if (shownTotal > 0) setShowTipSheet(true) },
               },
+              // Ящик без продажи (144): один тап, без диалога — размен и
+              // сдача с прошлой продажи не должны стоить кассиру экрана.
+              // Право то же, что у движения наличных; запись уходит в журнал.
+              drawer: {
+                icon: 'shift' as const,
+                label: t(lang, 'drawerOpenBtn'),
+                visible: drawerEnabled,
+                active: false,
+                dimmed: !canCashMove,
+                onClick: () => requirePerm(canCashMove, () => { void openDrawerNoSale() }),
+              },
             }[id]
             if (!def || !def.visible) return null
             return (
@@ -1369,7 +1391,7 @@ function ActionButton({
   active = false,
   dimmed = false,
 }: {
-  icon: 'customItem' | 'discount' | 'customers' | 'refund' | 'cash'
+  icon: 'customItem' | 'discount' | 'customers' | 'refund' | 'cash' | 'shift'
   label: string
   onClick: () => void
   active?: boolean

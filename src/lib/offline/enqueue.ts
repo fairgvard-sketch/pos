@@ -1,6 +1,7 @@
 import type { CartDiscount, CartLine, OrderType } from '../../store/cartStore'
 import type { PaymentInput } from '../../features/sell/api'
 import type { Receipt } from '../../features/receipt/api'
+import type { DrawerReason } from '../../features/drawer/api'
 import { assertStandardCashLimitForPayments } from '../israelCompliance'
 import { useOutboxStore } from './outboxStore'
 import { kickDrain } from './drain'
@@ -363,6 +364,37 @@ export function enqueueOrderReady(orderId: string): void {
     id: crypto.randomUUID(),
     kind: 'queue.order_ready',
     payload: {},
+  })
+  void kickDrain()
+}
+
+/**
+ * Открытие денежного ящика без сети (144): ящик уже открылся физически,
+ * в очередь едет только аудит. opUuid = id операции = ключ идемпотентности
+ * log_drawer_open, поэтому replay после таймаута не задваивает запись.
+ */
+export function enqueueDrawerOpen(args: {
+  opUuid: string
+  reason: DrawerReason
+  staffId: string | null
+  orderId?: string | null
+  note?: string | null
+  deviceUuid?: string | null
+  /** Время открытия на кассе — уезжает как p_opened_at, а не время replay */
+  openedAt: string
+}): void {
+  const ob = useOutboxStore.getState()
+  ob.enqueue({
+    ...opBase(null, args.orderId ?? null),
+    createdAt: args.openedAt,
+    id: args.opUuid,
+    kind: 'drawer.open',
+    payload: {
+      reason: args.reason,
+      staffId: args.staffId,
+      note: args.note ?? null,
+      deviceUuid: args.deviceUuid ?? null,
+    },
   })
   void kickDrain()
 }

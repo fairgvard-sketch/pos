@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { PayMethodId } from '../lib/payMethods'
+import type { DrawerPin } from '../lib/cashDrawer'
 
 /** Настройки конкретной кассы: localStorage — быстрый offline-first источник
  * для UI, devices.settings — серверная копия для восстановления (065). */
@@ -14,6 +15,8 @@ export type StartScreen = 'sell' | 'hall' | 'queue'
 export type Orientation = 'auto' | 'landscape' | 'portrait'
 /** Ширина термоленты, мм (per-device) */
 export type TapeWidth = 58 | 80
+/** Контакт разъёма денежного ящика на принтере (per-device) */
+export type { DrawerPin }
 
 /**
  * Способ оплаты (Square: payment types): наличные/карта + кошельки
@@ -33,7 +36,7 @@ export type FirstPayMethod = PayMethod
 export type QuickAmountsMode = 'smart' | 'manual' | 'off'
 
 /** Порядок кнопок ряда действий на экране продажи (перестановка long-press'ом) */
-export const DEFAULT_ACTION_ORDER = ['customItem', 'discount', 'loyalty', 'refund', 'tip']
+export const DEFAULT_ACTION_ORDER = ['customItem', 'discount', 'loyalty', 'refund', 'tip', 'drawer']
 
 export interface DevicePreferences {
   /** Имя этой кассы (для отчётов/шапки настроек). Пусто = не задано */
@@ -57,6 +60,16 @@ export interface DevicePreferences {
   orientation: Orientation
   /** Ширина термоленты, мм (per-device, P5) */
   tapeWidth: TapeWidth
+  /**
+   * К этой кассе подключён денежный ящик (144). Выключено — кнопка
+   * «Открыть ящик» скрыта и автооткрытие не срабатывает: на кассе без
+   * ящика импульс безвреден, но обещать открытие нельзя.
+   */
+  cashDrawerEnabled: boolean
+  /** Открывать ящик автоматически на операциях с наличными */
+  drawerOpenOnCash: boolean
+  /** Контакт разъёма ящика: 2 у большинства боксов, 5 у части моделей */
+  drawerPin: DrawerPin
   /**
    * Порядок способов оплаты в окне оплаты (Square: Payment types drag-list).
    * Первый — по умолчанию выбран. Все включённые способы перечислены.
@@ -99,6 +112,9 @@ interface DeviceState extends DevicePreferences {
   setStartScreen: (v: StartScreen) => void
   setOrientation: (v: Orientation) => void
   setTapeWidth: (v: TapeWidth) => void
+  setCashDrawerEnabled: (v: boolean) => void
+  setDrawerOpenOnCash: (v: boolean) => void
+  setDrawerPin: (v: DrawerPin) => void
   setPayMethodOrder: (o: PayMethod[]) => void
   setActionOrder: (o: string[]) => void
   setQuickAmountsMode: (m: QuickAmountsMode) => void
@@ -129,6 +145,9 @@ export const DEFAULT_DEVICE_PREFERENCES: DevicePreferences = {
   startScreen: 'sell',
   orientation: 'auto',
   tapeWidth: 80,
+  cashDrawerEnabled: false,
+  drawerOpenOnCash: true,
+  drawerPin: 2,
   payMethodOrder: ['cash', 'card'],
   actionOrder: DEFAULT_ACTION_ORDER,
   quickAmountsMode: 'smart',
@@ -158,6 +177,9 @@ export const useDeviceStore = create<DeviceState>()(
       setStartScreen: (startScreen) => set({ startScreen }),
       setOrientation: (orientation) => set({ orientation }),
       setTapeWidth: (tapeWidth) => set({ tapeWidth }),
+      setCashDrawerEnabled: (cashDrawerEnabled) => set({ cashDrawerEnabled }),
+      setDrawerOpenOnCash: (drawerOpenOnCash) => set({ drawerOpenOnCash }),
+      setDrawerPin: (drawerPin) => set({ drawerPin }),
       setPayMethodOrder: (payMethodOrder) => set({ payMethodOrder }),
       setActionOrder: (actionOrder) => set({ actionOrder }),
       setQuickAmountsMode: (quickAmountsMode) => set({ quickAmountsMode }),

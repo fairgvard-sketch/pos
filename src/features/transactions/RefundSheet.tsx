@@ -7,6 +7,8 @@ import Icon from '../../components/Icon'
 import FormSheet from '../../components/ui/FormSheet'
 import { useAuthStore } from '../../store/authStore'
 import { useLangStore } from '../../store/langStore'
+import { useDeviceStore } from '../../store/deviceStore'
+import { openDrawer } from '../drawer/service'
 import { t } from '../../lib/i18n'
 import { formatMoney, parseMoney } from '../../lib/money'
 
@@ -31,6 +33,10 @@ export default function RefundSheet({ tx, remaining, onClose, onDone }: Props) {
   const lang = useLangStore((s) => s.lang)
   const staff = useAuthStore((s) => s.staff)
   const qc = useQueryClient()
+  // Денежный ящик (144): автооткрытие на возврате наличными
+  const drawerEnabled = useDeviceStore((s) => s.cashDrawerEnabled)
+  const drawerOnCash = useDeviceStore((s) => s.drawerOpenOnCash)
+  const autoDrawer = drawerEnabled && drawerOnCash
 
   const { data: items = [] } = useQuery({
     queryKey: ['refundable', tx.id],
@@ -112,6 +118,11 @@ export default function RefundSheet({ tx, remaining, onClose, onDone }: Props) {
       }),
     onSuccess: (refundId) => {
       toast.success(t(lang, 'refundDone'))
+      // Деньги отдаём из ящика — открываем его после успешного возврата
+      // (в отличие от продажи, тут возврат может и не пройти).
+      if (method === 'cash' && autoDrawer) {
+        void openDrawer({ reason: 'refund', orderId: tx.id })
+      }
       qc.invalidateQueries({ queryKey: ['transactions'] })
       qc.invalidateQueries({ queryKey: ['refunds', tx.id] })
       qc.invalidateQueries({ queryKey: ['current_shift'] })

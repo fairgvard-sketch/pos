@@ -9,7 +9,7 @@ interface KassaAndroidBridge {
   isAvailable(): boolean
   /**
    * Версия контракта моста. v2+ гарантирует callback результата задания,
-   * v3+ умеет setOrientation.
+   * v3+ умеет setOrientation, v4+ — openDrawer.
    */
   bridgeVersion?(): number
   /**
@@ -24,6 +24,13 @@ interface KassaAndroidBridge {
    * jobId опционален для совместимости со старым мостом (без callback).
    */
   printBase64(data: string, jobId?: string): boolean
+  /**
+   * Открыть денежный ящик (v4+): нативный Sunmi-вызов, а если прошивка его
+   * не знает — тот же импульс ESC/POS изнутри APK. Возвращает, ПРИНЯТО ли
+   * задание; итог приходит в window.__kassaPrintResult(jobId, ...), как у
+   * печати. На старом мосту метода нет — импульс шлётся через printBase64.
+   */
+  openDrawer?(jobId: string): boolean
 }
 
 /** Статус задания печати от моста APK */

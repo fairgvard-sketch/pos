@@ -11,6 +11,7 @@ import { useLangStore } from '../../store/langStore'
 import { useDeviceStore } from '../../store/deviceStore'
 import { playPaymentChime } from '../../lib/sound'
 import { autoPrintReceipt, autoPrintLocalReceipt, printKitchenTicket } from '../receipt/printService'
+import { openDrawer } from '../drawer/service'
 import { buildLocalReceipt, billLineToReceiptLine } from '../receipt/localReceipt'
 import { setOrderBuyer, type Receipt } from '../receipt/api'
 import { OfflineError, withOfflineFallback } from '../../lib/offline/net'
@@ -56,6 +57,10 @@ export function usePayFlow() {
   const autoPrintOn = useDeviceStore((s) => s.autoPrintReceipt)
   const receiptPromptOn = useDeviceStore((s) => s.receiptPrompt)
   const kitchenTicketOn = useDeviceStore((s) => s.printKitchenTicket)
+  // Денежный ящик (144): автооткрытие на расчёте наличными
+  const drawerEnabled = useDeviceStore((s) => s.cashDrawerEnabled)
+  const drawerOnCash = useDeviceStore((s) => s.drawerOpenOnCash)
+  const autoDrawer = drawerEnabled && drawerOnCash
   const deviceName = useDeviceStore((s) => s.deviceName)
   const collectTips = useDeviceStore((s) => s.collectTips)
   const tipAskBeforePayment = useDeviceStore((s) => s.tipAskBeforePayment)
@@ -444,6 +449,14 @@ export function usePayFlow() {
           return { offlineNumber: (v.dailyNumber || null) as number | string | null, orderId: v.orderId, receipt }
         }
         throw e
+      }
+    },
+    // Ящик открываем в onMutate: кассир берёт деньги и отсчитывает сдачу,
+    // пока оплата уходит на сервер. Ждать ответа сети (onSuccess) значило бы
+    // держать гостя у закрытого ящика — и не работать офлайн вовсе.
+    onMutate: (v) => {
+      if (autoDrawer && v.payments.some((p) => p.method === 'cash' && p.amount > 0)) {
+        void openDrawer({ reason: 'sale', orderId: v.offline ? null : v.orderId })
       }
     },
     onSuccess: (res, v) => {

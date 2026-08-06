@@ -16,6 +16,7 @@ import {
   type QuickAmountsMode,
   type StartScreen,
   type TapeWidth,
+  type DrawerPin,
 } from '../store/deviceStore'
 import { isOnline, useNetStore } from './offline/net'
 import type { Device } from '../types'
@@ -129,6 +130,9 @@ export function sanitizeDeviceSettings(
     startScreen: enumValue<StartScreen>(r.startScreen, ['sell', 'hall', 'queue'], d.startScreen),
     orientation: enumValue<Orientation>(r.orientation, ['auto', 'landscape', 'portrait'], d.orientation),
     tapeWidth: enumValue<TapeWidth>(r.tapeWidth, [58, 80], d.tapeWidth),
+    cashDrawerEnabled: bool(r.cashDrawerEnabled, d.cashDrawerEnabled),
+    drawerOpenOnCash: bool(r.drawerOpenOnCash, d.drawerOpenOnCash),
+    drawerPin: enumValue<DrawerPin>(r.drawerPin, [2, 5], d.drawerPin),
     payMethodOrder: payMethods(r.payMethodOrder),
     actionOrder: actionOrder(r.actionOrder),
     quickAmountsMode: enumValue<QuickAmountsMode>(r.quickAmountsMode, ['smart', 'manual', 'off'], d.quickAmountsMode),

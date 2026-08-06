@@ -8,6 +8,8 @@ import { useLangStore } from '../../store/langStore'
 import { t } from '../../lib/i18n'
 import { parseMoney } from '../../lib/money'
 import { useNetStore } from '../../lib/offline/net'
+import { useDeviceStore } from '../../store/deviceStore'
+import { openDrawer } from '../drawer/service'
 import AppSidebar from '../../components/AppSidebar'
 
 /** Экран «смена не открыта»: ввод размена → открытие */
@@ -17,6 +19,9 @@ export default function ShiftGate() {
   const staff = useAuthStore((s) => s.staff)
   const qc = useQueryClient()
   const online = useNetStore((s) => s.online)
+  const drawerEnabled = useDeviceStore((s) => s.cashDrawerEnabled)
+  const drawerOnCash = useDeviceStore((s) => s.drawerOpenOnCash)
+  const autoDrawer = drawerEnabled && drawerOnCash
   const [floatStr, setFloatStr] = useState('')
 
   // Префилл размена из настроек точки (Смена → стартовая сумма по умолчанию).
@@ -37,7 +42,11 @@ export default function ShiftGate() {
       if (float === null) throw new Error(t(lang, 'openingFloat'))
       return openShift(staff!.id, float)
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['current_shift'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['current_shift'] })
+      // Размен кладут в ящик сразу после открытия смены (144)
+      if (autoDrawer) void openDrawer({ reason: 'shift_open' })
+    },
     onError: (e) => toast.error(e.message),
   })
 
