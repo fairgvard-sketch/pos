@@ -8,7 +8,7 @@ import {
   fetchReserveInfo, submitPublicReservation, fetchReservationView,
   cancelPublicReservation, fetchAvailability, reschedulePublicReservation,
   joinWaitlist, confirmAttendance,
-  type ReserveInfo, type ReservationView,
+  type ReserveInfo, type ReservationView, type ReserveRule,
 } from './publicReserveApi'
 import { trackReserveStep, resetFunnelSession } from './funnel'
 import BrandSplash from '../../components/ui/BrandSplash'
@@ -36,7 +36,12 @@ const MAX_DAYS_SHOWN = 60
 /** Зона по умолчанию: страница брони he-first, продукт израильский */
 const DEF_TZ = 'Asia/Jerusalem'
 
-type ReserveStep = 'slot' | 'times' | 'details'
+/**
+ * Шаг «правила» (145) появляется, ТОЛЬКО если точка их завела: кофейне
+ * без условий визита лишний экран между временем и контактами не нужен,
+ * а индикатор прогресса честно считает три или четыре шага.
+ */
+type ReserveStep = 'slot' | 'times' | 'rules' | 'details'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -179,6 +184,12 @@ export default function PublicReservePage() {
   // Контакты живут выше экранов: возврат к времени и повторный вход в
   // детали не стирают уже набранное имя/телефон.
   const [detailsDraft, setDetailsDraft] = useState({ name: '', phone: '', note: '' })
+  // Отмеченные правила (145) живут здесь же, а не в экране: гость,
+  // вернувшийся поправить время, не должен расставлять галочки заново.
+  const [rulesAck, setRulesAck] = useState<string[]>([])
+  // Сервер отклонил согласие: правила успели измениться, пока гость
+  // заполнял форму. Возвращаем его на шаг правил с объяснением.
+  const [rulesStale, setRulesStale] = useState(false)
   // Слот заняли, пока гость заполнял контакты: экран времени показывает
   // объяснение и перезапрошенную доступность.
   const [conflict, setConflict] = useState(false)
@@ -233,6 +244,10 @@ export default function PublicReservePage() {
     if (!instant || !avail) return null // null = доступность не применяется (все свободны)
     return new Set(avail.slots.filter((s) => s.free).map((s) => s.time))
   }, [instant, avail])
+
+  // Правила брони (145): нормализованы сервером — клиент только показывает
+  const rules = useMemo(() => info?.location.rules ?? [], [info])
+  const hasRules = rules.length > 0
 
   // Зоны зала (072): выбор осмыслен от двух зон (одну — 066 создаёт всем)
   const zones = useMemo(() => info?.location.zones ?? [], [info])
@@ -305,6 +320,10 @@ export default function PublicReservePage() {
       setStep('slot')
       setZoneId(null)
       setDetailsDraft({ name: '', phone: '', note: '' })
+      // Вторая бронь — второе согласие: правила подтверждают на визит,
+      // а не один раз навсегда.
+      setRulesAck([])
+      setRulesStale(false)
       setClientUuid(crypto.randomUUID())
       // Вторая бронь — вторая воронка: иначе она склеилась бы с первой и
       // выглядела бы как один гость, дошедший до конца дважды. Эпоха
@@ -382,9 +401,11 @@ export default function PublicReservePage() {
         onBack={
           step === 'times'
             ? () => navigateWithTransition('back', () => setStep('slot'))
-            : step === 'details'
+            : step === 'rules'
               ? () => navigateWithTransition('back', () => setStep('times'))
-              : undefined
+              : step === 'details'
+                ? () => navigateWithTransition('back', () => setStep(hasRules ? 'rules' : 'times'))
+                : undefined
         }
       >
         {step === 'slot' && (
@@ -424,6 +445,7 @@ export default function PublicReservePage() {
             zones={zones}
             todayStr={todayStr}
             conflict={conflict}
+            stepTotal={hasRules ? 4 : 3}
             onPick={(nextTime, nextZone) => {
               trackReserveStep(locId, 'slot_selected', {
                 party_size: guests,
@@ -435,9 +457,27 @@ export default function PublicReservePage() {
                 setConflict(false)
                 setTime(nextTime)
                 setZoneId(nextZone)
-                setStep('details')
+                setStep(hasRules ? 'rules' : 'details')
               })
             }}
+          />
+        )}
+        {step === 'rules' && (
+          <RulesScreen
+            lang={lang}
+            rules={rules}
+            date={date}
+            time={time}
+            guests={guests}
+            todayStr={todayStr}
+            zoneName={zoneName}
+            checked={rulesAck}
+            stale={rulesStale}
+            onChecked={setRulesAck}
+            onNext={() => navigateWithTransition('forward', () => {
+              setRulesStale(false)
+              setStep('details')
+            })}
           />
         )}
         {step === 'details' && (
@@ -456,6 +496,19 @@ export default function PublicReservePage() {
             draft={detailsDraft}
             onDraft={setDetailsDraft}
             clientUuid={clientUuid}
+            rulesAck={rulesAck}
+            stepOf={hasRules ? 4 : 3}
+            onRulesStale={() => {
+              // Правила точки изменились между загрузкой страницы и
+              // отправкой. Показываем СВЕЖИЕ — согласие с исчезнувшим
+              // текстом ничего не значит.
+              qc.invalidateQueries({ queryKey: ['public_reserve_info', locId] })
+              setRulesAck([])
+              navigateWithTransition('back', () => {
+                setRulesStale(true)
+                setStep('rules')
+              })
+            }}
             onConflict={() => {
               // Доступность могла устареть — перезапрашиваем и возвращаем
               // гостя на шаг выбора времени.
@@ -658,17 +711,26 @@ function PreviewBar({ lang, published }: { lang: Lang; published: boolean }) {
   )
 }
 
-function ReserveProgress({ lang, step }: { lang: Lang; step: 1 | 2 | 3 }) {
+/**
+ * Полоса шагов. `total` — 3 или 4 (145): шаг правил есть не у каждой
+ * точки, и рисовать пустое деление «на всякий случай» нельзя — гость
+ * считает по нему, сколько экранов ему осталось.
+ */
+function ReserveProgress({ lang, step, total = 3 }: {
+  lang: Lang
+  step: number
+  total?: number
+}) {
   return (
     <div
       className="public-reserve-progress"
       role="progressbar"
-      aria-label={`${t(lang, 'rsvStep')} ${step} / 3`}
+      aria-label={`${t(lang, 'rsvStep')} ${step} / ${total}`}
       aria-valuemin={1}
-      aria-valuemax={3}
+      aria-valuemax={total}
       aria-valuenow={step}
     >
-      {[1, 2, 3].map((value) => (
+      {Array.from({ length: total }, (_, i) => i + 1).map((value) => (
         <span key={value} data-active={value <= step || undefined} />
       ))}
     </div>
@@ -698,7 +760,9 @@ function ReserveSelectionSummary({
         </div>
         <div>
           <span><PersonIcon /></span>
-          <strong>{guests} {t(lang, 'resGuestsShort')}</strong>
+          {/* Слово «гостей» здесь дублирует фигурку над ним: в сводке из
+              трёх плиток важно число, а не подпись к иконке */}
+          <strong className="tabular-nums">{guests}</strong>
         </div>
       </div>
       {zoneName && (
@@ -853,9 +917,11 @@ function SlotScreen({
   // Расписание для показа часов — тот же разбор, что и для сетки слотов
   const schedule = useMemo(() => normalizeSchedule(loc), [loc])
   const hasHours = !!loc.schedule || !!loc.hours
+  // Шаг правил (145) есть не у всех точек — полоса шагов считает честно
+  const stepTotal = (loc.rules?.length ?? 0) > 0 ? 4 : 3
   return (
     <div className="px-4 pb-8 flex flex-col items-center">
-      <ReserveProgress lang={lang} step={1} />
+      <ReserveProgress lang={lang} step={1} total={stepTotal} />
 
       {!todayHasSlots && (
         <div className="w-full mt-3 rounded-2xl bg-amber-50 text-amber-800 text-sm font-semibold px-4 py-3 text-center">
@@ -1095,7 +1161,10 @@ function NavChooserSheet({ lang, googleMapsUrl, wazeUrl, onClose }: {
  * зону в контакты. Без зон (или одна) — единственная секция «вся точка»
  * (zoneId=null).
  */
-function TimesScreen({ lang, locId, date, time, guests, timeSlots, instant, freeTimes, zones, todayStr, conflict, onPick }: {
+function TimesScreen({
+  lang, locId, date, time, guests, timeSlots, instant, freeTimes, zones, todayStr,
+  conflict, stepTotal, onPick,
+}: {
   lang: Lang
   locId: string
   date: string
@@ -1111,6 +1180,8 @@ function TimesScreen({ lang, locId, date, time, guests, timeSlots, instant, free
   todayStr: string
   /** Гость вернулся сюда из-за занятого слота (118) */
   conflict: boolean
+  /** Сколько всего шагов у потока: 4 с правилами (145), 3 без них */
+  stepTotal: number
   /** (время, zoneId) — zoneId=null для общей секции «без зоны» */
   onPick: (time: string, zoneId: string | null) => void
 }) {
@@ -1143,7 +1214,7 @@ function TimesScreen({ lang, locId, date, time, guests, timeSlots, instant, free
 
   return (
     <div className="px-4 pb-8">
-      <ReserveProgress lang={lang} step={2} />
+      <ReserveProgress lang={lang} step={2} total={stepTotal} />
       <h2
         className="public-reserve-route-focus text-2xl font-bold text-gray-900 mt-6"
         tabIndex={-1}
@@ -1300,13 +1371,151 @@ function reserveErrorText(lang: Lang, code: string): string {
     case 'full_slot': return t(lang, 'rsvErrFull')
     case 'invalid_zone': return t(lang, 'rsvErrZone')
     case 'waitlist_disabled': return t(lang, 'rsvErrWaitlistOff')
+    case 'rules_not_accepted': return t(lang, 'rsvErrRules')
     default: return t(lang, 'rsvErrUnknown')
   }
 }
 
+/**
+ * Правила брони (145) — самостоятельный шаг между временем и контактами.
+ *
+ * Порядок внутри экрана: сначала пункты «просто знать», затем те, что
+ * требуют отметки. Вперемешку галочку легко пропустить, а отказ сервера
+ * из-за неотмеченного пункта гость воспринимает как поломку страницы.
+ *
+ * Кнопка НЕ дизейблится: неактивная кнопка без объяснения — та самая
+ * причина, по которой звонят в заведение. Нажатие показывает, каких
+ * именно подтверждений не хватает, и уводит фокус на первое из них.
+ */
+function RulesScreen({
+  lang, rules, date, time, guests, todayStr, zoneName, checked, stale, onChecked, onNext,
+}: {
+  lang: Lang
+  rules: ReserveRule[]
+  date: string
+  time: string
+  guests: number
+  todayStr: string
+  zoneName: string | null
+  checked: string[]
+  /** Сервер отклонил прежнее согласие: правила успели измениться */
+  stale: boolean
+  onChecked: (next: string[]) => void
+  onNext: () => void
+}) {
+  const [showValidation, setShowValidation] = useState(false)
+  const acksRef = useRef<HTMLDivElement>(null)
+
+  const notes = rules.filter((rule) => !rule.ack)
+  const acks = rules.filter((rule) => rule.ack)
+  const missing = acks.filter((rule) => !checked.includes(rule.id))
+
+  function toggle(id: string) {
+    onChecked(checked.includes(id) ? checked.filter((x) => x !== id) : [...checked, id])
+  }
+
+  function next() {
+    if (missing.length > 0) {
+      setShowValidation(true)
+      window.setTimeout(() => {
+        acksRef.current
+          ?.querySelector<HTMLInputElement>('input[data-missing="true"]')
+          ?.focus()
+      }, 0)
+      return
+    }
+    onNext()
+  }
+
+  return (
+    <div className="px-4 pb-8">
+      <ReserveProgress lang={lang} step={3} total={4} />
+      <h2
+        className="public-reserve-route-focus text-2xl font-bold text-gray-900 mt-6"
+        tabIndex={-1}
+      >
+        {t(lang, 'rsvRulesTitle')}
+      </h2>
+      <p className="text-sm text-gray-500 mt-1">{t(lang, 'rsvRulesHint')}</p>
+
+      <div className="mt-4">
+        <ReserveSelectionSummary
+          lang={lang}
+          date={date}
+          time={time}
+          guests={guests}
+          todayStr={todayStr}
+          zoneName={zoneName}
+        />
+      </div>
+
+      {stale && (
+        <div
+          className="mt-4 rounded-2xl bg-amber-50 text-amber-800 text-sm font-semibold px-4 py-3"
+          role="alert"
+        >
+          {t(lang, 'rsvErrRules')}
+        </div>
+      )}
+
+      {notes.length > 0 && (
+        <ul className="public-reserve-rules">
+          {notes.map((rule) => (
+            <li key={rule.id} data-level={rule.level}>
+              <span aria-hidden="true" />
+              <p><RuleText rule={rule} /></p>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {acks.length > 0 && (
+        <div className="public-reserve-rules-acks" ref={acksRef}>
+          {acks.map((rule) => {
+            const on = checked.includes(rule.id)
+            return (
+              <label key={rule.id} data-missing={showValidation && !on ? 'true' : undefined}>
+                <input
+                  type="checkbox"
+                  checked={on}
+                  data-missing={showValidation && !on ? 'true' : undefined}
+                  aria-invalid={showValidation && !on}
+                  onChange={() => toggle(rule.id)}
+                />
+                <span><RuleText rule={rule} /></span>
+              </label>
+            )
+          })}
+        </div>
+      )}
+
+      {showValidation && missing.length > 0 && (
+        <p className="text-sm font-semibold text-red-600 mt-3" role="alert">
+          {t(lang, 'rsvRulesNeedAck')}
+        </p>
+      )}
+
+      <button type="button" onClick={next} className="public-reserve-primary-action">
+        {t(lang, 'rsvRulesContinue')}
+      </button>
+    </div>
+  )
+}
+
+/** Пункт правила: со ссылкой — ссылкой (условия использования), иначе текстом */
+function RuleText({ rule }: { rule: ReserveRule }) {
+  if (!rule.url) return <>{rule.text}</>
+  return (
+    <a href={rule.url} target="_blank" rel="noreferrer noopener" className="underline">
+      {rule.text}
+    </a>
+  )
+}
+
 function DetailsScreen({
   lang, locId, date, time, guests, instant, zoneId, zoneName, todayStr, preview,
-  reservedAt, draft, onDraft, clientUuid, onSubmitted, onConflict,
+  reservedAt, draft, onDraft, clientUuid, rulesAck, stepOf, onSubmitted, onConflict,
+  onRulesStale,
 }: {
   lang: Lang
   locId: string
@@ -1327,7 +1536,13 @@ function DetailsScreen({
   draft: { name: string; phone: string; note: string }
   onDraft: (draft: { name: string; phone: string; note: string }) => void
   clientUuid: string
+  /** Отмеченные правила (145); проверяет их сервер, не эта форма */
+  rulesAck: string[]
+  /** Сколько всего шагов у потока: 4 с правилами, 3 без них */
+  stepOf: number
   onSubmitted: (clientUuid: string) => void
+  /** Правила точки изменились — согласие устарело и собирается заново */
+  onRulesStale: () => void
   /** Слот заняли, пока гость заполнял форму: возвращаем его к выбору
    *  времени со свежей доступностью, не стирая контакты. */
   onConflict: () => void
@@ -1393,6 +1608,7 @@ function DetailsScreen({
         reserved_at: at.toISOString(),
         note: note.trim() || null,
         zone_id: zoneId,
+        rules_ack: rulesAck,
       })
       // Конец воронки (124). Здесь, а не в onSubmitted: `reservation_id`
       // есть только тут, и именно он связывает канал привода с бронью.
@@ -1416,13 +1632,19 @@ function DetailsScreen({
         onConflict()
         return
       }
+      // Правила изменились, пока гость заполнял форму (145): красная
+      // надпись под именем тут бесполезна — вернуть надо к самим правилам.
+      if (code === 'rules_not_accepted') {
+        onRulesStale()
+        return
+      }
       setError(reserveErrorText(lang, code))
     }
   }
 
   return (
     <div className="px-4 pb-8">
-      <ReserveProgress lang={lang} step={3} />
+      <ReserveProgress lang={lang} step={stepOf} total={stepOf} />
       <h2
         className="public-reserve-route-focus text-2xl font-bold text-gray-900 mt-6"
         tabIndex={-1}

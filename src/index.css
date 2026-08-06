@@ -2575,6 +2575,83 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     to { background-position: -200% 0; }
   }
 
+  /* Правила брони (145): пункты с маркером, ниже — обязательные отметки.
+     Выделенный пункт красный и по цвету, и по весу: цветом одним
+     иерархию не задаём, а на солнце экран терминала съедает оттенки. */
+  .public-reserve-rules {
+    display: flex;
+    margin-top: 1.5rem;
+    flex-direction: column;
+    gap: .875rem;
+  }
+
+  .public-reserve-rules > li {
+    display: flex;
+    align-items: flex-start;
+    gap: .625rem;
+  }
+
+  .public-reserve-rules > li > span {
+    width: .5rem;
+    height: .5rem;
+    margin-top: .45rem;
+    flex: none;
+    border-radius: .125rem;
+    background: #6b7280;
+  }
+
+  .public-reserve-rules > li[data-level='important'] > span {
+    background: #dc2626;
+  }
+
+  .public-reserve-rules > li > p {
+    color: #374151;
+    font-size: .9375rem;
+    line-height: 1.5;
+  }
+
+  .public-reserve-rules > li[data-level='important'] > p {
+    color: #b91c1c;
+    font-weight: 600;
+  }
+
+  .public-reserve-rules-acks {
+    display: flex;
+    margin-top: 1.25rem;
+    padding-top: 1rem;
+    flex-direction: column;
+    border-top: 1px solid rgb(17 24 39 / 8%);
+    gap: .25rem;
+  }
+
+  .public-reserve-rules-acks label {
+    display: flex;
+    min-height: 2.75rem;
+    padding: .625rem .75rem;
+    align-items: flex-start;
+    border-radius: .875rem;
+    cursor: pointer;
+    gap: .75rem;
+  }
+
+  .public-reserve-rules-acks label[data-missing='true'] {
+    background: #fef2f2;
+  }
+
+  .public-reserve-rules-acks input {
+    width: 1.375rem;
+    height: 1.375rem;
+    margin-top: .125rem;
+    flex: none;
+    accent-color: #111827;
+  }
+
+  .public-reserve-rules-acks span {
+    color: #111827;
+    font-size: .9375rem;
+    line-height: 1.5;
+  }
+
   .public-reserve-details-fields {
     display: flex;
     margin-top: 1.5rem;

@@ -3,13 +3,15 @@
  *
  * GET ?loc=<location_id>
  *   → { location: { id, name, business_name, logo_url, accepting,
- *       address, phone, header_url, hours, links, zones } }
+ *       address, phone, header_url, hours, links, zones, rules } }
  *   Инфо точки для формы брони. accepting — тумблер
  *   settings->reservations->enabled (отсутствие = выключено).
  *   header_url — своя шапка брони, иначе fallback на шапку онлайн-заказа;
  *   hours (часы работы) и links (соцсети) — подвал страницы (066);
  *   zones — живые зоны зала с активными столами (072), гость выбирает
- *   зону, когда их две и больше.
+ *   зону, когда их две и больше;
+ *   rules — правила брони (145) в нормализованном БД виде; пункты с
+ *   ack:true гость обязан отметить, иначе заявку отклонит сервер.
  *
  * GET ?b=<public_token|client_uuid>
  *   → карточка брони для постоянной ссылки (118): статус, детали визита,
@@ -19,7 +21,7 @@
  *   → { status, reject_reason, reserved_at, party_size, table_label, zone_name }
  *   client_uuid знает только гость — он же и ключ доступа к статусу.
  *
- * POST { action:'submit', loc, client_uuid, name, phone, party_size, reserved_at, note?, zone_id? }
+ * POST { action:'submit', loc, client_uuid, name, phone, party_size, reserved_at, note?, zone_id?, rules_ack? }
  *   → { reservation_id, duplicate } | { error }
  * POST { action:'cancel', client_uuid }
  *   → { status } | { error }   client_uuid = public_token или client_uuid
@@ -75,6 +77,7 @@ const KNOWN_ERRORS = [
   'waitlist_disabled', // владелец не включил лист ожидания
   'offer_expired', // предложение просрочено или уже использовано
   'not_confirmed',
+  'rules_not_accepted', // 145: обязательное правило точки не отмечено
 ]
 
 // Сначала САМЫЕ ДЛИННЫЕ коды: сопоставление идёт по подстроке, а
@@ -204,6 +207,15 @@ Deno.serve(async (req) => {
           .filter((z) => used.has(z.id))
           .map((z) => ({ id: z.id, name: z.name }))
       }
+      // Правила брони (145). Нормализует их БД — та же функция, которой
+      // submit_reservation проверяет согласие. Второй нормализатор здесь
+      // означал бы, что показанный гостю пункт и проверяемый сервером
+      // могут разойтись, а именно на этом расхождении держится отказ
+      // rules_not_accepted.
+      const { data: rulesData } = await supabase.rpc('reservation_rules', {
+        p_settings: { reservations: rsv ?? {} },
+      })
+      const rules = Array.isArray(rulesData) ? rulesData : []
       return json(
         {
           location: {
@@ -262,6 +274,9 @@ Deno.serve(async (req) => {
             // Лист ожидания (122): владелец включает отдельно — заведение,
             // которое не собирается перезванивать, не должно копить обещания
             waitlist: rsv?.waitlist === true,
+            // Правила брони (145): гость читает их ДО отправки заявки, а
+            // пункты с ack:true отмечает явно
+            rules,
           },
         },
         200,
@@ -443,10 +458,12 @@ Deno.serve(async (req) => {
 
   if (action !== 'submit') return json({ error: 'bad_request' }, 400)
 
-  const { loc, client_uuid, name, phone, party_size, reserved_at, note, zone_id } = body as {
+  const {
+    loc, client_uuid, name, phone, party_size, reserved_at, note, zone_id, rules_ack,
+  } = body as {
     loc?: string; client_uuid?: string; name?: string; phone?: string
     party_size?: number; reserved_at?: string; note?: string | null
-    zone_id?: string | null
+    zone_id?: string | null; rules_ack?: unknown
   }
   if (!UUID_RE.test(loc ?? '') || !UUID_RE.test(client_uuid ?? '')) {
     return json({ error: 'bad_request' }, 400)
@@ -460,6 +477,13 @@ Deno.serve(async (req) => {
     return json({ error: 'invalid_zone' }, 400)
   }
 
+  // Правила (145): наружу принимаем ТОЛЬКО идентификаторы отмеченных
+  // пунктов. Текст правила берётся из настроек точки — снимок согласия
+  // не должен зависеть от того, что прислал браузер.
+  const acked = Array.isArray(rules_ack)
+    ? rules_ack.filter((id): id is string => typeof id === 'string' && id.length <= 64).slice(0, 20)
+    : []
+
   const { data, error } = await supabase.rpc('submit_reservation', {
     p_location_id: loc,
     p_client_uuid: client_uuid,
@@ -469,6 +493,7 @@ Deno.serve(async (req) => {
     p_reserved_at: reserved_at,
     p_note: note ?? null,
     p_zone_id: zone_id ?? null,
+    p_rules_ack: acked,
   })
 
   if (error) {

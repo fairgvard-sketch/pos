@@ -15,6 +15,22 @@ const headers = {
   Authorization: `Bearer ${ANON_KEY}`,
 }
 
+/**
+ * Правило брони (145). Нормализует его БД (`reservation_rules`), клиент
+ * только показывает: обязательный пункт без отметки отклонит сервер,
+ * и решать «обязателен ли он» на клиенте нельзя.
+ */
+export interface ReserveRule {
+  id: string
+  text: string
+  /** important — выделенный пункт (красный маркер) */
+  level: 'normal' | 'important'
+  /** true — гость обязан отметить пункт галочкой */
+  ack: boolean
+  /** Ссылка на документ (условия использования); null — обычный текст */
+  url: string | null
+}
+
 export interface ReserveInfo {
   location: {
     id: string
@@ -75,6 +91,9 @@ export interface ReserveInfo {
     /** Лист ожидания включён владельцем (122): гость может оставить
      *  пожелание, когда свободного слота нет */
     waitlist?: boolean
+    /** Правила брони (145): показываются отдельным шагом перед формой.
+     *  Пустой массив = шага нет, поток остаётся в три экрана. */
+    rules?: ReserveRule[]
   }
 }
 
@@ -101,6 +120,9 @@ export interface ReservePayload {
   note: string | null
   /** Пожелание зоны зала (072); null = без предпочтений */
   zone_id: string | null
+  /** Отмеченные правила (145) — только идентификаторы: текст в снимок
+   *  согласия сервер берёт из настроек точки, не из этого запроса */
+  rules_ack?: string[]
 }
 
 export interface ReserveResult {

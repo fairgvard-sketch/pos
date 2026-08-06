@@ -47,6 +47,15 @@ export interface Reservation {
   created_via?: 'public' | 'pos' | 'backoffice' | 'waitlist' | null
   /** Тестовая бронь запуска (126): настоящая, но не попадает в отчёты */
   is_test?: boolean
+  /**
+   * Снимок правил, которые гость видел и подтвердил при заявке (145).
+   * Пишет его сервер по настройкам точки; null — правил не было или
+   * бронь завёл сотрудник, которого правила не ограничивают.
+   */
+  rules_ack?: {
+    accepted_at: string
+    rules: { id: string; text: string; required: boolean; accepted: boolean }[]
+  } | null
 }
 
 /** Статусы, которые терминальны для веб-стола хостес (102) */

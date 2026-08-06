@@ -8,6 +8,7 @@ import {
   type BlockState, type PositionedBlock, type TimelineBooking, type TimelineTable,
 } from './timeline'
 import { fetchTimelineReservations, type Reservation } from './api'
+import PartySize from '../../components/ui/PartySize'
 import type { Table } from '../../types'
 
 /**
@@ -401,9 +402,7 @@ export default function TimelineView({
                         style={{ width: LABEL_W }}
                       >
                         <span className="font-bold text-gray-900">{row.table.label}</span>
-                        <span className="text-xs text-gray-500">
-                          {row.table.seats} {t(lang, 'resGuestsShort')}
-                        </span>
+                        <PartySize n={row.table.seats} lang={lang} className="text-xs text-gray-500" />
                       </div>
 
                       <div
@@ -528,7 +527,7 @@ function BookingBlock({ lang, block, dimmed, onOpen }: {
     >
       <span className="block text-xs font-bold truncate">{b.guestName}</span>
       <span className="block text-[11px] opacity-80 truncate">
-        {b.partySize} {t(lang, 'resGuestsShort')}
+        <PartySize n={b.partySize} lang={lang} />
         {block.combined && ` · ${t(lang, 'rsvCombined')}`}
         {b.state !== 'confirmed' && ` · ${stateLabel(lang, b.state)}`}
       </span>

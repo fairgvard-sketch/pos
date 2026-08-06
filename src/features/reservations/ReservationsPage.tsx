@@ -10,6 +10,7 @@ import { fetchTables } from '../tables/api'
 import { fetchCurrentLocation } from '../auth/api'
 import AppSidebar from '../../components/AppSidebar'
 import FormSheet from '../../components/ui/FormSheet'
+import PartySize from '../../components/ui/PartySize'
 import {
   fetchReservations, fetchReservationHistory, acceptReservation, rejectReservation,
   setReservationTable, seatReservation, markReservationArrived,
@@ -247,7 +248,7 @@ export default function ReservationsPage() {
                           )}
                         </div>
                         <div className="text-xs text-gray-500 mt-1">
-                          {r.party_size} {t(lang, 'resGuestsShort')}
+                          <PartySize n={r.party_size} lang={lang} />
                           {r.table ? ` · ${t(lang, 'tableLabel')} ${r.table.label}` : ''}
                           {r.reject_reason ? ` · ${r.reject_reason}` : ''}
                         </div>
@@ -402,7 +403,7 @@ function BookingActionsSheet({
         <div className="px-1">
           <p className="text-lg font-bold text-gray-900">{r.customer_name}</p>
           <p className="text-sm text-gray-500 mt-0.5">
-            {formatTime(r.reserved_at, lang)} · {r.party_size} {t(lang, 'resGuestsShort')}
+            {formatTime(r.reserved_at, lang)} · <PartySize n={r.party_size} lang={lang} />
             {r.zone && ` · ${r.zone.name}`}
             {r.table && ` · ${t(lang, 'tableLabel')} ${r.table.label}`}
           </p>
@@ -415,6 +416,13 @@ function BookingActionsSheet({
               лента отвечает за отбор, окно брони — за подробности */}
           <GuestBadge phone={r.customer_phone} currentId={r.id} lang={lang} />
           {r.note && <p className="text-sm text-gray-700 mt-2">{r.note}</p>}
+          {/* Согласие с правилами (145). Спор «мне этого не говорили»
+              разрешается здесь, а не в памяти смены. */}
+          {r.rules_ack?.accepted_at && (
+            <p className="text-xs text-gray-500 mt-2">
+              {t(lang, 'resRulesAccepted')} · {formatDate(r.rules_ack.accepted_at, lang)}
+            </p>
+          )}
         </div>
 
         <div className="flex flex-col gap-2 mt-4">
@@ -700,7 +708,7 @@ function TablePickerSheet({ lang, reservation, mode, tables, reservations, busy,
             {mode === 'accept' ? t(lang, 'resAcceptPickTitle') : t(lang, 'resPickTable')}
           </h2>
           <p className="text-sm text-gray-500 mt-1">
-            {formatTime(reservation.reserved_at, lang)} · {reservation.customer_name} · {reservation.party_size} {t(lang, 'resGuestsShort')}
+            {formatTime(reservation.reserved_at, lang)} · {reservation.customer_name} · <PartySize n={reservation.party_size} lang={lang} />
             {/* Пожелание зоны от гостя (072) — подсказка, не ограничение */}
             {reservation.zone && <> · <span className="font-semibold text-gray-900">{reservation.zone.name}</span></>}
           </p>

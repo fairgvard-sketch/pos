@@ -1612,6 +1612,14 @@ export const translations = {
     rsvFoundTitle: 'Мы нашли для вас свободные места',
     rsvInstantLabel: 'мгновенно',
     rsvPhoneLabel: 'по телефону',
+    // Правила брони (145): отдельный шаг перед контактами
+    rsvRulesTitle: 'Важно знать',
+    rsvRulesHint: 'Прочитайте условия визита — отмеченные пункты нужно подтвердить',
+    rsvRulesContinue: 'Продолжить',
+    rsvRulesNeedAck: 'Подтвердите отмеченные пункты, чтобы продолжить',
+    rsvErrRules: 'Условия брони изменились — прочитайте их и подтвердите заново',
+    // Согласие гостя в карточке брони у сотрудника
+    resRulesAccepted: 'Правила приняты',
   },
   he: {
     // Общее
@@ -3222,6 +3230,13 @@ export const translations = {
     rsvFoundTitle: 'מצאנו מספר מקומות פנויים עבורך',
     rsvInstantLabel: 'אישור מיידי',
     rsvPhoneLabel: 'תיאום טלפוני',
+    // כללי ההזמנה (145): שלב נפרד לפני פרטי הקשר
+    rsvRulesTitle: 'חשוב לדעת',
+    rsvRulesHint: 'קראו את תנאי ההזמנה — את הסעיפים המסומנים יש לאשר',
+    rsvRulesContinue: 'המשך',
+    rsvRulesNeedAck: 'יש לאשר את הסעיפים המסומנים כדי להמשיך',
+    rsvErrRules: 'תנאי ההזמנה השתנו — יש לקרוא ולאשר אותם מחדש',
+    resRulesAccepted: 'אישר/ה את התנאים',
   },
 } as const
 
