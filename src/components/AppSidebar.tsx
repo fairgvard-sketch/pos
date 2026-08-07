@@ -160,15 +160,6 @@ export default function AppSidebar({ active }: { active: SidebarPage }) {
             onClick={goHall}
           />
         )}
-        {tablesMode && (
-          <SideLink
-            active={active === 'reservations'}
-            label={t(lang, 'reservationsTitle')}
-            iconName="reservations"
-            badge={newResCount}
-            onClick={() => navigate('/reservations')}
-          />
-        )}
         {showSell && (
           <SideLink active={active === 'sell'} label={t(lang, 'sell')} iconName="register" onClick={() => navigate('/sell')} />
         )}
@@ -180,6 +171,15 @@ export default function AppSidebar({ active }: { active: SidebarPage }) {
           badge={newOnlineCount}
           onClick={() => navigate('/online')}
         />
+        {tablesMode && (
+          <SideLink
+            active={active === 'reservations'}
+            label={t(lang, 'reservationsTitle')}
+            iconName="reservations"
+            badge={newResCount}
+            onClick={() => navigate('/reservations')}
+          />
+        )}
         <SideLink active={active === 'transactions'} label={t(lang, 'transactions')} iconName="transactions" onClick={() => navigate('/transactions')} />
         <SideLink active={active === 'shift'} label={t(lang, 'shift')} iconName="workShift" onClick={() => navigate('/shift')} />
         {/* Склад (055): виден тем, кому доступен приход (право точки),
