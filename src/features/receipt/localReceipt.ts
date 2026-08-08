@@ -97,6 +97,14 @@ export function buildLocalReceipt(args: {
     receipt_number: null,
     doc_type: 'invoice_receipt', // дефолт orders.doc_type (020)
     allocation_number: null,
+    /*
+     * Слепка эмитента у временного чека нет и быть не может: документом
+     * он станет при синхронизации, тогда сервер и снимет слепок (150).
+     * До этого шапка печатается из настроек точки — как и раньше.
+     */
+    issuer_name: null,
+    issuer_tax_id: null,
+    issuer_address: null,
     buyer_name: null, // реквизиты покупателя (048) добавляются онлайн, после синка
     buyer_tax_id: null,
     order_type: args.orderType,

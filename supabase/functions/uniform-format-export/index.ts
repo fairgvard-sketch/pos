@@ -86,14 +86,59 @@ Deno.serve(async (req) => {
       info.error.message.includes('not in organization')
     return json({ error: forbidden ? 'forbidden' : 'info_failed' }, forbidden ? 403 : 500)
   }
-  const business = info.data as {
+  const liveBusiness = info.data as {
     business_name: string | null
     address: string | null
     tax_id: string | null
     location_id: string
   }
+
+  /*
+   * Реквизиты набора берутся из САМИХ ДОКУМЕНТОВ (150/151), а не из
+   * текущих настроек точки: набор за прошлый год обязан нести тот ח.פ,
+   * с которым документы были выпущены, даже если реквизиты с тех пор
+   * поменяли.
+   *
+   * Проверка идёт ДО постраничной выборки — она дешёвая, а собирать сто
+   * тысяч записей, чтобы выбросить их на последней странице, незачем.
+   */
+  const issuersRes = web
+    ? await supabase.rpc('uf_export_issuers_web', {
+        p_location_id: location_id,
+        p_from: from,
+        p_to: to,
+      })
+    : await supabase.rpc('uf_export_issuers', {
+        p_staff_session: staff_session,
+        p_from: from,
+        p_to: to,
+      })
+  if (issuersRes.error) return json({ error: 'issuers_failed' }, 500)
+
+  const issuers = (issuersRes.data?.issuers ?? []) as {
+    business_name: string | null
+    address: string | null
+    tax_id: string | null
+  }[]
+
+  /*
+   * Заголовок מבנה אחיד несёт ОДИН ח.פ. Период, внутри которого эмитент
+   * менялся, невозможно представить одним набором, и «усреднить» его
+   * нельзя — такой период выгружается раздельно. Отказ, а не
+   * предупреждение: молча сданный набор с чужим ח.פ хуже, чем несданный.
+   */
+  if (issuers.length > 1) {
+    return json({
+      error: 'issuer_changed_in_period',
+      issuers: issuers.map((i) => ({ business_name: i.business_name, tax_id: i.tax_id })),
+    }, 422)
+  }
+
+  // Документов нет — выгружать нечего; заголовок берём из настроек точки
+  const business = issuers.length === 1 ? { ...liveBusiness, ...issuers[0] } : liveBusiness
+
   const taxId = Number((business.tax_id ?? '').replace(/\D/g, ''))
-  if (!taxId) return json({ error: 'missing_tax_id' }, 422) // заполнить в Настройки → Чек
+  if (!taxId) return json({ error: 'missing_tax_id' }, 422) // заполнить в Locations → Receipts & tax
 
   // Постраничная выборка ленты документов
   const documents: ExportDocument[] = []

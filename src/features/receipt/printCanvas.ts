@@ -151,11 +151,20 @@ export function renderReceiptCanvas(
   }
 
   // ── Шапка ──
-  const businessName = location?.receipt_business_name || location?.name || ''
+  /*
+   * Шапка — из СЛЕПКА документа (150), а не из текущих настроек точки.
+   * Перепечатка обязана повторять оригинал: до слепка смена реквизитов
+   * меняла содержимое уже выданных чеков. Фолбэк на точку — документам
+   * до 150 и временному офлайн-чеку, который ещё не фискальный документ.
+   * Телефон остаётся живым: это оформление, а не реквизит документа.
+   */
+  const businessName = r.issuer_name || location?.receipt_business_name || location?.name || ''
+  const issuerAddress = r.issuer_address ?? location?.receipt_address
+  const issuerTaxId = r.issuer_tax_id ?? location?.receipt_tax_id
   if (businessName) center(businessName, 34, true, 10)
-  if (location?.receipt_address) center(location.receipt_address, 24)
+  if (issuerAddress) center(issuerAddress, 24)
   if (location?.receipt_phone) center(`טל׳: ${location.receipt_phone}`, 24)
-  if (location?.receipt_tax_id) center(`ע.מ/ח.פ: ${location.receipt_tax_id}`, 24)
+  if (issuerTaxId) center(`ע.מ/ח.פ: ${issuerTaxId}`, 24)
   y += 6
 
   // ── Тип документа + номер (у временного офлайн-чека номера ещё нет) ──
@@ -353,11 +362,20 @@ export function renderRefundReceiptCanvas(
   }
 
   // ── Шапка (реквизиты бизнеса) ──
-  const businessName = location?.receipt_business_name || location?.name || ''
+  /*
+   * Шапка — из СЛЕПКА документа (150), а не из текущих настроек точки.
+   * Перепечатка обязана повторять оригинал: до слепка смена реквизитов
+   * меняла содержимое уже выданных чеков. Фолбэк на точку — документам
+   * до 150 и временному офлайн-чеку, который ещё не фискальный документ.
+   * Телефон остаётся живым: это оформление, а не реквизит документа.
+   */
+  const businessName = r.issuer_name || location?.receipt_business_name || location?.name || ''
+  const issuerAddress = r.issuer_address ?? location?.receipt_address
+  const issuerTaxId = r.issuer_tax_id ?? location?.receipt_tax_id
   if (businessName) center(businessName, 34, true, 10)
-  if (location?.receipt_address) center(location.receipt_address, 24)
+  if (issuerAddress) center(issuerAddress, 24)
   if (location?.receipt_phone) center(`טל׳: ${location.receipt_phone}`, 24)
-  if (location?.receipt_tax_id) center(`ע.מ/ח.פ: ${location.receipt_tax_id}`, 24)
+  if (issuerTaxId) center(`ע.מ/ח.פ: ${issuerTaxId}`, 24)
   y += 6
 
   // ── Тип документа + номер ──

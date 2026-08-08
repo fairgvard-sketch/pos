@@ -26,6 +26,15 @@ export interface Receipt {
   receipt_number: number | null
   doc_type: 'receipt' | 'tax_invoice' | 'invoice_receipt'
   allocation_number: string | null
+  /**
+   * Эмитент на момент выпуска документа (150). Перепечатка обязана
+   * повторять оригинал: до слепка шапка бралась из текущих настроек
+   * точки, и смена реквизитов меняла содержимое уже выданных чеков.
+   * NULL — документ выпущен до 150, тогда фолбэк на настройки точки.
+   */
+  issuer_name: string | null
+  issuer_tax_id: string | null
+  issuer_address: string | null
   /** Покупатель-бизнес (048): блок на чеке — חשבונית מס для B2B */
   buyer_name: string | null
   buyer_tax_id: string | null
@@ -73,13 +82,17 @@ export interface RefundReceipt {
   vat_rate: number
   /** Доля НДС в возвращаемой сумме (пропорция исходного чека) */
   vat_amount: number
+  /** Эмитент на момент выпуска зикуя (150); NULL — документ до 150 */
+  issuer_name: string | null
+  issuer_tax_id: string | null
+  issuer_address: string | null
 }
 
 /** Данные תעודת זיכוי: возврат + реквизиты исходного чека */
 export async function fetchRefundReceipt(refundId: string): Promise<RefundReceipt> {
   const { data, error } = await supabase
     .from('refunds')
-    .select('id, refund_number, amount, method, reason, items, created_at, staff(name), orders(daily_number, receipt_number, doc_type, vat_rate, vat_amount, total)')
+    .select('id, refund_number, amount, method, reason, items, created_at, issuer_name, issuer_tax_id, issuer_address, staff(name), orders(daily_number, receipt_number, doc_type, vat_rate, vat_amount, total)')
     .eq('id', refundId)
     .single()
   if (error) throw new Error(error.message)
@@ -91,6 +104,9 @@ export async function fetchRefundReceipt(refundId: string): Promise<RefundReceip
     reason: string | null
     items: { name: string; qty: number; amount: number }[] | null
     created_at: string
+    issuer_name: string | null
+    issuer_tax_id: string | null
+    issuer_address: string | null
     staff: { name: string } | null
     orders: { daily_number: number; receipt_number: number | null; doc_type: RefundReceipt['doc_type']; vat_rate: number; vat_amount: number; total: number }
   }
@@ -103,6 +119,9 @@ export async function fetchRefundReceipt(refundId: string): Promise<RefundReceip
     reason: r.reason,
     items: r.items,
     created_at: r.created_at,
+    issuer_name: r.issuer_name,
+    issuer_tax_id: r.issuer_tax_id,
+    issuer_address: r.issuer_address,
     staff_name: r.staff?.name ?? null,
     daily_number: o.daily_number,
     receipt_number: o.receipt_number,
@@ -118,6 +137,9 @@ interface OrderRow {
   receipt_number: number | null
   doc_type: 'receipt' | 'tax_invoice' | 'invoice_receipt'
   allocation_number: string | null
+  issuer_name: string | null
+  issuer_tax_id: string | null
+  issuer_address: string | null
   buyer_name: string | null
   buyer_tax_id: string | null
   order_type: 'here' | 'takeaway' | 'delivery'
@@ -169,6 +191,7 @@ export async function fetchReceipt(orderId: string): Promise<Receipt> {
     .from('orders')
     .select(`
       id, daily_number, receipt_number, doc_type, allocation_number,
+      issuer_name, issuer_tax_id, issuer_address,
       buyer_name, buyer_tax_id,
       order_type, customer_name, table_label, status,
       subtotal, discount_type, discount_value, discount_amount, loyalty_discount, vat_rate, vat_amount, total, tip_amount,
@@ -187,6 +210,9 @@ export async function fetchReceipt(orderId: string): Promise<Receipt> {
     receipt_number: o.receipt_number,
     doc_type: o.doc_type,
     allocation_number: o.allocation_number,
+    issuer_name: o.issuer_name,
+    issuer_tax_id: o.issuer_tax_id,
+    issuer_address: o.issuer_address,
     buyer_name: o.buyer_name,
     buyer_tax_id: o.buyer_tax_id,
     order_type: o.order_type,

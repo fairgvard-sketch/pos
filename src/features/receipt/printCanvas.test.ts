@@ -118,6 +118,9 @@ function baseRefund(itemCount: number): RefundReceipt {
     daily_number: 5,
     receipt_number: 42,
     doc_type: 'invoice_receipt',
+  issuer_name: null,
+  issuer_tax_id: null,
+  issuer_address: null,
     vat_rate: 18,
     vat_amount: Math.round(1600 * itemCount * 18 / 118),
   }
