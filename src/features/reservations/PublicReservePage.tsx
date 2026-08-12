@@ -312,14 +312,30 @@ export default function PublicReservePage() {
     if (!slots.includes(time)) setTime(slots.find((s) => s >= '12:00') ?? slots[0] ?? '')
   }
 
-  function startNew() {
+  /**
+   * Забронировать снова.
+   *
+   * `seed` — то, что переносить БЕЗОПАСНО: имя гостя и размер компании.
+   * Заставлять человека, который только что поужинал у нас, набирать
+   * своё имя заново — единственный способ превратить повторный визит в
+   * работу.
+   *
+   * Телефон не переносится, потому что его не отдаёт и сервер
+   * (`reservation_public_view`, 118): попавшая не в те руки ссылка не
+   * должна выдавать номер. Время и согласие с правилами сбрасываются
+   * всегда — вторая бронь это второй визит, а не копия первого.
+   */
+  function startNew(seed?: { name?: string; guests?: number }) {
     navigateWithTransition('back', () => {
       localStorage.removeItem(ACTIVE_KEY)
       writeBookingUrl(null)
       setActiveUuid(null)
       setStep('slot')
       setZoneId(null)
-      setDetailsDraft({ name: '', phone: '', note: '' })
+      if (seed?.guests && seed.guests >= 1 && seed.guests <= maxParty) {
+        setGuests(seed.guests)
+      }
+      setDetailsDraft({ name: seed?.name ?? '', phone: '', note: '' })
       // Вторая бронь — второе согласие: правила подтверждают на визит,
       // а не один раз навсегда.
       setRulesAck([])
@@ -1747,7 +1763,7 @@ function BookingScreen({ lang, bookingKey, tz, onNew }: {
   lang: Lang
   bookingKey: string
   tz: string
-  onNew: () => void
+  onNew: (seed?: { name?: string; guests?: number }) => void
 }) {
   const [confirmCancel, setConfirmCancel] = useState(false)
   const [cancelBusy, setCancelBusy] = useState(false)
@@ -1789,7 +1805,8 @@ function BookingScreen({ lang, bookingKey, tz, onNew }: {
     return (
       <CenterCard>
         <p className="font-bold text-gray-900">{t(lang, 'pubStatusLost')}</p>
-        <NewBtn lang={lang} onClick={onNew} />
+        {/* Брони нет — переносить в новую нечего */}
+        <NewBtn lang={lang} onClick={() => onNew()} />
       </CenterCard>
     )
   }
@@ -1798,6 +1815,12 @@ function BookingScreen({ lang, bookingKey, tz, onNew }: {
   }
 
   const loc = view.location
+  /*
+   * Что переносится в повторную бронь: имя и размер компании. Телефон
+   * сервер наружу не отдаёт (118) — попавшая не в те руки ссылка не
+   * должна выдавать номер.
+   */
+  const repeatSeed = { name: view.customer_name, guests: view.party_size }
   const hasCoords = loc.lat != null && loc.lng != null
   const googleMapsUrl = hasCoords
     ? `https://www.google.com/maps/search/?api=1&query=${loc.lat},${loc.lng}`
@@ -1815,7 +1838,7 @@ function BookingScreen({ lang, bookingKey, tz, onNew }: {
       <CenterCard>
         <p className="text-2xl font-black text-gray-900">{t(lang, 'rsvRejectedTitle')}</p>
         <p className="text-sm text-gray-500 mt-2">{view.reject_reason || t(lang, 'rsvRejectedHint')}</p>
-        <NewBtn lang={lang} onClick={onNew} />
+        <NewBtn lang={lang} onClick={() => onNew(repeatSeed)} />
       </CenterCard>
     )
   }
@@ -1825,7 +1848,7 @@ function BookingScreen({ lang, bookingKey, tz, onNew }: {
     return (
       <CenterCard>
         <p className="text-2xl font-black text-gray-900">{t(lang, 'rsvCancelledTitle')}</p>
-        <NewBtn lang={lang} onClick={onNew} />
+        <NewBtn lang={lang} onClick={() => onNew(repeatSeed)} />
       </CenterCard>
     )
   }
@@ -2014,7 +2037,9 @@ function BookingScreen({ lang, bookingKey, tz, onNew }: {
         </button>
       )}
       {contacts}
-      {view.status === 'completed' ? <NewBtn lang={lang} onClick={onNew} /> : actions}
+      {view.status === 'completed'
+        ? <NewBtn lang={lang} onClick={() => onNew(repeatSeed)} />
+        : actions}
       {sheets}
     </CenterCard>
   )
