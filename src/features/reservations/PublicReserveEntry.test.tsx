@@ -61,8 +61,22 @@ describe('первый экран: структура', () => {
     await openEntry()
     const boxes = document.querySelectorAll('.public-reserve-quick-box')
     expect(boxes).toHaveLength(2)
-    expect(boxes[0].textContent).toContain(t('he', 'rsvEntryDateLabel'))
+    // У даты подписи нет: «сегодня» и так читается датой, а место отдано
+    // самому значению. Опознаём строку по её select-у.
+    expect(boxes[0].querySelector('select')).toBeTruthy()
+    expect(boxes[0].textContent).toContain(t('he', 'today'))
     expect(boxes[1].textContent).toContain(t('he', 'rsvEntryPartyLabel'))
+  })
+
+  it('шеврон даты стоит у дальнего края строки, а не вплотную к цифрам', async () => {
+    await openEntry()
+    const box = document.querySelector('.public-reserve-quick-box')!
+    const value = box.querySelector('.public-reserve-quick-value')!
+    const chevron = box.querySelector('.public-reserve-quick-chevron')!
+    // Значение идёт первым, шеврон — последним: space-between разводит их
+    // по краям, и стрелка относится ко всей строке, а не к числу
+    expect(value.compareDocumentPosition(chevron) & Node.DOCUMENT_POSITION_FOLLOWING)
+      .toBeTruthy()
   })
 
   it('название и адрес заведения стоят рядом, время на экране не выбирается', async () => {
@@ -150,6 +164,13 @@ describe('лист заведения', () => {
       .toHaveAttribute('rel', expect.stringContaining('noopener'))
     // Суббота показана закрытой
     expect(sheet.textContent).toContain(t('he', 'rsvDayClosed'))
+    // Отдельной строки «сейчас открыто/закрыто» в списке нет: сегодняшний
+    // день и так выделен, а вторая жирная строка с тем же интервалом
+    // читалась как ещё одна запись расписания
+    const hours = sheet.querySelector('.public-reserve-venue-hours')!
+    expect(hours.textContent).not.toContain(t('he', 'rsvVenueOpenNow'))
+    expect(hours.textContent).not.toContain(t('he', 'rsvVenueClosedNow'))
+    expect(hours.querySelectorAll('[data-today="true"]').length).toBeLessThanOrEqual(1)
   })
 
   it('закрывается по Escape и возвращает фокус кнопке, которая его открыла', async () => {

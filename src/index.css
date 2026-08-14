@@ -2886,10 +2886,13 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     inset: 0;
   }
 
+  /* Сторона ФИЗИЧЕСКАЯ: на правосторонней странице кнопка меню уходит
+     влево, к логотипу, и не спорит с названием заведения справа. */
   .public-reserve-menu-pill {
     position: absolute;
     z-index: 2;
     top: calc(1rem + env(safe-area-inset-top));
+    left: 1.0625rem;
     display: inline-flex;
     min-height: 2.25rem;
     align-items: center;
@@ -2900,7 +2903,6 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     color: #fff;
     font-size: .8125rem;
     font-weight: 600;
-    inset-inline-start: 1.0625rem;
   }
 
   .public-reserve-menu-pill:active {
@@ -2990,13 +2992,17 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
 
   .public-reserve-quick-value {
     display: flex;
+    min-width: 0;
     align-items: center;
-    font-size: .9375rem;
+    font-size: 1.0625rem;
     font-weight: 600;
     gap: .5rem;
   }
 
-  .public-reserve-quick-value > svg {
+  /* Шеврон у дальнего края строки: он про всю строку, а не про цифры */
+  .public-reserve-quick-chevron {
+    display: flex;
+    flex-shrink: 0;
     color: #9a9da3;
   }
 
@@ -3051,7 +3057,7 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     border: 1px solid #e2e4e7;
     border-radius: 1.125rem;
     background: #fbfbfc;
-    grid-template-columns: 1fr auto;
+    grid-template-columns: minmax(0, 1fr) 7.5rem;
     overflow: hidden;
   }
 
@@ -3105,7 +3111,6 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
 
   .public-reserve-route-button {
     display: grid;
-    width: 5.75rem;
     align-content: center;
     justify-items: center;
     padding-inline: .5rem;

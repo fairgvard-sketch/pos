@@ -770,13 +770,11 @@ function Shell({ isRtl, info, lang, hero, routeKey, onBack, children }: {
  * Кнопки нет там, где нет ссылки: пустой кружок соцсети означал бы, что
  * заведение есть в Instagram, хотя владелец ссылку не заводил.
  */
-function VenueSheet({ lang, loc, schedule, todayStr, nowMs, tz, onDirections, onClose }: {
+function VenueSheet({ lang, loc, schedule, todayStr, onDirections, onClose }: {
   lang: Lang
   loc: NonNullable<ReserveInfo['location']>
   schedule: ReturnType<typeof normalizeSchedule>
   todayStr: string
-  nowMs: number
-  tz: string
   /** Маршрут открывает общий выбор приложения (067), а не жёсткий Google */
   onDirections: (() => void) | null
   onClose: () => void
@@ -784,14 +782,6 @@ function VenueSheet({ lang, loc, schedule, todayStr, nowMs, tz, onDirections, on
   const links = loc.links
   const title = loc.business_name || loc.name
   const todayDow = dowOf(todayStr)
-  const nowMinutes = useMemo(() => {
-    const [h, m] = localTimeOf(nowMs, tz).split(':')
-    return Number(h) * 60 + Number(m)
-  }, [nowMs, tz])
-  const openNow = useMemo(
-    () => isOpenAt(schedule, todayStr, nowMinutes),
-    [schedule, todayStr, nowMinutes]
-  )
   const rows = useMemo(() => weeklyHoursRows(schedule), [schedule])
 
   return (
@@ -812,15 +802,13 @@ function VenueSheet({ lang, loc, schedule, todayStr, nowMs, tz, onDirections, on
           </button>
         </div>
 
+        {/* Только дни недели. Отдельной строки «сейчас закрыто» здесь нет:
+            сегодняшний день и так выделен в списке, а над ним висела вторая
+            жирная строка с тем же интервалом — две одинаковые строки подряд
+            читались как две разные записи расписания.
+            Состояние «открыто/закрыто сейчас» осталось на первом экране,
+            в полосе часов: там оно и нужно, до открытия листа. */}
         <div className="public-reserve-venue-hours">
-          {/* Сегодня отдельной строкой сверху: «открыто/закрыто сейчас» —
-              единственный вопрос, ради которого лист чаще всего открывают */}
-          <div data-today="true">
-            <span>{t(lang, openNow ? 'rsvVenueOpenNow' : 'rsvVenueClosedNow')}</span>
-            <span>
-              {formatWindows(dayWindows(schedule, todayStr)) || t(lang, 'rsvDayClosed')}
-            </span>
-          </div>
           {rows.map((row) => (
             <div key={row.days[0]} data-today={row.days.includes(todayDow ?? -1) || undefined}>
               <span>{dayRangeLabel(row.days, lang)}</span>
@@ -1139,12 +1127,16 @@ function EntryScreen({
         )}
 
         <div className="public-reserve-quick-grid">
-          {/* Дата — всегда над компанией: сначала «когда», потом «сколько нас» */}
+          {/* Дата — всегда над компанией: сначала «когда», потом «сколько нас».
+              Подписи «дата» нет: строка «вс 16/8» и так читается датой, а
+              освободившееся место отдано самой дате. Шеврон уехал к
+              дальнему краю — он относится ко всей строке, а не к цифрам. */}
           <div className="public-reserve-quick-box">
-            <span>{t(lang, 'rsvEntryDateLabel')}</span>
             <span className="public-reserve-quick-value">
-              <span className="rtl:rotate-180"><ChevronStart /></span>
               {dayOptionLabel(date, todayStr, lang)}
+            </span>
+            <span className="public-reserve-quick-chevron rtl:rotate-180" aria-hidden="true">
+              <ChevronStart />
             </span>
             {/* Родной select: единственный контрол, который умеет и открыть
                 привычный колесо-пикер телефона, и показать закрытый день
@@ -1262,8 +1254,6 @@ function EntryScreen({
           loc={loc}
           schedule={schedule}
           todayStr={todayStr}
-          nowMs={nowMs}
-          tz={tz}
           onDirections={mapsUrl ? () => setNavOpen(true) : null}
           onClose={() => setVenueOpen(false)}
         />
