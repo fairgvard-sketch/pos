@@ -334,6 +334,35 @@ export interface HoursRow {
   windows: HoursWindow[]
 }
 
+/** Окна дня → «08:00–20:00, 18:00–23:00»; пусто = день закрыт */
+export function formatWindows(windows: HoursWindow[]): string {
+  return windows.map((w) => `${w[0]}–${w[1]}`).join(', ')
+}
+
+/**
+ * Открыто ли заведение прямо сейчас — для точки «открыто» в полосе часов.
+ *
+ * Проверяются окна СЕГОДНЯШНЕЙ даты и окна вчерашней, перешедшие полночь:
+ * заведение, работающее до 02:00, в час ночи открыто по вчерашнему окну, а
+ * не по сегодняшнему. Ровно так же считает сетка слотов (окно принадлежит
+ * дате начала и продолжается за 24:00), поэтому показанное «открыто» не
+ * расходится с тем, что реально можно забронировать.
+ */
+export function isOpenAt(
+  schedule: ReserveSchedule, dateStr: string, minutes: number,
+): boolean {
+  const within = (windows: HoursWindow[], value: number) => windows.some((w) => {
+    const from = hmToMin(w[0])
+    let to = hmToMin(w[1])
+    if (from === null || to === null) return false
+    if (to < from) to += 1440
+    return value >= from && value <= to
+  })
+  if (within(dayWindows(schedule, dateStr), minutes)) return true
+  // Вчерашнее окно за полночь: 01:30 сегодня = 25:30 вчерашних суток
+  return within(dayWindows(schedule, shiftDate(dateStr, -1)), minutes + 1440)
+}
+
 /**
  * Недельное расписание → строки для показа: подряд идущие дни с
  * одинаковыми окнами схлопываются в одну строку («вс–чт · 08:00–20:00»).

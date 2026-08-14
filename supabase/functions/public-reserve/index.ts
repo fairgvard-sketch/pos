@@ -21,8 +21,11 @@
  *   → { status, reject_reason, reserved_at, party_size, table_label, zone_name }
  *   client_uuid знает только гость — он же и ключ доступа к статусу.
  *
- * POST { action:'submit', loc, client_uuid, name, phone, party_size, reserved_at, note?, zone_id?, rules_ack? }
+ * POST { action:'submit', loc, client_uuid, name, phone, party_size, reserved_at, note?, zone_id?, rules_ack?, first_name?, last_name?, email? }
  *   → { reservation_id, duplicate } | { error }
+ *   first_name/last_name/email (163) — структурное имя и почта гостя.
+ *   Необязательны: без них имя берётся из name, и клиент, выложенный до
+ *   163, работает как раньше. Наружу почта и телефон не отдаются.
  * POST { action:'cancel', client_uuid }
  *   → { status } | { error }   client_uuid = public_token или client_uuid
  * POST { action:'reschedule', client_uuid, reserved_at, zone_id? }
@@ -34,6 +37,14 @@
  *   → { reservation_id, public_token, status } | { error }
  * POST { action:'confirm_attendance', client_uuid }
  *   → { confirmed } | { error }
+ * POST { action:'prepay_begin', loc, client_uuid, attempt_key, phone,
+ *        party_size, reserved_at, note?, zone_id?, rules_ack?,
+ *        first_name?, last_name?, email? }
+ *   → { attempt_key, reservation_id, amount_minor, currency, status,
+ *       expires_at, duplicate } | { error }   предоплата (164)
+ *   Успех НЕ означает оплату: бронь лишь встаёт в удержание. Оплаченной
+ *   она становится только из проверенного вебхука провайдера. Пока у
+ *   точки нет провайдера со статусом healthy — prepay_unavailable.
  * POST { action:'track', loc, session_id, step, src?, utm?, party_size?,
  *        wanted_date?, wanted_time?, zone_id?, reservation_id? }
  *   → { ok: true }   воронка и атрибуция (124)
@@ -78,6 +89,11 @@ const KNOWN_ERRORS = [
   'offer_expired', // предложение просрочено или уже использовано
   'not_confirmed',
   'rules_not_accepted', // 145: обязательное правило точки не отмечено
+  'invalid_email', // 163: почта пришла, но по формату это не адрес
+  // 164, предоплата:
+  'prepay_unavailable', // предоплата не настроена или провайдер не здоров
+  'hold_expired',       // удержание стола истекло, пока гость платил
+  'amount_mismatch',    // подтверждена не та сумма, которую посчитал сервер
 ]
 
 // Сначала САМЫЕ ДЛИННЫЕ коды: сопоставление идёт по подстроке, а
@@ -216,6 +232,14 @@ Deno.serve(async (req) => {
         p_settings: { reservations: rsv ?? {} },
       })
       const rules = Array.isArray(rulesData) ? rulesData : []
+      // Правило предоплаты (164). Считает СЕРВЕР и отдаёт только там, где
+      // платёж действительно можно принять: без провайдера со статусом
+      // healthy вернётся null, и страница про предоплату не узнает.
+      // Сумма здесь предварительная (с человека) — обязывающую называет
+      // begin_reservation_prepayment в момент оплаты.
+      const { data: prepayData } = await supabase.rpc('reservation_prepay_rule', {
+        p_location_id: loc,
+      })
       return json(
         {
           location: {
@@ -277,6 +301,9 @@ Deno.serve(async (req) => {
             // Правила брони (145): гость читает их ДО отправки заявки, а
             // пункты с ack:true отмечает явно
             rules,
+            // Предоплата (164): null = шага оплаты нет. Ключей провайдера
+            // здесь нет и быть не может — только то, что видит гость.
+            prepay: prepayData ?? null,
           },
         },
         200,
@@ -442,6 +469,60 @@ Deno.serve(async (req) => {
     return json({ ok: true })
   }
 
+  // Начало предоплаты (164). Бронь встаёт в удержание, сумму называет БД.
+  //
+  // Редирект на провайдера здесь НЕ формируется: адаптера в проекте нет,
+  // и придумывать его «на будущее» нельзя — гость ушёл бы в никуда. Пока
+  // ни у одной точки нет провайдера со статусом healthy, БД отвечает
+  // prepay_unavailable, и этот эндпоинт остаётся недостижимым по делу.
+  if (action === 'prepay_begin') {
+    const {
+      loc, client_uuid, attempt_key, phone, party_size, reserved_at, note,
+      zone_id, rules_ack, first_name, last_name, email,
+    } = body as {
+      loc?: string; client_uuid?: string; attempt_key?: string; phone?: string
+      party_size?: number; reserved_at?: string; note?: string | null
+      zone_id?: string | null; rules_ack?: unknown
+      first_name?: string | null; last_name?: string | null; email?: string | null
+    }
+    if (!UUID_RE.test(loc ?? '') || !UUID_RE.test(client_uuid ?? '')
+        || !UUID_RE.test(attempt_key ?? '')) {
+      return json({ error: 'bad_request' }, 400)
+    }
+    if (typeof phone !== 'string' || typeof party_size !== 'number'
+        || typeof reserved_at !== 'string') {
+      return json({ error: 'bad_request' }, 400)
+    }
+    if (zone_id != null && (typeof zone_id !== 'string' || !UUID_RE.test(zone_id))) {
+      return json({ error: 'invalid_zone' }, 400)
+    }
+    const ack = Array.isArray(rules_ack)
+      ? rules_ack.filter((id): id is string => typeof id === 'string' && id.length <= 64).slice(0, 20)
+      : []
+    const opt = (value: unknown, limit: number): string | null =>
+      typeof value === 'string' && value.trim() ? value.trim().slice(0, limit) : null
+
+    const { data, error } = await supabase.rpc('begin_reservation_prepayment', {
+      p_location_id: loc,
+      p_client_uuid: client_uuid,
+      p_attempt_key: attempt_key,
+      p_phone: phone,
+      p_party_size: Math.floor(party_size),
+      p_reserved_at: reserved_at,
+      p_note: note ?? null,
+      p_zone_id: zone_id ?? null,
+      p_rules_ack: ack,
+      p_first_name: opt(first_name, 40),
+      p_last_name: opt(last_name, 40),
+      p_email: opt(email, 254),
+    })
+    if (error) {
+      const code = errorCode(error.message)
+      return json({ error: code }, code === 'unknown' ? 500 : 400)
+    }
+    return json(data, 200, { 'Cache-Control': 'no-store' })
+  }
+
   // Гость подтверждает, что придёт (122).
   if (action === 'confirm_attendance') {
     const key = (body as { client_uuid?: string }).client_uuid
@@ -460,10 +541,12 @@ Deno.serve(async (req) => {
 
   const {
     loc, client_uuid, name, phone, party_size, reserved_at, note, zone_id, rules_ack,
+    first_name, last_name, email,
   } = body as {
     loc?: string; client_uuid?: string; name?: string; phone?: string
     party_size?: number; reserved_at?: string; note?: string | null
     zone_id?: string | null; rules_ack?: unknown
+    first_name?: string | null; last_name?: string | null; email?: string | null
   }
   if (!UUID_RE.test(loc ?? '') || !UUID_RE.test(client_uuid ?? '')) {
     return json({ error: 'bad_request' }, 400)
@@ -472,6 +555,11 @@ Deno.serve(async (req) => {
       || typeof party_size !== 'number' || typeof reserved_at !== 'string') {
     return json({ error: 'bad_request' }, 400)
   }
+  // Структурное имя и почта (163) — необязательные строки. Длину режем
+  // здесь только как грубый предел; канонический вид и проверку формата
+  // делает БД, чтобы правило жило в одном месте.
+  const optText = (value: unknown, limit: number): string | null =>
+    typeof value === 'string' && value.trim() ? value.trim().slice(0, limit) : null
   // Зона (072) — опциональное пожелание гостя
   if (zone_id != null && (typeof zone_id !== 'string' || !UUID_RE.test(zone_id))) {
     return json({ error: 'invalid_zone' }, 400)
@@ -494,6 +582,9 @@ Deno.serve(async (req) => {
     p_note: note ?? null,
     p_zone_id: zone_id ?? null,
     p_rules_ack: acked,
+    p_first_name: optText(first_name, 40),
+    p_last_name: optText(last_name, 40),
+    p_email: optText(email, 254),
   })
 
   if (error) {

@@ -94,7 +94,30 @@ export interface ReserveInfo {
     /** Правила брони (145): показываются отдельным шагом перед формой.
      *  Пустой массив = шага нет, поток остаётся в три экрана. */
     rules?: ReserveRule[]
+    /** Правило предоплаты (164). Присылается ТОЛЬКО когда предоплата
+     *  включена И платёжный провайдер настроен и здоров: отсутствие поля
+     *  означает «шага оплаты нет», и клиент не имеет права решить иначе.
+     *  Здесь только то, что можно показать гостю — никаких секретов. */
+    prepay?: ReservePrepayRule | null
   }
+}
+
+/**
+ * Правило предоплаты точки (164) — без ключей провайдера.
+ *
+ * Суммы здесь ПРЕДВАРИТЕЛЬНЫЕ: их можно показать, но нельзя считать
+ * обязательством. Обязывающую сумму называет сервер в ответ на начало
+ * оплаты, он же сверяет её с тем, что подтвердил провайдер.
+ */
+export interface ReservePrepayRule {
+  /** Сумма с гостя в минорных единицах (агороты) — считает сервер */
+  amount_per_guest: number
+  /** С какого размера компании предоплата обязательна */
+  from_party: number
+  /** Валюта точки, ISO-4217 */
+  currency: string
+  /** За сколько часов до визита отмена возвращает деньги полностью */
+  refund_cutoff_hours: number
 }
 
 export async function fetchReserveInfo(
@@ -113,6 +136,8 @@ export async function fetchReserveInfo(
 export interface ReservePayload {
   loc: string
   client_uuid: string
+  /** Собранное имя. Остаётся в контракте: по нему живут касса, карточка
+   *  гостя и выгрузки, а старый сервер других полей не знает (163) */
   name: string
   phone: string
   party_size: number
@@ -123,6 +148,12 @@ export interface ReservePayload {
   /** Отмеченные правила (145) — только идентификаторы: текст в снимок
    *  согласия сервер берёт из настроек точки, не из этого запроса */
   rules_ack?: string[]
+  /** Структурное имя (163). Сервер сам соберёт из них `customer_name` —
+   *  разбирать одну строку обратно на части нельзя достоверно */
+  first_name?: string
+  last_name?: string
+  /** Почта гостя (163). Нормализует и проверяет формат сервер */
+  email?: string
 }
 
 export interface ReserveResult {
@@ -222,6 +253,10 @@ export interface ReservationView {
   /** Секрет постоянной ссылки: гость может сохранить её или открыть с другого устройства */
   public_token: string
   rescheduled: boolean
+  /** Состояние предоплаты (164). Показывать «оплачено» можно ТОЛЬКО по
+   *  значению 'paid': оно ставится из проверенного ответа провайдера */
+  deposit_status?: 'none' | 'required' | 'awaiting' | 'paid'
+    | 'failed' | 'cancelled' | 'expired' | 'refunded' | 'forfeited'
   /** Заведение попросило подтвердить приход (122) */
   confirm_requested_at?: string | null
   /** Гость подтвердил, что придёт */
@@ -310,6 +345,48 @@ export async function joinWaitlist(payload: WaitlistPayload): Promise<{
     method: 'POST',
     headers,
     body: JSON.stringify({ action: 'waitlist', ...payload, loc }),
+  })
+  if (!res.ok) await parseError(res)
+  return res.json()
+}
+
+// ── Предоплата брони (164) ───────────────────────────────────
+
+export interface PrepayBeginPayload extends ReservePayload {
+  /** Ключ попытки оплаты. Создаётся ДО первой попытки и переиспользуется
+   *  при повторе: повторный тап не должен создавать вторую бронь */
+  attempt_key: string
+}
+
+export interface PrepayBeginResult {
+  attempt_key: string
+  reservation_id: string
+  /** Обязывающая сумма в минорных единицах — считает СЕРВЕР */
+  amount_minor: number
+  currency: string
+  status: 'pending' | 'paid'
+  /** До какого момента стол удерживается неоплаченным */
+  expires_at: string
+  duplicate: boolean
+  /** Куда отправить гостя платить. Формирует сервер, не клиент */
+  redirect_url?: string | null
+}
+
+/**
+ * Начать предоплату: сервер держит стол бронью и называет сумму.
+ *
+ * Успех этого вызова НЕ означает оплату. Оплаченной бронь становится
+ * только после проверенного подтверждения провайдера на сервере —
+ * возврат гостя на страницу успеха доказательством не является.
+ */
+export async function beginReservationPrepayment(
+  payload: PrepayBeginPayload,
+): Promise<PrepayBeginResult> {
+  const loc = await resolveLocationId(payload.loc)
+  const res = await fetch(`${FN_BASE}/public-reserve`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ action: 'prepay_begin', ...payload, loc }),
   })
   if (!res.ok) await parseError(res)
   return res.json()

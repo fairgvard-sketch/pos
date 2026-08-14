@@ -2659,6 +2659,79 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     gap: 1rem;
   }
 
+  /* Имя и фамилия делят строку. Ниже 360px они встают друг под друга:
+     сжимать поле до нечитаемого хуже, чем занять лишнюю строку. */
+  .public-reserve-field-row {
+    display: grid;
+    gap: .5rem;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .public-reserve-field-row > label {
+    min-width: 0;
+  }
+
+  @media (max-width: 22.5rem) {
+    .public-reserve-field-row {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .public-reserve-notice-head {
+    display: flex;
+    align-items: center;
+    margin-top: .25rem;
+    gap: .5625rem;
+  }
+
+  .public-reserve-notice-icon {
+    display: grid;
+    width: 1.75rem;
+    height: 1.75rem;
+    flex: 0 0 1.75rem;
+    border: 1px solid #1b1d22;
+    border-radius: 999px;
+    color: #1b1d22;
+    place-items: center;
+  }
+
+  /* Подпись у выключенной кнопки: почему нельзя дальше */
+  .public-reserve-cta-note {
+    margin-bottom: .5rem;
+    color: #b45309;
+    font-size: .8125rem;
+    font-weight: 600;
+    text-align: center;
+  }
+
+  .public-reserve-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .375rem;
+  }
+
+  .public-reserve-chips button {
+    min-height: 2.75rem;
+    padding-inline: .875rem;
+    border: 1px solid #dedbd5;
+    border-radius: 999px;
+    background: #fff;
+    color: #454950;
+    font-size: .8125rem;
+    font-weight: 500;
+  }
+
+  .public-reserve-chips button[aria-pressed='true'] {
+    border-color: #1b1d22;
+    background: #f0f1f3;
+    color: #202228;
+    font-weight: 600;
+  }
+
+  .public-reserve-chips button:active {
+    transform: scale(.97);
+  }
+
   .public-reserve-details-fields label {
     position: relative;
     display: flex;
@@ -2707,6 +2780,12 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     color: #b91c1c;
     font-size: .75rem;
     font-weight: 600;
+  }
+
+  /* Подсказка под полем — не ошибка: серая и без красного акцента */
+  .public-reserve-details-fields small[data-hint='true'] {
+    color: #6b7280;
+    font-weight: 400;
   }
 
   .public-reserve-details-fields em {
@@ -2759,6 +2838,11 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     to { transform: translate3d(0, 0, 0); }
   }
 
+  /* Сам лист фокусируется программно — обводка на нём не нужна */
+  .public-reserve-sheet:focus {
+    outline: none;
+  }
+
   .public-reserve-shell button:focus-visible,
   .public-reserve-shell a:focus-visible,
   .public-reserve-shell input:focus-visible,
@@ -2766,6 +2850,939 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   .public-reserve-shell select:focus-visible {
     outline: 3px solid rgb(17 24 39 / 38%);
     outline-offset: 2px;
+  }
+
+  /* ── Первый экран брони: короткая шапка + белый лист ──────
+     Пропорции утверждённого референса: фото занимает верхнюю треть, а
+     форма — всё остальное. Лист наезжает на фото скруглённым верхом, круг
+     логотипа сидит ровно на шве. Высота фото ограничена сверху и снизу в
+     px: на низком телефоне 30vh вырождается в полоску, на планшете
+     разрастается на пол-экрана. */
+  .public-reserve-entry {
+    display: flex;
+    min-height: 0;
+    flex: 1;
+    flex-direction: column;
+  }
+
+  .public-reserve-entry-hero {
+    position: relative;
+    height: clamp(9.5rem, 30vh, 15rem);
+    flex-shrink: 0;
+    background: #17191d;
+  }
+
+  .public-reserve-entry-hero > img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  /* Затемнение только сверху: там лежит кнопка меню, а низ перекрыт листом */
+  .public-reserve-entry-hero::after {
+    position: absolute;
+    background: linear-gradient(to bottom, rgb(9 10 12 / 34%), rgb(9 10 12 / 4%) 46%);
+    content: '';
+    inset: 0;
+  }
+
+  .public-reserve-menu-pill {
+    position: absolute;
+    z-index: 2;
+    top: calc(1rem + env(safe-area-inset-top));
+    display: inline-flex;
+    min-height: 2.25rem;
+    align-items: center;
+    padding-inline: .875rem;
+    border: 1px solid rgb(255 255 255 / 34%);
+    border-radius: 999px;
+    background: rgb(7 8 10 / 28%);
+    color: #fff;
+    font-size: .8125rem;
+    font-weight: 600;
+    inset-inline-start: 1.0625rem;
+  }
+
+  .public-reserve-menu-pill:active {
+    transform: scale(.97);
+  }
+
+  .public-reserve-entry-sheet {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    min-height: 0;
+    flex: 1;
+    flex-direction: column;
+    margin-top: -1.75rem;
+    padding: 1.375rem 1.125rem 0;
+    border-radius: 2rem 2rem 0 0;
+    background: #fff;
+    box-shadow: 0 -12px 28px rgb(12 13 16 / 14%);
+  }
+
+  /* Круг логотипа на шве фото и листа.
+     Сторона ФИЗИЧЕСКАЯ (левая), а не логическая: страница правосторонняя,
+     название и адрес прижаты вправо, и логотип с той же стороны наезжал бы
+     на них. В утверждённом референсе он тоже слева. */
+  .public-reserve-entry-logo {
+    position: absolute;
+    top: -2rem;
+    left: 1.375rem;
+    width: 4rem;
+    height: 4rem;
+    border: 4px solid #fff;
+    border-radius: 999px;
+    background: #181a20;
+    box-shadow: 0 8px 20px rgb(12 13 16 / 18%);
+    object-fit: cover;
+  }
+
+  /* Логотип слева, имя справа — они не конфликтуют, и отступ нужен
+     только чтобы имя не оказалось выше середины круга */
+  .public-reserve-entry-sheet.has-logo .public-reserve-entry-title {
+    margin-top: 1.25rem;
+  }
+
+  .public-reserve-entry-title {
+    color: #17191f;
+    font-size: 1.5rem;
+    font-weight: 600;
+    letter-spacing: -.025em;
+    line-height: 1.1;
+  }
+
+  /* Адрес прижат к названию: между ними одна строка, а не пустая полоса */
+  .public-reserve-entry-address {
+    margin-top: .1875rem;
+    color: #686d75;
+    font-size: .8125rem;
+    line-height: 1.3;
+  }
+
+  .public-reserve-quick-grid {
+    display: grid;
+    margin-top: 1.125rem;
+    gap: .5625rem;
+    grid-template-columns: 1fr;
+  }
+
+  /* Дата и гости — одинаковые полосы во всю ширину, дата всегда выше */
+  .public-reserve-quick-box {
+    position: relative;
+    display: flex;
+    min-height: 3.625rem;
+    align-items: center;
+    justify-content: space-between;
+    padding-inline: 1rem;
+    border: 1px solid #e2e4e7;
+    border-radius: 1.125rem;
+    background: #fbfbfc;
+    color: #17191f;
+    gap: .875rem;
+    text-align: start;
+  }
+
+  .public-reserve-quick-box > span:first-child {
+    color: #747981;
+    font-size: .8125rem;
+  }
+
+  .public-reserve-quick-value {
+    display: flex;
+    align-items: center;
+    font-size: .9375rem;
+    font-weight: 600;
+    gap: .5rem;
+  }
+
+  .public-reserve-quick-value > svg {
+    color: #9a9da3;
+  }
+
+  /* Невидимый select поверх полосы даты: тап работает по всей плитке */
+  .public-reserve-date-input {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    border-radius: inherit;
+    cursor: pointer;
+    inset: 0;
+    opacity: 0;
+  }
+
+  .public-reserve-stepper {
+    display: flex;
+    min-width: 7.875rem;
+    align-items: center;
+    justify-content: space-between;
+    direction: ltr;
+  }
+
+  .public-reserve-stepper button {
+    display: grid;
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: 999px;
+    background: #f0f1f3;
+    color: #1d1f24;
+    font-size: 1.25rem;
+    place-items: center;
+  }
+
+  .public-reserve-stepper button:disabled {
+    color: #b9bcc2;
+  }
+
+  .public-reserve-stepper button:not(:disabled):active {
+    transform: scale(.94);
+  }
+
+  .public-reserve-stepper > strong {
+    font-size: 1.0625rem;
+    font-weight: 600;
+  }
+
+  /* Полоса «часы · навигация»: часы забирают всю свободную ширину */
+  .public-reserve-venue-strip {
+    display: grid;
+    min-height: 3.75rem;
+    margin-top: .75rem;
+    border: 1px solid #e2e4e7;
+    border-radius: 1.125rem;
+    background: #fbfbfc;
+    grid-template-columns: 1fr auto;
+    overflow: hidden;
+  }
+
+  .public-reserve-hours-button {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    justify-content: space-between;
+    padding-inline: 1rem;
+    gap: .75rem;
+    text-align: start;
+  }
+
+  .public-reserve-hours-button:active {
+    background: rgb(17 24 39 / 3%);
+  }
+
+  .public-reserve-hours-copy {
+    min-width: 0;
+  }
+
+  .public-reserve-hours-copy > span {
+    display: flex;
+    align-items: center;
+    color: #666b73;
+    font-size: .8125rem;
+    gap: .375rem;
+  }
+
+  .public-reserve-hours-copy > span > i {
+    width: .4375rem;
+    height: .4375rem;
+    flex-shrink: 0;
+    border-radius: 999px;
+    background: #168757;
+  }
+
+  .public-reserve-hours-copy > span > i[data-closed='true'] {
+    background: #9a9da3;
+  }
+
+  .public-reserve-hours-copy > strong {
+    display: block;
+    margin-top: .125rem;
+    font-size: .9375rem;
+    font-weight: 600;
+    direction: ltr;
+    text-align: start;
+    white-space: nowrap;
+  }
+
+  .public-reserve-route-button {
+    display: grid;
+    width: 5.75rem;
+    align-content: center;
+    justify-items: center;
+    padding-inline: .5rem;
+    border-inline-start: 1px solid #e2e4e7;
+    color: #17191f;
+    font-size: .75rem;
+    font-weight: 600;
+    gap: .125rem;
+  }
+
+  .public-reserve-route-button:active {
+    background: rgb(17 24 39 / 3%);
+  }
+
+  /* Нижняя панель действия: растворяется в белом, не режет последнее поле */
+  .public-reserve-bottom {
+    position: sticky;
+    z-index: 3;
+    bottom: 0;
+    margin-top: auto;
+    padding: 1rem 0 calc(1rem + env(safe-area-inset-bottom));
+    background: linear-gradient(to bottom, rgb(255 255 255 / 0%), #fff 30%);
+  }
+
+  .public-reserve-cta {
+    display: flex;
+    width: 100%;
+    height: 3.25rem;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    background: #181a20;
+    color: #fff;
+    font-size: .9375rem;
+    font-weight: 600;
+    transition: transform 150ms ease;
+  }
+
+  .public-reserve-cta:disabled {
+    background: #e1e3e6;
+    color: #8a8f97;
+  }
+
+  .public-reserve-cta:not(:disabled):active {
+    transform: scale(.98);
+  }
+
+  /* ── Второй экран: зона зала, затем время ─────────────────
+     Порядок жёсткий: доступность считается для конкретного зала, поэтому
+     время не может стоять выше зоны. */
+  .public-reserve-step-page {
+    display: flex;
+    min-height: 0;
+    flex: 1;
+    flex-direction: column;
+    padding: 0 1.125rem;
+  }
+
+  .public-reserve-step-title {
+    margin-top: .25rem;
+    color: #17191f;
+    font-size: 1.4375rem;
+    font-weight: 600;
+    letter-spacing: -.025em;
+  }
+
+  .public-reserve-step-hint {
+    margin-top: .25rem;
+    color: #737780;
+    font-size: .8125rem;
+    line-height: 1.4;
+  }
+
+  /* Сводка «кого и когда» с кнопкой возврата на первый экран */
+  .public-reserve-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: .75rem;
+    padding: .6875rem .75rem;
+    border-radius: .9375rem;
+    background: #f3f4f5;
+    gap: .75rem;
+  }
+
+  .public-reserve-summary strong {
+    display: block;
+    color: #17191f;
+    font-size: .875rem;
+    font-weight: 600;
+  }
+
+  .public-reserve-summary small {
+    display: block;
+    margin-top: .0625rem;
+    color: #72767e;
+    font-size: .75rem;
+  }
+
+  .public-reserve-summary button {
+    flex-shrink: 0;
+    min-height: 2.75rem;
+    padding-inline: .5rem;
+    color: #5e626a;
+    font-size: .8125rem;
+    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  .public-reserve-field-label {
+    margin: 1.125rem .125rem .5rem;
+    color: #656a72;
+    font-size: .8125rem;
+    font-weight: 600;
+  }
+
+  .public-reserve-zones {
+    display: grid;
+    gap: .5rem;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .public-reserve-zone {
+    display: flex;
+    min-height: 4.375rem;
+    align-items: center;
+    padding: .625rem .6875rem;
+    border: 1px solid #dedfe2;
+    border-radius: 1.125rem;
+    background: #fff;
+    color: #202228;
+    gap: .625rem;
+    text-align: start;
+  }
+
+  /* Выбранная зона — тёмная с белым содержимым, как в референсе */
+  .public-reserve-zone[aria-pressed='true'] {
+    border-color: #181a20;
+    background: #181a20;
+    color: #fff;
+  }
+
+  .public-reserve-zone:not([aria-pressed='true']):active {
+    transform: scale(.98);
+  }
+
+  .public-reserve-zone-icon {
+    display: grid;
+    width: 2.25rem;
+    height: 2.25rem;
+    flex: 0 0 2.25rem;
+    border-radius: 999px;
+    background: #f0f1f3;
+    color: #26282e;
+    place-items: center;
+  }
+
+  .public-reserve-zone[aria-pressed='true'] .public-reserve-zone-icon {
+    background: rgb(255 255 255 / 14%);
+    color: #fff;
+  }
+
+  .public-reserve-zone b {
+    display: block;
+    font-size: .875rem;
+    font-weight: 600;
+  }
+
+  .public-reserve-times {
+    display: grid;
+    gap: .5rem;
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .public-reserve-time {
+    display: flex;
+    min-height: 2.875rem;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #dedbd5;
+    border-radius: .875rem;
+    background: #fff;
+    color: #202228;
+    font-size: .9375rem;
+    font-weight: 600;
+    gap: .0625rem;
+  }
+
+  .public-reserve-time[aria-pressed='true'] {
+    border-color: #191b21;
+    background: #191b21;
+    color: #fff;
+  }
+
+  /* Занятое время: серая заливка + слово «занято». Одного цвета мало —
+     дальтоник и экран на солнце должны различать состояния текстом. */
+  .public-reserve-time[aria-disabled='true'] {
+    border-color: #e4e1db;
+    background: #ece9e3;
+    color: #9b9ea4;
+  }
+
+  .public-reserve-time > small {
+    font-size: .625rem;
+    font-weight: 500;
+    line-height: 1;
+  }
+
+  .public-reserve-time:not([aria-disabled='true']):not([aria-pressed='true']):active {
+    transform: scale(.97);
+  }
+
+  /* Скелет только на месте времён: остальной экран не мигает */
+  .public-reserve-time-skeleton {
+    min-height: 2.875rem;
+    border-radius: .875rem;
+    background: linear-gradient(90deg, #f1f2f4 25%, #e7e9ec 37%, #f1f2f4 63%);
+    background-size: 400% 100%;
+    animation: public-reserve-skeleton 1.4s ease infinite;
+  }
+
+  @keyframes public-reserve-skeleton {
+    from { background-position: 100% 50%; }
+    to { background-position: 0 50%; }
+  }
+
+  /* Ничего не свободно: объяснение, ближайшее время и лист ожидания */
+  .public-reserve-empty-head {
+    margin-top: 1.125rem;
+    text-align: center;
+  }
+
+  .public-reserve-empty-icon {
+    display: grid;
+    width: 3rem;
+    height: 3rem;
+    margin: 0 auto .6875rem;
+    border-radius: 999px;
+    background: #f0f1f3;
+    color: #4b5058;
+    place-items: center;
+  }
+
+  .public-reserve-alternatives {
+    display: grid;
+    margin-top: 1rem;
+    gap: .5rem;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .public-reserve-alternative {
+    padding: .75rem;
+    border: 1px solid #dedbd5;
+    border-radius: 1rem;
+    background: #fff;
+    text-align: start;
+  }
+
+  .public-reserve-alternative strong {
+    display: block;
+    color: #17191f;
+    font-size: 1.0625rem;
+    font-weight: 600;
+  }
+
+  .public-reserve-alternative small {
+    display: block;
+    margin-top: .1875rem;
+    color: #777b83;
+    font-size: .75rem;
+  }
+
+  .public-reserve-alternative:active {
+    transform: scale(.98);
+  }
+
+  .public-reserve-waitlist-card {
+    margin-top: .6875rem;
+    padding: .875rem;
+    border-radius: 1.125rem;
+    background: #191b21;
+    color: #fff;
+  }
+
+  .public-reserve-waitlist-card strong {
+    font-size: .9375rem;
+    font-weight: 600;
+  }
+
+  .public-reserve-waitlist-card p {
+    margin: .25rem 0 .75rem;
+    color: rgb(255 255 255 / 68%);
+    font-size: .8125rem;
+    line-height: 1.4;
+  }
+
+  .public-reserve-waitlist-card button {
+    width: 100%;
+    height: 2.75rem;
+    border-radius: 999px;
+    background: #fff;
+    color: #181a20;
+    font-size: .875rem;
+    font-weight: 600;
+  }
+
+  .public-reserve-link-action {
+    display: block;
+    min-height: 2.75rem;
+    margin: .875rem auto 0;
+    color: #60656d;
+    font-size: .8125rem;
+    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  /* ── Экран подтверждения ──────────────────────────────────
+     Фото заведения, круг логотипа и «билет» с датой, временем и числом
+     гостей: страница открывается второй раз ради этих трёх чисел. */
+  .public-reserve-done {
+    display: flex;
+    min-height: 0;
+    flex: 1;
+    flex-direction: column;
+  }
+
+  .public-reserve-done-hero {
+    position: relative;
+    height: clamp(11rem, 34vh, 16rem);
+    flex-shrink: 0;
+    background: #17191d;
+  }
+
+  .public-reserve-done-hero > img:first-child {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .public-reserve-done-hero::after {
+    position: absolute;
+    background: linear-gradient(to bottom, rgb(9 10 12 / 8%), rgb(9 10 12 / 72%));
+    content: '';
+    inset: 0;
+  }
+
+  .public-reserve-done-logo {
+    position: absolute;
+    z-index: 2;
+    top: calc(.9375rem + env(safe-area-inset-top));
+    width: 2.625rem;
+    height: 2.625rem;
+    border: 1px solid rgb(255 255 255 / 70%);
+    border-radius: 999px;
+    inset-inline-end: 1.0625rem;
+    object-fit: cover;
+  }
+
+  .public-reserve-done-copy {
+    position: absolute;
+    z-index: 2;
+    bottom: 1.25rem;
+    color: #fff;
+    inset-inline: 1.1875rem;
+  }
+
+  .public-reserve-done-check {
+    display: grid;
+    width: 2.125rem;
+    height: 2.125rem;
+    margin-bottom: .5rem;
+    border-radius: 999px;
+    background: #fff;
+    color: #17191f;
+    place-items: center;
+  }
+
+  .public-reserve-done-spinner {
+    display: block;
+    width: 2.125rem;
+    height: 2.125rem;
+    margin-bottom: .5rem;
+    border: 3px solid rgb(255 255 255 / 35%);
+    border-top-color: #fff;
+    border-radius: 999px;
+  }
+
+  .public-reserve-done-copy strong {
+    display: block;
+    font-size: 1.4375rem;
+    font-weight: 600;
+    letter-spacing: -.035em;
+  }
+
+  .public-reserve-done-copy small {
+    display: block;
+    margin-top: .125rem;
+    color: rgb(255 255 255 / 78%);
+    font-size: .8125rem;
+    line-height: 1.35;
+  }
+
+  .public-reserve-done-body {
+    flex: 1;
+    padding: .9375rem 1.125rem calc(1.5rem + env(safe-area-inset-bottom));
+  }
+
+  .public-reserve-ticket {
+    padding: .875rem;
+    border: 1px solid #dedbd5;
+    border-radius: 1.1875rem;
+    background: #fff;
+  }
+
+  .public-reserve-ticket-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    text-align: center;
+  }
+
+  .public-reserve-ticket-grid > div + div {
+    border-inline-start: 1px solid #ece8e1;
+  }
+
+  .public-reserve-ticket-grid small {
+    display: block;
+    color: #777b83;
+    font-size: .75rem;
+  }
+
+  .public-reserve-ticket-grid strong {
+    display: block;
+    margin-top: .1875rem;
+    color: #17191f;
+    font-size: 1rem;
+    font-weight: 600;
+  }
+
+  .public-reserve-ticket-actions {
+    display: flex;
+    flex-wrap: wrap;
+    margin-top: .625rem;
+    gap: .4375rem;
+  }
+
+  .public-reserve-ticket-actions > * {
+    display: flex;
+    min-height: 2.75rem;
+    flex: 1 1 8rem;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #dedbd5;
+    border-radius: 999px;
+    background: #fff;
+    color: #24262b;
+    font-size: .8125rem;
+    font-weight: 600;
+    gap: .375rem;
+  }
+
+  .public-reserve-ticket-actions > *:active {
+    transform: scale(.98);
+  }
+
+  .public-reserve-ticket-meta {
+    display: flex;
+    flex-direction: column;
+    margin-top: .75rem;
+    padding-top: .75rem;
+    border-top: 1px solid #ece8e1;
+    color: #5f646c;
+    font-size: .8125rem;
+    gap: .1875rem;
+  }
+
+  /* Оплата подтверждена сервером — единственный случай, когда её видно */
+  .public-reserve-paid {
+    color: #168757;
+    font-weight: 600;
+  }
+
+  /* ── Предоплата (164) ─────────────────────────────────────
+     Тон сдержанный: красным помечена только потеря денег, а не весь
+     экран. Иконки валюты у заголовка нет намеренно. */
+  .public-reserve-prepay-alert {
+    margin-top: .875rem;
+    padding: .75rem .8125rem;
+    border: 1px solid #f1d3ce;
+    border-radius: 1rem;
+    background: #fff6f4;
+    color: #b63f34;
+    font-size: .8125rem;
+    line-height: 1.45;
+  }
+
+  .public-reserve-prepay-amount {
+    margin-top: .6875rem;
+    padding: .8125rem .875rem;
+    border-radius: 1.0625rem;
+    background: #f3f4f5;
+  }
+
+  .public-reserve-prepay-amount > div {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    color: #5e626a;
+    font-size: .8125rem;
+    gap: .75rem;
+  }
+
+  .public-reserve-prepay-amount > div + div {
+    margin-top: .375rem;
+  }
+
+  .public-reserve-prepay-amount strong {
+    color: #202228;
+    font-size: .875rem;
+    font-weight: 600;
+    direction: ltr;
+  }
+
+  /* Итоговая строка отделена чертой и набрана крупно */
+  .public-reserve-prepay-amount > div[data-total='true'] {
+    margin-top: .625rem;
+    padding-top: .625rem;
+    border-top: 1px solid #dedfe2;
+    color: #202228;
+    font-weight: 600;
+  }
+
+  .public-reserve-prepay-amount > div[data-total='true'] strong {
+    font-size: 1.25rem;
+  }
+
+  .public-reserve-secure-note {
+    display: flex;
+    align-items: center;
+    margin-top: .625rem;
+    color: #6c7078;
+    font-size: .75rem;
+    gap: .4375rem;
+  }
+
+  .public-reserve-secure-note > span {
+    display: grid;
+    width: 1.375rem;
+    height: 1.375rem;
+    flex-shrink: 0;
+    border-radius: 999px;
+    background: #eceef0;
+    color: #202228;
+    place-items: center;
+  }
+
+  /* ── Лист «о заведении» ───────────────────────────────────
+     Заменяет прежнюю чёрную плашку соцсетей: часы, адрес, маршрут и
+     кружки соцсетей живут здесь, а первый экран остаётся формой. */
+  .public-reserve-venue-sheet {
+    max-height: 86vh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .public-reserve-venue-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: .75rem;
+  }
+
+  .public-reserve-venue-head h3 {
+    color: #17191f;
+    font-size: 1.3125rem;
+    font-weight: 600;
+    letter-spacing: -.02em;
+  }
+
+  .public-reserve-venue-head p {
+    margin-top: .125rem;
+    color: #6c7179;
+    font-size: .8125rem;
+  }
+
+  .public-reserve-venue-close {
+    display: grid;
+    width: 2.75rem;
+    height: 2.75rem;
+    flex-shrink: 0;
+    border: 1px solid #e0e2e5;
+    border-radius: 999px;
+    background: #fff;
+    color: #202228;
+    place-items: center;
+  }
+
+  .public-reserve-venue-close:active {
+    transform: scale(.94);
+  }
+
+  .public-reserve-venue-hours {
+    margin-top: 1rem;
+    border-top: 1px solid #eceef0;
+  }
+
+  .public-reserve-venue-hours > div {
+    display: flex;
+    min-height: 2.5rem;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid #eceef0;
+    color: #686d75;
+    font-size: .875rem;
+    gap: .75rem;
+  }
+
+  /* Сегодня — единственная выделенная строка недели */
+  .public-reserve-venue-hours > div[data-today='true'] {
+    color: #15171c;
+    font-weight: 600;
+  }
+
+  .public-reserve-venue-hours > div > span:last-child {
+    direction: ltr;
+    white-space: nowrap;
+  }
+
+  .public-reserve-venue-address {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: .875rem;
+    color: #555a62;
+    font-size: .8125rem;
+    gap: .75rem;
+  }
+
+  .public-reserve-venue-route {
+    display: inline-flex;
+    min-height: 2.75rem;
+    flex-shrink: 0;
+    align-items: center;
+    padding-inline: 1.125rem;
+    border-radius: 999px;
+    background: #181a20;
+    color: #fff;
+    font-size: .8125rem;
+    font-weight: 600;
+  }
+
+  .public-reserve-venue-route:active {
+    transform: scale(.97);
+  }
+
+  .public-reserve-venue-socials {
+    display: flex;
+    justify-content: center;
+    margin-top: 1rem;
+    direction: ltr;
+    gap: .625rem;
+  }
+
+  .public-reserve-venue-socials > a {
+    display: grid;
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: 999px;
+    background: #181a20;
+    color: #fff;
+    place-items: center;
+  }
+
+  .public-reserve-venue-socials > a:active {
+    transform: scale(.94);
   }
 
   @supports (height: 100dvh) {

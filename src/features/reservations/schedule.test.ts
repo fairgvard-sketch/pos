@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
-  dayWindows, hmToMin, localTimeExists, minToHm, normalizeSchedule,
-  slotGrid, weeklyHoursRows, zonedToUtc,
+  dayWindows, formatWindows, hmToMin, isOpenAt, localTimeExists, minToHm,
+  normalizeSchedule, slotGrid, weeklyHoursRows, zonedToUtc,
 } from './schedule'
 
 /**
@@ -247,5 +247,70 @@ describe('показ часов работы', () => {
     expect(saturdayRow.windows).toEqual([])
     // Ровно то, чего не было до 117: «закрыто» на витрине = 0 слотов в сетке
     expect(grid('2027-03-13')).toHaveLength(0)
+  })
+})
+
+/**
+ * «Открыто сейчас» в полосе часов на первом экране. Точка обязана
+ * совпадать с тем, что реально можно забронировать: показать зелёное
+ * «открыто» и тут же не дать ни одного слота — та же рассинхронизация,
+ * ради которой в 117 свободный текст часов заменили расписанием.
+ */
+describe('isOpenAt — состояние «открыто сейчас»', () => {
+  const s = normalizeSchedule(BULOCHKA as never)
+
+  it('внутри окна дня — открыто, до и после — закрыто', () => {
+    expect(isOpenAt(s, '2027-03-14', 8 * 60)).toBe(true) // ровно 08:00, граница включительна
+    expect(isOpenAt(s, '2027-03-14', 12 * 60)).toBe(true)
+    expect(isOpenAt(s, '2027-03-14', 20 * 60)).toBe(true) // ровно 20:00
+    expect(isOpenAt(s, '2027-03-14', 7 * 60 + 59)).toBe(false)
+    expect(isOpenAt(s, '2027-03-14', 20 * 60 + 1)).toBe(false)
+  })
+
+  it('в закрытый день закрыто в любое время', () => {
+    expect(isOpenAt(s, '2027-03-13', 12 * 60)).toBe(false) // суббота
+  })
+
+  it('короткий день пятницы заканчивается в 15:00', () => {
+    expect(isOpenAt(s, '2027-03-12', 14 * 60)).toBe(true)
+    expect(isOpenAt(s, '2027-03-12', 16 * 60)).toBe(false)
+  })
+
+  it('ночная смена: в час ночи открыто по ВЧЕРАШНЕМУ окну', () => {
+    // Бар до 02:00: окно принадлежит дате начала и продолжается за 24:00 —
+    // ровно как в сетке слотов. Без учёта вчерашнего окна страница писала
+    // бы «закрыто» гостю, который стоит в открытом зале.
+    const night = normalizeSchedule({
+      schedule: {
+        weekly: {
+          '0': [['18:00', '02:00']], '1': [['18:00', '02:00']], '2': [['18:00', '02:00']],
+          '3': [['18:00', '02:00']], '4': [['18:00', '02:00']],
+          '5': [['18:00', '02:00']], '6': [['18:00', '02:00']],
+        },
+        exceptions: {},
+      },
+    } as never)
+    expect(isOpenAt(night, '2027-03-14', 1 * 60)).toBe(true) // 01:00 — вчерашнее окно
+    expect(isOpenAt(night, '2027-03-14', 19 * 60)).toBe(true) // 19:00 — сегодняшнее
+    expect(isOpenAt(night, '2027-03-14', 15 * 60)).toBe(false) // день — закрыто
+  })
+
+  it('исключение по дате замещает недельное правило', () => {
+    const holiday = normalizeSchedule({
+      schedule: {
+        weekly: { '0': [['08:00', '20:00']] },
+        exceptions: { '2027-03-14': [] },
+      },
+    } as never)
+    expect(isOpenAt(holiday, '2027-03-14', 12 * 60)).toBe(false)
+  })
+})
+
+describe('formatWindows', () => {
+  it('склеивает окна дня, пустой день даёт пустую строку', () => {
+    expect(formatWindows([['08:00', '20:00']])).toBe('08:00–20:00')
+    expect(formatWindows([['08:00', '12:00'], ['18:00', '23:00']]))
+      .toBe('08:00–12:00, 18:00–23:00')
+    expect(formatWindows([])).toBe('')
   })
 })

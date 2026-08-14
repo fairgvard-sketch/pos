@@ -1,20 +1,26 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
-import { t, formatTime, type Lang } from '../../lib/i18n'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { t, type Lang } from '../../lib/i18n'
 import { PublicApiError } from '../online/publicApi'
 import { navigateWithTransition } from '../online/viewTransition'
 import {
   fetchReserveInfo, submitPublicReservation, fetchReservationView,
   cancelPublicReservation, fetchAvailability, reschedulePublicReservation,
-  joinWaitlist, confirmAttendance,
+  joinWaitlist, confirmAttendance, beginReservationPrepayment,
   type ReserveInfo, type ReservationView, type ReserveRule,
+  type ReservePrepayRule,
 } from './publicReserveApi'
 import { trackReserveStep, resetFunnelSession } from './funnel'
+import {
+  composeName, composeNote, draftErrors, isDraftValid, reserveFlow, stepAfter,
+  stepBefore, stepIndex, EMPTY_DRAFT, EXTRA_KEYS,
+  type DetailsDraft, type ReserveStep,
+} from './reserveFlow'
 import BrandSplash from '../../components/ui/BrandSplash'
 import {
-  hasBookableSlot, normalizeSchedule, partsInZone, shiftDate, slotGrid,
-  weeklyHoursRows,
+  dayWindows, dowOf, formatWindows, hasBookableSlot, hmToMin, isOpenAt,
+  normalizeSchedule, partsInZone, shiftDate, slotGrid, weeklyHoursRows,
 } from './schedule'
 import { downloadIcs } from './calendar'
 import { updateInstalledMenuName } from '../online/menuManifest'
@@ -35,13 +41,6 @@ const DEF_STEP_MIN = 15
 const MAX_DAYS_SHOWN = 60
 /** Зона по умолчанию: страница брони he-first, продукт израильский */
 const DEF_TZ = 'Asia/Jerusalem'
-
-/**
- * Шаг «правила» (145) появляется, ТОЛЬКО если точка их завела: кофейне
- * без условий визита лишний экран между временем и контактами не нужен,
- * а индикатор прогресса честно считает три или четыре шага.
- */
-type ReserveStep = 'slot' | 'times' | 'rules' | 'details'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -183,7 +182,7 @@ export default function PublicReservePage() {
   const [guests, setGuests] = useState(2)
   // Контакты живут выше экранов: возврат к времени и повторный вход в
   // детали не стирают уже набранное имя/телефон.
-  const [detailsDraft, setDetailsDraft] = useState({ name: '', phone: '', note: '' })
+  const [detailsDraft, setDetailsDraft] = useState<DetailsDraft>(EMPTY_DRAFT)
   // Отмеченные правила (145) живут здесь же, а не в экране: гость,
   // вернувшийся поправить время, не должен расставлять галочки заново.
   const [rulesAck, setRulesAck] = useState<string[]>([])
@@ -196,6 +195,11 @@ export default function PublicReservePage() {
   // Лист ожидания (122): открыт лист-форма
   const [waitlistOpen, setWaitlistOpen] = useState(false)
   const [clientUuid, setClientUuid] = useState(() => crypto.randomUUID())
+  // Ключ попытки оплаты (164) создаётся ДО первой попытки: повторный тап
+  // «оплатить» и повтор после таймаута обязаны попасть в ту же попытку.
+  const [attemptKey, setAttemptKey] = useState(() => crypto.randomUUID())
+  const [payBusy, setPayBusy] = useState(false)
+  const [payError, setPayError] = useState<string | null>(null)
 
   // Лимит гостей (061): настройка владельца, дефолт 20, потолок 50
   const maxParty = useMemo(() => {
@@ -230,13 +234,14 @@ export default function PublicReservePage() {
   // расписания. Владелец здесь проверяет часы, зоны и вид, а не занятость.
   const instant = info?.location.instant === true
     && (info?.location.published !== false)
+  // Ключ содержит зону явным null: при точке без зон это ТОТ ЖЕ ключ, что
+  // и у экрана времени, и оба экрана делят один ответ вместо двух запросов.
   const {
     data: avail,
-    isPending: availabilityPending,
     isError: availabilityError,
   } = useQuery({
-    queryKey: ['reserve_avail', locId, date, guests],
-    queryFn: () => fetchAvailability(locId, date, guests),
+    queryKey: ['reserve_avail', locId, date, guests, null],
+    queryFn: () => fetchAvailability(locId, date, guests, null),
     enabled: instant && !!info?.location.accepting,
     staleTime: 20_000,
   })
@@ -252,6 +257,19 @@ export default function PublicReservePage() {
   // Зоны зала (072): выбор осмыслен от двух зон (одну — 066 создаёт всем)
   const zones = useMemo(() => info?.location.zones ?? [], [info])
   const zoneName = zoneId ? zones.find((z) => z.id === zoneId)?.name ?? null : null
+
+  // Предоплата (164). Решает СЕРВЕР: он присылает политику только тогда,
+  // когда она включена И провайдер платежей настроен и здоров. Клиент не
+  // имеет права вывести «нужна предоплата» из суммы в настройках — иначе
+  // гость упёрся бы в экран оплаты, за которым ничего нет.
+  // Правило приходит, только когда платёж реально можно принять (164).
+  // Обязательна ли предоплата ЭТОЙ компании — решает порог по размеру.
+  const prepayRule = info?.location.prepay ?? null
+  const hasPrepay = prepayRule !== null && guests >= prepayRule.from_party
+  const flow = useMemo(
+    () => reserveFlow({ hasRules, hasPrepay }),
+    [hasRules, hasPrepay]
+  )
 
   // ── Воронка (124) ──────────────────────────────────────────
   // Вершина: страница открыта и приём включён. Закрытую страницу не
@@ -304,6 +322,13 @@ export default function PublicReservePage() {
   if (guests > maxParty) {
     setGuests(maxParty)
   }
+  // 4) Зона по умолчанию — первая живая. Доступность обязана относиться к
+  //    конкретному залу: null сервер понимает как «любой стол» (072), и
+  //    это другое обещание, а не «зал, который гость просто не трогал».
+  //    Точка без зон остаётся с null — там «любой стол» и есть правда.
+  if (zones.length > 0 && !zones.some((z) => z.id === zoneId)) {
+    setZoneId(zones[0].id)
+  }
 
   function pickDate(next: string) {
     setDate(next)
@@ -335,12 +360,16 @@ export default function PublicReservePage() {
       if (seed?.guests && seed.guests >= 1 && seed.guests <= maxParty) {
         setGuests(seed.guests)
       }
-      setDetailsDraft({ name: seed?.name ?? '', phone: '', note: '' })
+      // Переносим только имя: телефон сервер наружу не отдаёт, а почту
+      // и пожелания второй визит подтверждает заново.
+      setDetailsDraft({ ...EMPTY_DRAFT, firstName: seed?.name ?? '' })
       // Вторая бронь — второе согласие: правила подтверждают на визит,
       // а не один раз навсегда.
       setRulesAck([])
       setRulesStale(false)
       setClientUuid(crypto.randomUUID())
+      setAttemptKey(crypto.randomUUID())
+      setPayError(null)
       // Вторая бронь — вторая воронка: иначе она склеилась бы с первой и
       // выглядела бы как один гость, дошедший до конца дважды. Эпоха
       // заставляет новую сессию заново отправить вершину и доступность —
@@ -348,6 +377,74 @@ export default function PublicReservePage() {
       resetFunnelSession()
       setFunnelEpoch((epoch) => epoch + 1)
     })
+  }
+
+  /**
+   * Гость согласился с условиями предоплаты и идёт платить.
+   *
+   * Здесь бронь ещё НЕ оплачена: сервер лишь удерживает стол и называет
+   * обязывающую сумму. Дальше гостя ведёт страница провайдера, а
+   * «оплачено» появляется только из проверенного вебхука.
+   *
+   * Платёжного адаптера в проекте нет, поэтому сервер честно отвечает
+   * prepay_unavailable — и мы показываем это, а не рисуем успех.
+   */
+  async function startPrepayment() {
+    if (payBusy || !selectedAt) return
+    setPayBusy(true)
+    setPayError(null)
+    try {
+      const result = await beginReservationPrepayment({
+        loc: locId,
+        client_uuid: clientUuid,
+        attempt_key: attemptKey,
+        name: composeName(detailsDraft),
+        first_name: detailsDraft.firstName.trim(),
+        last_name: detailsDraft.lastName.trim(),
+        email: detailsDraft.email.trim(),
+        phone: detailsDraft.phone.replace(/\D/g, ''),
+        party_size: guests,
+        reserved_at: selectedAt.toISOString(),
+        note: null,
+        zone_id: zoneId,
+        rules_ack: rulesAck,
+      })
+      trackReserveStep(locId, 'submitted', {
+        party_size: guests,
+        wanted_date: date,
+        wanted_time: time,
+        zone_id: zoneId,
+        reservation_id: result.reservation_id,
+      })
+      // Адрес платёжной страницы формирует сервер. Его нет — значит
+      // платить негде, и притворяться, что бронь готова, нельзя.
+      if (result.redirect_url) {
+        window.location.assign(result.redirect_url)
+        return
+      }
+      setPayError(t(lang, 'rsvPrepayUnavailable'))
+      setPayBusy(false)
+    } catch (e) {
+      const code = e instanceof PublicApiError ? e.code : 'unknown'
+      setPayBusy(false)
+      if (code === 'prepay_unavailable') {
+        setPayError(t(lang, 'rsvErrPrepayUnavailable'))
+        return
+      }
+      if (code === 'hold_expired') {
+        setPayError(t(lang, 'rsvErrHoldExpired'))
+        return
+      }
+      if (code === 'full_slot' || code === 'outside_hours' || code === 'invalid_time') {
+        qc.invalidateQueries({ queryKey: ['reserve_avail', locId] })
+        navigateWithTransition('back', () => {
+          setConflict(true)
+          setStep('times')
+        })
+        return
+      }
+      setPayError(reserveErrorText(lang, code))
+    }
   }
 
   if (activeUuid) {
@@ -358,10 +455,15 @@ export default function PublicReservePage() {
           isRtl={isRtl}
           info={info}
           lang={lang}
+          // Карточка брони рисует своё фото и логотип: компактная шапка
+          // сверху была бы вторым названием заведения подряд.
+          hero
           routeKey="status"
         >
           <BookingScreen
             lang={lang}
+            locId={locId}
+            info={info}
             bookingKey={activeUuid}
             tz={info?.location.timezone || DEF_TZ}
             onNew={startNew}
@@ -414,35 +516,34 @@ export default function PublicReservePage() {
         lang={lang}
         hero={step === 'slot'}
         routeKey={step}
+        // «Назад» ходит по тому же списку шагов, что и «вперёд»:
+        // симметрия обязана быть выведенной, а не написанной второй раз.
         onBack={
-          step === 'times'
-            ? () => navigateWithTransition('back', () => setStep('slot'))
-            : step === 'rules'
-              ? () => navigateWithTransition('back', () => setStep('times'))
-              : step === 'details'
-                ? () => navigateWithTransition('back', () => setStep(hasRules ? 'rules' : 'times'))
-                : undefined
+          step === 'slot'
+            ? undefined
+            : () => navigateWithTransition('back', () => setStep(stepBefore(flow, step)))
         }
       >
         {step === 'slot' && (
-          <SlotScreen
+          <EntryScreen
             lang={lang}
+            locId={locId}
             info={info}
             days={days}
             todayStr={todayStr}
             todayHasSlots={todayHasSlots}
             dayOpen={dayOpen}
             date={date}
-            time={time}
             guests={guests}
             maxParty={maxParty}
             timeSlots={timeSlots}
             instant={instant}
             freeTimes={freeTimes}
-            availabilityLoading={instant && availabilityPending && !avail}
             availabilityError={instant && availabilityError}
+            schedule={schedule}
+            nowMs={nowMs}
+            tz={tz}
             onDate={pickDate}
-            onTime={setTime}
             onGuests={setGuests}
             onNext={() => navigateWithTransition('forward', () => setStep('times'))}
             onWaitlist={() => setWaitlistOpen(true)}
@@ -457,23 +558,27 @@ export default function PublicReservePage() {
             guests={guests}
             timeSlots={timeSlots}
             instant={instant}
-            freeTimes={freeTimes}
             zones={zones}
             todayStr={todayStr}
+            waitlistEnabled={info.location.waitlist === true}
             conflict={conflict}
-            stepTotal={hasRules ? 4 : 3}
-            onPick={(nextTime, nextZone) => {
+            step={stepIndex(flow, 'times')}
+            stepTotal={flow.length}
+            zoneId={zoneId}
+            onZone={setZoneId}
+            onTime={setTime}
+            onEditSlot={() => navigateWithTransition('back', () => setStep('slot'))}
+            onWaitlist={() => setWaitlistOpen(true)}
+            onNext={() => {
               trackReserveStep(locId, 'slot_selected', {
                 party_size: guests,
                 wanted_date: date,
-                wanted_time: nextTime,
-                zone_id: nextZone,
+                wanted_time: time,
+                zone_id: zoneId,
               })
               navigateWithTransition('forward', () => {
                 setConflict(false)
-                setTime(nextTime)
-                setZoneId(nextZone)
-                setStep(hasRules ? 'rules' : 'details')
+                setStep(stepAfter(flow, 'times') ?? 'details')
               })
             }}
           />
@@ -489,11 +594,29 @@ export default function PublicReservePage() {
             zoneName={zoneName}
             checked={rulesAck}
             stale={rulesStale}
+            step={stepIndex(flow, 'rules')}
+            stepTotal={flow.length}
             onChecked={setRulesAck}
             onNext={() => navigateWithTransition('forward', () => {
               setRulesStale(false)
-              setStep('details')
+              setStep(stepAfter(flow, 'rules') ?? 'details')
             })}
+          />
+        )}
+        {step === 'prepay' && prepayRule && (
+          <PrepayScreen
+            lang={lang}
+            rule={prepayRule}
+            guests={guests}
+            date={date}
+            time={time}
+            todayStr={todayStr}
+            zoneName={zoneName}
+            step={stepIndex(flow, 'prepay')}
+            stepTotal={flow.length}
+            busy={payBusy}
+            error={payError}
+            onPay={startPrepayment}
           />
         )}
         {step === 'details' && (
@@ -513,7 +636,10 @@ export default function PublicReservePage() {
             onDraft={setDetailsDraft}
             clientUuid={clientUuid}
             rulesAck={rulesAck}
-            stepOf={hasRules ? 4 : 3}
+            stepOf={stepIndex(flow, 'details')}
+            stepTotal={flow.length}
+            prepay={hasPrepay}
+            onPrepay={() => navigateWithTransition('forward', () => setStep('prepay'))}
             onRulesStale={() => {
               // Правила точки изменились между загрузкой страницы и
               // отправкой. Показываем СВЕЖИЕ — согласие с исчезнувшим
@@ -574,6 +700,8 @@ function Shell({ isRtl, info, lang, hero, routeKey, onBack, children }: {
   isRtl: boolean
   info?: ReserveInfo
   lang: Lang
+  /** Экран сам рисует шапку с фото (вход и карточка брони) — общей
+   *  компактной шапки тогда нет */
   hero?: boolean
   routeKey?: string
   onBack?: () => void
@@ -584,22 +712,9 @@ function Shell({ isRtl, info, lang, hero, routeKey, onBack, children }: {
   const currentRouteKey = routeKey ?? '__static__'
   const currentRoute = (
     <div className="public-reserve-route-motion">
-      {hero ? (
-        <header className={`public-reserve-hero${loc?.header_url ? ' has-media' : ''}`}>
-          {loc?.header_url && (
-            <img src={loc.header_url} alt="" className="public-reserve-hero-media" />
-          )}
-          <span className="public-reserve-hero-scrim" aria-hidden />
-          <div className="public-reserve-hero-copy">
-            {!loc?.header_url && loc?.logo_url && (
-              <img src={loc.logo_url} alt="" className="public-reserve-hero-logo" />
-            )}
-            <div>{t(lang, 'rsvPageLabel')}</div>
-            <h1 className="font-display public-reserve-route-focus" tabIndex={-1}>{title ?? ''}</h1>
-            {loc?.address && <p>{loc.address}</p>}
-          </div>
-        </header>
-      ) : (
+      {/* На первом экране шапки нет: фото и лист — часть самого экрана,
+          иначе лист не смог бы наехать на фото скруглённым верхом. */}
+      {!hero && (
         <header className="public-reserve-compact-header">
           {onBack && (
             <button
@@ -621,7 +736,6 @@ function Shell({ isRtl, info, lang, hero, routeKey, onBack, children }: {
         </header>
       )}
       <main className="flex-1 flex flex-col">{children}</main>
-      {hero && loc && <ReserveFooter loc={loc} lang={lang} />}
     </div>
   )
   const focusRoute = useRef(currentRouteKey)
@@ -646,55 +760,208 @@ function Shell({ isRtl, info, lang, hero, routeKey, onBack, children }: {
 }
 
 /**
- * Подвал страницы брони (066): часы работы (свободный текст) и соцкнопки
- * (Instagram/Facebook/Google-отзыв). Пустые поля → блок/кнопка не рендерится;
- * если всё пусто — подвала нет. Тёмная плашка со скруглённым верхом и
- * hairline-чертой отделяет подвал от контента (как на гостевой странице заказа).
+ * Лист «о заведении» — заменил постоянную чёрную плашку соцсетей (066).
+ *
+ * Часы, адрес, маршрут и соцсети нужны гостю один раз и по запросу, а не
+ * всё время под формой: первый экран должен принадлежать брони. Сегодняшняя
+ * строка выделена, остальная неделя идёт ниже — гость чаще спрашивает
+ * «а сейчас открыто?», чем «а что в четверг?».
+ *
+ * Кнопки нет там, где нет ссылки: пустой кружок соцсети означал бы, что
+ * заведение есть в Instagram, хотя владелец ссылку не заводил.
  */
-function ReserveFooter({ loc, lang }: { loc: NonNullable<ReserveInfo['location']>; lang: Lang }) {
+function VenueSheet({ lang, loc, schedule, todayStr, nowMs, tz, onDirections, onClose }: {
+  lang: Lang
+  loc: NonNullable<ReserveInfo['location']>
+  schedule: ReturnType<typeof normalizeSchedule>
+  todayStr: string
+  nowMs: number
+  tz: string
+  /** Маршрут открывает общий выбор приложения (067), а не жёсткий Google */
+  onDirections: (() => void) | null
+  onClose: () => void
+}) {
   const links = loc.links
-  const hasSocial = !!(links?.instagram || links?.facebook || links?.google_review)
-  // Часы работы переехали в зону «часы · навигация» на первом экране (SlotScreen);
-  // подвал теперь — только соцсети.
-  if (!hasSocial) return null
-  const iconBtn =
-    'w-12 h-12 rounded-full bg-white/10 text-white flex items-center justify-center active:scale-[0.94] transition-all'
+  const title = loc.business_name || loc.name
+  const todayDow = dowOf(todayStr)
+  const nowMinutes = useMemo(() => {
+    const [h, m] = localTimeOf(nowMs, tz).split(':')
+    return Number(h) * 60 + Number(m)
+  }, [nowMs, tz])
+  const openNow = useMemo(
+    () => isOpenAt(schedule, todayStr, nowMinutes),
+    [schedule, todayStr, nowMinutes]
+  )
+  const rows = useMemo(() => weeklyHoursRows(schedule), [schedule])
+
   return (
-    <footer className="mt-8 px-4 pt-8 pb-8 flex flex-col items-center gap-5 bg-black/85 border-t border-white/10">
-      {(links?.instagram || links?.facebook) && (
-        <div className="flex items-center gap-3">
-          {links?.instagram && (
-            <a href={links.instagram} target="_blank" rel="noopener noreferrer" aria-label="Instagram" className={iconBtn}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
-                <rect x="3" y="3" width="18" height="18" rx="5" />
-                <circle cx="12" cy="12" r="4" />
-                <circle cx="17.2" cy="6.8" r="1.2" fill="currentColor" stroke="none" />
-              </svg>
-            </a>
-          )}
-          {links?.facebook && (
-            <a href={links.facebook} target="_blank" rel="noopener noreferrer" aria-label="Facebook" className={iconBtn}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" aria-hidden>
-                <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z" />
-              </svg>
-            </a>
-          )}
+    <SheetOverlay label={t(lang, 'rsvVenueSheetTitle')} onClose={onClose}>
+      <div className="public-reserve-venue-sheet">
+        <div className="public-reserve-venue-head">
+          <div>
+            <h3>{title}</h3>
+            {loc.address && <p>{loc.address}</p>}
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label={t(lang, 'rsvVenueClose')}
+            className="public-reserve-venue-close"
+          >
+            <CloseIcon />
+          </button>
         </div>
-      )}
-      {links?.google_review && (
-        <a
-          href={links.google_review}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="h-11 px-5 rounded-full bg-white/10 text-sm font-semibold text-white flex items-center gap-2 active:scale-[0.96] transition-all"
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z" />
-          </svg>
-          {t(lang, 'pubReviewGoogle')}
-        </a>
-      )}
-    </footer>
+
+        <div className="public-reserve-venue-hours">
+          {/* Сегодня отдельной строкой сверху: «открыто/закрыто сейчас» —
+              единственный вопрос, ради которого лист чаще всего открывают */}
+          <div data-today="true">
+            <span>{t(lang, openNow ? 'rsvVenueOpenNow' : 'rsvVenueClosedNow')}</span>
+            <span>
+              {formatWindows(dayWindows(schedule, todayStr)) || t(lang, 'rsvDayClosed')}
+            </span>
+          </div>
+          {rows.map((row) => (
+            <div key={row.days[0]} data-today={row.days.includes(todayDow ?? -1) || undefined}>
+              <span>{dayRangeLabel(row.days, lang)}</span>
+              <span>{formatWindows(row.windows) || t(lang, 'rsvDayClosed')}</span>
+            </div>
+          ))}
+        </div>
+
+        {(loc.address || onDirections) && (
+          <div className="public-reserve-venue-address">
+            {loc.address && <span>{loc.address}</span>}
+            {onDirections && (
+              <button
+                type="button"
+                onClick={() => { onClose(); onDirections() }}
+                className="public-reserve-venue-route"
+              >
+                {t(lang, 'rsvVenueDirections')}
+              </button>
+            )}
+          </div>
+        )}
+
+        {(links?.instagram || links?.facebook || links?.google_review) && (
+          <div className="public-reserve-venue-socials">
+            {links?.instagram && (
+              <a
+                href={links.instagram}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={t(lang, 'rsvSocialInstagram')}
+              >
+                <InstagramIcon />
+              </a>
+            )}
+            {links?.facebook && (
+              <a
+                href={links.facebook}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={t(lang, 'rsvSocialFacebook')}
+              >
+                <FacebookIcon />
+              </a>
+            )}
+            {links?.google_review && (
+              <a
+                href={links.google_review}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={t(lang, 'rsvSocialGoogle')}
+              >
+                <GoogleGIcon />
+              </a>
+            )}
+          </div>
+        )}
+      </div>
+    </SheetOverlay>
+  )
+}
+
+/**
+ * Общая обвязка нижнего листа: затемнение, Escape, блокировка прокрутки
+ * фона, ловушка фокуса и возврат фокуса открывшему элементу.
+ *
+ * Раньше каждый лист повторял половину этого сам и ни один не удерживал
+ * фокус — с клавиатуры и со скринридером фокус уходил за спину открытого
+ * листа, в форму под ним.
+ */
+function SheetOverlay({ label, onClose, children }: {
+  label: string
+  onClose: () => void
+  children: React.ReactNode
+}) {
+  const sheetRef = useRef<HTMLDivElement>(null)
+  const openerRef = useRef<Element | null>(null)
+
+  useEffect(() => {
+    openerRef.current = document.activeElement
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onClose()
+        return
+      }
+      if (event.key !== 'Tab') return
+      const focusable = sheetRef.current?.querySelectorAll<HTMLElement>(
+        'a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])'
+      )
+      if (!focusable || focusable.length === 0) return
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      const active = document.activeElement
+      if (event.shiftKey && active === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && active === last) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+
+    window.addEventListener('keydown', onKeyDown)
+    // Фокус на САМ лист, а не на первую кнопку внутри: Tab дальше идёт
+    // по листу, но обводка фокуса не загорается на «закрыть» — гость,
+    // открывший часы пальцем, видел бы обведённый крестик без причины.
+    window.setTimeout(() => sheetRef.current?.focus({ preventScroll: true }), 0)
+
+    return () => {
+      document.body.style.overflow = previousOverflow
+      window.removeEventListener('keydown', onKeyDown)
+      // Фокус возвращается кнопке, которая лист открыла
+      const opener = openerRef.current
+      if (opener instanceof HTMLElement && document.contains(opener)) {
+        opener.focus({ preventScroll: true })
+      }
+    }
+  }, [onClose])
+
+  return (
+    <div
+      className="public-reserve-sheet-overlay fixed inset-0 z-50 flex items-end justify-center bg-black/40"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label={label}
+    >
+      <div
+        ref={sheetRef}
+        tabIndex={-1}
+        className="public-reserve-sheet w-full max-w-lg rounded-t-3xl bg-white px-4 pt-3 shadow-xl text-start"
+        style={{ paddingBottom: 'calc(1.5rem + env(safe-area-inset-bottom))' }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-gray-200" aria-hidden="true" />
+        {children}
+      </div>
+    </div>
   )
 }
 
@@ -753,93 +1020,7 @@ function ReserveProgress({ lang, step, total = 3 }: {
   )
 }
 
-function ReserveSelectionSummary({
-  lang, date, time, guests, todayStr, zoneName,
-}: {
-  lang: Lang
-  date: string
-  time: string
-  guests: number
-  todayStr: string
-  zoneName?: string | null
-}) {
-  return (
-    <>
-      <div className="public-reserve-selection-summary">
-        <div>
-          <span><CalendarIcon /></span>
-          <strong>{dayOptionLabel(date, todayStr, lang)}</strong>
-        </div>
-        <div>
-          <span><ClockIcon /></span>
-          <strong className="tabular-nums">{time}</strong>
-        </div>
-        <div>
-          <span><PersonIcon /></span>
-          {/* Слово «гостей» здесь дублирует фигурку над ним: в сводке из
-              трёх плиток важно число, а не подпись к иконке */}
-          <strong className="tabular-nums">{guests}</strong>
-        </div>
-      </div>
-      {zoneName && (
-        <p className="public-reserve-zone-summary">
-          {t(lang, 'rsvZoneSummary')}: <strong>{zoneName}</strong>
-        </p>
-      )}
-    </>
-  )
-}
 
-/** Ячейка слот-панели: значение — текстом, под ним маленькая стрелка вниз;
- *  невидимый select растянут на всю плитку (тап везде) */
-function SlotCell({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="relative flex-1 min-w-0 py-3 px-2">
-      <div className="text-center font-bold text-gray-900 text-base truncate">{label}</div>
-      <div className="flex justify-center text-gray-400 mt-1">
-        <Chevron />
-      </div>
-      {children}
-    </div>
-  )
-}
-
-const SELECT_CLS = 'absolute inset-0 w-full h-full opacity-0 cursor-pointer text-base'
-
-/**
- * Часы работы (066) выводятся двумя выровненными колонками: день слева,
- * интервал справа — чтобы дни были под днями, а время под временем. Формат
- * ввода — «<день> · <время>» построчно (как в плейсхолдере настроек). Первый
- * « · » делит строку; строка без разделителя показывается днём на всю ширину.
- */
-function HoursRows({ text }: { text: string }) {
-  const rows = text
-    .split('\n')
-    .map((l) => l.trim())
-    .filter(Boolean)
-    .map((line) => {
-      const i = line.indexOf('·')
-      return i === -1
-        ? { day: line, time: null as string | null }
-        : { day: line.slice(0, i).trim(), time: line.slice(i + 1).trim() || null }
-    })
-  return (
-    <div className="mt-1.5 space-y-1 text-sm text-gray-900">
-      {rows.map((r, i) => (
-        <div key={i} className="flex items-baseline justify-between gap-2">
-          {/* Время не переносится и не сжимается: диапазон «8:00–22:00» рвался
-              по дефису («08:00 –» / «20:00»). День при нехватке места
-              переносится целыми словами — обрезать его нельзя, «Вс–Чт»
-              и «Вс» значат разное. */}
-          <span className="font-semibold min-w-0">{r.day}</span>
-          {r.time && (
-            <span className="text-gray-600 tabular-nums whitespace-nowrap shrink-0" dir="ltr">{r.time}</span>
-          )}
-        </div>
-      ))}
-    </div>
-  )
-}
 
 /** «вс–чт» из группы дней; имена берём у Intl, отдельных ключей не заводим */
 function dayRangeLabel(days: number[], lang: Lang): string {
@@ -852,40 +1033,21 @@ function dayRangeLabel(days: number[], lang: Lang): string {
 }
 
 /**
- * Часы работы из недельного расписания (117). Раньше здесь был свободный
- * текст, который владелец вёл вручную ОТДЕЛЬНО от часов приёма броней —
- * из-за этого страница писала «шабат закрыто» и тут же предлагала
- * субботние слоты. Теперь показ и сетка читают одну структуру.
+ * Первый экран (утверждённый референс): короткое фото заведения, белый лист
+ * со скруглённым верхом поверх него, круглый логотип на шве, название и
+ * адрес вплотную, затем ДАТА и ниже КОМПАНИЯ — обе полосой во всю ширину.
+ *
+ * Времени здесь нет намеренно: доступность зависит от зоны зала, а зону
+ * гость выбирает на следующем экране. Показать время до зоны — значит
+ * показать время, посчитанное не для того зала.
  */
-function ScheduleHours({ schedule, lang }: {
-  schedule: ReturnType<typeof normalizeSchedule>
-  lang: Lang
-}) {
-  const rows = weeklyHoursRows(schedule)
-  return (
-    <div className="mt-1.5 space-y-1 text-sm text-gray-900">
-      {rows.map((r) => (
-        <div key={r.days[0]} className="flex items-baseline justify-between gap-2">
-          <span className="font-semibold min-w-0">{dayRangeLabel(r.days, lang)}</span>
-          {r.windows.length > 0 ? (
-            <span className="text-gray-600 tabular-nums whitespace-nowrap shrink-0" dir="ltr">
-              {r.windows.map((w) => `${w[0]}\u2013${w[1]}`).join(', ')}
-            </span>
-          ) : (
-            <span className="text-gray-500 whitespace-nowrap shrink-0">{t(lang, 'rsvDayClosed')}</span>
-          )}
-        </div>
-      ))}
-    </div>
-  )
-}
-
-function SlotScreen({
-  lang, info, days, todayStr, todayHasSlots, dayOpen, date, time, guests, maxParty,
-  timeSlots, instant, freeTimes, availabilityLoading, availabilityError,
-  onDate, onTime, onGuests, onNext, onWaitlist,
+function EntryScreen({
+  lang, locId, info, days, todayStr, todayHasSlots, dayOpen, date, guests, maxParty,
+  timeSlots, instant, freeTimes, availabilityError, schedule, nowMs, tz,
+  onDate, onGuests, onNext, onWaitlist,
 }: {
   lang: Lang
+  locId: string
   info: ReserveInfo
   days: string[]
   todayStr: string
@@ -893,18 +1055,18 @@ function SlotScreen({
   /** Открыт ли день по расписанию (117) — закрытые дни в селекте недоступны */
   dayOpen: (dateStr: string) => boolean
   date: string
-  time: string
   guests: number
   maxParty: number
   timeSlots: string[]
-  /** instant-режим (063): показываем live-доступность и «Забронировать сейчас» */
+  /** instant-режим (063): у даты есть живая занятость */
   instant: boolean
   /** Свободные времена (Set) или null, если доступность не применяется */
   freeTimes: Set<string> | null
-  availabilityLoading: boolean
   availabilityError: boolean
+  schedule: ReturnType<typeof normalizeSchedule>
+  nowMs: number
+  tz: string
   onDate: (v: string) => void
-  onTime: (v: string) => void
   onGuests: (v: number) => void
   onNext: () => void
   /** День занят целиком — гость может встать в лист ожидания (122) */
@@ -912,8 +1074,6 @@ function SlotScreen({
 }) {
   // В instant-режиме день целиком занят, если сетка загружена и пуста на free
   const dayFull = instant && freeTimes !== null && freeTimes.size === 0 && timeSlots.length > 0
-  // Выбранное время недоступно — не даём идти дальше
-  const timeTaken = instant && freeTimes !== null && !freeTimes.has(time)
   const loc = info.location
   // Навигация (062/067): координаты → точный пин; иначе текстовый поиск по адресу.
   // По тапу гость выбирает приложение — Google Maps или Waze (bottom-sheet).
@@ -930,157 +1090,184 @@ function SlotScreen({
       : null
   const mapsUrl = googleMapsUrl // есть ли вообще куда навигировать
   const [navOpen, setNavOpen] = useState(false)
-  // Расписание для показа часов — тот же разбор, что и для сетки слотов
-  const schedule = useMemo(() => normalizeSchedule(loc), [loc])
-  const hasHours = !!loc.schedule || !!loc.hours
-  // Шаг правил (145) есть не у всех точек — полоса шагов считает честно
-  const stepTotal = (loc.rules?.length ?? 0) > 0 ? 4 : 3
+  const [venueOpen, setVenueOpen] = useState(false)
+  const title = loc.business_name || loc.name
+  // Сегодняшние часы в полосе: тот же разбор, что и у сетки слотов (117)
+  const nowMinutes = useMemo(() => {
+    const [h, m] = localTimeOf(nowMs, tz).split(':')
+    return Number(h) * 60 + Number(m)
+  }, [nowMs, tz])
+  const openNow = useMemo(
+    () => isOpenAt(schedule, todayStr, nowMinutes),
+    [schedule, todayStr, nowMinutes]
+  )
+  const todayHours = useMemo(
+    () => formatWindows(dayWindows(schedule, todayStr)),
+    [schedule, todayStr]
+  )
+
   return (
-    <div className="px-4 pb-8 flex flex-col items-center">
-      <ReserveProgress lang={lang} step={1} total={stepTotal} />
-
-      {!todayHasSlots && (
-        <div className="w-full mt-3 rounded-2xl bg-amber-50 text-amber-800 text-sm font-semibold px-4 py-3 text-center">
-          {t(lang, 'rsvNoSlotsToday')}
-        </div>
-      )}
-
-      {/* Слот-панель: гости · дата · время (в RTL справа налево — как у Tabit;
-          селекты, время дискретно по 15 мин) */}
-      <div className="w-full mt-4 rounded-2xl border border-gray-200 shadow-sm flex divide-x divide-gray-100 rtl:divide-x-reverse">
-        <SlotCell label={`${guests} ${t(lang, 'resGuestsShort')}`}>
-          <select className={SELECT_CLS} value={guests} onChange={(e) => onGuests(Number(e.target.value))} aria-label={t(lang, 'rsvGuests')}>
-            {Array.from({ length: maxParty }, (_, i) => i + 1).map((n) => (
-              <option key={n} value={n}>{n} {t(lang, 'resGuestsShort')}</option>
-            ))}
-          </select>
-        </SlotCell>
-        <SlotCell label={dayOptionLabel(date, todayStr, lang)}>
-          <select className={SELECT_CLS} value={date} onChange={(e) => onDate(e.target.value)} aria-label={t(lang, 'rsvDate')}>
-            {days.map((d) => {
-              // Закрытый день (выходной по расписанию, праздник-исключение
-              // или сегодня уже поздно) виден, но выбрать его нельзя.
-              const open = dayOpen(d)
-              return (
-                <option key={d} value={d} disabled={!open}>
-                  {dayOptionLabel(d, todayStr, lang)}
-                  {open ? '' : ` · ${t(lang, 'rsvDayClosed')}`}
-                </option>
-              )
-            })}
-          </select>
-        </SlotCell>
-        <SlotCell label={time}>
-          <select className={SELECT_CLS} value={time} onChange={(e) => onTime(e.target.value)} aria-label={t(lang, 'rsvTime')}>
-            {timeSlots.map((s) => {
-              const full = freeTimes !== null && !freeTimes.has(s)
-              return (
-                <option key={s} value={s} disabled={full}>
-                  {s}{full ? ` · ${t(lang, 'rsvSlotFull')}` : ''}
-                </option>
-              )
-            })}
-          </select>
-        </SlotCell>
+    <div className="public-reserve-entry">
+      <div className="public-reserve-entry-hero">
+        {loc.header_url && <img src={loc.header_url} alt="" />}
+        {/* Меню того же заведения: гость пришёл бронировать, но почти
+            всегда хочет сначала посмотреть, что здесь готовят. Слаг/UUID
+            берём из адреса — тот же ключ, по которому открыта бронь. */}
+        <a href={`/order/${locId}`} className="public-reserve-menu-pill">
+          {t(lang, 'rsvMenuLink')}
+        </a>
       </div>
 
-      {dayFull && (
-        <div className="w-full mt-4 rounded-2xl bg-amber-50 text-amber-800 text-sm font-semibold px-4 py-3 text-center">
-          {t(lang, 'rsvNoFreeSlots')}
-        </div>
-      )}
-
-      {/* Лист ожидания (122): день занят целиком — предлагаем ждать, а не
-          отправляем гостя ни с чем. Тумблер владельца: заведение, которое
-          не собирается перезванивать, обещаний не копит. */}
-      {dayFull && loc.waitlist && (
-        <button
-          type="button"
-          onClick={onWaitlist}
-          className="w-full h-12 mt-3 rounded-2xl border border-gray-300 text-sm font-bold text-gray-900 active:scale-[0.98] transition-all"
+      <div className={`public-reserve-entry-sheet${loc.logo_url ? ' has-logo' : ''}`}>
+        {loc.logo_url && (
+          <img src={loc.logo_url} alt="" className="public-reserve-entry-logo" />
+        )}
+        <h1
+          className="font-display public-reserve-entry-title public-reserve-route-focus"
+          tabIndex={-1}
         >
-          {t(lang, 'rsvJoinWaitlist')}
-        </button>
-      )}
+          {title}
+        </h1>
+        {loc.address && (
+          <p className="public-reserve-entry-address">{loc.address}</p>
+        )}
 
-      {availabilityLoading && (
-        <div className="public-reserve-availability-note" aria-live="polite">
-          <span aria-hidden />
-          {t(lang, 'rsvCheckingSlots')}
-        </div>
-      )}
-      {availabilityError && (
-        <div className="w-full mt-4 rounded-2xl bg-red-50 text-red-700 text-sm font-semibold px-4 py-3 text-center" role="alert">
-          {t(lang, 'rsvErrAvailability')}
-        </div>
-      )}
+        {!todayHasSlots && (
+          <div className="w-full mt-4 rounded-2xl bg-amber-50 text-amber-800 text-sm font-semibold px-4 py-3 text-center">
+            {t(lang, 'rsvNoSlotsToday')}
+          </div>
+        )}
 
-      <button
-        onClick={onNext}
-        disabled={
-          timeSlots.length === 0
-          || dayFull
-          || timeTaken
-          || availabilityLoading
-          || availabilityError
-        }
-        className="w-full h-14 mt-4 rounded-2xl bg-gray-900 text-white font-bold disabled:opacity-40 active:scale-[0.98] transition-all"
-      >
-        {instant ? t(lang, 'rsvBookNow') : t(lang, 'rsvSubmit')}
-      </button>
+        <div className="public-reserve-quick-grid">
+          {/* Дата — всегда над компанией: сначала «когда», потом «сколько нас» */}
+          <div className="public-reserve-quick-box">
+            <span>{t(lang, 'rsvEntryDateLabel')}</span>
+            <span className="public-reserve-quick-value">
+              <span className="rtl:rotate-180"><ChevronStart /></span>
+              {dayOptionLabel(date, todayStr, lang)}
+            </span>
+            {/* Родной select: единственный контрол, который умеет и открыть
+                привычный колесо-пикер телефона, и показать закрытый день
+                недоступным. У input[type=date] выключить можно только
+                диапазон, а выходные заведения лежат внутри него. */}
+            <select
+              className="public-reserve-date-input"
+              value={date}
+              onChange={(e) => onDate(e.target.value)}
+              aria-label={t(lang, 'rsvDate')}
+            >
+              {days.map((d) => {
+                const open = dayOpen(d)
+                return (
+                  <option key={d} value={d} disabled={!open}>
+                    {dayOptionLabel(d, todayStr, lang)}
+                    {open ? '' : ` · ${t(lang, 'rsvDayClosed')}`}
+                  </option>
+                )
+              })}
+            </select>
+          </div>
 
-      <p className="text-sm text-gray-500 mt-4 text-center">{t(lang, 'rsvChooseHint')}</p>
-
-      {/* Зона «часы работы · навигация» (066): часы слева двумя колонками
-          (день/время выровнены), кнопки телефона/навигации справа.
-          Ширина НЕ 50/50: кнопки занимают ровно свои 80px (shrink-0), всё
-          остальное достаётся часам — при делении пополам колонка часов была
-          уже, чем требует диапазон «8:00–22:00», и день обрезался, хотя
-          рядом с одинокой кнопкой оставалось пустое место.
-          Разделитель — только когда есть обе стороны. */}
-      {(hasHours || loc.phone || mapsUrl) && (
-        <div className={`w-full mt-6 rounded-2xl border border-gray-200 overflow-hidden ${
-          hasHours && (loc.phone || mapsUrl)
-            ? 'flex divide-x divide-gray-100 rtl:divide-x-reverse'
-            : ''
-        }`}>
-          {hasHours && (
-            <div className="min-w-0 grow px-4 py-4">
-              <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{t(lang, 'rsvHoursTitle')}</div>
-              {/* Часы показываются из ТОГО ЖЕ расписания, по которому строится
-                  сетка слотов (117). Свободный текст остаётся только у точек,
-                  которым расписание ещё не заполнили. */}
-              {loc.schedule
-                ? <ScheduleHours schedule={schedule} lang={lang} />
-                : <HoursRows text={loc.hours as string} />}
+          <div className="public-reserve-quick-box">
+            <span>{t(lang, 'rsvEntryPartyLabel')}</span>
+            {/* Степпер, а не select: размер компании меняют на ±1, и два
+                тапа по «+» быстрее, чем открыть список и найти строку.
+                Края явно выключены — предел заведения виден, а не угадан. */}
+            <div className="public-reserve-stepper">
+              <button
+                type="button"
+                onClick={() => onGuests(Math.max(1, guests - 1))}
+                disabled={guests <= 1}
+                aria-label={t(lang, 'rsvPartyMinus')}
+              >
+                −
+              </button>
+              <strong className="tabular-nums" aria-live="polite">{guests}</strong>
+              <button
+                type="button"
+                onClick={() => onGuests(Math.min(maxParty, guests + 1))}
+                disabled={guests >= maxParty}
+                aria-label={t(lang, 'rsvPartyPlus')}
+              >
+                +
+              </button>
             </div>
-          )}
-          {(loc.phone || mapsUrl) && (
-            <div className="flex shrink-0 items-center justify-center gap-2 px-3 py-4">
-              {loc.phone && (
-                <a
-                  href={`tel:${loc.phone}`}
-                  className="w-20 h-20 rounded-2xl border border-gray-300 flex flex-col items-center justify-center gap-1 text-gray-900 active:scale-[0.96] transition-all"
-                >
-                  <PhoneIcon />
-                  <span className="text-xs font-semibold">{t(lang, 'rsvPhoneBtn')}</span>
-                </a>
-              )}
-              {mapsUrl && (
-                <button
-                  type="button"
-                  onClick={() => setNavOpen(true)}
-                  className="w-20 h-20 rounded-2xl border border-gray-300 flex flex-col items-center justify-center gap-1 text-gray-900 active:scale-[0.96] transition-all"
-                >
-                  <PinIcon />
-                  <span className="text-xs font-semibold">{t(lang, 'rsvNavigateBtn')}</span>
-                </button>
-              )}
-            </div>
+          </div>
+        </div>
+
+        {/* Часы и маршрут — компактная полоса, а не постоянный чёрный блок */}
+        <div className="public-reserve-venue-strip">
+          <button
+            type="button"
+            onClick={() => setVenueOpen(true)}
+            className="public-reserve-hours-button"
+            aria-label={t(lang, 'rsvVenueHoursOpen')}
+          >
+            <span className="public-reserve-hours-copy">
+              <span>
+                <i data-closed={!openNow || undefined} aria-hidden />
+                {t(lang, openNow ? 'rsvVenueOpenNow' : 'rsvVenueClosedNow')}
+              </span>
+              <strong>{todayHours || t(lang, 'rsvDayClosed')}</strong>
+            </span>
+            <span className="rtl:rotate-180 text-gray-400"><ChevronStart /></span>
+          </button>
+          {mapsUrl && (
+            <button
+              type="button"
+              onClick={() => setNavOpen(true)}
+              className="public-reserve-route-button"
+            >
+              <RouteIcon />
+              <span>{t(lang, 'rsvNavigateBtn')}</span>
+            </button>
           )}
         </div>
-      )}
 
+        {dayFull && (
+          <div className="w-full mt-3 rounded-2xl bg-amber-50 text-amber-800 text-sm font-semibold px-4 py-3 text-center">
+            {t(lang, 'rsvNoFreeSlots')}
+          </div>
+        )}
+        {dayFull && loc.waitlist && (
+          <button
+            type="button"
+            onClick={onWaitlist}
+            className="w-full h-12 mt-3 rounded-2xl border border-gray-300 text-sm font-bold text-gray-900 active:scale-[0.98] transition-all"
+          >
+            {t(lang, 'rsvJoinWaitlist')}
+          </button>
+        )}
+        {availabilityError && (
+          <div className="w-full mt-3 rounded-2xl bg-red-50 text-red-700 text-sm font-semibold px-4 py-3 text-center" role="alert">
+            {t(lang, 'rsvErrAvailability')}
+          </div>
+        )}
+
+        <div className="public-reserve-bottom">
+          <button
+            type="button"
+            onClick={onNext}
+            disabled={timeSlots.length === 0 || dayFull}
+            className="public-reserve-cta"
+          >
+            {t(lang, 'rsvShowTimes')}
+          </button>
+        </div>
+      </div>
+
+      {venueOpen && (
+        <VenueSheet
+          lang={lang}
+          loc={loc}
+          schedule={schedule}
+          todayStr={todayStr}
+          nowMs={nowMs}
+          tz={tz}
+          onDirections={mapsUrl ? () => setNavOpen(true) : null}
+          onClose={() => setVenueOpen(false)}
+        />
+      )}
       {navOpen && (
         <NavChooserSheet
           lang={lang}
@@ -1102,32 +1289,9 @@ function NavChooserSheet({ lang, googleMapsUrl, wazeUrl, onClose }: {
   wazeUrl: string | null
   onClose: () => void
 }) {
-  useEffect(() => {
-    const previousOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => {
-      document.body.style.overflow = previousOverflow
-      window.removeEventListener('keydown', onKeyDown)
-    }
-  }, [onClose])
-
   return (
-    <div
-      className="public-reserve-sheet-overlay fixed inset-0 z-50 flex items-end justify-center bg-black/40"
-      onClick={onClose}
-      role="dialog"
-      aria-modal="true"
-      aria-label={t(lang, 'rsvNavSheetTitle')}
-    >
-      <div
-        className="public-reserve-sheet w-full max-w-lg rounded-t-3xl bg-white px-4 pt-3 pb-6 shadow-xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-gray-200" aria-hidden="true" />
+    <SheetOverlay label={t(lang, 'rsvNavSheetTitle')} onClose={onClose}>
+      <>
         <div className="px-1 pb-3 text-center text-sm font-semibold text-gray-500">
           {t(lang, 'rsvNavSheetTitle')}
         </div>
@@ -1164,79 +1328,128 @@ function NavChooserSheet({ lang, googleMapsUrl, wazeUrl, onClose }: {
         >
           {t(lang, 'rsvNavCancel')}
         </button>
-      </div>
-    </div>
+      </>
+    </SheetOverlay>
   )
 }
 
 /**
- * Точное время (Ontopo-стиль): каждая зона зала — отдельная секция со
- * своим рядом ±2 слота вокруг запрошенного времени. В instant-режиме у
- * секции своя live-доступность: свободный слот — «мгновенное подтверждение»
- * (зелёная точка), занятый — ⊘ и дизейбл. Тап по слоту несёт и время, и
- * зону в контакты. Без зон (или одна) — единственная секция «вся точка»
- * (zoneId=null).
+ * Второй экран: СНАЧАЛА зона зала, ПОТОМ время в этой зоне.
+ *
+ * Порядок не косметический. Свободное время считается для конкретного
+ * набора столов, поэтому «19:00 свободно» без зоны — утверждение ни о
+ * чём: в зале свободно, на террасе занято. Прежний экран показывал
+ * секцию на каждую зону сразу и тем самым просил гостя сравнивать
+ * четыре ряда времён вместо одного вопроса «где вам удобнее сесть».
+ *
+ * Смена зоны обнуляет выбранное время, если в новой зоне его нет:
+ * запрос доступности ключуется зоной, поэтому ответ старой зоны в новую
+ * не попадает физически, а выбор гостя проверяется отдельно.
+ *
+ * Итоговое решение всё равно за сервером: здесь только предложение, а
+ * конфликт на submit возвращает гостя сюда со свежей сеткой.
  */
 function TimesScreen({
-  lang, locId, date, time, guests, timeSlots, instant, freeTimes, zones, todayStr,
-  conflict, stepTotal, onPick,
+  lang, locId, date, guests, timeSlots, instant, zones, todayStr, waitlistEnabled,
+  conflict, step, stepTotal, zoneId, time, onZone, onTime, onNext, onEditSlot, onWaitlist,
 }: {
   lang: Lang
   locId: string
   date: string
-  time: string
   guests: number
+  /** Сетка расписания на дату (117) — метки времени без учёта занятости */
   timeSlots: string[]
-  /** instant-режим (063): каждая секция считает доступность по своей зоне */
+  /** instant-режим (063): у слотов есть живая занятость */
   instant: boolean
-  /** Свободные времена по всей точке (instant-режим) или null */
-  freeTimes: Set<string> | null
-  /** Зоны зала (072); от двух зон — секция на зону, иначе одна общая */
+  /** Зоны зала (072) с активными столами */
   zones: { id: string; name: string }[]
   todayStr: string
+  /** Лист ожидания включён владельцем (122) — обещание перезвонить */
+  waitlistEnabled: boolean
   /** Гость вернулся сюда из-за занятого слота (118) */
   conflict: boolean
-  /** Сколько всего шагов у потока: 4 с правилами (145), 3 без них */
+  /** Номер этого шага и всего шагов в потоке — считает reserveFlow */
+  step: number
   stepTotal: number
-  /** (время, zoneId) — zoneId=null для общей секции «без зоны» */
-  onPick: (time: string, zoneId: string | null) => void
+  zoneId: string | null
+  time: string
+  onZone: (zoneId: string | null) => void
+  onTime: (time: string) => void
+  onNext: () => void
+  /** Вернуться к дате и числу гостей */
+  onEditSlot: () => void
+  onWaitlist: () => void
 }) {
-  // Ряд из 5 слотов вокруг запрошенного времени (окно у краёв дня сдвигается)
-  const chips = useMemo(() => {
-    const i = Math.max(0, timeSlots.indexOf(time))
-    const start = Math.max(0, Math.min(i - 2, timeSlots.length - 5))
-    return timeSlots.slice(start, start + 5)
-  }, [timeSlots, time])
+  // Время, которое гость разглядывает в «занято» — экран объяснения
+  const [blocked, setBlocked] = useState<string | null>(null)
 
-  // От двух зон — секция на каждую (zoneId = z.id). Меньше — одна общая
-  // секция по всей точке (zoneId = null), доступность из freeTimes.
-  const sections = useMemo(
-    () => (zones.length >= 2
-      ? zones.map((z) => ({ id: z.id, name: z.name }))
-      : [{ id: null as string | null, name: null }]),
-    [zones]
-  )
-
-  // Каждой зоне-секции — свой запрос доступности (только instant). Хук
-  // useQueries держит стабильный порядок; общая секция берёт freeTimes.
-  const zoneQueries = useQueries({
-    queries: sections.map((s) => ({
-      queryKey: ['reserve_avail', locId, date, guests, s.id],
-      queryFn: () => fetchAvailability(locId, date, guests, s.id),
-      enabled: instant && s.id !== null,
-      staleTime: 20_000,
-    })),
+  // Доступность ИМЕННО выбранной зоны. Зона входит в ключ, поэтому ответ
+  // прошлой зоны не может быть показан как ответ новой — устаревший
+  // запрос отсекается самим кэшем, а не гонкой промисов.
+  const {
+    data: avail,
+    isPending,
+    isError,
+  } = useQuery({
+    queryKey: ['reserve_avail', locId, date, guests, zoneId],
+    queryFn: () => fetchAvailability(locId, date, guests, zoneId),
+    enabled: instant,
+    staleTime: 20_000,
   })
 
+  const freeTimes = useMemo(() => {
+    if (!instant || !avail) return null // null = занятость не применяется
+    return new Set(avail.slots.filter((s) => s.free).map((s) => s.time))
+  }, [instant, avail])
+
+  const loading = instant && isPending
+  const free = useMemo(
+    () => timeSlots.filter((s) => freeTimes === null || freeTimes.has(s)),
+    [timeSlots, freeTimes]
+  )
+  // Зона занята целиком: сетка расписания есть, а свободного в ней нет
+  const zoneFull = !loading && !isError && timeSlots.length > 0 && free.length === 0
+
+  // Выбор гостя действителен, только пока он свободен в ТЕКУЩЕЙ зоне.
+  // Производная величина, а не состояние: иначе смена зоны оставляла бы
+  // подсвеченным время, которого в новой зоне нет.
+  const selected = time && free.includes(time) ? time : ''
+
+  function pickZone(next: string | null) {
+    if (next === zoneId) return
+    onZone(next)
+    setBlocked(null)
+    // Время не переносим вслепую: в новой зоне оно может быть занято.
+    // Сверка идёт по её собственной доступности, когда та приедет.
+    if (time) onTime(time)
+  }
+
+  const zoneName = zoneId ? zones.find((z) => z.id === zoneId)?.name ?? null : null
+
+  if (blocked) {
+    return (
+      <UnavailableTime
+        lang={lang}
+        blocked={blocked}
+        free={free}
+        zoneName={zoneName}
+        waitlistEnabled={waitlistEnabled}
+        onPick={(next) => { setBlocked(null); onTime(next); onNext() }}
+        onBack={() => setBlocked(null)}
+        onWaitlist={onWaitlist}
+        onAnotherDay={onEditSlot}
+      />
+    )
+  }
+
   return (
-    <div className="px-4 pb-8">
-      <ReserveProgress lang={lang} step={2} total={stepTotal} />
-      <h2
-        className="public-reserve-route-focus text-2xl font-bold text-gray-900 mt-6"
-        tabIndex={-1}
-      >
-        {instant ? t(lang, 'rsvFoundTitle') : t(lang, 'rsvPickTimeTitle')}
+    <div className="public-reserve-step-page">
+      <ReserveProgress lang={lang} step={step} total={stepTotal} />
+      <h2 className="public-reserve-route-focus public-reserve-step-title" tabIndex={-1}>
+        {t(lang, 'rsvVisitTitle')}
       </h2>
+      <p className="public-reserve-step-hint">{t(lang, 'rsvVisitHint')}</p>
+
       {conflict && (
         <div
           className="w-full mt-4 rounded-2xl bg-amber-50 text-amber-800 text-sm font-semibold px-4 py-3"
@@ -1246,135 +1459,215 @@ function TimesScreen({
         </div>
       )}
 
-      <div className="mt-4">
-        <ReserveSelectionSummary
-          lang={lang}
-          date={date}
-          time={time}
-          guests={guests}
-          todayStr={todayStr}
-        />
+      <div className="public-reserve-summary">
+        <div>
+          <strong>{dayOptionLabel(date, todayStr, lang)}</strong>
+          <small>{guests} {t(lang, 'resGuestsShort')}</small>
+        </div>
+        <button type="button" onClick={onEditSlot}>{t(lang, 'rsvChangeSelection')}</button>
       </div>
 
-      <div className="mt-5 space-y-6">
-        {sections.map((s, i) => {
-          // Свободные времена секции: своя зона → её запрос; общая → freeTimes
-          const q = zoneQueries[i]
-          const secFree = s.id === null
-            ? freeTimes
-            : (instant && q?.data
-                ? new Set(q.data.slots.filter((sl) => sl.free).map((sl) => sl.time))
-                : null)
-          const checking = instant && s.id !== null && q?.isPending
-          const failed = instant && s.id !== null && q?.isError
-          return (
-            <ZoneTimeRow
-              key={s.id ?? '__any__'}
-              lang={lang}
-              zoneName={s.name}
-              chips={chips}
-              time={time}
-              instant={instant}
-              freeTimes={secFree}
-              checking={checking}
-              failed={failed}
-              onPick={(v) => onPick(v, s.id)}
-            />
-          )
-        })}
+      {/* Зона — выше времени. Одна зона тоже показывается: гость должен
+          понимать, куда его сажают, даже когда выбора нет. */}
+      {zones.length > 0 && (
+        <>
+          <div className="public-reserve-field-label">{t(lang, 'rsvZoneQuestion')}</div>
+          <div className="public-reserve-zones" role="group" aria-label={t(lang, 'rsvZoneQuestion')}>
+            {zones.map((z) => (
+              <button
+                key={z.id}
+                type="button"
+                className="public-reserve-zone"
+                aria-pressed={z.id === zoneId}
+                onClick={() => pickZone(z.id)}
+              >
+                <span className="public-reserve-zone-icon" aria-hidden="true"><ChairIcon /></span>
+                <b>{z.name}</b>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+
+      <div className="public-reserve-field-label">
+        {t(lang, 'rsvTimesForZone')}
+        {zoneName && <> · {zoneName}</>}
+      </div>
+
+      {isError ? (
+        <p className="text-sm font-semibold text-red-600" role="alert">
+          {t(lang, 'rsvErrAvailability')}
+        </p>
+      ) : loading ? (
+        // Скелет ровно на месте времён: зоны и сводка не мигают
+        <>
+          <div className="public-reserve-times" aria-hidden="true">
+            {Array.from({ length: 6 }, (_, i) => (
+              <span key={i} className="public-reserve-time-skeleton" />
+            ))}
+          </div>
+          <p className="sr-only" role="status">{t(lang, 'rsvLoadingTimes')}</p>
+        </>
+      ) : zoneFull ? (
+        <ZoneFullNote
+          lang={lang}
+          waitlistEnabled={waitlistEnabled}
+          onWaitlist={onWaitlist}
+          onAnotherDay={onEditSlot}
+        />
+      ) : (
+        <div className="public-reserve-times">
+          {timeSlots.map((s) => {
+            const taken = freeTimes !== null && !freeTimes.has(s)
+            return (
+              <button
+                key={s}
+                type="button"
+                className="public-reserve-time tabular-nums"
+                aria-pressed={s === selected}
+                aria-disabled={taken || undefined}
+                aria-label={`${s}${zoneName ? ` · ${zoneName}` : ''}${
+                  taken ? ` · ${t(lang, 'rsvSlotFull')}` : ''
+                }`}
+                // Занятое время не мёртвая кнопка: тап объясняет, что
+                // произошло, и показывает ближайшее свободное.
+                onClick={() => (taken ? setBlocked(s) : onTime(s))}
+              >
+                {s}
+                {taken && <small>{t(lang, 'rsvSlotFull')}</small>}
+              </button>
+            )
+          })}
+        </div>
+      )}
+
+      <div className="public-reserve-bottom">
+        <button
+          type="button"
+          onClick={onNext}
+          disabled={!selected}
+          className="public-reserve-cta"
+        >
+          {selected ? t(lang, 'rsvContinue') : t(lang, 'rsvPickTimeFirst')}
+        </button>
       </div>
     </div>
   )
 }
 
+/** Разница между метками времени в минутах — для подписи «на 30 мин раньше» */
+function minutesBetween(from: string, to: string): number {
+  const a = hmToMin(from)
+  const b = hmToMin(to)
+  if (a === null || b === null) return 0
+  return Math.abs(b - a)
+}
+
 /**
- * Секция одной зоны на экране времени: заголовок зоны (если есть) и ряд
- * слотов. Свободный instant-слот подписан «мгновенное подтверждение»,
- * дальний/не-instant — «по телефону», занятый — ⊘ и недоступен.
+ * Выбранное время занято. Экран объясняет это словами и предлагает
+ * ближайшее свободное В ТОЙ ЖЕ ЗОНЕ — молча переносить гостя в другой
+ * зал нельзя, он выбирал зал осознанно.
  */
-function ZoneTimeRow({
-  lang, zoneName, chips, time, instant, freeTimes, checking, failed, onPick,
+function UnavailableTime({
+  lang, blocked, free, zoneName, waitlistEnabled, onPick, onBack, onWaitlist, onAnotherDay,
 }: {
   lang: Lang
+  blocked: string
+  free: string[]
   zoneName: string | null
-  chips: string[]
-  time: string
-  instant: boolean
-  freeTimes: Set<string> | null
-  checking: boolean
-  failed: boolean
-  onPick: (v: string) => void
+  waitlistEnabled: boolean
+  onPick: (time: string) => void
+  onBack: () => void
+  onWaitlist: () => void
+  onAnotherDay: () => void
 }) {
-  const stripRef = useRef<HTMLDivElement>(null)
-  useLayoutEffect(() => {
-    const requested = stripRef.current
-      ?.querySelector<HTMLElement>('[data-requested="true"]')
-    if (!requested) return
-    // scrollIntoView надёжно учитывает разные RTL-модели scrollLeft, но
-    // некоторые Safari/Chrome заодно двигают документ по вертикали.
-    // Возвращаем прежний Y синхронно, до первого paint.
-    const scrollY = window.scrollY
-    requested.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'auto' })
-    window.scrollTo({ top: scrollY, left: 0, behavior: 'auto' })
-  }, [time, chips])
+  const target = hmToMin(blocked) ?? 0
+  const earlier = [...free].filter((s) => (hmToMin(s) ?? 0) < target).pop() ?? null
+  const later = free.find((s) => (hmToMin(s) ?? 0) > target) ?? null
 
   return (
-    <section>
-      {zoneName && (
-        <div className="flex items-center gap-2 mb-3">
-          <span className="w-5 h-5 flex items-center justify-center text-gray-500 shrink-0"><ChairIcon /></span>
-          <h3 className="text-base font-bold text-gray-900">{zoneName}</h3>
+    <div className="public-reserve-step-page">
+      <div className="public-reserve-empty-head">
+        <div className="public-reserve-empty-icon" aria-hidden="true"><ClockIcon /></div>
+        <h2 className="public-reserve-route-focus public-reserve-step-title" tabIndex={-1}>
+          <span className="tabular-nums">{blocked}</span> · {t(lang, 'rsvUnavailableTitle')}
+        </h2>
+        <p className="public-reserve-step-hint">
+          {(earlier || later) ? t(lang, 'rsvUnavailableHint') : t(lang, 'rsvZoneFull')}
+          {zoneName && <> · {zoneName}</>}
+        </p>
+      </div>
+
+      {(earlier || later) && (
+        <div className="public-reserve-alternatives">
+          {earlier && (
+            <button type="button" className="public-reserve-alternative" onClick={() => onPick(earlier)}>
+              <strong className="tabular-nums">{earlier}</strong>
+              <small>
+                {minutesBetween(earlier, blocked)} {t(lang, 'rsvMinShort')} {t(lang, 'rsvAltEarlier')}
+              </small>
+            </button>
+          )}
+          {later && (
+            <button type="button" className="public-reserve-alternative" onClick={() => onPick(later)}>
+              <strong className="tabular-nums">{later}</strong>
+              <small>
+                {minutesBetween(blocked, later)} {t(lang, 'rsvMinShort')} {t(lang, 'rsvAltLater')}
+              </small>
+            </button>
+          )}
         </div>
       )}
-      {failed && (
-        <p className="mb-3 text-sm font-semibold text-red-600" role="alert">
-          {t(lang, 'rsvErrAvailability')}
-        </p>
+
+      {/* Лист ожидания — только если владелец его включил: заведение,
+          которое не собирается перезванивать, обещаний не копит (122). */}
+      {waitlistEnabled && (
+        <div className="public-reserve-waitlist-card">
+          <strong>{t(lang, 'rsvJoinWaitlist')}</strong>
+          <p>{t(lang, 'rsvWaitlistHint')}</p>
+          <button type="button" onClick={onWaitlist}>{t(lang, 'rsvWaitlistSubmit')}</button>
+        </div>
       )}
-      <div ref={stripRef} className="public-reserve-time-strip">
-        {chips.map((s) => {
-          const current = s === time
-          // instant: занят, если явно не в множестве свободных
-          const full = failed || checking || (instant && freeTimes !== null && !freeTimes.has(s))
-          // Мгновенное подтверждение — только instant + слот свободен
-          const now = instant && !checking && !failed && freeTimes !== null && freeTimes.has(s)
-          return (
-            <button
-              key={s}
-              data-requested={current || undefined}
-              onClick={() => !full && onPick(s)}
-              disabled={full}
-              aria-label={`${s}${zoneName ? ` · ${zoneName}` : ''} · ${
-                checking ? t(lang, 'rsvCheckingSlots') : full ? t(lang, 'rsvSlotFull') : now ? t(lang, 'rsvInstantLabel') : t(lang, 'rsvPhoneLabel')
-              }`}
-              className={`public-reserve-time-card ${
-                full
-                  ? 'is-disabled'
-                  : current
-                    ? 'is-requested'
-                    : ''
-              }`}
-            >
-              <span className={`text-base font-bold tabular-nums ${full ? 'text-gray-300' : 'text-gray-900'}`}>{s}</span>
-              {checking ? (
-                <span className="public-reserve-time-loading" aria-hidden />
-              ) : full ? (
-                <span className="text-gray-300" aria-label={t(lang, 'rsvSlotFull')}><BlockedIcon /></span>
-              ) : now ? (
-                <span className="flex items-center gap-1 text-[11px] text-gray-500 leading-none">
-                  <span className="w-1.5 h-1.5 rounded-full bg-lime-500 shrink-0" aria-hidden />
-                  {t(lang, 'rsvInstantLabel')}
-                </span>
-              ) : (
-                <span className="text-[11px] text-gray-500 leading-none">{t(lang, 'rsvPhoneLabel')}</span>
-              )}
-            </button>
-          )
-        })}
+
+      <button type="button" className="public-reserve-link-action" onClick={onAnotherDay}>
+        {t(lang, 'rsvPickAnotherDay')}
+      </button>
+
+      <div className="public-reserve-bottom">
+        <button type="button" onClick={onBack} className="public-reserve-cta">
+          {t(lang, 'rsvBackToZones')}
+        </button>
       </div>
-    </section>
+    </div>
   )
 }
+
+/** В выбранной зоне на этот день свободного времени нет вовсе */
+function ZoneFullNote({ lang, waitlistEnabled, onWaitlist, onAnotherDay }: {
+  lang: Lang
+  waitlistEnabled: boolean
+  onWaitlist: () => void
+  onAnotherDay: () => void
+}) {
+  return (
+    <div role="status">
+      <div className="w-full rounded-2xl bg-amber-50 text-amber-800 text-sm font-semibold px-4 py-3">
+        {t(lang, 'rsvZoneFull')}
+      </div>
+      {waitlistEnabled && (
+        <div className="public-reserve-waitlist-card">
+          <strong>{t(lang, 'rsvJoinWaitlist')}</strong>
+          <p>{t(lang, 'rsvWaitlistHint')}</p>
+          <button type="button" onClick={onWaitlist}>{t(lang, 'rsvWaitlistSubmit')}</button>
+        </div>
+      )}
+      <button type="button" className="public-reserve-link-action" onClick={onAnotherDay}>
+        {t(lang, 'rsvPickAnotherDay')}
+      </button>
+    </div>
+  )
+}
+
 
 function reserveErrorText(lang: Lang, code: string): string {
   switch (code) {
@@ -1404,7 +1697,8 @@ function reserveErrorText(lang: Lang, code: string): string {
  * именно подтверждений не хватает, и уводит фокус на первое из них.
  */
 function RulesScreen({
-  lang, rules, date, time, guests, todayStr, zoneName, checked, stale, onChecked, onNext,
+  lang, rules, date, time, guests, todayStr, zoneName, checked, stale, step, stepTotal,
+  onChecked, onNext,
 }: {
   lang: Lang
   rules: ReserveRule[]
@@ -1416,6 +1710,8 @@ function RulesScreen({
   checked: string[]
   /** Сервер отклонил прежнее согласие: правила успели измениться */
   stale: boolean
+  step: number
+  stepTotal: number
   onChecked: (next: string[]) => void
   onNext: () => void
 }) {
@@ -1444,25 +1740,26 @@ function RulesScreen({
   }
 
   return (
-    <div className="px-4 pb-8">
-      <ReserveProgress lang={lang} step={3} total={4} />
-      <h2
-        className="public-reserve-route-focus text-2xl font-bold text-gray-900 mt-6"
-        tabIndex={-1}
-      >
-        {t(lang, 'rsvRulesTitle')}
-      </h2>
-      <p className="text-sm text-gray-500 mt-1">{t(lang, 'rsvRulesHint')}</p>
+    <div className="public-reserve-step-page">
+      <ReserveProgress lang={lang} step={step} total={stepTotal} />
+      <div className="public-reserve-notice-head">
+        <span className="public-reserve-notice-icon" aria-hidden="true"><InfoIcon /></span>
+        <h2 className="public-reserve-route-focus public-reserve-step-title" tabIndex={-1}>
+          {t(lang, 'rsvRulesTitle')}
+        </h2>
+      </div>
+      <p className="public-reserve-step-hint">{t(lang, 'rsvRulesHint')}</p>
 
-      <div className="mt-4">
-        <ReserveSelectionSummary
-          lang={lang}
-          date={date}
-          time={time}
-          guests={guests}
-          todayStr={todayStr}
-          zoneName={zoneName}
-        />
+      <div className="public-reserve-summary">
+        <div>
+          <strong>
+            {dayOptionLabel(date, todayStr, lang)} · <span className="tabular-nums">{time}</span>
+          </strong>
+          <small>
+            {guests} {t(lang, 'resGuestsShort')}
+            {zoneName && <> · {zoneName}</>}
+          </small>
+        </div>
       </div>
 
       {stale && (
@@ -1505,15 +1802,25 @@ function RulesScreen({
         </div>
       )}
 
-      {showValidation && missing.length > 0 && (
-        <p className="text-sm font-semibold text-red-600 mt-3" role="alert">
-          {t(lang, 'rsvRulesNeedAck')}
-        </p>
-      )}
-
-      <button type="button" onClick={next} className="public-reserve-primary-action">
-        {t(lang, 'rsvRulesContinue')}
-      </button>
+      <div className="public-reserve-bottom">
+        {/* Кнопка выключена, пока не отмечено обязательное, — и рядом
+            написано, чего именно не хватает. Молча неактивная кнопка это
+            та самая причина, по которой звонят в заведение. */}
+        {missing.length > 0 && (
+          <p className="public-reserve-cta-note" id="reserve-rules-need" role="status">
+            {t(lang, 'rsvRulesNeedAck')}
+          </p>
+        )}
+        <button
+          type="button"
+          onClick={next}
+          disabled={missing.length > 0}
+          aria-describedby={missing.length > 0 ? 'reserve-rules-need' : undefined}
+          className="public-reserve-cta"
+        >
+          {t(lang, 'rsvRulesContinue')}
+        </button>
+      </div>
     </div>
   )
 }
@@ -1530,8 +1837,8 @@ function RuleText({ rule }: { rule: ReserveRule }) {
 
 function DetailsScreen({
   lang, locId, date, time, guests, instant, zoneId, zoneName, todayStr, preview,
-  reservedAt, draft, onDraft, clientUuid, rulesAck, stepOf, onSubmitted, onConflict,
-  onRulesStale,
+  reservedAt, draft, onDraft, clientUuid, rulesAck, stepOf, stepTotal, prepay,
+  onSubmitted, onConflict, onRulesStale, onPrepay,
 }: {
   lang: Lang
   locId: string
@@ -1549,50 +1856,66 @@ function DetailsScreen({
   /** Абсолютный момент выбранного слота в зоне ТОЧКИ (117); null = слот
    *  пропал из расписания, пока гость заполнял форму */
   reservedAt: Date | null
-  draft: { name: string; phone: string; note: string }
-  onDraft: (draft: { name: string; phone: string; note: string }) => void
+  draft: DetailsDraft
+  onDraft: (draft: DetailsDraft) => void
   clientUuid: string
   /** Отмеченные правила (145); проверяет их сервер, не эта форма */
   rulesAck: string[]
-  /** Сколько всего шагов у потока: 4 с правилами, 3 без них */
+  /** Номер этого шага и всего шагов в потоке */
   stepOf: number
+  stepTotal: number
+  /** Требуется предоплата (164) — тогда дальше экран условий, а не бронь */
+  prepay: boolean
   onSubmitted: (clientUuid: string) => void
   /** Правила точки изменились — согласие устарело и собирается заново */
   onRulesStale: () => void
   /** Слот заняли, пока гость заполнял форму: возвращаем его к выбору
    *  времени со свежей доступностью, не стирая контакты. */
   onConflict: () => void
+  /** Перейти к экрану предоплаты вместо немедленной отправки */
+  onPrepay: () => void
 }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showValidation, setShowValidation] = useState(false)
-  const nameRef = useRef<HTMLInputElement>(null)
+  const firstRef = useRef<HTMLInputElement>(null)
+  const lastRef = useRef<HTMLInputElement>(null)
   const phoneRef = useRef<HTMLInputElement>(null)
-  const { name, phone, note } = draft
+  const emailRef = useRef<HTMLInputElement>(null)
 
-  const phoneDigits = phone.replace(/\D/g, '')
-  const nameValid = name.trim().length > 0
-  const phoneValid = phoneDigits.length >= 9
-  const valid = nameValid && phoneValid
+  const errors = draftErrors(draft)
+  const valid = isDraftValid(draft)
+
+  const extraLabels: Record<string, string> = {
+    birthday: t(lang, 'rsvExtraBirthday'),
+    high_chair: t(lang, 'rsvExtraHighChair'),
+    accessibility: t(lang, 'rsvExtraAccessibility'),
+  }
 
   /**
    * Первое касание формы (124). Отличает «не нашёл подходящего времени»
    * от «начал оформлять и передумал» — а это разные проблемы заведения.
    * Повторные нажатия отсекаются дедупликацией шага.
    */
-  function editDraft(next: { name: string; phone: string; note: string }) {
+  function editDraft(next: DetailsDraft) {
     trackReserveStep(locId, 'form_started', { party_size: guests, wanted_date: date })
     onDraft(next)
+  }
+
+  function focusFirstError() {
+    window.setTimeout(() => {
+      if (errors.firstName) firstRef.current?.focus()
+      else if (errors.lastName) lastRef.current?.focus()
+      else if (errors.phone) phoneRef.current?.focus()
+      else if (errors.email) emailRef.current?.focus()
+    }, 0)
   }
 
   async function submit() {
     if (busy) return
     setShowValidation(true)
     if (!valid) {
-      window.setTimeout(() => {
-        if (!nameValid) nameRef.current?.focus()
-        else phoneRef.current?.focus()
-      }, 0)
+      focusFirstError()
       return
     }
     // Момент визита приходит из сетки и посчитан в зоне ТОЧКИ (117).
@@ -1603,6 +1926,12 @@ function DetailsScreen({
     const at = reservedAt
     if (!at || Number.isNaN(at.getTime())) {
       setError(t(lang, 'rsvErrTime'))
+      return
+    }
+    // Предоплата (164): бронь НЕ создаётся до подтверждённой оплаты.
+    // Отсюда — только переход к условиям; заявку отправит уже тот экран.
+    if (prepay) {
+      onPrepay()
       return
     }
     // Предпросмотр доходит до последнего шага и честно останавливается:
@@ -1618,11 +1947,16 @@ function DetailsScreen({
       const result = await submitPublicReservation({
         loc: locId,
         client_uuid: clientUuid,
-        name: name.trim(),
-        phone: phoneDigits,
+        // Собранное имя шлём и мы: сервер, выложенный до 163, других
+        // полей не знает, а по `customer_name` живут касса и выгрузки.
+        name: composeName(draft),
+        first_name: draft.firstName.trim(),
+        last_name: draft.lastName.trim(),
+        email: draft.email.trim(),
+        phone: draft.phone.replace(/\D/g, ''),
         party_size: guests,
         reserved_at: at.toISOString(),
-        note: note.trim() || null,
+        note: composeNote(draft, extraLabels),
         zone_id: zoneId,
         rules_ack: rulesAck,
       })
@@ -1659,67 +1993,145 @@ function DetailsScreen({
   }
 
   return (
-    <div className="px-4 pb-8">
-      <ReserveProgress lang={lang} step={stepOf} total={stepOf} />
-      <h2
-        className="public-reserve-route-focus text-2xl font-bold text-gray-900 mt-6"
-        tabIndex={-1}
-      >
-        {t(lang, 'rsvDetailsTitle')}
+    <div className="public-reserve-step-page">
+      <ReserveProgress lang={lang} step={stepOf} total={stepTotal} />
+      <h2 className="public-reserve-route-focus public-reserve-step-title" tabIndex={-1}>
+        {t(lang, 'rsvDetailsHeading')}
       </h2>
+      <p className="public-reserve-step-hint">{t(lang, 'rsvDetailsSubhint')}</p>
 
-      <div className="mt-4">
-        <ReserveSelectionSummary
-          lang={lang}
-          date={date}
-          time={time}
-          guests={guests}
-          todayStr={todayStr}
-          zoneName={zoneName}
-        />
+      <div className="public-reserve-summary">
+        <div>
+          <strong>
+            {dayOptionLabel(date, todayStr, lang)} · <span className="tabular-nums">{time}</span>
+          </strong>
+          <small>
+            {guests} {t(lang, 'resGuestsShort')}
+            {zoneName && <> · {zoneName}</>}
+          </small>
+        </div>
       </div>
 
       <div className="public-reserve-details-fields">
+        {/* Имя и фамилия делят строку, а на узком экране встают друг под
+            друга: сжимать их до нечитаемой ширины хуже, чем перенести. */}
+        <div className="public-reserve-field-row">
+          <label>
+            <span id="reserve-first-label">{t(lang, 'rsvFirstName')}</span>
+            <input
+              ref={firstRef}
+            aria-labelledby="reserve-first-label"
+              autoComplete="given-name"
+              value={draft.firstName}
+              aria-invalid={showValidation && errors.firstName}
+              aria-describedby={showValidation && errors.firstName ? 'reserve-first-error' : undefined}
+              onChange={(e) => editDraft({ ...draft, firstName: e.target.value })}
+            />
+            {showValidation && errors.firstName && (
+              <small id="reserve-first-error">{t(lang, 'rsvErrFirstName')}</small>
+            )}
+          </label>
+          <label>
+            <span id="reserve-last-label">{t(lang, 'rsvLastName')}</span>
+            <input
+              ref={lastRef}
+            aria-labelledby="reserve-last-label"
+              autoComplete="family-name"
+              value={draft.lastName}
+              aria-invalid={showValidation && errors.lastName}
+              aria-describedby={showValidation && errors.lastName ? 'reserve-last-error' : undefined}
+              onChange={(e) => editDraft({ ...draft, lastName: e.target.value })}
+            />
+            {showValidation && errors.lastName && (
+              <small id="reserve-last-error">{t(lang, 'rsvErrLastName')}</small>
+            )}
+          </label>
+        </div>
+
         <label>
-          <span>{t(lang, 'rsvName')}</span>
-          <input
-            ref={nameRef}
-            autoComplete="name"
-            value={name}
-            aria-invalid={showValidation && !nameValid}
-            aria-describedby={showValidation && !nameValid ? 'reserve-name-error' : undefined}
-            onChange={(event) => editDraft({ ...draft, name: event.target.value })}
-          />
-          {showValidation && !nameValid && (
-            <small id="reserve-name-error">{t(lang, 'rsvErrName')}</small>
-          )}
-        </label>
-        <label>
-          <span>{t(lang, 'rsvPhone')}</span>
+          <span id="reserve-phone-label">{t(lang, 'rsvPhone')}</span>
           <input
             ref={phoneRef}
+            aria-labelledby="reserve-phone-label"
             type="tel"
             inputMode="tel"
             autoComplete="tel"
             dir="ltr"
-            value={phone}
-            aria-invalid={showValidation && !phoneValid}
-            aria-describedby={showValidation && !phoneValid ? 'reserve-phone-error' : undefined}
-            onChange={(event) => editDraft({ ...draft, phone: event.target.value })}
+            value={draft.phone}
+            aria-invalid={showValidation && errors.phone}
+            aria-describedby={showValidation && errors.phone ? 'reserve-phone-error' : undefined}
+            onChange={(e) => editDraft({ ...draft, phone: e.target.value })}
           />
-          {showValidation && !phoneValid && (
+          {showValidation && errors.phone && (
             <small id="reserve-phone-error">{t(lang, 'rsvErrPhone')}</small>
           )}
         </label>
+
         <label>
-          <span>{t(lang, 'rsvNote')}</span>
-          <textarea
-            rows={3}
-            maxLength={200}
-            value={note}
-            onChange={(event) => editDraft({ ...draft, note: event.target.value })}
+          <span id="reserve-email-label">{t(lang, 'rsvEmail')}</span>
+          <input
+            ref={emailRef}
+            aria-labelledby="reserve-email-label"
+            type="email"
+            inputMode="email"
+            autoComplete="email"
+            dir="ltr"
+            placeholder="name@example.com"
+            value={draft.email}
+            aria-invalid={showValidation && errors.email}
+            aria-describedby={
+              showValidation && errors.email ? 'reserve-email-error' : 'reserve-email-hint'
+            }
+            onChange={(e) => editDraft({ ...draft, email: e.target.value })}
           />
-          <em>{note.length}/200</em>
+          {showValidation && errors.email
+            ? <small id="reserve-email-error">{t(lang, 'rsvErrEmail')}</small>
+            : (
+              // Обычная строка под полем, а не <em>: тот позиционируется
+              // абсолютно (счётчик символов в углу textarea) и лёг бы
+              // поверх плейсхолдера самого поля.
+              <small id="reserve-email-hint" data-hint="true">
+                {t(lang, 'rsvEmailHint')}
+              </small>
+            )}
+        </label>
+      </div>
+
+      {/* Пожелания уезжают в ту же заметку, которую читает хостес: это
+          не декоративные чипы, у них есть адресат. */}
+      <div className="public-reserve-field-label">
+        {t(lang, 'rsvExtras')} <span className="font-normal">({t(lang, 'rsvExtrasOptional')})</span>
+      </div>
+      <div className="public-reserve-chips">
+        {EXTRA_KEYS.map((key) => {
+          const on = draft.extras.includes(key)
+          return (
+            <button
+              key={key}
+              type="button"
+              aria-pressed={on}
+              onClick={() => editDraft({
+                ...draft,
+                extras: on ? draft.extras.filter((x) => x !== key) : [...draft.extras, key],
+              })}
+            >
+              {extraLabels[key]}
+            </button>
+          )
+        })}
+      </div>
+
+      <div className="public-reserve-details-fields">
+        <label>
+          <span id="reserve-note-label">{t(lang, 'rsvNote')}</span>
+          <textarea
+            aria-labelledby="reserve-note-label"
+            rows={2}
+            maxLength={200}
+            value={draft.note}
+            onChange={(e) => editDraft({ ...draft, note: e.target.value })}
+          />
+          <em>{draft.note.length}/200</em>
         </label>
       </div>
 
@@ -1729,25 +2141,180 @@ function DetailsScreen({
         </div>
       )}
 
-      <button
-        type="button"
-        disabled={busy}
-        onClick={submit}
-        className="public-reserve-primary-action"
-      >
-        {busy ? t(lang, 'pubSubmitting') : instant ? t(lang, 'rsvSendInstant') : t(lang, 'rsvSend')}
-      </button>
+      <div className="public-reserve-bottom">
+        {/* Подпись говорит, что произойдёт дальше: «подтвердить» там, где
+            бронь появится сразу, и «к оплате» там, где сначала платят. */}
+        <button
+          type="button"
+          disabled={busy}
+          onClick={submit}
+          className="public-reserve-cta"
+        >
+          {busy
+            ? t(lang, 'pubSubmitting')
+            : prepay
+              ? t(lang, 'rsvToPrepay')
+              : instant
+                ? t(lang, 'rsvConfirmBooking')
+                : t(lang, 'rsvSend')}
+        </button>
+      </div>
     </div>
   )
 }
 
-/** Дата визита в человеческом виде: «пт, 18 июля, 19:30» */
-function visitLabel(iso: string, lang: Lang): string {
-  const d = new Date(iso)
-  const day = d.toLocaleDateString(lang === 'he' ? 'he-IL' : 'ru-RU', {
-    weekday: 'short', day: 'numeric', month: 'long',
-  })
-  return `${day}, ${formatTime(iso, lang)}`
+
+
+/** Минорные единицы → «₪100» в валюте точки */
+function formatMinor(amountMinor: number, currency: string, lang: Lang): string {
+  try {
+    return new Intl.NumberFormat(lang === 'he' ? 'he-IL' : 'ru-RU', {
+      style: 'currency', currency, maximumFractionDigits: 0,
+    }).format(amountMinor / 100)
+  } catch {
+    // Неизвестная валюта не повод показать пустое место вместо суммы
+    return `${Math.round(amountMinor / 100)} ${currency}`
+  }
+}
+
+/**
+ * Экран условий предоплаты (164) — ПОСЛЕ контактов и только когда сервер
+ * прислал правило. Появиться иначе он не может: правила нет, пока у точки
+ * нет здорового платёжного провайдера.
+ *
+ * Суммы здесь показанные, а не обязывающие: обязывающую называет сервер,
+ * когда бронь встаёт в удержание, и он же сверяет её с подтверждением
+ * провайдера. Галочка гостя доказательством оплаты не является, возврат
+ * с чужой страницы — тем более.
+ *
+ * Иконки валюты у заголовка нет намеренно: сумма и так набрана крупно,
+ * а знак шекеля рядом с «Предоплата» читается как ценник, а не как шаг.
+ */
+function PrepayScreen({
+  lang, rule, guests, date, time, todayStr, zoneName, step, stepTotal, busy,
+  error, onPay,
+}: {
+  lang: Lang
+  rule: ReservePrepayRule
+  guests: number
+  date: string
+  time: string
+  todayStr: string
+  zoneName: string | null
+  step: number
+  stepTotal: number
+  busy: boolean
+  error: string | null
+  onPay: () => void
+}) {
+  const [agreed, setAgreed] = useState(false)
+  const total = rule.amount_per_guest * guests
+
+  return (
+    <div className="public-reserve-step-page">
+      <ReserveProgress lang={lang} step={step} total={stepTotal} />
+      <h2 className="public-reserve-route-focus public-reserve-step-title" tabIndex={-1}>
+        {t(lang, 'rsvPrepayTitle')}
+      </h2>
+      <p className="public-reserve-step-hint">{t(lang, 'rsvPrepayHint')}</p>
+
+      <div className="public-reserve-summary">
+        <div>
+          <strong>
+            {dayOptionLabel(date, todayStr, lang)} · <span className="tabular-nums">{time}</span>
+          </strong>
+          <small>
+            {guests} {t(lang, 'resGuestsShort')}
+            {zoneName && <> · {zoneName}</>}
+          </small>
+        </div>
+      </div>
+
+      {/* Списание сейчас — главное, что обязан понять гость до оплаты */}
+      <p className="public-reserve-prepay-alert">{t(lang, 'rsvPrepayAlert')}</p>
+
+      <div className="public-reserve-prepay-amount">
+        <div>
+          <span>{t(lang, 'rsvPrepayPerGuest')}</span>
+          <strong>{formatMinor(rule.amount_per_guest, rule.currency, lang)}</strong>
+        </div>
+        <div>
+          <span>
+            {guests} {t(lang, 'rsvPrepayForParty')}{' '}
+            {formatMinor(rule.amount_per_guest, rule.currency, lang)}
+          </span>
+          <strong>{formatMinor(total, rule.currency, lang)}</strong>
+        </div>
+        <div data-total="true">
+          <span>{t(lang, 'rsvPrepayNow')}</span>
+          <strong>{formatMinor(total, rule.currency, lang)}</strong>
+        </div>
+      </div>
+
+      <ul className="public-reserve-rules">
+        <li data-level="normal">
+          <span aria-hidden="true" />
+          <p>
+            {t(lang, 'rsvPrepayRefund')} {rule.refund_cutoff_hours}{' '}
+            {t(lang, 'rsvPrepayRefundTail')}
+          </p>
+        </li>
+        {/* Потеря денег — единственный пункт, который красный */}
+        <li data-level="important">
+          <span aria-hidden="true" />
+          <p>{t(lang, 'rsvPrepayForfeit')}</p>
+        </li>
+      </ul>
+
+      <p className="public-reserve-secure-note">
+        <span aria-hidden="true"><LockIcon /></span>
+        {t(lang, 'rsvPrepaySecure')}
+      </p>
+
+      <div className="public-reserve-rules-acks">
+        <label>
+          <input
+            type="checkbox"
+            checked={agreed}
+            onChange={() => setAgreed((v) => !v)}
+          />
+          <span>{t(lang, 'rsvPrepayConsent')}</span>
+        </label>
+      </div>
+
+      {error && (
+        <div className="mt-4 rounded-2xl bg-red-50 text-red-700 text-sm font-semibold px-4 py-3" role="alert">
+          {error}
+        </div>
+      )}
+
+      <div className="public-reserve-bottom">
+        {!agreed && (
+          <p className="public-reserve-cta-note" id="reserve-prepay-need" role="status">
+            {t(lang, 'rsvPrepayConsentNeed')}
+          </p>
+        )}
+        <button
+          type="button"
+          disabled={!agreed || busy}
+          aria-describedby={!agreed ? 'reserve-prepay-need' : undefined}
+          onClick={onPay}
+          className="public-reserve-cta"
+        >
+          {busy ? t(lang, 'pubSubmitting') : t(lang, 'rsvPrepayCta')}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/** Замок — знак защищённой оплаты; не эмодзи (шрифт системы рисует иначе) */
+function LockIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path d="M4.5 7V5.4a3.5 3.5 0 0 1 7 0V7M3.7 7h8.6c.7 0 1.2.5 1.2 1.2v5.1c0 .7-.5 1.2-1.2 1.2H3.7c-.7 0-1.2-.5-1.2-1.2V8.2C2.5 7.5 3 7 3.7 7Z" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
 }
 
 /**
@@ -1759,8 +2326,11 @@ function visitLabel(iso: string, lang: Lang): string {
  * `can_reschedule`): правило отсечки живёт в одном месте. Клиент лишь
  * объясняет отказ человеческими словами.
  */
-function BookingScreen({ lang, bookingKey, tz, onNew }: {
+function BookingScreen({ lang, locId, info, bookingKey, tz, onNew }: {
   lang: Lang
+  locId: string
+  /** Фото и логотип точки для шапки подтверждения; может ещё грузиться */
+  info?: ReserveInfo
   bookingKey: string
   tz: string
   onNew: (seed?: { name?: string; guests?: number }) => void
@@ -1852,44 +2422,6 @@ function BookingScreen({ lang, bookingKey, tz, onNew }: {
       </CenterCard>
     )
   }
-
-  const details = (
-    <div className="mt-4 rounded-2xl bg-gray-50 px-4 py-3 text-start">
-      <div className="font-bold text-gray-900">{visitLabel(view.reserved_at, lang)}</div>
-      <div className="text-sm text-gray-500 mt-1">
-        {view.customer_name} · {view.party_size} {t(lang, 'resGuestsShort')}
-        {view.zone_name && <> · {view.zone_name}</>}
-        {view.table_label && <> · {t(lang, 'tableLabel')} {view.table_label}</>}
-      </div>
-      {loc.address && <div className="text-sm text-gray-500 mt-1">{loc.address}</div>}
-    </div>
-  )
-
-  // Дорога и звонок: страница брони должна отвечать «как доехать» сама,
-  // не отправляя гостя обратно на витрину.
-  const contacts = (loc.phone || googleMapsUrl) ? (
-    <div className="mt-3 flex gap-2">
-      {loc.phone && (
-        <a
-          href={`tel:${loc.phone}`}
-          className="flex-1 h-12 rounded-xl border border-gray-300 text-sm font-semibold text-gray-900 flex items-center justify-center gap-2 active:scale-[0.97] transition-all"
-        >
-          <PhoneIcon />
-          {t(lang, 'rsvPhoneBtn')}
-        </a>
-      )}
-      {googleMapsUrl && (
-        <button
-          type="button"
-          onClick={() => setNavOpen(true)}
-          className="flex-1 h-12 rounded-xl border border-gray-300 text-sm font-semibold text-gray-900 flex items-center justify-center gap-2 active:scale-[0.97] transition-all"
-        >
-          <PinIcon />
-          {t(lang, 'rsvNavigateBtn')}
-        </button>
-      )}
-    </div>
-  ) : null
 
   const actions = (
     <>
@@ -1993,55 +2525,114 @@ function BookingScreen({ lang, bookingKey, tz, onNew }: {
     </>
   )
 
-  if (view.status === 'new') {
-    return (
-      <CenterCard>
-        <div className="public-reserve-status-spinner w-10 h-10 mx-auto rounded-full border-4 border-gray-200 border-t-gray-900" />
-        <p className="text-xl font-bold text-gray-900 mt-5">{t(lang, 'rsvPendingTitle')}</p>
-        <p className="text-sm text-gray-500 mt-2">{t(lang, 'rsvPendingHint')}</p>
-        {details}
-        {contacts}
-        {actions}
-        {sheets}
-      </CenterCard>
-    )
-  }
+  const confirmed = view.status === 'confirmed' || view.status === 'completed'
+  const visitDate = new Date(view.reserved_at)
 
-  // confirmed / completed (102): после визита карточка остаётся
-  // подтверждённой, но действовать уже нечего
-  return (
-    <CenterCard>
-      <div className="w-14 h-14 mx-auto rounded-full bg-green-100 flex items-center justify-center">
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path d="M5 13l4 4L19 7" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
+  /* Билет визита: дата, время и компания тремя колонками — то, ради чего
+     гость открывает эту страницу второй раз. */
+  const ticket = (
+    <div className="public-reserve-ticket">
+      <div className="public-reserve-ticket-grid">
+        <div>
+          <small>{t(lang, 'rsvTicketDate')}</small>
+          <strong>
+            {visitDate.toLocaleDateString(lang === 'he' ? 'he-IL' : 'ru-RU', {
+              day: 'numeric', month: 'short', timeZone: tz,
+            })}
+          </strong>
+        </div>
+        <div>
+          <small>{t(lang, 'rsvTicketTime')}</small>
+          <strong className="tabular-nums">{localTimeOf(visitDate.getTime(), tz)}</strong>
+        </div>
+        <div>
+          <small>{t(lang, 'rsvTicketGuests')}</small>
+          <strong className="tabular-nums">{view.party_size}</strong>
+        </div>
       </div>
-      <p className="text-2xl font-black text-gray-900 mt-4">{t(lang, 'rsvConfirmedTitle')}</p>
-      <p className="text-sm text-gray-500 mt-2">{t(lang, 'rsvConfirmedHint')}</p>
-      {details}
-      {view.status === 'confirmed' && (
-        <button
-          type="button"
-          onClick={() => downloadIcs({
-            uid: view.public_token,
-            start: new Date(view.reserved_at),
-            durationMin: view.duration_min,
-            summary: `${t(lang, 'rsvPageLabel')} · ${loc.name}`,
-            location: loc.address,
-            description: `${view.customer_name} · ${view.party_size} ${t(lang, 'resGuestsShort')}`,
-          })}
-          className="w-full h-12 mt-4 rounded-xl border border-gray-300 text-sm font-semibold text-gray-900 flex items-center justify-center gap-2 active:scale-[0.97] transition-all"
-        >
-          <CalendarIcon />
-          {t(lang, 'rsvAddToCalendar')}
-        </button>
-      )}
-      {contacts}
-      {view.status === 'completed'
-        ? <NewBtn lang={lang} onClick={() => onNew(repeatSeed)} />
-        : actions}
-      {sheets}
-    </CenterCard>
+
+      <div className="public-reserve-ticket-actions">
+        {confirmed && (
+          <button
+            type="button"
+            onClick={() => downloadIcs({
+              uid: view.public_token,
+              start: visitDate,
+              durationMin: view.duration_min,
+              summary: `${t(lang, 'rsvPageLabel')} · ${loc.name}`,
+              location: loc.address,
+              description: `${view.customer_name} · ${view.party_size} ${t(lang, 'resGuestsShort')}`,
+            })}
+          >
+            <CalendarIcon />
+            {t(lang, 'rsvAddToCalendar')}
+          </button>
+        )}
+        {googleMapsUrl && (
+          <button type="button" onClick={() => setNavOpen(true)}>
+            <RouteIcon />
+            {t(lang, 'rsvNavigateBtn')}
+          </button>
+        )}
+        {loc.phone && (
+          <a href={`tel:${loc.phone}`}>
+            <PhoneIcon />
+            {t(lang, 'rsvPhoneBtn')}
+          </a>
+        )}
+      </div>
+
+      <div className="public-reserve-ticket-meta">
+        <span>
+          {view.customer_name}
+          {view.zone_name && <> · {view.zone_name}</>}
+          {view.table_label && <> · {t(lang, 'tableLabel')} {view.table_label}</>}
+        </span>
+        {/* Оплата показывается ТОЛЬКО подтверждённая сервером (164):
+            «требуется» и «ждём» подтверждением платежа не являются. */}
+        {view.deposit_status === 'paid' && (
+          <span className="public-reserve-paid">{t(lang, 'rsvPaidLabel')}</span>
+        )}
+        {loc.address && <span>{loc.address}</span>}
+      </div>
+    </div>
+  )
+
+  return (
+    <div className="public-reserve-done">
+      <div className="public-reserve-done-hero">
+        {info?.location.header_url && <img src={info.location.header_url} alt="" />}
+        {info?.location.logo_url && (
+          <img src={info.location.logo_url} alt="" className="public-reserve-done-logo" />
+        )}
+        <div className="public-reserve-done-copy">
+          {confirmed ? (
+            <span className="public-reserve-done-check" aria-hidden="true"><CheckIcon /></span>
+          ) : (
+            <span className="public-reserve-status-spinner public-reserve-done-spinner" aria-hidden="true" />
+          )}
+          {/* Заявка и подтверждённая бронь — РАЗНЫЕ слова: пока касса не
+              ответила, называть стол закреплённым нельзя. */}
+          <strong className="font-display public-reserve-route-focus" tabIndex={-1}>
+            {confirmed ? t(lang, 'rsvConfirmedTitle') : t(lang, 'rsvPendingTitle')}
+          </strong>
+          <small>
+            {confirmed
+              ? `${t(lang, 'rsvDoneWaiting')} · ${loc.name}`
+              : t(lang, 'rsvPendingHint')}
+          </small>
+        </div>
+      </div>
+
+      <div className="public-reserve-done-body">
+        {ticket}
+        {actions}
+        <a href={`/order/${locId}`} className="public-reserve-link-action">
+          {t(lang, 'rsvViewMenu')}
+        </a>
+        {sheets}
+      </div>
+    </div>
   )
 }
 
@@ -2235,8 +2826,8 @@ function WaitlistSheet({ lang, locId, date, guests, zones, draft, onDraft, onClo
   date: string
   guests: number
   zones: { id: string; name: string }[]
-  draft: { name: string; phone: string; note: string }
-  onDraft: (d: { name: string; phone: string; note: string }) => void
+  draft: DetailsDraft
+  onDraft: (d: DetailsDraft) => void
   onClose: () => void
 }) {
   const [from, setFrom] = useState('18:00')
@@ -2259,7 +2850,10 @@ function WaitlistSheet({ lang, locId, date, guests, zones, draft, onDraft, onClo
   }, [onClose])
 
   const phoneDigits = draft.phone.replace(/\D/g, '')
-  const valid = draft.name.trim().length > 0 && phoneDigits.length >= 9 && to > from
+  // Листу ожидания хватает имени и телефона: это ещё не бронь, а согласие
+  // подождать — фамилию и почту здесь не спрашиваем.
+  const guestName = `${draft.firstName} ${draft.lastName}`.trim()
+  const valid = guestName.length > 0 && phoneDigits.length >= 9 && to > from
 
   async function submit() {
     if (busy || !valid) return
@@ -2269,7 +2863,7 @@ function WaitlistSheet({ lang, locId, date, guests, zones, draft, onDraft, onClo
       await joinWaitlist({
         loc: locId,
         client_uuid: clientUuid,
-        name: draft.name.trim(),
+        name: guestName,
         phone: phoneDigits,
         party_size: guests,
         date,
@@ -2363,10 +2957,10 @@ function WaitlistSheet({ lang, locId, date, guests, zones, draft, onDraft, onClo
 
             <div className="public-reserve-details-fields">
               <label>
-                <span>{t(lang, 'rsvName')}</span>
+                <span>{t(lang, 'rsvFirstName')}</span>
                 <input
-                  autoComplete="name" value={draft.name}
-                  onChange={(e) => onDraft({ ...draft, name: e.target.value })}
+                  autoComplete="given-name" value={draft.firstName}
+                  onChange={(e) => onDraft({ ...draft, firstName: e.target.value })}
                 />
               </label>
               <label>
@@ -2429,14 +3023,6 @@ function NewBtn({ lang, onClick }: { lang: Lang; onClick: () => void }) {
 
 // ── Иконки (инлайн, наследуют currentColor) ──────────────────
 
-function Chevron() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  )
-}
-
 function CalendarIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -2455,28 +3041,11 @@ function ClockIcon() {
   )
 }
 
-function PersonIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <circle cx="12" cy="8" r="3.5" stroke="currentColor" strokeWidth="1.8" />
-      <path d="M5 20c.8-3.5 3.6-5.5 7-5.5s6.2 2 7 5.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
-  )
-}
 
 function PhoneIcon() {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <path d="M6.5 3.5h3l1.5 4-2 1.5a12 12 0 0 0 6 6l1.5-2 4 1.5v3a2 2 0 0 1-2.2 2A16.5 16.5 0 0 1 4.5 5.7 2 2 0 0 1 6.5 3.5Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-    </svg>
-  )
-}
-
-function PinIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M12 21s7-6.1 7-11a7 7 0 1 0-14 0c0 4.9 7 11 7 11Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-      <circle cx="12" cy="10" r="2.5" stroke="currentColor" strokeWidth="1.8" />
     </svg>
   )
 }
@@ -2505,6 +3074,82 @@ function WazeIcon() {
   )
 }
 
+/** Шеврон «вперёд по направлению чтения»; в RTL зеркалится классом */
+function ChevronStart() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M9 5l7 7-7 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+/** Обведённая «i» — ярлык экрана условий визита, как в референсе */
+function InfoIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M12 10.5v6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <circle cx="12" cy="7" r="1.2" fill="currentColor" />
+    </svg>
+  )
+}
+
+function CheckIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M5 13l4 4L19 7" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function CloseIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+/**
+ * Маршрут — пин со стрелкой навигации, как в утверждённом референсе.
+ * Не эмодзи и не знак валюты: иконка обязана читаться и в 24px, и в RTL,
+ * а эмодзи рисуется шрифтом системы и на Android 7.1 выглядит иначе.
+ */
+function RouteIcon() {
+  return (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M12 21s6-5.5 6-11a6 6 0 1 0-12 0c0 5.5 6 11 6 11Z" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="m9.15 10.25 5.7-2.4-2.4 5.7-.8-2.5-2.5-.8Z" fill="currentColor" />
+    </svg>
+  )
+}
+
+function InstagramIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+      <rect x="3" y="3" width="18" height="18" rx="5" />
+      <circle cx="12" cy="12" r="4" />
+      <circle cx="17.2" cy="6.8" r="1.2" fill="currentColor" stroke="none" />
+    </svg>
+  )
+}
+
+function FacebookIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" aria-hidden="true">
+      <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z" />
+    </svg>
+  )
+}
+
+/** Google-отзыв: звезда — понятнее буквы G, речь именно об оценке */
+function GoogleGIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z" />
+    </svg>
+  )
+}
+
 function BackIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -2522,12 +3167,3 @@ function ChairIcon() {
   )
 }
 
-/** Перечёркнутый круг — слот занят (нет свободного стола в instant-режиме) */
-function BlockedIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <circle cx="12" cy="12" r="8.5" stroke="currentColor" strokeWidth="1.6" />
-      <path d="M6.5 6.5l11 11" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-    </svg>
-  )
-}
