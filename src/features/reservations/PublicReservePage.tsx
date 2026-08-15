@@ -723,7 +723,9 @@ function Shell({ isRtl, info, lang, hero, routeKey, onBack, children }: {
               aria-label={t(lang, 'rsvBackToSlot')}
               className="public-reserve-back-button"
             >
-              <span className="rtl:rotate-180"><BackIcon /></span>
+              {/* Не разворачиваем по RTL: кнопка стоит у левого края
+                  физически, и стрелка обязана смотреть на свой край */}
+              <BackIcon />
             </button>
           )}
           <div className="public-reserve-compact-brand">

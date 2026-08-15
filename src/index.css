@@ -2356,9 +2356,13 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     backdrop-filter: blur(16px);
   }
 
+  /* Возврат стоит слева ФИЗИЧЕСКИ, как кнопка меню на первом экране.
+     Логическая сторона на правосторонней странице ставила его справа —
+     туда же, где название заведения, и две вещи спорили за один угол.
+     Стрелка при этом смотрит влево, к своему краю (см. BackIcon). */
   .public-reserve-back-button {
     position: absolute;
-    inset-inline-start: .75rem;
+    left: .75rem;
     top: calc(env(safe-area-inset-top) + .75rem);
     display: grid;
     width: 3rem;
