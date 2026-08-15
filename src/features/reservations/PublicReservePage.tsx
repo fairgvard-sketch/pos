@@ -1093,6 +1093,11 @@ function EntryScreen({
     () => formatWindows(dayWindows(schedule, todayStr)),
     [schedule, todayStr]
   )
+  // Имя сегодняшнего дня перед часами: без него закрытый день давал в
+  // полосе одно слово «סגור», и было непонятно, что закрыт именно шабат,
+  // а не заведение вообще. Теперь строка всегда читается как запись
+  // расписания: «שבת · סגור», «יום א׳ · 08:00–20:00».
+  const todayDow = useMemo(() => dowOf(todayStr), [todayStr])
 
   return (
     <div className="public-reserve-entry">
@@ -1161,7 +1166,9 @@ function EntryScreen({
           </div>
 
           <div className="public-reserve-quick-box">
-            <span>{t(lang, 'rsvEntryPartyLabel')}</span>
+            <span className="public-reserve-quick-label">
+              {t(lang, 'rsvEntryPartyLabel')}
+            </span>
             {/* Степпер, а не select: размер компании меняют на ±1, и два
                 тапа по «+» быстрее, чем открыть список и найти строку.
                 Края явно выключены — предел заведения виден, а не угадан. */}
@@ -1200,7 +1207,12 @@ function EntryScreen({
                 <i data-closed={!openNow || undefined} aria-hidden />
                 {t(lang, openNow ? 'rsvVenueOpenNow' : 'rsvVenueClosedNow')}
               </span>
-              <strong>{todayHours || t(lang, 'rsvDayClosed')}</strong>
+              <strong>
+                {todayDow !== null && `${dayRangeLabel([todayDow], lang)} · `}
+                {/* Интервал изолирован LTR: иначе «08:00–20:00» в
+                    правосторонней строке читался бы концом вперёд */}
+                <bdi dir="ltr">{todayHours || t(lang, 'rsvDayClosed')}</bdi>
+              </strong>
             </span>
             <span className="rtl:rotate-180 text-gray-400"><ChevronStart /></span>
           </button>

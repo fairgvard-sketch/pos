@@ -2985,9 +2985,14 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     text-align: start;
   }
 
-  .public-reserve-quick-box > span:first-child {
-    color: #747981;
-    font-size: .8125rem;
+  /* Подпись компании — того же веса и цвета, что и значение даты. Раньше
+     здесь стоял серый `> span:first-child`, и он бил по классу значения:
+     дата — тоже первый span своей полосы, поэтому она рисовалась серой
+     подписью 13 px вместо чёрных 17 px. */
+  .public-reserve-quick-label {
+    color: #17191f;
+    font-size: 1.0625rem;
+    font-weight: 600;
   }
 
   .public-reserve-quick-value {
@@ -3099,13 +3104,16 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     background: #9a9da3;
   }
 
+  /* Строка расписания идёт в направлении страницы: день недели впереди,
+     интервал за ним. LTR остаётся только на самом интервале (bdi). */
   .public-reserve-hours-copy > strong {
     display: block;
+    overflow: hidden;
     margin-top: .125rem;
     font-size: .9375rem;
     font-weight: 600;
-    direction: ltr;
     text-align: start;
+    text-overflow: ellipsis;
     white-space: nowrap;
   }
 

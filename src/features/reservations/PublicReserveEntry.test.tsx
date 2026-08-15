@@ -205,6 +205,29 @@ describe('лист заведения', () => {
   })
 })
 
+describe('полоса часов на первом экране', () => {
+  /** Короткое имя дня недели так же, как его берёт страница — у Intl */
+  const dayName = (dateStr: string) => new Date(`${dateStr}T12:00:00Z`)
+    .toLocaleDateString('he-IL', { weekday: 'short', timeZone: 'UTC' })
+
+  const strip = () => document.querySelector('.public-reserve-hours-copy > strong')!
+
+  it('называет день и его интервал, а не один интервал', async () => {
+    await openEntry()
+    // Воскресенье 2027-03-14: «יום א׳ · 08:00–20:00»
+    expect(strip().textContent).toContain(dayName('2027-03-14'))
+    expect(strip().textContent).toContain('08:00–20:00')
+  })
+
+  it('в шабат пишет сам день, а не одинокое «закрыто»', async () => {
+    // 2027-03-20 — суббота, у «Булочки» шабат закрыт
+    vi.setSystemTime(new Date('2027-03-20T08:00:00.000Z'))
+    await openEntry()
+    expect(strip().textContent).toContain(dayName('2027-03-20'))
+    expect(strip().textContent).toContain(t('he', 'rsvDayClosed'))
+  })
+})
+
 describe('переход к выбору зала и времени', () => {
   it('кнопка ведёт на второй экран, а не сразу к времени без зоны', async () => {
     await openEntry()
