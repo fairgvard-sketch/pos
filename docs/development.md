@@ -95,7 +95,8 @@ npm run check:bundle
 | `npm run test` | разработка теста в watch-режиме |
 | `npm run test:run` | один прогон Vitest: `src/`, Edge-функции |
 | `npm run test:bundle` | тесты скриптов сборки на встроенном runner Node |
-| `npm run test:all` | перед коммитом и в CI: `test:run` + `test:bundle` |
+| `npm run test:ops` | тесты приватных/неперезаписываемых бэкапов на fake CLI, без Supabase |
+| `npm run test:all` | перед коммитом и в CI: `test:run` + `test:bundle` + `test:ops` |
 | `npm run lint` | после изменений TS/TSX/скриптов |
 | `npm run build` | проверка типов и обоих Vite bundles |
 | `npm run check:bundle` | бюджет стартового JS обеих веток после production build |
@@ -104,6 +105,10 @@ npm run check:bundle
 `test:run` остаётся чистым Vitest, поэтому его флаги доходят до Vitest:
 `npm run test:run -- --coverage`. Node-runner под jsdom/Vitest не запускается —
 это отдельный процесс, поэтому общий прогон и есть `test:all`.
+
+`test:ops` проверяет обёртку дампа, не восстановление БД. Restore и
+операционный SQL-верификатор запускаются только в изолированной среде по
+[runbook бэкапов](backups.md). Production-дамп в CI не выполнять.
 
 ## Как устроен feature
 
@@ -339,7 +344,7 @@ supabase test db
 ## Что проверять перед pull request
 
 - [ ] `npm run lint` проходит;
-- [ ] `npm run test:all` проходит (Vitest и тесты скриптов сборки);
+- [ ] `npm run test:all` проходит (Vitest, тесты сборки и обёртки бэкапов);
 - [ ] `npm run build` создаёт modern и legacy bundles;
 - [ ] `npm run check:bundle` не превышает бюджет ни в modern-, ни в legacy-ветке
   (скрипт считает весь статический стартовый граф, см. «Бюджет стартового JS»);

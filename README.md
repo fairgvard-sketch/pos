@@ -108,10 +108,12 @@ npm run check:bundle
 | `npm run test` | Vitest в watch-режиме |
 | `npm run test:run` | один полный прогон Vitest (`src/`, Edge-функции) |
 | `npm run test:bundle` | тесты скриптов сборки на встроенном runner Node |
-| `npm run test:all` | общий прогон: `test:run` + `test:bundle`, его же вызывает CI |
+| `npm run test:ops` | безопасные тесты скрипта бэкапов, без production-запросов |
+| `npm run test:all` | общий прогон: `test:run` + `test:bundle` + `test:ops`, его же вызывает CI |
 | `npm run check:schema` | сверка `MIN_SCHEMA_VERSION` с номером последней миграции |
 | `npm run check:ref` | проверка целевого Supabase project ref |
 | `npm run db:push` | проверка ref и применение миграций |
+| `npm run db:dump` | проверка ref и отдельная закрытая логическая копия; [ограничения](docs/backups.md) |
 | `npm run functions:deploy` | проверка ref и деплой Edge Functions |
 
 SQL-интеграционные тесты запускаются отдельно, только на локальной тестовой БД

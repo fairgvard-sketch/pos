@@ -26,7 +26,7 @@ jobs:
       - name: Schema version guard
         run: npm run check:schema
 
-      # test:all — Vitest (src, Edge-функции) плюс тесты скриптов сборки на
+      # test:all — Vitest (src, Edge-функции) плюс тесты сборки и бэкапов на
       # встроенном runner Node: у них разные окружения, один прогон их
       # объединяет, чтобы проверка не забывалась.
       - name: Test
