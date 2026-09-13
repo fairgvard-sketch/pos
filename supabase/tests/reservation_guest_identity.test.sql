@@ -9,6 +9,15 @@
 BEGIN;
 SELECT plan(23);
 
+-- NOW()+N hours can land after the fixture closes at 23:45. Use tomorrow's
+-- local daytime, independent of runner time/timezone; product hours stay real.
+CREATE FUNCTION pg_temp.identity_slot(p_offset_hours INTEGER DEFAULT 0)
+RETURNS TIMESTAMPTZ LANGUAGE sql STABLE AS $$
+  SELECT (date_trunc('day', NOW() AT TIME ZONE 'Asia/Jerusalem')
+          + INTERVAL '1 day 12 hours' + p_offset_hours * INTERVAL '1 hour')
+         AT TIME ZONE 'Asia/Jerusalem'
+$$;
+
 INSERT INTO orgs (id, name) VALUES
   ('e0000000-0000-4000-8000-000000000001', 'pgTAP identity');
 INSERT INTO locations (id, org_id, name, timezone, settings) VALUES
@@ -54,7 +63,7 @@ SELECT lives_ok($$
   SELECT submit_reservation(
     'e1000000-0000-4000-8000-000000000001',
     'e2000000-0000-4000-8000-000000000001',
-    NULL, '0541234567', 2, NOW() + INTERVAL '2 hours',
+    NULL, '0541234567', 2, pg_temp.identity_slot(),
     NULL, NULL, NULL,
     'וולד', 'אנוטוב', 'Guest@Example.com')
 $$, 'заявка со структурным именем принимается');
@@ -89,7 +98,7 @@ SELECT lives_ok($$
   SELECT submit_reservation(
     'e1000000-0000-4000-8000-000000000001',
     'e2000000-0000-4000-8000-000000000002',
-    'Старый Клиент', '0549999999', 2, NOW() + INTERVAL '3 hours')
+    'Старый Клиент', '0549999999', 2, pg_temp.identity_slot(1))
 $$, 'клиент, выложенный до 163, продолжает работать');
 
 SELECT is(
@@ -111,7 +120,7 @@ SELECT throws_ok($$
   SELECT submit_reservation(
     'e1000000-0000-4000-8000-000000000001',
     'e2000000-0000-4000-8000-000000000003',
-    NULL, '0541111111', 2, NOW() + INTERVAL '4 hours',
+    NULL, '0541111111', 2, pg_temp.identity_slot(2),
     NULL, NULL, NULL, 'Имя', 'Фамилия', 'сломанный адрес')
 $$, 'invalid_email', 'битая почта отклоняется сервером');
 
@@ -119,7 +128,7 @@ SELECT throws_ok($$
   SELECT submit_reservation(
     'e1000000-0000-4000-8000-000000000001',
     'e2000000-0000-4000-8000-000000000004',
-    NULL, '0542222222', 2, NOW() + INTERVAL '4 hours',
+    NULL, '0542222222', 2, pg_temp.identity_slot(2),
     NULL, NULL, NULL, NULL, NULL, 'guest@example.com')
 $$, 'invalid_name', 'без имени вовсе заявка не проходит');
 
@@ -129,7 +138,7 @@ SELECT is(
   (SELECT (submit_reservation(
      'e1000000-0000-4000-8000-000000000001',
      'e2000000-0000-4000-8000-000000000001',
-     NULL, '0541234567', 2, NOW() + INTERVAL '2 hours',
+     NULL, '0541234567', 2, pg_temp.identity_slot(),
      NULL, NULL, NULL, 'вольд', 'анотов', 'other@example.com') ->> 'duplicate')::BOOLEAN),
   TRUE, 'повтор того же client_uuid остаётся идемпотентным');
 SELECT is(

@@ -10,6 +10,17 @@
 BEGIN;
 SELECT plan(27);
 
+-- Keep all successful bookings inside the unchanged 00:00–23:45 schedule.
+-- Relative NOW()+N hours made this suite fail near closing; tomorrow at local
+-- noon (and 16:00 for the second booking) is future, within the horizon and
+-- keeps the two bookings four hours apart. Hold expiry still uses real NOW().
+CREATE FUNCTION pg_temp.prepayment_slot(p_offset_hours INTEGER DEFAULT 0)
+RETURNS TIMESTAMPTZ LANGUAGE sql STABLE AS $$
+  SELECT (date_trunc('day', NOW() AT TIME ZONE 'Asia/Jerusalem')
+          + INTERVAL '1 day 12 hours' + p_offset_hours * INTERVAL '1 hour')
+         AT TIME ZONE 'Asia/Jerusalem'
+$$;
+
 INSERT INTO orgs (id, name) VALUES
   ('d0000000-0000-4000-8000-000000000001', 'pgTAP prepay');
 INSERT INTO locations (id, org_id, name, timezone, settings) VALUES
@@ -58,7 +69,7 @@ SELECT throws_ok($$
     'd1000000-0000-4000-8000-000000000001',
     'd2000000-0000-4000-8000-000000000001',
     'd5000000-0000-4000-8000-000000000001',
-    '0541234567', 4, NOW() + INTERVAL '2 hours')
+    '0541234567', 4, pg_temp.prepayment_slot())
 $$, 'prepay_unavailable', 'начать оплату без провайдера нельзя');
 
 -- Провайдер заведён, но ещё не проверен — этого НЕ достаточно
@@ -107,7 +118,7 @@ SELECT lives_ok($$
     'd1000000-0000-4000-8000-000000000001',
     'd2000000-0000-4000-8000-000000000001',
     'd5000000-0000-4000-8000-000000000001',
-    '0541234567', 4, NOW() + INTERVAL '2 hours',
+    '0541234567', 4, pg_temp.prepayment_slot(),
     NULL, NULL, NULL, 'Вольд', 'Анотов', 'guest@example.com')
 $$, 'оплата начинается при живом провайдере');
 
@@ -140,7 +151,7 @@ SELECT is(
      'd1000000-0000-4000-8000-000000000001',
      'd2000000-0000-4000-8000-000000000001',
      'd5000000-0000-4000-8000-000000000001',
-     '0541234567', 4, NOW() + INTERVAL '2 hours') ->> 'duplicate')::BOOLEAN),
+     '0541234567', 4, pg_temp.prepayment_slot()) ->> 'duplicate')::BOOLEAN),
   TRUE, 'повтор попытки идемпотентен');
 SELECT is(
   (SELECT COUNT(*)::INTEGER FROM reservation_payments
@@ -193,7 +204,7 @@ SELECT begin_reservation_prepayment(
   'd1000000-0000-4000-8000-000000000001',
   'd2000000-0000-4000-8000-000000000002',
   'd5000000-0000-4000-8000-000000000002',
-  '0549999999', 2, NOW() + INTERVAL '6 hours',
+  '0549999999', 2, pg_temp.prepayment_slot(4),
   NULL, NULL, NULL, 'Второй', 'Гость', 'second@example.com');
 
 UPDATE reservation_payments SET expires_at = NOW() - INTERVAL '1 minute'
