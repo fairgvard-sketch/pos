@@ -5,10 +5,9 @@ import type { StoredPublicCartLine } from './publicCart'
  * Сверка восстановленной корзины с текущим меню.
  *
  * Корзина живёт в localStorage до 6 часов и хранит СНАПШОТ цен. За это
- * время товар может подорожать или исчезнуть из меню. Сервер это поймает
- * (submit_online_order пересчитывает сам и вернёт item_unavailable), но
- * гость узнает о проблеме на последнем шаге — уже заполнив контакты.
- * Поэтому сверяем сразу после загрузки меню.
+ * время товар может подорожать, исчезнуть или изменить доступный состав.
+ * Сверяем после получения меню, в том числе при его повторной загрузке.
+ * Это UX-проверка, не замена серверной валидации заказа.
  *
  * Что делаем:
  *   • позиции, которых больше нет в меню, — убираем;
@@ -18,6 +17,7 @@ import type { StoredPublicCartLine } from './publicCart'
  */
 
 export interface ReconcileResult<T> {
+  /** Исходный массив по ссылке, если строки не изменились */
   lines: T[]
   /** Названия убранных позиций — для сообщения гостю */
   removed: string[]
@@ -25,28 +25,41 @@ export interface ReconcileResult<T> {
   repriced: boolean
 }
 
-/** Актуальная цена строки: вариант, если выбран, иначе базовая + модификаторы */
-function currentUnitPrice(
+/** Не выбираем новый размер/добавку за гостя, даже при наличии default. */
+function currentSelection(
   item: PublicMenu['categories'][number]['items'][number],
   variantId: string | null,
   modIds: string[],
-): number | null {
+): Pick<StoredPublicCartLine, 'unitPrice' | 'variantName' | 'modNames'> | null {
   let base = item.price
-  if (variantId) {
+  let variantName: string | null = null
+  if (variantId !== null) {
     const variant = item.variants.find((v) => v.id === variantId)
     // Вариант исчез (например, «большой» сняли) — строка невалидна
     if (!variant) return null
     base = variant.price
+    variantName = variant.name
+  } else if (item.variants.length > 0) {
+    // Раньше размеров не было: теперь требуется новый выбор гостя.
+    return null
+  }
+  const selected = new Set(modIds)
+  if (selected.size !== modIds.length) return null
+  for (const group of item.modifier_groups) {
+    const count = group.modifiers.filter((mod) => selected.has(mod.id)).length
+    if (count < group.min_select || (group.max_select > 0 && count > group.max_select)) return null
   }
   const mods = item.modifier_groups.flatMap((g) => g.modifiers)
   let delta = 0
+  const modNames: string[] = []
   for (const id of modIds) {
     const mod = mods.find((m) => m.id === id)
     // Модификатор исчез — не додумываем состав за гостя
     if (!mod) return null
     delta += mod.price_delta
+    modNames.push(mod.name)
   }
-  return base + delta
+  return { unitPrice: base + delta, variantName, modNames }
 }
 
 export function reconcileCart<T extends StoredPublicCartLine>(
@@ -68,20 +81,24 @@ export function reconcileCart<T extends StoredPublicCartLine>(
       continue
     }
 
-    const price = currentUnitPrice(item, line.variantId, line.modIds)
-    if (price === null) {
+    const selection = currentSelection(item, line.variantId, line.modIds)
+    if (selection === null) {
       removed.push(line.name)
       continue
     }
 
-    if (price !== line.unitPrice || item.name !== line.name) {
-      if (price !== line.unitPrice) repriced = true
-      next.push({ ...line, name: item.name, unitPrice: price })
+    if (selection.unitPrice !== line.unitPrice || item.name !== line.name
+      || selection.variantName !== line.variantName
+      || selection.modNames.length !== line.modNames.length
+      || selection.modNames.some((name, index) => name !== line.modNames[index])) {
+      if (selection.unitPrice !== line.unitPrice) repriced = true
+      next.push({ ...line, name: item.name, ...selection })
       continue
     }
 
     next.push(line)
   }
 
-  return { lines: next, removed, repriced }
+  const unchanged = next.length === lines.length && next.every((line, index) => line === lines[index])
+  return { lines: unchanged ? lines : next, removed, repriced }
 }

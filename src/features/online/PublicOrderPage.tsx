@@ -197,9 +197,9 @@ export default function PublicOrderPage() {
   }, [activeCat, menu])
   /**
    * Сверка восстановленной корзины с меню. Корзина живёт до 6 часов и
-   * хранит снапшот цен: товар мог подорожать или исчезнуть. Сервер это
-   * поймает сам, но гость узнал бы на последнем шаге — после заполнения
-   * контактов. Поэтому правим сразу и сообщаем, что изменилось.
+   * хранит снапшот цен и подписей: товар мог подорожать, исчезнуть или
+   * изменить обязательные опции. Обновляем при получении свежего меню;
+   * серверная проверка при отправке всё равно необходима.
    */
   const [cartNotice, setCartNotice] = useState<string | null>(null)
   const reconciledFor = useRef<PublicMenu | null>(null)
@@ -214,7 +214,9 @@ export default function PublicOrderPage() {
       } else if (repriced) {
         setCartNotice(t(lang, 'pubCartRepriced'))
       }
-      return removed.length > 0 || repriced ? lines : current
+      // Переименование — тоже изменение, даже без удаления/новой цены.
+      // Неизменённый массив reconcileCart возвращает по прежней ссылке.
+      return lines
     })
   }, [menu, lang])
 

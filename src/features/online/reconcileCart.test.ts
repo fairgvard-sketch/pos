@@ -113,4 +113,82 @@ describe('reconcileCart', () => {
     expect(r.lines[0].name).toBe('Латте на овсяном')
     expect(r.repriced).toBe(false)
   })
+
+  const modifier = (id: string, name = id) => ({ id, name, price_delta: 100, is_default: false })
+  const group = (min = 0, max = 0) => ({
+    id: 'g1', name: 'Добавки', min_select: min, max_select: max,
+    modifiers: [modifier('m1'), modifier('m2')],
+  })
+
+  it('сохраняет массив и строку по ссылке, если ничего не изменилось', () => {
+    const original = [line()]
+    expect(reconcileCart(original, menu([item()])).lines).toBe(original)
+  })
+
+  it('обновляет все подписи без смены ID, порядка, количества и цены', () => {
+    const original = line({ variantId: 'v1', variantName: 'Старый размер',
+      modIds: ['m2', 'm1'], modNames: ['Старая добавка 2', 'Старая добавка 1'],
+      unitPrice: 2200, qty: 3 })
+    const r = reconcileCart([original], menu([item({ name: 'Новое имя',
+      variants: [{ id: 'v1', name: 'Новый размер', price: 2000, is_default: false }],
+      modifier_groups: [group()],
+    })]))
+    expect(r.lines).toEqual([{ ...original, name: 'Новое имя',
+      variantName: 'Новый размер', modNames: ['m2', 'm1'] }])
+    expect(r.repriced).toBe(false)
+    expect(original.variantName).toBe('Старый размер')
+    expect(original.modNames).toEqual(['Старая добавка 2', 'Старая добавка 1'])
+    expect(reconcileCart(r.lines, menu([item({ name: 'Новое имя',
+      variants: [{ id: 'v1', name: 'Новый размер', price: 2000, is_default: false }],
+      modifier_groups: [group()],
+    })])).lines).toBe(r.lines)
+  })
+
+  it('убирает строку при появлении обязательного выбора размера', () => {
+    const r = reconcileCart([line()], menu([item({
+      variants: [{ id: 'v1', name: 'Размер', price: 1600, is_default: true }],
+    })]))
+    expect(r.lines).toEqual([])
+    expect(r.removed).toEqual(['Латте'])
+  })
+
+  it.each([
+    { name: 'новая обязательная группа', min: 1, max: 1, ids: [] },
+    { name: 'повышенный минимум', min: 2, max: 0, ids: ['m1'] },
+    { name: 'пониженный максимум', min: 0, max: 1, ids: ['m1', 'm2'] },
+    { name: 'повтор одного ID не заменяет два выбора', min: 2, max: 2, ids: ['m1', 'm1'] },
+  ])('убирает несовместимую строку: $name', ({ min, max, ids }) => {
+    const r = reconcileCart([line({ modIds: ids })], menu([item({ modifier_groups: [group(min, max)] })]))
+    expect(r.lines).toEqual([])
+    expect(r.removed).toEqual(['Латте'])
+    expect(r.repriced).toBe(false)
+  })
+
+  it.each([
+    { name: 'пустая необязательная группа', min: 0, max: 1, ids: [] },
+    { name: 'ровно минимум и максимум', min: 2, max: 2, ids: ['m1', 'm2'] },
+    { name: 'нулевой максимум — без ограничения', min: 1, max: 0, ids: ['m1', 'm2'] },
+  ])('сохраняет допустимый состав: $name', ({ min, max, ids }) => {
+    const original = [line({ modIds: ids, modNames: ids, unitPrice: 1600 + 100 * ids.length })]
+    const r = reconcileCart(original, menu([item({ modifier_groups: [group(min, max)] })]))
+    expect(r.lines).toBe(original)
+    expect(r.removed).toEqual([])
+    expect(r.repriced).toBe(false)
+  })
+
+  it('проверяет минимум каждой группы отдельно, а не общее число добавок', () => {
+    const r = reconcileCart([line({ modIds: ['m1', 'm2'] })], menu([item({ modifier_groups: [
+      group(0, 0), { id: 'g2', name: 'Молоко', min_select: 1, max_select: 1, modifiers: [modifier('m3')] },
+    ] })]))
+    expect(r.lines).toEqual([])
+  })
+
+  it('удаление плохой строки не теряет соседа и его пересчёт', () => {
+    const original = [line({ key: 'bad', modIds: ['gone'] }), line({ key: 'good', qty: 2 })]
+    const r = reconcileCart(original, menu([item({ price: 1800 })]))
+    expect(r.lines).toEqual([{ ...original[1], unitPrice: 1800 }])
+    expect(r.removed).toEqual(['Латте'])
+    expect(r.repriced).toBe(true)
+    expect(original[1].unitPrice).toBe(1600)
+  })
 })
