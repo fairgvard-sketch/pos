@@ -9,6 +9,9 @@ SELECT plan(9);
 
 INSERT INTO orgs (id, name) VALUES
   ('e0000000-0000-4000-8000-000000000001', 'pgTAP partial');
+-- Exercise partial payload with an authorized catalogue, not an unpaid owner.
+INSERT INTO organization_products(org_id,product) VALUES
+  ('e0000000-0000-4000-8000-000000000001','menu');
 INSERT INTO locations (id, org_id, name, timezone) VALUES
   ('e6000000-0000-4000-8000-000000000001',
    'e0000000-0000-4000-8000-000000000001', 'Loc', 'Asia/Jerusalem');

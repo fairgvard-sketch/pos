@@ -15,6 +15,9 @@ SELECT plan(56);
 INSERT INTO orgs (id, name) VALUES
   ('e0000000-0000-4000-8000-000000000001', 'pgTAP customers'),
   ('e0000000-0000-4000-8000-0000000000ff', 'pgTAP чужая');
+-- This test also reads reservation/waitlist history after CRM mutations.
+INSERT INTO organization_products(org_id,product) VALUES
+  ('e0000000-0000-4000-8000-000000000001','reservations');
 
 INSERT INTO locations (id, org_id, name, timezone) VALUES
   ('e1000000-0000-4000-8000-000000000001',

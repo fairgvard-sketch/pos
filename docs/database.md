@@ -46,6 +46,22 @@ explicit_table_privileges; результаты конкретного выпу�
   `src/lib/schemaVersion.ts` — CI (`npm run check:schema`) требует равенства
   константы номеру последней миграции.
 
+### Digital identity и прямой REST-доступ (168)
+
+`auth_org_id()` для authenticated digital-сессии без `location_id` возвращает
+организацию только при активном `organization_members`. Проверка действует
+для старого JWT, tenant RLS и SECURITY DEFINER RPC. POS-токены с точкой и
+операторские вызовы сохраняют прежний контракт; это не включение строгого
+PIN-режима и не отзыв device-сессии по факту отзыва веб-членства.
+
+Каталог получил restrictive product/role-политики поверх tenant RLS; прямые
+чтения Orders/Reserve дополнительно проверяют capability точки. Внутренние
+тела save/bulk RPC закрыты для клиентов. Триггеры связей каталога запрещают
+чужого родителя как при REST-записи, так и внутри SECURITY DEFINER. Данные
+не удаляются/не переносятся; старые миграции не переписываются. Новые helpers
+используют явный `search_path = public, pg_temp`.
+Матрица и тестовые команды — [справочник аккаунта](../../anglesite/docs/account-access.md).
+
 ### Версия схемы для фронтенда (081)
 
 `get_schema_version()` (SECURITY DEFINER, только `authenticated`) возвращает

@@ -68,7 +68,7 @@ checkout-записей. Сам checkout добавлен в 166; 167 допол
 ### Как проверить фейковую оплату
 
 Из соседнего `anglesite/`, при работающем локальном Docker/Colima и контейнере
-`supabase_db_kassa` с известной локальной схемой 164–167:
+`supabase_db_kassa` с известной локальной схемой 164–168:
 
 ```bash
 node scripts/billing-lab.mjs angle_billing_lab_demo --init
@@ -76,7 +76,7 @@ node scripts/billing-lab.mjs angle_billing_lab_demo --init
 
 Скрипт [billing-lab.mjs](../../anglesite/scripts/billing-lab.mjs) создаёт
 **новую** БД, копирует только схему и технические справочники локальной Kassa,
-применяет недостающие 165–167 и заводит два синтетических owner-аккаунта/заведения.
+применяет недостающие 165–168 и заводит два синтетических owner-аккаунта/заведения.
 Выводит случайный localhost-порт. Повторный запуск этой БД — без `--init`;
 существующую БД скрипт не перезаписывает. Не нужны `.env`, service keys,
 SMTP, реквизиты карты или production URL. Скрипт не входит в dist/деплой.

@@ -11,6 +11,9 @@ SELECT has_table('modifier_supplies');
 INSERT INTO orgs (id, name) VALUES
   ('40000000-0000-4000-8000-000000000001', 'pgTAP org A'),
   ('40000000-0000-4000-8000-000000000002', 'pgTAP org B');
+-- The POS recipe editor is a catalogue capability consumer.
+INSERT INTO organization_products(org_id,product) VALUES
+  ('40000000-0000-4000-8000-000000000001','pos');
 
 INSERT INTO locations (id, org_id, name) VALUES
   ('40100000-0000-4000-8000-000000000001',

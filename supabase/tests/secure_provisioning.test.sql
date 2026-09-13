@@ -162,7 +162,7 @@ SELECT set_config(
 SET LOCAL ROLE authenticated;
 SELECT throws_ok(
   $$ SELECT request_product_activation('menu') $$,
-  'P0001', 'backoffice access denied',
+  'P0001', 'not authenticated',
   'без членства заявка отклоняется'
 );
 RESET ROLE;

@@ -89,7 +89,7 @@ SELECT set_config(
 
 SELECT throws_ok(
   $$ SELECT get_backoffice_context() $$,
-  'P0001', 'backoffice access denied',
+  'P0001', 'not authenticated',
   'деактивированное членство не открывает бэкофис'
 );
 
@@ -102,7 +102,7 @@ SELECT set_config(
 
 SELECT throws_ok(
   $$ SELECT get_backoffice_context() $$,
-  'P0001', 'backoffice access denied',
+  'P0001', 'not authenticated',
   'аккаунт без членства не открывает бэкофис'
 );
 

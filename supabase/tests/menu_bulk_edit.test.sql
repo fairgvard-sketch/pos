@@ -10,6 +10,9 @@ SELECT plan(16);
 INSERT INTO orgs (id, name) VALUES
   ('d0000000-0000-4000-8000-000000000001', 'pgTAP bulk A'),
   ('d0000000-0000-4000-8000-000000000002', 'pgTAP bulk B');
+-- Catalogue operations require an active product (105/168).
+INSERT INTO organization_products(org_id,product) VALUES
+  ('d0000000-0000-4000-8000-000000000001','menu');
 INSERT INTO locations (id, org_id, name, timezone) VALUES
   ('d6000000-0000-4000-8000-000000000001', 'd0000000-0000-4000-8000-000000000001', 'A loc', 'Asia/Jerusalem'),
   ('d6000000-0000-4000-8000-000000000002', 'd0000000-0000-4000-8000-000000000002', 'B loc', 'Asia/Jerusalem');
