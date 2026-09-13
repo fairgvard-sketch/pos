@@ -89,7 +89,7 @@ VITE_SUPABASE_ANON_KEY=<anon-key>
 
 ```bash
 npm run lint
-npm run test:run
+npm run test:all
 npm run build
 npm run check:bundle
 ```
@@ -102,11 +102,13 @@ npm run check:bundle
 | `npm run dev:menu` | отдельный dev-сервер публичной Menu/Orders/Reserve-поверхности |
 | `npm run build` | проверка TypeScript и production-сборка |
 | `npm run build:menu` | production-сборка публичной поверхности, также в `dist/` |
-| `npm run check:bundle` | лимит gzip entry/polyfills после build; дополнительные статические чанки пока учитываются отдельно |
+| `npm run check:bundle` | бюджет gzip статического стартового графа последней сборки: entry, modulepreload, legacy polyfills и их статические импорты ([подробно](docs/development.md#бюджет-стартового-js)) |
 | `npm run preview` | локальный просмотр production-сборки |
 | `npm run lint` | ESLint для `src/` и `scripts/` |
 | `npm run test` | Vitest в watch-режиме |
-| `npm run test:run` | один полный прогон Vitest |
+| `npm run test:run` | один полный прогон Vitest (`src/`, Edge-функции) |
+| `npm run test:bundle` | тесты скриптов сборки на встроенном runner Node |
+| `npm run test:all` | общий прогон: `test:run` + `test:bundle`, его же вызывает CI |
 | `npm run check:schema` | сверка `MIN_SCHEMA_VERSION` с номером последней миграции |
 | `npm run check:ref` | проверка целевого Supabase project ref |
 | `npm run db:push` | проверка ref и применение миграций |
@@ -154,7 +156,7 @@ supabase test db
 
 Короткая последовательность:
 
-1. `npm run lint && npm run test:run && npm run build && npm run check:bundle`;
+1. `npm run lint && npm run test:all && npm run build && npm run check:bundle && npm run build:menu && npm run check:bundle`;
 2. `npm run db:push` для новых миграций;
 3. `npm run functions:deploy` для изменённых функций;
 4. frontend-деплой;

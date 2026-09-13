@@ -26,10 +26,13 @@ jobs:
       - name: Schema version guard
         run: npm run check:schema
 
+      # test:all — Vitest (src, Edge-функции) плюс тесты скриптов сборки на
+      # встроенном runner Node: у них разные окружения, один прогон их
+      # объединяет, чтобы проверка не забывалась.
       - name: Test
-        run: npm run test:run
+        run: npm run test:all
 
-      - name: Build
+      - name: Build POS
         run: npm run build
         env:
           # Сборке нужны переменные Vite; для CI достаточно плейсхолдеров —
@@ -37,7 +40,18 @@ jobs:
           VITE_SUPABASE_URL: https://placeholder.supabase.co
           VITE_SUPABASE_ANON_KEY: placeholder-anon-key
 
-      - name: Bundle budget
+      # Бюджет проверяется сразу после каждой сборки: обе пишут в один dist/,
+      # и сборка Menu затирает POS — после неё POS-бюджет уже не измерить.
+      - name: Bundle budget (POS)
+        run: npm run check:bundle
+
+      - name: Build Menu
+        run: npm run build:menu
+        env:
+          VITE_SUPABASE_URL: https://placeholder.supabase.co
+          VITE_SUPABASE_ANON_KEY: placeholder-anon-key
+
+      - name: Bundle budget (Menu)
         run: npm run check:bundle
 
   database:

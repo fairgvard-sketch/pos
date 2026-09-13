@@ -56,7 +56,10 @@ export default defineConfig({
       exclude: [
         'src/test/**',
         'src/**/*.d.ts',
-        '**/*.{test,spec}.{ts,tsx}',
+        // `.mjs` — тесты скриптов на встроенном runner Node (`npm run
+        // test:bundle`). Сам скрипт из метрики не исключается: Vitest его не
+        // загружает, и это видно в отчёте как честный ноль.
+        '**/*.{test,spec}.{ts,tsx,mjs}',
       ],
     },
   },
