@@ -71,7 +71,8 @@ jobs:
       - name: Test RLS and financial idempotency
         run: |
           if ! supabase test db > test.log 2>&1; then
-            msg=$(tail -c 3000 test.log); msg="${msg//$'\n'/%0A}"
+            msg=$({ grep -A 20 -B 2 -E 'not ok|Failed test|ERROR:' test.log || true; tail -n 12 test.log; } | head -c 12000)
+            msg="${msg//'%'/'%25'}"; msg="${msg//$'\r'/%0D}"; msg="${msg//$'\n'/%0A}"
             echo "::error title=supabase test db failed::${msg}"
             exit 1
           fi
