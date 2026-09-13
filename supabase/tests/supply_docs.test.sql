@@ -196,6 +196,10 @@ SELECT is(
    WHERE type = 'waste' AND supply_item_id = '41600000-0000-4000-8000-000000000001'),
   -380::bigint, 'waste: value = round(−500×760/1000)');
 
+-- 169: both JWTs represent live devices, including the negative tenant test.
+INSERT INTO auth.users(id) VALUES
+ ('41c00000-0000-4000-8000-000000000001'),
+ ('41c00000-0000-4000-8000-000000000002');
 -- ── Фасовки: своя org пишет, чужой расходник отклонён ────────
 SET LOCAL ROLE authenticated;
 

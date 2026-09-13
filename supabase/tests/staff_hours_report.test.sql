@@ -31,6 +31,8 @@ INSERT INTO staff (id, org_id, location_id, name, role, pin_hash, is_active) VAL
 
 INSERT INTO auth.users (id) VALUES
   ('c3000000-0000-4000-8000-000000000001');  -- веб-владелец кабинета
+-- A live device without a membership: still needs the manage PIN session.
+INSERT INTO auth.users(id) VALUES ('c3000000-0000-4000-8000-000000000002');
 
 INSERT INTO organization_members (org_id, auth_user_id, role, is_active) VALUES
   ('c0000000-0000-4000-8000-000000000001', 'c3000000-0000-4000-8000-000000000001', 'owner', TRUE);
@@ -174,7 +176,7 @@ SELECT is(
 -- ============================================================
 SELECT set_config(
   'request.jwt.claims',
-  '{"role":"authenticated","app_metadata":{"org_id":"c0000000-0000-4000-8000-000000000001","location_id":"c1000000-0000-4000-8000-000000000001"}}',
+  '{"sub":"c3000000-0000-4000-8000-000000000002","role":"authenticated","app_metadata":{"org_id":"c0000000-0000-4000-8000-000000000001","location_id":"c1000000-0000-4000-8000-000000000001"}}',
   true
 );
 

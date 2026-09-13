@@ -177,6 +177,8 @@ SELECT stock_take(
 SELECT is((SELECT stock FROM supply_items WHERE id = '40600000-0000-4000-8000-000000000004'),
   150000, 'stock_take: 150 кг муки в граммах (лимит supply поднят)');
 
+-- 169: a device JWT must belong to a live Auth account.
+INSERT INTO auth.users(id) VALUES ('40c00000-0000-4000-8000-000000000001');
 -- ── RLS: связка пишется в своей org, чужой расходник запрещён ─
 SET LOCAL ROLE authenticated;
 

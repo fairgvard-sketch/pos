@@ -67,6 +67,10 @@ INSERT INTO devices (
     '{}'
   );
 
+-- 169: liveness is part of device authorization; client telemetry unchanged.
+INSERT INTO auth.users(id) VALUES
+ ('34000000-0000-4000-8000-000000000001'),
+ ('34000000-0000-4000-8000-000000000002');
 -- ── Работаем как устройство Org A ──
 SET LOCAL ROLE authenticated;
 SELECT set_config(

@@ -71,6 +71,11 @@ INSERT INTO devices (
     '{}'
   );
 
+-- 169: model live devices, not claims of nonexistent accounts.
+INSERT INTO auth.users(id) VALUES
+ ('24000000-0000-4000-8000-000000000001'),
+ ('24000000-0000-4000-8000-000000000002'),
+ ('24000000-0000-4000-8000-000000000003');
 SET LOCAL ROLE authenticated;
 SELECT set_config(
   'request.jwt.claims',

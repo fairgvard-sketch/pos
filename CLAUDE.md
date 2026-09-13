@@ -9,16 +9,7 @@ Kassa — POS для кофеен, пекарен и specialty coffee. `legacy/`
 
 1. Прочитать `AGENTS.md`.
 2. Использовать `README.md` как индекс актуальной документации.
-3. Прочитать относящиеся к задаче документы:
-   - `docs/architecture.md` — архитектура, модули и маршруты;
-   - `docs/development.md` — разработка, UI-правила и тестирование;
-   - `docs/database.md` — Supabase, RLS, RPC и миграции;
-   - `docs/offline.md` — offline-cache, outbox и replay;
-   - `docs/android-printing.md` — Android, WebView и печать;
-   - `docs/deployment.md` — выпуск, эксплуатация и откат;
-   - профильные `docs/online-orders.md`, `docs/reservations.md`,
-     `docs/cardcom-plan.md`, `docs/israel-compliance.md` и
-     `docs/t2-smoke-test.md`.
+3. Прочитать относящиеся к задаче документы из `docs/`.
 
 Не дублировать в этом файле меняющийся снимок routes, миграций и готовых фич.
 Фактический источник истины — текущий код и последовательность миграций. При

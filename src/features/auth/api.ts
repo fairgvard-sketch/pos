@@ -19,6 +19,20 @@ export async function getDeviceContext(): Promise<DeviceContext | null> {
   }
 }
 
+/** Private sync snapshot: pin RPC authorization to the identity that read settings. */
+export async function getDeviceSyncSession() {
+  const { data, error } = await supabase.auth.getSession()
+  if (error) throw new Error(error.message)
+  const session = data.session
+  if (!session) return null
+  return {
+    orgId: session.user.app_metadata?.org_id as string | undefined,
+    locationId: session.user.app_metadata?.location_id as string | undefined,
+    authUserId: session.user.id,
+    accessToken: session.access_token,
+  }
+}
+
 /** Текущая точка устройства (service_mode, ставка НДС и пр.). RLS скоупит по org. */
 export async function fetchCurrentLocation(): Promise<Location> {
   const ctx = await getDeviceContext()
@@ -175,7 +189,8 @@ export async function registerDevice(args: {
   appVersion?: string | null
   webviewVersion?: string | null
   printerCapabilities?: Record<string, unknown> | null
-}): Promise<Device> {
+}, accessToken: string): Promise<Device> {
+  if (!accessToken) throw new Error('device sync session required')
   const { data, error } = await supabase.rpc('register_device', {
     p_device_uuid: args.deviceUuid,
     p_name: args.name ?? null,
@@ -183,7 +198,7 @@ export async function registerDevice(args: {
     p_app_version: args.appVersion ?? null,
     p_webview_version: args.webviewVersion ?? null,
     p_printer_capabilities: args.printerCapabilities ?? null,
-  })
+  }).setHeader('Authorization', `Bearer ${accessToken}`)
   if (error) throw new Error(error.message)
   const row = Array.isArray(data) ? data[0] : data
   if (!row) throw new Error('device registration returned no row')

@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { supabase } from './supabase'
 import {
   registerDevice,
-  getDeviceContext,
+  getDeviceSyncSession,
 } from '../features/auth/api'
 import {
   DEFAULT_ACTION_ORDER,
@@ -19,6 +19,7 @@ import {
   type DrawerPin,
 } from '../store/deviceStore'
 import { isOnline, useNetStore } from './offline/net'
+import { currentScopeKey } from './offline/scope'
 import type { Device } from '../types'
 
 /**
@@ -168,6 +169,7 @@ let syncAgain = false
 let suppressStorePush = false
 let debounceTimer: ReturnType<typeof setTimeout> | null = null
 let retryTimer: ReturnType<typeof setTimeout> | null = null
+let syncGeneration = 0
 
 function setStatus(status: DeviceSyncState, error: string | null = null): void {
   useDeviceSyncStore.setState({ status, lastError: error })
@@ -200,10 +202,15 @@ export async function syncDeviceNow(): Promise<void> {
   }
 
   syncing = true
+  const scope = currentScopeKey()
+  const generation = syncGeneration
+  const isCurrent = () => generation === syncGeneration && scope === currentScopeKey()
   setStatus('syncing')
   try {
-    const ctx = await getDeviceContext()
-    if (!ctx?.orgId) {
+    const ctx = await getDeviceSyncSession()
+    if (!isCurrent()) return
+    if (!ctx?.orgId || !ctx.locationId || !ctx.authUserId || !ctx.accessToken
+      || scope !== `${ctx.orgId}:${ctx.locationId}:${ctx.authUserId}`) {
       setStatus('idle')
       return
     }
@@ -212,13 +219,20 @@ export async function syncDeviceNow(): Promise<void> {
     const local = useDeviceStore.getState()
     // Первый вызов только гарантирует строку и возвращает server snapshot.
     // При отсутствии localStorage не передаём stale in-memory значения прошлого scope.
+    const uuid = deviceUuid()
     const row = await registerDevice({
-      deviceUuid: deviceUuid(),
+      deviceUuid: uuid,
       name: hasLocal ? local.deviceName || null : null,
       settings: null,
       appVersion: __APP_VERSION__,
       webviewVersion: webviewVersion(),
-    })
+    }, ctx.accessToken)
+    if (!isCurrent()) return
+    // Never hydrate a response belonging to another account/point/device.
+    if (row.org_id !== ctx.orgId || row.location_id !== ctx.locationId
+      || row.auth_user_id !== ctx.authUserId || row.device_uuid !== uuid) {
+      throw new Error('device identity mismatch')
+    }
 
     const remoteHasSettings = row.settings && Object.keys(row.settings).length > 0
     if (!hasLocal && remoteHasSettings) {
@@ -231,12 +245,13 @@ export async function syncDeviceNow(): Promise<void> {
       }
       const s = useDeviceStore.getState()
       await registerDevice({
-        deviceUuid: deviceUuid(),
+        deviceUuid: uuid,
         name: s.deviceName || null,
         settings: settingsSnapshot(),
         appVersion: __APP_VERSION__,
         webviewVersion: webviewVersion(),
-      })
+      }, ctx.accessToken)
+      if (!isCurrent()) return
     }
 
     if (retryTimer !== null) {
@@ -249,11 +264,13 @@ export async function syncDeviceNow(): Promise<void> {
       lastError: null,
     })
   } catch (e) {
+    if (!isCurrent()) return
     const message = e instanceof Error ? e.message : String(e)
     setStatus('error', message)
     scheduleRetry()
   } finally {
     syncing = false
+    if (!isCurrent() && useDeviceSyncStore.getState().status === 'syncing') setStatus('idle')
     if (syncAgain) {
       syncAgain = false
       void syncDeviceNow()
@@ -282,6 +299,11 @@ export async function initDeviceSync(): Promise<void> {
     if (!s.online && prev.online) setStatus('pending')
   })
   supabase.auth.onAuthStateChange((_event, session) => {
+    // Invalidate old responses synchronously, including A → sign-out → A.
+    syncGeneration++
+    if (retryTimer !== null) { clearTimeout(retryTimer); retryTimer = null }
+    if (debounceTimer !== null) { clearTimeout(debounceTimer); debounceTimer = null }
+    useDeviceSyncStore.setState({ status: 'idle', lastSyncedAt: null, lastError: null })
     // Не await внутри auth callback: Supabase может держать auth lock.
     if (session?.user.app_metadata?.org_id) {
       setTimeout(() => void syncDeviceNow(), 0)

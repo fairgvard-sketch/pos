@@ -48,6 +48,8 @@ INSERT INTO staff_sessions (token, staff_id, org_id, location_id) VALUES
   ('b3000000-0000-4000-8000-000000000003', 'b2000000-0000-4000-8000-000000000003',
    'b0000000-0000-4000-8000-000000000001', 'b1000000-0000-4000-8000-000000000001');
 
+-- 169: a device JWT must belong to a live Auth account.
+INSERT INTO auth.users(id) VALUES ('b4000000-0000-4000-8000-000000000001');
 SET LOCAL ROLE authenticated;
 -- Токен устройства: org + location (как у кассы)
 SELECT set_config(

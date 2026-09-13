@@ -57,6 +57,8 @@ SELECT ok(
   'pin_attempts недоступна authenticated на чтение'
 );
 
+-- 169: a device JWT must belong to a live Auth account.
+INSERT INTO auth.users(id) VALUES ('84000000-0000-4000-8000-000000000001');
 -- ── 2. Скоуп сессии по точке (находка 2) ────────────────────
 -- Контекст точки A: своя сессия проходит.
 SET LOCAL request.jwt.claims = '{"sub":"84000000-0000-4000-8000-000000000001","app_metadata":{"org_id":"80000000-0000-4000-8000-000000000001","location_id":"81000000-0000-4000-8000-00000000000a"}}';

@@ -48,6 +48,8 @@ INSERT INTO organization_members (org_id, auth_user_id, role, is_active)
 VALUES ('70000000-0000-4000-8000-000000000001',
         '74000000-0000-4000-8000-000000000002', 'owner', TRUE);
 
+-- 169: the PIN session belongs to a live device identity.
+INSERT INTO auth.users(id) VALUES ('74000000-0000-4000-8000-000000000001');
 SET LOCAL ROLE authenticated;
 SELECT set_config(
   'request.jwt.claims',

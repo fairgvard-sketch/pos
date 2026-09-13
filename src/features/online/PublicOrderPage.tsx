@@ -22,6 +22,7 @@ import {
   menuBackgroundUsesDarkUi,
   resolveMenuBackgroundUrl,
 } from './menuBackgrounds'
+import { resolvePublicHeroVideo } from './heroVideo'
 
 /**
  * Публичная страница «закажи и забери» (050): меню → корзина → заявка →
@@ -31,11 +32,6 @@ import {
  */
 
 const ACTIVE_KEY = 'kassa-public-active' // {clientUuid, locId} — текущая заявка
-const BRANDED_HERO_VIDEOS: Record<string, string> = {
-  // Developer showcase account: uploaded settings still take precedence.
-  'fe2eebf0-65e3-45b4-a81f-331359d71955': '/brand/bulochka/hero.mp4',
-}
-
 /** «~20–35 мин» / «~20 мин» / '' — вилка приготовления для гостя (061) */
 function formatPrepRange(lang: Lang, min: number, max: number): string {
   const hi = Math.max(min, max)
@@ -551,7 +547,7 @@ export default function PublicOrderPage() {
       logo={menu.location.logo_url}
       hero={view === 'menu' && !hasStarted}
       headerImg={menu.location.header_url}
-      heroVideo={menu.location.hero_video_url ?? BRANDED_HERO_VIDEOS[locId] ?? null}
+      heroVideo={resolvePublicHeroVideo(menu.location.id, menu.location.hero_video_url)}
       bgImg={menuBackground}
       routeKey={routeKey}
       onHeroStart={() => {
@@ -829,7 +825,7 @@ function Shell({
                   muted
                   loop
                   playsInline
-                  preload={reducedMotion ? 'none' : 'metadata'}
+                  preload={reducedMotion ? 'none' : 'auto'}
                   aria-hidden="true"
                   className="public-menu-hero-media"
                 />
