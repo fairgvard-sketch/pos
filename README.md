@@ -28,6 +28,12 @@ Kassa — веб-касса для specialty coffee, кофеен и пекар�
 
 ## Документация
 
+Начать с [индекса Kassa](docs/README.md) или
+[общей документации ANGLE + Kassa](../anglesite/docs/README.md).
+Текущие приоритеты — в [едином плане завершения](../anglesite/docs/product-completion-plan.md),
+а не в старых handoff-планах. Сайт и кабинет — соседний репозиторий `anglesite`.
+Налоговая регистрация и подключение платежей отложены; вход и аккаунты доводим.
+
 | Документ | Что внутри |
 |---|---|
 | [Архитектура](docs/architecture.md) | слои приложения, модули, маршруты, авторизация и хранение состояния |
@@ -93,8 +99,10 @@ npm run check:bundle
 | Команда | Назначение |
 |---|---|
 | `npm run dev` | локальный Vite-сервер |
+| `npm run dev:menu` | отдельный dev-сервер публичной Menu/Orders/Reserve-поверхности |
 | `npm run build` | проверка TypeScript и production-сборка |
-| `npm run check:bundle` | лимит gzip-размера modern/legacy startup JS после build |
+| `npm run build:menu` | production-сборка публичной поверхности, также в `dist/` |
+| `npm run check:bundle` | лимит gzip entry/polyfills после build; дополнительные статические чанки пока учитываются отдельно |
 | `npm run preview` | локальный просмотр production-сборки |
 | `npm run lint` | ESLint для `src/` и `scripts/` |
 | `npm run test` | Vitest в watch-режиме |
@@ -104,7 +112,8 @@ npm run check:bundle
 | `npm run db:push` | проверка ref и применение миграций |
 | `npm run functions:deploy` | проверка ref и деплой Edge Functions |
 
-SQL-интеграционные тесты запускаются отдельно:
+SQL-интеграционные тесты запускаются отдельно, только на локальной тестовой БД
+(reset удаляет её данные):
 
 ```bash
 supabase start

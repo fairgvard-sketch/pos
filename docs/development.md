@@ -38,12 +38,27 @@ VITE_ENABLE_INTERNAL_RUSSIAN=true
 npm run dev
 ```
 
+Публичное приложение Menu / Orders / Reserve запускается отдельно:
+
+```bash
+npm run dev:menu -- --host 127.0.0.1 --port 5174 --strictPort
+```
+
+Его маршруты — `/order/:locId` и `/reserve/:locId`, данные — из указанного
+в `.env` Supabase. Для разработки используйте тестовую БД, не живые заказы.
+Сайт/кабинет запускаются из соседнего `anglesite` по
+[общей инструкции](../../anglesite/docs/development.md).
+
 Production-сборка локально:
 
 ```bash
 npm run build
 npm run preview
 ```
+
+Публичная production-сборка: `npm run build:menu`. Она тоже записывает `dist/`;
+не путать её артефакт с POS-сборкой. Общий выпуск —
+[release checklist](../../anglesite/docs/release-checklist.md).
 
 ## Структура репозитория
 
@@ -197,6 +212,15 @@ Frontend-тесты лежат рядом с кодом и выполняютс�
 npm run test:run
 ```
 
+Ограничение F2 (13.09.2026): в установленной ветке Vitest 3 остаётся
+[GHSA-82fw-gwwq-j7x9](https://github.com/advisories/GHSA-82fw-gwwq-j7x9).
+Текущая конфигурация использует jsdom, без browser mode и
+`mockerPlugin`/`interceptorPlugin`; описанный в advisory путь здесь не включён.
+До отдельного обновления Vitest не подключать эти плагины/browser mode и не
+выставлять тестовый сервер через LAN, `0.0.0.0` или публичный proxy.
+Это ограничение конфигурации, не исправление пакета; переход на исправленную
+major-ветку отслеживается как F2.1 в общем плане. `audit fix --force` не применять.
+
 Сейчас проверяются денежные helpers, математика корзины (скидки, лояльность и
 округление итога до шекеля — зеркало серверного `round_order_total`), варианты
 чаевых, i18n, capability-gate, offline scope и drain, optimistic rollback
@@ -218,7 +242,8 @@ supabase test db
 - [ ] `npm run lint` проходит;
 - [ ] `npm run test:run` проходит;
 - [ ] `npm run build` создаёт modern и legacy bundles;
-- [ ] `npm run check:bundle` не превышает startup budget;
+- [ ] `npm run check:bundle` не превышает budget entry/polyfills; дополнительные
+  статические startup-чанки учтены отдельно (текущий скрипт их не считает);
 - [ ] новые суммы представлены агоротами;
 - [ ] для мутаций определены optimistic и error states;
 - [ ] ru/he и RTL проверены;

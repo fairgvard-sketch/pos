@@ -1,9 +1,9 @@
-# CI: фронтенд, размер стартового бандла и SQL-инварианты на каждый push/PR.
+# CI: фронтенд, размер стартового бандла и SQL-инварианты на main/codex/** и PR.
 name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'codex/**']
   pull_request:
 
 jobs:

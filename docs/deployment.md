@@ -1,10 +1,14 @@
 # Выпуск и эксплуатация
 
-Kassa состоит из трёх независимо выпускаемых частей:
+В Kassa отдельно выпускаются:
 
 1. Supabase schema/RPC и Edge Functions;
-2. frontend на Vercel;
-3. Android APK для Sunmi.
+2. POS frontend на Vercel;
+3. публичная Menu / Orders / Reserve-сборка из того же репозитория;
+4. Android APK для Sunmi.
+
+Сайт и кабинет владельца выпускаются из соседнего `anglesite`. Согласование
+с общей БД — [общий release checklist](../../anglesite/docs/release-checklist.md).
 
 Изменение веб-интерфейса не требует нового APK. Изменение JS-моста, origin или
 Android-конфигурации требует.
@@ -13,6 +17,8 @@ Android-конфигурации требует.
 
 - production Supabase project ref: `qgmnxrgtlpyqglwqmsej`;
 - production frontend: `https://pos.angle.co.il`;
+- публичная поверхность: `https://menu.angle.co.il`, отдельная сборка
+  `npm run build:menu` / `VITE_APP_SURFACE=menu`;
 - APK `app_url` должен указывать на этот стабильный origin. Только собственный
   домен: автогенерённый `*.vercel.app` отвязывается от проекта при
   пересоздании деплоя и отдаёт 404 `DEPLOYMENT_NOT_FOUND`, а касса в APK
@@ -24,10 +30,10 @@ Android-конфигурации требует.
 
 ## CI
 
-`.github/workflows/ci.yml` выполняет на push в `main` и pull request:
+`.github/workflows/ci.yml` выполняет на push в `main`, `codex/**` и pull request:
 
 ```text
-frontend: npm ci → lint → test:run → build → bundle budget
+frontend: npm ci → lint → check:schema → test:run → build → bundle budget
 database: local Supabase → migrations from zero → pgTAP
 ```
 
@@ -46,12 +52,17 @@ database: local Supabase → migrations from zero → pgTAP
 git status --short
 npm ci
 npm run lint
+npm run check:schema
 npm run test:run
 npm run build
 npm run check:bundle
 ```
 
-Если менялись SQL-инварианты:
+При изменении гостевой поверхности отдельно проверить `npm run build:menu`:
+она также пишет в `dist/`, не подменять этим артефактом POS deployment.
+
+Если менялись SQL-инварианты, на локальной изолированной базе (reset удаляет
+тестовые данные, это не production-команда):
 
 ```bash
 supabase start
@@ -99,7 +110,16 @@ npm run functions:deploy
 
 ### 4. Выпустить frontend
 
-Push в `main` запускает production deployment Vercel. После публикации:
+Push в `main` запускает production deployment Vercel.
+
+Для проверки невыпущенной пары клиентов/схемы сначала отправлять изменения
+в `codex/**`: CI запускается без merge в production-ветку. Vercel может
+создать отдельный Preview по настройкам Git-интеграции; это не приёмочная
+среда, пока для него не проверены изолированные env/БД. Не прогонять мутации
+против production через Preview. Перед merge применить совместимую схему
+по порядку выше; push рабочей ветки сам по себе миграции не применяет.
+
+После production-публикации:
 
 - откройте `/setup` или `/pin` в чистом браузере;
 - проверьте, что manifest и service worker обновились;

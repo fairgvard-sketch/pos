@@ -50,6 +50,12 @@ Canvas receipt ─► ESC/POS raster ─► APK JS bridge ─► Sunmi printer
 этого монтирует React. Глобальный `AppErrorBoundary` ловит runtime-сбой всего
 приложения.
 
+Точка входа выбирает одну из двух независимых поверхностей: `App.tsx` для POS
+или `PublicApp.tsx` при `VITE_APP_SURFACE=menu`. Публичная сборка содержит
+гостевые маршруты, без запуска POS device sync и offline replay.
+Сайт и кабинет — отдельный репозиторий; общая карта —
+[system-overview](../../anglesite/docs/system-overview.md).
+
 `src/App.tsx` настраивает:
 
 - React Query и персистентный read-кэш;

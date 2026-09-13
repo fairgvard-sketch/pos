@@ -425,6 +425,16 @@ capability (что технически разрешено), entitlement (что
   `request_product_activation` — заявка владельца/менеджера из кабинета;
   `attach_device_to_org` — операторский апгрейд digital → POS без второй
   организации. Процедуры — `docs/standalone-products.md`;
+- защита bootstrap (165): legacy `bootstrap_org` / `bootstrap_digital_org`
+  сериализованы по строке Auth-пользователя. Новый `create_digital_workspace`
+  принимает UUID запроса и сохраняет атомарный результат в приватной
+  `digital_workspace_requests`; повтор не создаёт новую org/точку и не выдаёт
+  продукты. Старые тела переименованы и закрыты от прямых клиентских вызовов;
+- первая подписочная покупка (166): активный owner создаёт счёт через
+  `create_subscription_checkout`, без выдачи entitlement. Сумма — из БД,
+  повтор — по UUID, параллельные запросы сериализованы по организации.
+  Только service-only подтверждение платежа активирует/продлевает продукт.
+  Режим по умолчанию disabled; локальный тестовый путь — в [биллинге](billing.md);
 - гейты (105): `submit_online_order`/`get_online_order_status` —
   `online_orders`; `submit_reservation`/`reservation_availability`/
   `get_reservation_status` — `public_reservations`;

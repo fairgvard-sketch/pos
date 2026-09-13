@@ -1,5 +1,10 @@
 # Claude handoff: standalone ANGLE Menu and ANGLE Reserve
 
+> Исторический план этапа. Не использовать как текущий список отсутствующих
+> функций или команду повторно реализовать продукт. Актуальные приоритеты —
+> [план завершения](../../anglesite/docs/product-completion-plan.md), модель —
+> [standalone-products.md](standalone-products.md).
+
 ## Objective
 
 Turn the existing QR menu, online orders, and reservations into independently
@@ -393,4 +398,3 @@ Do not start with broad implementation. First:
 4. identify backward-compatibility and rollout risks;
 5. then implement Phase 1 only, verify it fully, and hand it back for review
    before proceeding to Phase 2.
-
