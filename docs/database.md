@@ -1,5 +1,16 @@
 # База данных и Supabase
 
+## Явные права журнала ящика и слагов (167)
+
+`drawer_opens` и `location_slugs`: у anon/PUBLIC нет табличных прав,
+authenticated имеет только SELECT под существующей RLS; запись — через
+прежние SECURITY DEFINER RPC. service_role сохраняет табличные права.
+Миграция 167 явно отзывает лишние grants, поскольку GRANT SELECT сам по себе
+не отменяет GRANT ALL из default privileges среды. Строки, RLS-политики,
+сигнатуры RPC и глобальные default privileges не меняются. Старые 106/144
+не переписываются. Проверки — cash_drawer, location_slugs и
+explicit_table_privileges; результаты конкретного выпуска — в общем журнале.
+
 ## Целевой проект
 
 Боевой project ref: `qgmnxrgtlpyqglwqmsej`.
