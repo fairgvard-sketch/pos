@@ -37,5 +37,27 @@ export default defineConfig({
       'supabase/functions/_shared/**/*.{test,spec}.ts',
     ],
     css: false,
+    coverage: {
+      // Vitest 3 по умолчанию считал весь репозиторий (`all: true`), Vitest 5 —
+      // только файлы, загруженные тестами. Из-за этого одно лишь обновление
+      // пакета меняет знаменатель метрики. Целевые файлы фиксируем явно;
+      // алгоритм подсчёта и известный пропуск Deno описаны в docs/development.md.
+      include: [
+        'src/**/*.{ts,tsx}',
+        'scripts/**/*.mjs',
+        'api/**/*.ts',
+        'supabase/functions/**/*.ts',
+        'postcss.config.js',
+        'tailwind.config.js',
+      ],
+      // `legacy/` — продуктовый референс, а не зависимость приложения
+      // (AGENTS.md), `public/` — статика: в метрику приложения не входят.
+      // Сами тесты и тестовые заглушки не измеряют покрытие кода продукта.
+      exclude: [
+        'src/test/**',
+        'src/**/*.d.ts',
+        '**/*.{test,spec}.{ts,tsx}',
+      ],
+    },
   },
 })
