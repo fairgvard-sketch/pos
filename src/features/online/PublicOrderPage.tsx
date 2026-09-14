@@ -462,6 +462,21 @@ export default function PublicOrderPage() {
     setConfigItem(item)
   }, [])
 
+  /**
+   * Карточка держит снимок товара, а каталог обновляется и при открытой
+   * карточке (staleTime 30 с, refetch при возврате на вкладку). Поэтому
+   * товар берём из ТЕКУЩЕГО меню по id: иначе гость добавляет состав и
+   * цену, которых в каталоге уже нет, а сверка корзины это не поймает —
+   * она идёт при получении меню, то есть до самого добавления.
+   */
+  const liveConfigItem = useMemo(() => {
+    if (!configItem) return null
+    if (!menu) return configItem
+    return menu.categories
+      .flatMap((category) => category.items)
+      .find((candidate) => candidate.id === configItem.id) ?? null
+  }, [configItem, menu])
+
   // Кто открыл карточку — запоминаем в эффекте, а не в обработчике:
   // запись ref из функции, переданной в проп, линтер считает чтением
   // во время рендера. Фокус на момент открытия ещё на карточке товара.
@@ -696,9 +711,13 @@ export default function PublicOrderPage() {
         />
       )}
 
+      {/* Товар исчез из каталога, пока карточка открыта: карточка остаётся
+          открытой и объясняет это. Сама не закрывается и корзину не трогает —
+          закрыть её решает гость. */}
       {configItem && (
         <ItemConfigSheet
-          item={configItem}
+          item={liveConfigItem ?? configItem}
+          gone={!!menu && !liveConfigItem}
           lang={lang}
           isRtl={isRtl}
           viewOnly={viewOnly}
@@ -1193,11 +1212,13 @@ function ItemRow({ item, lang, onTap, layout = 'row', priority = false }: {
 
 /** Конфигуратор позиции: размер, модификаторы (min/max по группе), количество */
 function ItemConfigSheet({
-  item, lang, isRtl, viewOnly = false, editing, closing, onClose, onAdd, onRemove,
+  item, lang, isRtl, viewOnly = false, gone = false, editing, closing, onClose, onAdd, onRemove,
 }: {
   item: PublicItem
   lang: Lang
   isRtl: boolean
+  /** Товара больше нет в каталоге: показываем причину вместо выбора состава */
+  gone?: boolean
   /** Витрина без модуля заказов (100): карточка только показывает состав/цену */
   viewOnly?: boolean
   /** Правка строки корзины: открываем с уже выбранными вариантом и модификаторами */
@@ -1279,6 +1300,19 @@ function ItemConfigSheet({
   const missingGroup = item.modifier_groups.find(
     (g) => g.modifiers.filter((m) => selected.has(m.id)).length < g.min_select
   )
+  /**
+   * Каталог обновился, пока карточка открыта: размер мог исчезнуть, а
+   * размеры — появиться у товара, где их не было. Выбор проверяем по
+   * текущему каталогу (variant, а не сохранённый id), и новый размер за
+   * гостя не выбираем даже при наличии default — это его решение.
+   * Выбранные добавки, которых больше нет, отпадают там же, где считается
+   * состав: он собирается из текущих групп товара.
+   */
+  const needsVariant = item.variants.length > 0 && variant === null
+  // max_select мог уменьшиться уже после выбора гостя
+  const overfilledGroup = item.modifier_groups.find(
+    (g) => g.max_select > 0 && g.modifiers.filter((m) => selected.has(m.id)).length > g.max_select
+  )
 
   function toggleMod(groupId: string, modId: string) {
     const group = item.modifier_groups.find((g) => g.id === groupId)!
@@ -1345,10 +1379,15 @@ function ItemConfigSheet({
         </div>
 
         <div className="public-menu-item-options">
-          {item.description && (
+          {gone && (
+            <p className="public-menu-item-detail-description" role="status">
+              {t(lang, 'pubItemGone').replace('{item}', item.name)}
+            </p>
+          )}
+          {!gone && item.description && (
             <p className="public-menu-item-detail-description">{item.description}</p>
           )}
-          {item.variants.length > 0 && (
+          {!gone && item.variants.length > 0 && (
             <div className="flex gap-2 flex-wrap">
               {item.variants.map((v) => (
                 <Chip key={v.id} active={variantId === v.id} onClick={() => setVariantId(v.id)}>
@@ -1358,7 +1397,7 @@ function ItemConfigSheet({
             </div>
           )}
 
-          {item.modifier_groups.map((g) => (
+          {!gone && item.modifier_groups.map((g) => (
             <div key={g.id}>
               <div className="text-sm font-bold text-gray-500 mb-2">
                 {g.name}
@@ -1383,7 +1422,7 @@ function ItemConfigSheet({
 
         </div>
 
-        {!viewOnly && (
+        {!viewOnly && !gone && (
         <div className="public-menu-item-submit">
           {/* Количество + добавление — одна полоса: степпер слева, кнопка справа */}
           <div className="flex items-center gap-3">
@@ -1411,7 +1450,7 @@ function ItemConfigSheet({
               </button>
             )}
             <button
-              disabled={!!missingGroup}
+              disabled={!!missingGroup || needsVariant || !!overfilledGroup}
               onClick={() => {
                 const mods = item.modifier_groups.flatMap((g) => g.modifiers).filter((m) => selected.has(m.id))
                 const line = {
@@ -1434,8 +1473,12 @@ function ItemConfigSheet({
               className="flex-1 min-w-0 h-14 rounded-2xl bg-gray-900 text-white font-bold disabled:opacity-40
                          active:scale-[0.98] transition-all flex items-center justify-center gap-2 px-4"
             >
-              {missingGroup ? (
+              {needsVariant ? (
+                <span className="truncate">{t(lang, 'pubChooseSize')}</span>
+              ) : missingGroup ? (
                 <span className="truncate">{`${t(lang, 'pubChoose')}: ${missingGroup.name}`}</span>
+              ) : overfilledGroup ? (
+                <span className="truncate">{`${t(lang, 'pubChoose')}: ${overfilledGroup.name}`}</span>
               ) : (
                 <>
                   <span>{t(lang, editing ? 'save' : 'pubAdd')}</span>
@@ -2358,6 +2401,10 @@ function publicErrorText(lang: Lang, code: string, detail?: string): string {
     // Выбранное время вне часов работы (112): слот мог устареть, пока
     // гость заполнял форму, — просим выбрать заново.
     case 'pickup_outside_hours': return t(lang, 'pubErrPickupHours')
+    // Состав позиции не прошёл серверную проверку (171): каталог изменился,
+    // пока гость оформлял заказ, либо заявку прислал устаревший клиент.
+    case 'invalid_composition':
+      return `${t(lang, 'pubErrComposition')}${detail ? `: ${detail}` : ''}`
     case 'invalid_table': return t(lang, 'pubTableQrExpired')
     case 'table_ordering_disabled': return t(lang, 'pubTableOrderingDisabled')
     default: return t(lang, 'pubErrGeneric')
