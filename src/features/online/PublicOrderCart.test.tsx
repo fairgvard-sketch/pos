@@ -54,7 +54,7 @@ async function openCart(current = item, lines = [stored]) {
       </MemoryRouter>
     </QueryClientProvider>,
   )
-  fireEvent.click(await screen.findByRole('button', { name: 'התחלה' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'להזמין' }))
   fireEvent.click(await screen.findByRole('button', { name: new RegExp(t('he', 'pubShowItems')) }))
   await screen.findByRole('heading', { name: t('he', 'pubYourOrder'), level: 1 })
   return { ...view, client }
@@ -66,6 +66,25 @@ function updateMenu(client: QueryClient, current: PublicItem) {
 const cartText = () => document.querySelector('.public-menu-cart-lines')?.textContent ?? ''
 
 describe('открытая гостевая корзина после обновления каталога', () => {
+  it('возврат из меню на hero начинает новый заказ с пустой корзиной', async () => {
+    await openCart()
+
+    // Корзина → меню: заказ ещё сохраняется, чтобы можно было добавить позиции.
+    fireEvent.click(screen.getByRole('button', { name: t('he', 'back') }))
+    await screen.findByRole('heading', { name: 'Drinks', level: 2 })
+    expect(readPublicCart(LOC)).toHaveLength(1)
+
+    // Меню → hero: пользователь явно покинул заказ, поэтому он сбрасывается.
+    fireEvent.click(screen.getByRole('button', { name: t('he', 'back') }))
+    await screen.findByRole('button', { name: 'להזמין' })
+    await waitFor(() => expect(readPublicCart(LOC)).toEqual([]))
+
+    fireEvent.click(screen.getByRole('button', { name: 'להזמין' }))
+    await screen.findByRole('heading', { name: 'Drinks', level: 2 })
+    expect(screen.queryByRole('button', { name: new RegExp(t('he', 'pubShowItems')) }))
+      .not.toBeInTheDocument()
+  })
+
   it('восстановление обновляет имя товара даже без новой цены и сохраняет его на диск', async () => {
     const view = await openCart({ ...item, name: 'Renamed coffee' })
     expect(cartText()).toContain('Renamed coffee')

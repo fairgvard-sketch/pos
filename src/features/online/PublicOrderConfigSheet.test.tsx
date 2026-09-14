@@ -54,7 +54,7 @@ async function openConfigSheet(name = 'Coffee') {
       </MemoryRouter>
     </QueryClientProvider>,
   )
-  fireEvent.click(await screen.findByRole('button', { name: 'התחלה' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'להזמין' }))
   const card = (await screen.findAllByRole('button'))
     .find((button) => button.className.includes('public-menu-item-card')
       && button.textContent?.includes(name))

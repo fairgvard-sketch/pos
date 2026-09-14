@@ -99,6 +99,7 @@ export default function PublicOrderPage() {
   // Нельзя выводить это из routeTransition.phase: иначе после hero → menu
   // список получает вторую анимацию и визуально «мигает».
   const [categoryMotion, setCategoryMotion] = useState(false)
+  const [cartNotice, setCartNotice] = useState<string | null>(null)
   const reducedMotion = usePrefersReducedMotion()
   const itemCloseTimer = useRef<number | undefined>(undefined)
   const itemTrigger = useRef<HTMLElement | null>(null)
@@ -145,9 +146,15 @@ export default function PublicOrderPage() {
    */
   const resetToStart = () => {
     window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+    // Hero означает начало нового заказа. Чистим диск синхронно, чтобы
+    // закрытие вкладки сразу после возврата не успело восстановить старую
+    // корзину до следующего useEffect.
+    writePublicCart(locId, [])
     setCart([])
     setConfigItem(null)
     setConfigClosing(false)
+    setEditingKey(null)
+    setCartNotice(null)
     setActiveCat(null)
     setCategoryMotion(false)
     setCheckoutStage('cart')
@@ -201,7 +208,6 @@ export default function PublicOrderPage() {
    * изменить обязательные опции. Обновляем при получении свежего меню;
    * серверная проверка при отправке всё равно необходима.
    */
-  const [cartNotice, setCartNotice] = useState<string | null>(null)
   const reconciledFor = useRef<PublicMenu | null>(null)
   useEffect(() => {
     if (!menu || reconciledFor.current === menu) return
@@ -575,15 +581,16 @@ export default function PublicOrderPage() {
         })
       }}
       // Возврат в шапке: из оплаты → к корзине, из корзины → к меню,
-      // из меню → на заставку. Раньше на экране меню кнопки не было, и
-      // гость, вошедший через «Начать», не мог вернуться назад.
+      // из меню → на заставку и к новому заказу с пустой корзиной. Раньше
+      // на экране меню кнопки не было, и гость, вошедший через «Заказать»,
+      // не мог вернуться назад.
       onBack={
         view === 'checkout'
           ? checkoutStage === 'payment'
             ? () => navigateWithTransition('back', () => setCheckoutStage('cart'))
             : () => navigateWithTransition('back', () => setView('menu'))
           : hasStarted
-            ? () => navigateWithTransition('back', () => setHasStarted(false))
+            ? () => navigateWithTransition('back', resetToStart)
             : undefined
       }
       backLabel={t(lang, 'back')}
@@ -809,7 +816,7 @@ function Shell({
   }, [routeKey])
 
   // Пока hero полностью закрывает каталог, запрещаем прокрутку скрытого
-  // слоя. При нажатии «Начать» блокировка снимается до движения обложки.
+  // слоя. При нажатии «Заказать» блокировка снимается до движения обложки.
   useEffect(() => {
     if (!hero) return
     const previousOverflow = document.body.style.overflow
@@ -874,9 +881,9 @@ function Shell({
                 type="button"
                 className="public-menu-hero-scroll public-menu-route-focus"
                 onClick={onHeroStart}
-                aria-label="התחלה"
+                aria-label="להזמין"
               >
-                <span>התחל</span>
+                <span>להזמין</span>
               </button>
             </header>
           </div>

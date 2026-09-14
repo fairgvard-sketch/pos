@@ -2,6 +2,13 @@ import { flushSync } from 'react-dom'
 
 export type NavDirection = 'forward' | 'back'
 
+interface SameDocumentViewTransition {
+  finished: Promise<void>
+  skipTransition?: () => void
+}
+
+let activeTransition: SameDocumentViewTransition | null = null
+
 /**
  * Переход между экранами гостевого сценария через View Transitions API.
  *
@@ -23,10 +30,15 @@ export type NavDirection = 'forward' | 'back'
  */
 export function navigateWithTransition(direction: NavDirection, commit: () => void): void {
   const doc = document as Document & {
-    startViewTransition?: (update: () => void) => { finished: Promise<void> }
+    startViewTransition?: (update: () => void) => SameDocumentViewTransition
   }
 
+  let committed = false
   const apply = () => {
+    // Некоторые реализации вызывают update-callback даже после отмены
+    // перехода. При аварийном fallback не даём одному тапу примениться дважды.
+    if (committed) return
+    committed = true
     // flushSync: снапшот «после» снимается сразу по завершении колбэка,
     // обычный асинхронный рендер React в него бы не успел.
     flushSync(() => commit())
@@ -41,9 +53,41 @@ export function navigateWithTransition(direction: NavDirection, commit: () => vo
     return
   }
 
+  // Новый тап важнее незаконченной декорации. Hero уже виден под снапшотом
+  // возврата, поэтому пользователь может снова нажать «Заказать» до конца
+  // 550-ms анимации. Второй document.startViewTransition в этот момент
+  // нестабилен в браузерах с ранней реализацией API (особенно вокруг video):
+  // отменяем старый снимок и применяем новое состояние без второй анимации.
+  if (activeTransition) {
+    try {
+      activeTransition.skipTransition?.()
+    } catch {
+      // Даже ошибочная отмена анимации не имеет права блокировать навигацию.
+    }
+    apply()
+    return
+  }
+
   document.documentElement.dataset.nav = direction
-  const transition = doc.startViewTransition(apply)
-  void transition.finished.finally(() => {
+  let transition: SameDocumentViewTransition
+  try {
+    transition = doc.startViewTransition(apply)
+  } catch {
+    // Анимация — progressive enhancement: даже при ошибке браузерного API
+    // навигация обязана состояться.
     delete document.documentElement.dataset.nav
-  })
+    apply()
+    return
+  }
+
+  activeTransition = transition
+  void transition.finished
+    .catch(() => undefined)
+    .finally(() => {
+      // Старый transition может завершиться уже после нового. Он не должен
+      // снять направление или занулить ссылку у более свежего перехода.
+      if (activeTransition !== transition) return
+      activeTransition = null
+      delete document.documentElement.dataset.nav
+    })
 }
