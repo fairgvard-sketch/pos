@@ -1,5 +1,5 @@
 const BULOCHKA_LOCATION_ID = 'fe2eebf0-65e3-45b4-a81f-331359d71955'
-const BULOCHKA_BUNDLED_HERO = '/brand/bulochka/hero.mp4?v=2'
+const BULOCHKA_BUNDLED_HERO = '/brand/bulochka/hero.mp4?v=3'
 
 // This upload is the original 4.6 MB source now replaced by the optimized
 // bundled asset. A later owner upload must still take precedence.

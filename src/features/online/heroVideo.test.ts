@@ -8,13 +8,13 @@ const LEGACY_UPLOAD =
 describe('resolvePublicHeroVideo', () => {
   it('uses the optimized bundled Bulochka video for the legacy upload', () => {
     expect(resolvePublicHeroVideo(BULOCHKA, LEGACY_UPLOAD)).toBe(
-      '/brand/bulochka/hero.mp4?v=2',
+      '/brand/bulochka/hero.mp4?v=3',
     )
   })
 
   it('uses the bundled showcase video when no upload is configured', () => {
     expect(resolvePublicHeroVideo(BULOCHKA, null)).toBe(
-      '/brand/bulochka/hero.mp4?v=2',
+      '/brand/bulochka/hero.mp4?v=3',
     )
   })
 
