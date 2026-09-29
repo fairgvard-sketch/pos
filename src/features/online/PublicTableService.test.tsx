@@ -172,6 +172,48 @@ describe('ANGLE Guest table service', () => {
     })
   })
 
+  it('restores the submitted item summary from the server after reload', async () => {
+    localStorage.setItem('kassa-public-active', JSON.stringify({
+      clientUuid: CLIENT,
+      locId: LOC,
+    }))
+    vi.mocked(fetchPublicMenu).mockResolvedValue({
+      ...menu,
+      categories: [{ id: 'popular', name: 'Popular', items: [COFFEE] }],
+    })
+    vi.mocked(fetchPublicStatus).mockResolvedValue({
+      status: 'accepted',
+      reject_reason: null,
+      total: COFFEE.price + 200,
+      items: [{
+        menu_item_id: COFFEE.id,
+        variant_id: null,
+        modifier_ids: ['oat'],
+        qty: 1,
+        notes: null,
+        name: COFFEE.name,
+        variant_name: null,
+        unit_price: COFFEE.price + 200,
+        line_total: COFFEE.price + 200,
+        mods: [{ id: 'oat', name: 'Oat milk', price_delta: 200 }],
+      }],
+      daily_number: null,
+      order_status: 'open',
+      table_label: '12',
+      created_at: new Date().toISOString(),
+    })
+
+    renderTable()
+    fireEvent.click(await screen.findByRole('tab', {
+      name: new RegExp(t('he', 'pubYourOrder')),
+    }))
+
+    expect(await screen.findByTestId('table-live-order-summary')).toBeInTheDocument()
+    expect(screen.getByText(`1 × ${COFFEE.name}`)).toBeInTheDocument()
+    expect(screen.getByText('Oat milk')).toBeInTheDocument()
+    expect(screen.queryByLabelText(t('he', 'pubOrderProgress'))).not.toBeInTheDocument()
+  })
+
   it('sends water optimistically and then shows the accepted server state', async () => {
     let resolveSubmit!: (value: Awaited<ReturnType<typeof submitPublicServiceRequest>>) => void
     vi.spyOn(globalThis.crypto, 'randomUUID').mockReturnValue(CLIENT)

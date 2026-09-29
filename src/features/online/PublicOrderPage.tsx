@@ -2571,6 +2571,19 @@ function TableOrderSummary({ lang, status, items, itemImages }: {
   const cancelled = status.status === 'rejected'
     || status.status === 'cancelled'
     || status.order_status === 'voided'
+  // Серверный снимок авторитетнее локальной копии: он содержит именно те
+  // названия, добавки и цены, которые были приняты при отправке. Локальная
+  // копия остаётся запасным вариантом на короткое окно релиза миграции.
+  const serverItems = (status.items ?? []).map((line, index) => ({
+    key: `${line.menu_item_id}:${line.variant_id ?? ''}:${index}`,
+    itemId: line.menu_item_id,
+    name: line.name,
+    variantName: line.variant_name,
+    modNames: line.mods.map((mod) => mod.name),
+    unitPrice: line.unit_price,
+    qty: line.qty,
+  }))
+  const displayItems = serverItems.length > 0 ? serverItems : items
 
   return (
     <main
@@ -2587,9 +2600,9 @@ function TableOrderSummary({ lang, status, items, itemImages }: {
         )}
       </header>
 
-      {items.length > 0 ? (
+      {displayItems.length > 0 ? (
         <section className="angle-live-order-lines" aria-label={t(lang, 'pubYourOrder')}>
-          {items.map((line) => (
+          {displayItems.map((line) => (
             <article key={line.key} className="angle-live-order-line">
               <span className="angle-live-order-media" aria-hidden>
                 {itemImages[line.itemId] ? (

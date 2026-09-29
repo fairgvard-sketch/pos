@@ -320,6 +320,23 @@ export async function submitPublicOrder(payload: SubmitPayload): Promise<SubmitR
   return res.json()
 }
 
+export interface PublicStatusItem {
+  menu_item_id: string
+  variant_id: string | null
+  modifier_ids: string[]
+  qty: number
+  notes: string | null
+  name: string
+  variant_name: string | null
+  unit_price: number
+  line_total: number
+  mods: Array<{
+    id: string
+    name: string
+    price_delta: number
+  }>
+}
+
 export interface PublicStatus {
   /**
    * new/accepted/rejected — исходный цикл (050, POS-приёмка).
@@ -329,6 +346,8 @@ export interface PublicStatus {
   status: 'new' | 'accepted' | 'preparing' | 'ready' | 'completed' | 'rejected' | 'cancelled'
   reject_reason: string | null
   total: number
+  /** Серверный снимок состава: восстанавливает «Ваш заказ» после reload. */
+  items?: PublicStatusItem[]
   daily_number: number | null
   /** Статус настоящего заказа: open (готовится) | paid/fulfilled (выдан) | voided */
   order_status: string | null
