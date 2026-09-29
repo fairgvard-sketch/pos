@@ -581,7 +581,9 @@ export default function PublicOrderPage() {
   // Благодаря стабильному ключу каталог не перемонтируется и не мигает
   // при открытии или возврате на заставку.
   const routeKey = tableContext
-    ? `${liveTableTab}-${liveTableTab === 'order' ? checkoutStage : 'root'}`
+    ? view === 'checkout'
+      ? `table-checkout-${checkoutStage}`
+      : `${liveTableTab}-root`
     : view === 'checkout' ? checkoutStage : 'menu'
   const visibleCategoryId = activeCat ?? menu.categories[0]?.id ?? null
   const normalizedMenuSearch = menuSearch.trim().toLocaleLowerCase()
@@ -590,9 +592,13 @@ export default function PublicOrderPage() {
       `${item.name} ${item.description ?? ''}`.toLocaleLowerCase().includes(normalizedMenuSearch),
     )
     : null
-  const showMenu = tableContext ? liveTableTab === 'menu' : view === 'menu'
+  const showMenu = tableContext
+    ? liveTableTab === 'menu' && view === 'menu'
+    : view === 'menu'
   const showCheckout = tableContext
-    ? liveTableTab === 'order' && !activeUuid && cartCount > 0
+    // После первого заказа гость может дозаказать: сервер добавит новую
+    // заявку в тот же открытый счёт стола. Статус показывает последнюю.
+    ? view === 'checkout' && cartCount > 0
     : view === 'checkout'
   const liveTableHeader = tableContext ? (
     <LiveTableHeader
@@ -600,16 +606,18 @@ export default function PublicOrderPage() {
       restaurantName={menu.location.business_name || menu.location.name}
       tableLabel={tableContext.label}
       activeTab={liveTableTab}
-      orderCount={cartCount}
+      // Бейдж «Ваш заказ» относится только к уже отправленной заявке.
+      // Неотправленные блюда остаются частью меню и нижней корзины.
+      orderCount={activeUuid ? 1 : 0}
       serviceCount={activeServiceCount}
       onTab={(tab) => {
         window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+        // Корзина и её подтверждение принадлежат вкладке «Меню».
+        // «Ваш заказ» показывает только уже отправленную заявку, поэтому
+        // переход по вкладкам закрывает проверку корзины, но не очищает её.
+        setCheckoutStage('cart')
+        setView('menu')
         setLiveTableTab(tab)
-        if (tab === 'menu') setView('menu')
-        if (tab === 'order' && !activeUuid) {
-          setCheckoutStage('cart')
-          setView('checkout')
-        }
       }}
     />
   ) : undefined
@@ -718,7 +726,6 @@ export default function PublicOrderPage() {
             navigateWithTransition('forward', () => {
               setCheckoutStage('cart')
               setView('checkout')
-              if (tableContext) setLiveTableTab('order')
             })
           }}
         />
@@ -793,11 +800,11 @@ export default function PublicOrderPage() {
 
       {tableContext && liveTableTab === 'order' && activeUuid && (
         <div className="angle-live-table-panel">
-          <StatusScreen lang={lang} clientUuid={activeUuid} onNewOrder={startNewOrder} />
+          <StatusScreen lang={lang} clientUuid={activeUuid} onNewOrder={startNewOrder} readOnly />
         </div>
       )}
 
-      {tableContext && liveTableTab === 'order' && !activeUuid && cartCount === 0 && (
+      {tableContext && liveTableTab === 'order' && !activeUuid && (
         <LiveTableEmptyOrder lang={lang} onMenu={() => setLiveTableTab('menu')} />
       )}
 
@@ -1738,6 +1745,7 @@ function ItemConfigSheet({
 function CartStage({
   lang, cart, total, itemImages, recommendations,
   onQty, onEditLine, onRecommend, onAddItems, onContinue,
+  actionLabel, actionDisabled = false, actionAlert,
 }: {
   lang: Lang
   cart: CartLine[]
@@ -1750,6 +1758,10 @@ function CartStage({
   onRecommend: (item: PublicItem) => void
   onAddItems: () => void
   onContinue: () => void
+  /** У QR-стола корзина сама является подтверждением — шага оплаты нет. */
+  actionLabel?: string
+  actionDisabled?: boolean
+  actionAlert?: string | null
 }) {
   const cartCount = cart.reduce((sum, line) => sum + line.qty, 0)
 
@@ -1848,9 +1860,17 @@ function CartStage({
       </div>
 
       <div className="public-menu-checkout-submitbar is-cart">
-        <button type="button" onClick={onContinue} className="public-menu-checkout-submit">
+        {actionAlert && (
+          <div className="public-menu-checkout-alert is-error" role="alert">{actionAlert}</div>
+        )}
+        <button
+          type="button"
+          onClick={onContinue}
+          disabled={actionDisabled}
+          className="public-menu-checkout-submit"
+        >
           <span className="public-menu-checkout-submit-count">{cartCount}</span>
-          <span>{t(lang, 'pubContinueToPayment')}</span>
+          <span>{actionLabel ?? t(lang, 'pubContinueToPayment')}</span>
           <strong dir="ltr">{formatMoney(total, lang)}</strong>
         </button>
       </div>
@@ -2030,7 +2050,16 @@ function CheckoutScreen({
         onEditLine={onEditLine}
         onRecommend={onRecommend}
         onAddItems={onAddItems}
-        onContinue={onContinue}
+        onContinue={isTableOrder ? () => void submit() : onContinue}
+        actionLabel={isTableOrder
+          ? t(lang, busy ? 'pubSubmitting' : 'pubConfirmTableOrder')
+          : undefined}
+        actionDisabled={isTableOrder && (busy || !canSubmit || !valid)}
+        actionAlert={isTableOrder
+          // Предзаказ за столом невозможен: если зал сейчас не принимает,
+          // не обещаем гостю выбор другого времени.
+          ? error || contextMessage || (!openNow ? t(lang, 'pubClosed') : availabilityMessage)
+          : null}
       />
     )
   }
@@ -2310,10 +2339,12 @@ function CheckoutScreen({
 }
 
 /** Статус заявки: поллинг каждые 5 секунд, пока не решена и не выдана */
-function StatusScreen({ lang, clientUuid, onNewOrder }: {
+function StatusScreen({ lang, clientUuid, onNewOrder, readOnly = false }: {
   lang: Lang
   clientUuid: string
   onNewOrder: () => void
+  /** В Live Table новый заказ начинается во вкладке «Меню». */
+  readOnly?: boolean
 }) {
   const [status, setStatus] = useState<PublicStatus | null>(null)
   const [lost, setLost] = useState(false)
@@ -2380,7 +2411,7 @@ function StatusScreen({ lang, clientUuid, onNewOrder }: {
     return (
       <CenterCard>
         <p className="font-bold text-gray-900">{t(lang, 'pubStatusLost')}</p>
-        <NewOrderBtn lang={lang} onClick={onNewOrder} />
+        {!readOnly && <NewOrderBtn lang={lang} onClick={onNewOrder} />}
       </CenterCard>
     )
   }
@@ -2398,7 +2429,7 @@ function StatusScreen({ lang, clientUuid, onNewOrder }: {
       <CenterCard>
         <p className="text-2xl font-black text-gray-900">{t(lang, 'pubRejectedTitle')}</p>
         <p className="text-sm text-gray-500 mt-2">{status.reject_reason || t(lang, 'pubRejectedHint')}</p>
-        <NewOrderBtn lang={lang} onClick={onNewOrder} />
+        {!readOnly && <NewOrderBtn lang={lang} onClick={onNewOrder} />}
       </CenterCard>
     )
   }
@@ -2421,7 +2452,7 @@ function StatusScreen({ lang, clientUuid, onNewOrder }: {
     return (
       <CenterCard>
         <p className="text-2xl font-black text-gray-900">{t(lang, 'pubCancelledTitle')}</p>
-        <NewOrderBtn lang={lang} onClick={onNewOrder} />
+        {!readOnly && <NewOrderBtn lang={lang} onClick={onNewOrder} />}
       </CenterCard>
     )
   }
@@ -2462,7 +2493,7 @@ function StatusScreen({ lang, clientUuid, onNewOrder }: {
       </p>
       <p className="text-lg font-bold tabular-nums text-gray-900 mt-3" dir="ltr">{formatMoney(status.total, lang)}</p>
       {/* Пока заказ не выдан — вторичная, чтобы случайно не потерять экран с номером */}
-      <NewOrderBtn lang={lang} onClick={onNewOrder} secondary={!isDone} />
+      {!readOnly && <NewOrderBtn lang={lang} onClick={onNewOrder} secondary={!isDone} />}
     </CenterCard>
   )
 }
