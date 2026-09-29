@@ -1127,8 +1127,15 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
 
   .angle-table-service-page {
     min-height: calc(100svh - 7rem - env(safe-area-inset-top));
-    padding: 2rem 1rem calc(2rem + env(safe-area-inset-bottom));
+    padding: 1.25rem 1rem calc(2rem + env(safe-area-inset-bottom));
+    border-top: 1px solid rgb(17 19 21 / 6%);
     background: #fff;
+  }
+
+  .angle-table-service-page > :not(.sr-only) {
+    width: 100%;
+    max-width: 30rem;
+    margin-inline: auto;
   }
 
   .angle-table-service-close {
@@ -1170,18 +1177,46 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   .angle-table-service-primary {
     display: flex;
     width: 100%;
-    min-height: 3.5rem;
+    min-height: 4.75rem;
     align-items: center;
-    justify-content: center;
-    gap: .65rem;
+    justify-content: flex-start;
+    gap: .85rem;
     margin-top: 1.25rem;
-    padding: .75rem 1rem;
-    border-radius: .85rem;
+    padding: .75rem;
+    border: 1px solid #111315;
+    border-radius: 1.25rem;
     background: #111315;
+    box-shadow: 0 .5rem 1.5rem rgb(17 19 21 / 10%);
     color: #fff;
+    text-align: start;
+    transition: transform 150ms ease, background-color 150ms ease;
+  }
+
+  .angle-table-service-page .angle-table-service-primary {
+    margin-top: 0;
+  }
+
+  .angle-table-service-primary-icon {
+    display: grid;
+    width: 3.25rem;
+    height: 3.25rem;
+    flex-shrink: 0;
+    place-items: center;
+    border: 1px solid rgb(255 255 255 / 14%);
+    border-radius: 1rem;
+    background: rgb(255 255 255 / 9%);
+  }
+
+  .angle-table-service-primary-copy {
+    display: grid;
+    min-width: 0;
+    gap: .2rem;
+  }
+
+  .angle-table-service-primary-copy strong {
     font-size: .95rem;
     font-weight: 800;
-    transition: transform 150ms ease;
+    line-height: 1.25;
   }
 
   .angle-table-service-primary:active {
@@ -1189,14 +1224,29 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   }
 
   .angle-table-service-primary.is-active {
-    background: #e8f5eb;
-    color: #176c35;
+    border-color: #cdd1ce;
+    background: #eef0ee;
+    box-shadow: none;
+    color: #171918;
   }
 
   .angle-table-service-primary small {
-    color: inherit;
-    font-size: .7rem;
-    font-weight: 650;
+    overflow: hidden;
+    color: rgb(255 255 255 / 66%);
+    font-size: .68rem;
+    font-weight: 600;
+    line-height: 1.35;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .angle-table-service-primary.is-active small {
+    color: #5f6460;
+  }
+
+  .angle-table-service-primary.is-active .angle-table-service-primary-icon {
+    border-color: rgb(17 19 21 / 9%);
+    background: #fff;
   }
 
   .angle-table-service-activity {
@@ -1251,52 +1301,68 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   }
 
   .angle-table-service-group {
-    margin-top: 2rem;
+    margin-top: 2.25rem;
   }
 
   .angle-table-service-group h2 {
-    margin: 0 0 .75rem;
-    color: #242624;
-    font-size: 1rem;
+    margin: 0 0 .85rem;
+    padding-inline: .25rem;
+    color: #363936;
+    font-size: .82rem;
     font-weight: 800;
+    letter-spacing: .01em;
   }
 
   .angle-table-service-quick-grid {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: .5rem;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: .625rem;
   }
 
   .angle-table-service-quick {
     display: flex;
     min-width: 0;
-    min-height: 7rem;
+    min-height: 7.5rem;
     align-items: center;
     flex-direction: column;
     justify-content: center;
-    gap: .55rem;
-    padding: .75rem .5rem;
-    border: 1px solid rgb(17 19 21 / 8%);
-    border-radius: 1rem;
-    background: rgb(255 255 255 / 74%);
+    gap: .65rem;
+    padding: .75rem .35rem;
+    border: 1px solid #e5e7e4;
+    border-radius: 1.25rem;
+    background: #f6f6f4;
+    box-shadow: 0 1px 0 rgb(17 19 21 / 3%);
     color: #242624;
     text-align: center;
+    transition: transform 150ms ease, border-color 150ms ease, background-color 150ms ease;
   }
 
   .angle-table-service-icon {
     display: grid;
-    color: #2688c7;
+    width: 2.75rem;
+    height: 2.75rem;
+    flex-shrink: 0;
     place-items: center;
+    border: 1px solid #e4e6e3;
+    border-radius: 1rem;
+    background: #fff;
+    box-shadow: 0 .25rem .75rem rgb(17 19 21 / 5%);
+    color: #171918;
+  }
+
+  .angle-service-glyph {
+    width: 1.55rem;
+    height: 1.55rem;
   }
 
   .angle-table-service-label {
-    font-size: .8rem;
-    font-weight: 750;
+    font-size: .78rem;
+    font-weight: 800;
     line-height: 1.2;
   }
 
   .angle-table-service-state {
-    color: #176c35;
+    color: #565b57;
     font-size: .65rem;
     font-weight: 700;
     line-height: 1.2;
@@ -1304,32 +1370,35 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
 
   .angle-table-service-quick.is-active,
   .angle-table-service-row.is-active {
-    border-color: rgb(23 128 68 / 30%);
-    background: #edf7ef;
+    border-color: #bbc0bb;
+    background: #eef0ee;
   }
 
   .angle-table-service-row-list {
-    overflow: hidden;
-    border: 1px solid rgb(17 19 21 / 8%);
-    border-radius: 1rem;
-    background: rgb(255 255 255 / 74%);
+    display: grid;
+    gap: .625rem;
   }
 
   .angle-table-service-row {
     display: grid;
     width: 100%;
-    min-height: 3.5rem;
+    min-height: 4.25rem;
     grid-template-columns: auto minmax(0, 1fr) auto;
     align-items: center;
     gap: .75rem;
-    padding: .5rem 1rem;
-    border-bottom: 1px solid rgb(17 19 21 / 8%);
+    padding: .6rem .75rem;
+    border: 1px solid #e5e7e4;
+    border-radius: 1.1rem;
+    background: #f8f8f6;
     color: #242624;
     text-align: start;
+    transition: transform 150ms ease, border-color 150ms ease, background-color 150ms ease;
   }
 
-  .angle-table-service-row:last-child {
-    border-bottom: 0;
+  .angle-table-service-row .angle-table-service-icon {
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: .9rem;
   }
 
   .angle-table-service-row .angle-table-service-state {
@@ -1337,8 +1406,26 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   }
 
   .angle-table-service-chevron {
-    color: #8a8c89;
-    font-size: 1.25rem;
+    display: grid;
+    width: 2rem;
+    height: 2rem;
+    place-items: center;
+    border: 1px solid #e4e6e3;
+    border-radius: 999px;
+    background: #fff;
+    color: #727672;
+    font-size: 1.15rem;
+    line-height: 1;
+  }
+
+  .angle-table-service-quick:not(:disabled):active,
+  .angle-table-service-row:not(:disabled):active {
+    transform: scale(.98);
+  }
+
+  .angle-table-service-quick:disabled:not(.is-active),
+  .angle-table-service-row:disabled:not(.is-active) {
+    opacity: .52;
   }
 
   .angle-table-service-error {
