@@ -264,7 +264,8 @@ QR конкретного стола открывает отдельную об�
    (режим без кассы), `112`/`116` (часы и предзаказ),
    `139`–`142` (номер заявки, история переходов, рабочий стол кабинета и
    правило долга), `172_guest_service_requests.sql` (ANGLE Guest Service),
-   `173_restaurant_directory.sql` (публичный каталог заведений).
+   `173_restaurant_directory.sql` (публичный каталог заведений) и
+   `174_restaurant_directory_privileges.sql` (публикация только через операторский контур).
 2. **Edge Functions:**
    ```bash
    supabase functions deploy public-menu --project-ref qgmnxrgtlpyqglwqmsej

@@ -27,6 +27,10 @@ INSERT INTO orgs (id, name) VALUES
 INSERT INTO locations (id, org_id, name) VALUES
   ('d1000000-0000-4000-8000-000000000001', 'd0000000-0000-4000-8000-000000000001', 'Directory loc A'),
   ('d1000000-0000-4000-8000-000000000002', 'd0000000-0000-4000-8000-000000000002', 'Directory loc B');
+INSERT INTO auth.users (id, raw_app_meta_data) VALUES
+  ('d4000000-0000-4000-8000-000000000001', '{"org_id":"d0000000-0000-4000-8000-000000000001"}');
+INSERT INTO organization_members (org_id, auth_user_id, role) VALUES
+  ('d0000000-0000-4000-8000-000000000001', 'd4000000-0000-4000-8000-000000000001', 'owner');
 
 INSERT INTO restaurant_directory_profiles (
   location_id, org_id, is_published, demo_rating, demo_rating_count
