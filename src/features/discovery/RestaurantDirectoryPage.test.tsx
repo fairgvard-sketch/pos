@@ -106,6 +106,8 @@ describe('ANGLE restaurant directory', () => {
     expect(screen.queryByRole('button', { name: 'All' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Bakery' }).querySelector('img'))
       .toHaveAttribute('src', '/discovery/cuisines/bakery.jpg')
+    expect(screen.getByLabelText('Profile')).toHaveAttribute('aria-disabled', 'true')
+    expect(document.querySelector('.angle-discovery-bottom')).not.toBeInTheDocument()
     expect(document.querySelector('.angle-discovery-map')).not.toBeInTheDocument()
     expect(screen.queryByText('ANGLE restaurants')).not.toBeInTheDocument()
     expect(screen.getByText('Demo')).toBeInTheDocument()

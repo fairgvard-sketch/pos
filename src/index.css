@@ -4746,7 +4746,7 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   max-width: 30rem;
   margin: 0 auto;
   overflow-x: hidden;
-  padding-bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px));
+  padding-bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px));
 }
 
 .angle-discovery-panel {
@@ -4763,10 +4763,17 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   padding-top: env(safe-area-inset-top, 0px);
 }
 
-.angle-discovery-wordmark {
-  font-family: 'Archivo Black', 'Inter', sans-serif;
-  font-size: 1.125rem;
-  letter-spacing: -.04em;
+.angle-discovery-profile {
+  position: absolute;
+  left: 0;
+  display: grid;
+  width: 2.75rem;
+  height: 2.75rem;
+  border: 1px solid #e1e4e7;
+  border-radius: 999px;
+  background: #fff;
+  color: #242424;
+  place-items: center;
 }
 
 .angle-discovery-location {
@@ -4794,10 +4801,13 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
 
 .angle-discovery-search {
   display: flex;
-  min-height: 3.25rem;
+  width: 100%;
+  max-width: 24rem;
+  min-height: 2.75rem;
   align-items: center;
   justify-content: center;
-  padding: 0 1.5rem;
+  margin: 0 auto;
+  padding: 0 1rem;
   border: 0;
   border-radius: 999px;
   background: #f1f0ee;
@@ -4814,7 +4824,7 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   background: transparent;
   color: #171717;
   font: inherit;
-  font-size: 1rem;
+  font-size: .9375rem;
   font-weight: 600;
 }
 
@@ -4824,7 +4834,7 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
 }
 
 .angle-discovery-cuisines {
-  padding: 1.25rem 0 1rem;
+  padding: .75rem 0 .5rem;
   border-top: 1px solid #e7e9ec;
   border-bottom: 1px solid #e7e9ec;
   background: #fff;
@@ -4844,10 +4854,10 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
 
 .angle-discovery-cuisine-rail button {
   display: grid;
-  min-width: 5.5rem;
-  min-height: 6.75rem;
+  min-width: 4.75rem;
+  min-height: 5.75rem;
   flex: 0 0 auto;
-  gap: .5rem;
+  gap: .375rem;
   justify-items: center;
   padding: 0;
   border: 0;
@@ -4859,12 +4869,12 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
 .angle-discovery-cuisine-rail button > span {
   display: grid;
   overflow: hidden;
-  width: 5rem;
-  height: 5rem;
+  width: 4.25rem;
+  height: 4.25rem;
   border: 2px solid transparent;
   border-radius: 999px;
   background: #fff;
-  box-shadow: 0 .375rem 1rem rgb(17 24 39 / 10%);
+  box-shadow: 0 .25rem .75rem rgb(17 24 39 / 10%);
   transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
   place-items: center;
 }
@@ -4888,7 +4898,7 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
 .angle-discovery-cuisine-rail button.is-active { color: #171717; }
 .angle-discovery-cuisine-rail button.is-active > span {
   border-color: #171717;
-  box-shadow: 0 .375rem 1.125rem rgb(17 24 39 / 16%);
+  box-shadow: 0 .25rem .875rem rgb(17 24 39 / 16%);
 }
 
 .angle-discovery-controls {
@@ -5514,42 +5524,6 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   font-weight: 750;
   text-decoration: none;
 }
-
-.angle-discovery-bottom {
-  position: fixed;
-  z-index: 20;
-  right: 50%;
-  bottom: 0;
-  display: grid;
-  width: 100%;
-  max-width: 30rem;
-  min-height: calc(4.5rem + env(safe-area-inset-bottom, 0px));
-  padding: .625rem .75rem env(safe-area-inset-bottom, .5rem);
-  grid-template-columns: repeat(4, 1fr);
-  border-top: 1px solid #dfe3e8;
-  background: rgb(255 255 255 / 96%);
-  box-shadow: 0 -8px 24px rgb(20 20 20 / 6%);
-  transform: translateX(50%);
-}
-
-.angle-discovery-bottom a,
-.angle-discovery-bottom span {
-  display: flex;
-  min-height: 2.75rem;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: .25rem;
-  color: #737373;
-  font-weight: 650;
-  text-align: center;
-  text-decoration: none;
-}
-
-.angle-discovery-bottom small { font-size: .625rem; line-height: 1; }
-.angle-discovery-bottom svg { width: 1.25rem; height: 1.25rem; }
-
-.angle-discovery-bottom .is-active { color: #171717; font-weight: 800; }
 
 .angle-venue {
   width: 100%;

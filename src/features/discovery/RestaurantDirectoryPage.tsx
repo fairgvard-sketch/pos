@@ -29,8 +29,7 @@ const discoveryCopy = {
     mostReviewed: 'Most reviewed', priceFilter: 'Price level', clearFilters: 'Clear filters',
     reservations: 'Reservations', loading: 'Loading restaurants…',
     loadError: 'Restaurants could not be loaded.', retry: 'Try again',
-    empty: 'No restaurants match this search.', navigation: 'Main navigation', home: 'Home',
-    restaurants: 'Restaurants', profile: 'Profile', menuAvailable: 'Menu available',
+    empty: 'No restaurants match this search.', profile: 'Profile', menuAvailable: 'Menu available',
     live: 'Live', chooseLocation: 'Choose location',
     discoverTitle: 'Good places, close to you',
     browseCuisine: 'Browse by cuisine', recent: 'Recently visited',
@@ -73,8 +72,7 @@ const discoveryCopy = {
     mostReviewed: 'מספר הביקורות', priceFilter: 'רמת מחיר', clearFilters: 'איפוס סינון',
     reservations: 'הזמנות', loading: 'טוענים מסעדות…',
     loadError: 'לא הצלחנו לטעון את המסעדות.', retry: 'נסו שוב',
-    empty: 'לא נמצאו מסעדות שמתאימות לחיפוש.', navigation: 'ניווט ראשי', home: 'בית',
-    restaurants: 'מסעדות', profile: 'פרופיל', menuAvailable: 'התפריט זמין',
+    empty: 'לא נמצאו מסעדות שמתאימות לחיפוש.', profile: 'פרופיל', menuAvailable: 'התפריט זמין',
     live: 'פעיל', chooseLocation: 'בחירת מיקום',
     discoverTitle: 'מקומות טובים, קרוב אליכם',
     browseCuisine: 'חיפוש לפי מטבח', recent: 'ביקרתם לאחרונה',
@@ -146,18 +144,6 @@ const ArrowIcon = () => (
 
 const MenuIcon = () => (
   <Icon><rect x="4" y="3" width="16" height="18" rx="2" /><path d="M8 7h8M8 11h8M8 15h5" /></Icon>
-)
-
-const CalendarIcon = () => (
-  <Icon><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M16 3v4M8 3v4M3 10h18" /></Icon>
-)
-
-const HomeIcon = () => (
-  <Icon><path d="m3 11 9-8 9 8" /><path d="M5 10v11h14V10M9 21v-7h6v7" /></Icon>
-)
-
-const RestaurantsIcon = () => (
-  <Icon><path d="M7 3v7M4 3v4a3 3 0 0 0 6 0V3M7 10v11" /><path d="M16 3v18M16 3c3 1 4 4 4 7h-4" /></Icon>
 )
 
 const ProfileIcon = () => (
@@ -929,7 +915,9 @@ export function RestaurantDirectoryHome() {
     <main className="angle-discovery" dir={dir}>
       <div className="angle-discovery-panel">
         <header className="angle-discovery-header">
-          <div className="angle-discovery-wordmark">ANGLE</div>
+          <span className="angle-discovery-profile" aria-label={copy.profile} aria-disabled="true">
+            <ProfileIcon />
+          </span>
           <button
             className="angle-discovery-location"
             type="button"
@@ -1081,13 +1069,6 @@ export function RestaurantDirectoryHome() {
           )
         )}
       </div>
-
-      <nav className="angle-discovery-bottom" aria-label={copy.navigation}>
-        <Link className="is-active" to="/"><HomeIcon /><small>{copy.home}</small></Link>
-        <Link to="/"><RestaurantsIcon /><small>{copy.restaurants}</small></Link>
-        <span aria-disabled="true"><CalendarIcon /><small>{copy.reservations}</small></span>
-        <span aria-disabled="true"><ProfileIcon /><small>{copy.profile}</small></span>
-      </nav>
 
       {isLocationPickerOpen && (
         <LocationPicker
