@@ -30,6 +30,7 @@ const bulochka: PublicRestaurant = {
   summary: 'Fresh pastries and coffee.',
   hero_url: null,
   logo_url: null,
+  added_at: '2026-09-20T12:00:00.000Z',
   price_level: 2,
   hours: {
     0: [['08:00', '20:00']],
@@ -58,6 +59,8 @@ const casaRoma: PublicRestaurant = {
   address: 'Dizengoff 100, Tel Aviv',
   coordinates: { lat: 32.0809, lng: 34.7806 },
   cuisine: ['Italian', 'Pizza'],
+  added_at: '2026-09-01T12:00:00.000Z',
+  price_level: 3,
   rating: { value: 4.6, count: 180, source: 'demo' },
 }
 
@@ -98,7 +101,11 @@ describe('ANGLE restaurant directory', () => {
     expect(restaurantLinks.every((link) => link.getAttribute('href') === '/restaurants/bulochka')).toBe(true)
     expect(screen.getByRole('heading', { name: 'Good places, close to you', level: 1 })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Nearby restaurants', level: 2 })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Browse by cuisine', level: 2 })).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Browse by cuisine' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Browse by cuisine' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'All' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Bakery' }).querySelector('img'))
+      .toHaveAttribute('src', '/discovery/cuisines/bakery.jpg')
     expect(document.querySelector('.angle-discovery-map')).not.toBeInTheDocument()
     expect(screen.queryByText('ANGLE restaurants')).not.toBeInTheDocument()
     expect(screen.getByText('Demo')).toBeInTheDocument()
@@ -119,6 +126,31 @@ describe('ANGLE restaurant directory', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Italian' }))
     expect(screen.queryByRole('heading', { name: 'Bulochka' })).not.toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Casa Roma' })).toBeInTheDocument()
+  })
+
+  it('sorts restaurant cards and applies price filters from the controls', async () => {
+    vi.mocked(fetchPublicRestaurants).mockResolvedValue([bulochka, casaRoma])
+    renderAt('/')
+
+    await screen.findByRole('heading', { name: 'Casa Roma' })
+    const restaurantHrefs = () => screen.getAllByRole('link')
+      .map((link) => link.getAttribute('href'))
+      .filter((href) => href?.startsWith('/restaurants/'))
+
+    expect(restaurantHrefs()[0]).toBe('/restaurants/casa-roma')
+    fireEvent.click(screen.getByRole('button', { name: 'Top restaurants' }))
+    expect(restaurantHrefs()[0]).toBe('/restaurants/bulochka')
+
+    fireEvent.click(screen.getByRole('button', { name: /Sort restaurants:/ }))
+    fireEvent.click(within(screen.getByRole('dialog', { name: 'Sort restaurants' }))
+      .getByRole('button', { name: 'Nearest' }))
+    expect(restaurantHrefs()[0]).toBe('/restaurants/casa-roma')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Filters' }))
+    const filterDialog = screen.getByRole('dialog', { name: 'Filter restaurants' })
+    fireEvent.click(within(filterDialog).getByRole('button', { name: '₪₪' }))
+    expect(screen.getByRole('heading', { name: 'Bulochka' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Casa Roma' })).not.toBeInTheDocument()
   })
 
   it('filters by restaurant and cuisine without another server request', async () => {

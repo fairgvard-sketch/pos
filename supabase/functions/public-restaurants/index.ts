@@ -29,6 +29,7 @@ type ProfileRow = {
   cuisine_labels: string[] | null
   summary: string | null
   hero_url: string | null
+  created_at: string
   price_level: number | null
   demo_rating: number | null
   demo_rating_count: number | null
@@ -86,7 +87,7 @@ Deno.serve(async (req) => {
 
   let profileQuery = supabase
     .from('restaurant_directory_profiles')
-    .select('location_id, org_id, city, country_code, cuisine_labels, summary, hero_url, price_level, demo_rating, demo_rating_count')
+    .select('location_id, org_id, city, country_code, cuisine_labels, summary, hero_url, created_at, price_level, demo_rating, demo_rating_count')
     .eq('is_published', true)
     .order('created_at')
   if (locationFilter) profileQuery = profileQuery.eq('location_id', locationFilter)
@@ -159,6 +160,7 @@ Deno.serve(async (req) => {
       summary: profile.summary,
       hero_url: heroUrl,
       logo_url: location.logo_url,
+      added_at: profile.created_at,
       price_level: profile.price_level,
       hours: location.settings?.online_orders?.hours ?? null,
       timezone: location.timezone,

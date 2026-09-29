@@ -152,6 +152,8 @@ export interface PublicRestaurant {
   summary: string | null
   hero_url: string | null
   logo_url: string | null
+  /** Public profile creation time used by the guest directory's New restaurants sort. */
+  added_at?: string | null
   price_level: number | null
   /** Public opening windows used by the restaurant detail card. */
   hours: Record<string, [string, string][]> | null

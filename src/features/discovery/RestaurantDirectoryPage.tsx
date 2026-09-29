@@ -22,14 +22,18 @@ const discoveryCopy = {
     area: 'Current area: Tel Aviv', searchRegion: 'Find a restaurant',
     searchPlaceholder: 'Search', searchLabel: 'Search restaurants',
     filters: 'Restaurant filters', near: 'Nearby restaurants', bookmarks: 'Favourites',
+    filterRestaurants: 'Filters', sortRestaurants: 'Sort restaurants', topRestaurants: 'Top restaurants',
+    newRestaurants: 'New restaurants',
+    openNow: 'Open now', favouritesOnly: 'Favourites only', filterTitle: 'Filter restaurants',
+    sortTitle: 'Sort restaurants', nearest: 'Nearest', highestRated: 'Highest rated',
+    mostReviewed: 'Most reviewed', priceFilter: 'Price level', clearFilters: 'Clear filters',
     reservations: 'Reservations', loading: 'Loading restaurants…',
     loadError: 'Restaurants could not be loaded.', retry: 'Try again',
     empty: 'No restaurants match this search.', navigation: 'Main navigation', home: 'Home',
     restaurants: 'Restaurants', profile: 'Profile', menuAvailable: 'Menu available',
     live: 'Live', chooseLocation: 'Choose location',
-    explore: 'Explore ANGLE', discoverTitle: 'Good places, close to you',
-    discoverSubtitle: 'Restaurants, cafés and bakeries selected for your area.',
-    browseCuisine: 'Browse by cuisine', allCuisines: 'All', recent: 'Recently visited',
+    discoverTitle: 'Good places, close to you',
+    browseCuisine: 'Browse by cuisine', recent: 'Recently visited',
     searchResults: 'Search results', removeFavourite: 'Remove restaurant from favourites',
     changeLocation: 'Change location', locating: 'Locating…', yourLocation: 'My location',
     locationUnavailable: 'Location unavailable', locationTitle: 'Choose your location', close: 'Close',
@@ -62,14 +66,18 @@ const discoveryCopy = {
     area: 'האזור הנוכחי: תל אביב', searchRegion: 'חיפוש מסעדה',
     searchPlaceholder: 'חיפוש', searchLabel: 'חיפוש מסעדות',
     filters: 'מסנני מסעדות', near: 'מסעדות קרובות', bookmarks: 'מועדפים',
+    filterRestaurants: 'סינון', sortRestaurants: 'מיון מסעדות', topRestaurants: 'מסעדות מובילות',
+    newRestaurants: 'מסעדות חדשות',
+    openNow: 'פתוח עכשיו', favouritesOnly: 'מועדפים בלבד', filterTitle: 'סינון מסעדות',
+    sortTitle: 'מיון מסעדות', nearest: 'הקרובות ביותר', highestRated: 'הדירוג הגבוה ביותר',
+    mostReviewed: 'מספר הביקורות', priceFilter: 'רמת מחיר', clearFilters: 'איפוס סינון',
     reservations: 'הזמנות', loading: 'טוענים מסעדות…',
     loadError: 'לא הצלחנו לטעון את המסעדות.', retry: 'נסו שוב',
     empty: 'לא נמצאו מסעדות שמתאימות לחיפוש.', navigation: 'ניווט ראשי', home: 'בית',
     restaurants: 'מסעדות', profile: 'פרופיל', menuAvailable: 'התפריט זמין',
     live: 'פעיל', chooseLocation: 'בחירת מיקום',
-    explore: 'לגלות עם ANGLE', discoverTitle: 'מקומות טובים, קרוב אליכם',
-    discoverSubtitle: 'מסעדות, בתי קפה ומאפיות שנבחרו לאזור שלכם.',
-    browseCuisine: 'חיפוש לפי מטבח', allCuisines: 'הכול', recent: 'ביקרתם לאחרונה',
+    discoverTitle: 'מקומות טובים, קרוב אליכם',
+    browseCuisine: 'חיפוש לפי מטבח', recent: 'ביקרתם לאחרונה',
     searchResults: 'תוצאות חיפוש', removeFavourite: 'הסרת המסעדה מהמועדפים',
     changeLocation: 'שינוי מיקום', locating: 'מאתרים…', yourLocation: 'המיקום שלי',
     locationUnavailable: 'המיקום לא זמין', locationTitle: 'בחירת המיקום שלכם', close: 'סגירה',
@@ -196,33 +204,25 @@ const ClockIcon = () => (
   <Icon><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></Icon>
 )
 
-const DishIcon = () => (
-  <Icon><path d="M4 18h16M6 18a6 6 0 0 1 12 0M12 9V6" /><path d="M10 6h4" /></Icon>
+const SlidersIcon = () => (
+  <Icon><path d="M4 6h5M15 6h5M4 12h9M17 12h3M4 18h2M12 18h8" /><circle cx="12" cy="6" r="2" /><circle cx="15" cy="12" r="2" /><circle cx="9" cy="18" r="2" /></Icon>
 )
 
-const CoffeeIcon = () => (
-  <Icon><path d="M5 8h12v6a5 5 0 0 1-5 5h-2a5 5 0 0 1-5-5Z" /><path d="M17 10h1a3 3 0 0 1 0 6h-2M8 3v2M12 3v2" /></Icon>
+const SortIcon = () => (
+  <Icon><path d="M8 4v16M5 7l3-3 3 3M16 20V4M13 17l3 3 3-3" /></Icon>
 )
 
-const BakeryIcon = () => (
-  <Icon><path d="M5 16c0-5 3-9 7-9s7 4 7 9c0 2-1 3-3 3H8c-2 0-3-1-3-3Z" /><path d="m9 8 2 3M15 8l-2 3M8 14h8" /></Icon>
-)
+function cuisineArtwork(cuisine: string) {
+  const value = cuisine.toLocaleLowerCase()
+  if (/(coffee|café|cafe|קפה)/.test(value)) return '/discovery/cuisines/coffee.jpg'
+  if (/(bakery|pastry|dessert|מאפ|מאפה|קונדיט)/.test(value)) return '/discovery/cuisines/bakery.jpg'
+  if (/(italian|pizza|איטלק|פיצה)/.test(value)) return '/discovery/cuisines/pizza.jpg'
+  if (/(asian|sushi|japanese|thai|אסי|יפנ|סושי|תאיל)/.test(value)) return '/discovery/cuisines/asian.jpg'
+  return '/discovery/cuisines/all.jpg'
+}
 
-const BowlIcon = () => (
-  <Icon><path d="M4 11h16c0 5-3 8-8 8s-8-3-8-8ZM8 7l8-3M9 5l7 3" /></Icon>
-)
-
-const PizzaIcon = () => (
-  <Icon><path d="m5 19 7-15 7 15Z" /><path d="M8 13h.01M14 10h.01M13 16h.01" /></Icon>
-)
-
-function CuisineIcon({ cuisine }: { cuisine: string | null }) {
-  const value = cuisine?.toLocaleLowerCase() ?? ''
-  if (/(coffee|café|cafe)/.test(value)) return <CoffeeIcon />
-  if (/(bakery|pastry|dessert|מאפ)/.test(value)) return <BakeryIcon />
-  if (/(italian|pizza|איטלק)/.test(value)) return <PizzaIcon />
-  if (/(asian|sushi|japanese|thai|אסי|יפנ)/.test(value)) return <BowlIcon />
-  return <DishIcon />
+function CuisineArtwork({ cuisine }: { cuisine: string }) {
+  return <img src={cuisineArtwork(cuisine)} alt="" aria-hidden="true" />
 }
 
 const QrIcon = () => (
@@ -331,6 +331,44 @@ function todayHours(
   const windows = hours[String(dayOfWeekInTimezone(timezone))] ?? []
   if (windows.length === 0) return copy.closedToday
   return windows.map(([from, to]) => `${from}–${to}`).join(' · ')
+}
+
+function timeInTimezone(timezone?: string | null) {
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      weekday: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+      timeZone: timezone || undefined,
+    }).formatToParts(new Date())
+    const value = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value ?? ''
+    return {
+      day: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(value('weekday')),
+      minutes: Number(value('hour')) * 60 + Number(value('minute')),
+    }
+  } catch {
+    const now = new Date()
+    return { day: now.getDay(), minutes: now.getHours() * 60 + now.getMinutes() }
+  }
+}
+
+function restaurantIsOpenNow(restaurant: PublicRestaurant) {
+  if (!restaurant.hours || Object.keys(restaurant.hours).length === 0) return true
+  const { day, minutes } = timeInTimezone(restaurant.timezone)
+  const parse = (value: string) => {
+    const [hour, minute] = value.split(':').map(Number)
+    return hour * 60 + minute
+  }
+  const todayOpen = (restaurant.hours[String(day)] ?? []).some(([from, to]) => {
+    const start = parse(from)
+    const end = parse(to)
+    return end > start ? minutes >= start && minutes < end : minutes >= start
+  })
+  if (todayOpen) return true
+  const previousDay = (day + 6) % 7
+  return (restaurant.hours[String(previousDay)] ?? []).some(([from, to]) => {
+    const start = parse(from)
+    const end = parse(to)
+    return end <= start && minutes < end
+  })
 }
 
 function QrScannerDialog({ copy, onClose, onNavigate }: {
@@ -653,6 +691,84 @@ function DirectoryState({ children }: { children: ReactNode }) {
   return <div className="angle-discovery-state">{children}</div>
 }
 
+type DirectorySort = 'distance' | 'rating' | 'reviews' | 'newest'
+type DirectoryControlsView = 'filters' | 'sort'
+
+function DiscoveryControlsSheet({ view, copy, sort, onlyOpen, onlyFavourites, priceLevels, onSort,
+  onOnlyOpen, onOnlyFavourites, onTogglePrice, onClear, onClose }: {
+  view: DirectoryControlsView
+  copy: typeof discoveryCopy.en | typeof discoveryCopy.he
+  sort: DirectorySort
+  onlyOpen: boolean
+  onlyFavourites: boolean
+  priceLevels: number[]
+  onSort: (sort: DirectorySort) => void
+  onOnlyOpen: (value: boolean) => void
+  onOnlyFavourites: (value: boolean) => void
+  onTogglePrice: (value: number) => void
+  onClear: () => void
+  onClose: () => void
+}) {
+  const sortOptions: { value: DirectorySort; label: string }[] = [
+    { value: 'distance', label: copy.nearest },
+    { value: 'rating', label: copy.highestRated },
+    { value: 'reviews', label: copy.mostReviewed },
+    { value: 'newest', label: copy.newRestaurants },
+  ]
+  const title = view === 'sort' ? copy.sortTitle : copy.filterTitle
+  return (
+    <div className="angle-controls-backdrop" role="presentation" onMouseDown={(event) => {
+      if (event.target === event.currentTarget) onClose()
+    }}>
+      <section className="angle-controls-sheet" role="dialog" aria-modal="true" aria-label={title}>
+        <div className="angle-location-handle" aria-hidden="true" />
+        <header>
+          <h2>{title}</h2>
+          <button type="button" onClick={onClose} aria-label={copy.close}><CloseIcon /></button>
+        </header>
+        {view === 'sort' ? (
+          <div className="angle-controls-options">
+            {sortOptions.map((option) => (
+              <button key={option.value} type="button" onClick={() => { onSort(option.value); onClose() }}>
+                <span>{option.label}</span>
+                {sort === option.value && <CheckIcon />}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <>
+            <div className="angle-controls-options">
+              <button type="button" aria-pressed={onlyOpen} onClick={() => onOnlyOpen(!onlyOpen)}>
+                <span>{copy.openNow}</span>{onlyOpen && <CheckIcon />}
+              </button>
+              <button type="button" aria-pressed={onlyFavourites} onClick={() => onOnlyFavourites(!onlyFavourites)}>
+                <span>{copy.favouritesOnly}</span>{onlyFavourites && <CheckIcon />}
+              </button>
+            </div>
+            <div className="angle-controls-price">
+              <strong>{copy.priceFilter}</strong>
+              <div>
+                {[1, 2, 3, 4].map((level) => (
+                  <button
+                    key={level}
+                    type="button"
+                    className={priceLevels.includes(level) ? 'is-active' : ''}
+                    aria-pressed={priceLevels.includes(level)}
+                    onClick={() => onTogglePrice(level)}
+                  >
+                    {'₪'.repeat(level)}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <button className="angle-controls-clear" type="button" onClick={onClear}>{copy.clearFilters}</button>
+          </>
+        )}
+      </section>
+    </div>
+  )
+}
+
 function RestaurantRail({ title, restaurants, copy, distances }: {
   title: string
   restaurants: PublicRestaurant[]
@@ -692,6 +808,11 @@ export function RestaurantDirectoryHome() {
   const [locationSource, setLocationSource] = useState<LocationSource>(initialLocation.source)
   const [isLocationPickerOpen, setIsLocationPickerOpen] = useState(false)
   const [activeCuisine, setActiveCuisine] = useState<string | null>(null)
+  const [controlsView, setControlsView] = useState<DirectoryControlsView | null>(null)
+  const [sort, setSort] = useState<DirectorySort>('distance')
+  const [onlyOpen, setOnlyOpen] = useState(false)
+  const [onlyFavourites, setOnlyFavourites] = useState(false)
+  const [priceLevels, setPriceLevels] = useState<number[]>([])
   const [favouriteIds] = useState(() => readStoredRestaurantIds(FAVOURITE_RESTAURANTS_STORAGE_KEY))
   const [recentIds] = useState(() => readStoredRestaurantIds(RECENT_RESTAURANTS_STORAGE_KEY))
   const { copy, dir } = useDiscoveryLocale()
@@ -710,18 +831,29 @@ export function RestaurantDirectoryHome() {
         ...restaurant.cuisine,
       ].filter(Boolean).join(' ').toLocaleLowerCase().includes(needle))
       : restaurants.data ?? []
-    const matching = activeCuisine
+    let matching = activeCuisine
       ? matchingSearch.filter((restaurant) => restaurant.cuisine.some(
         (cuisine) => cuisine.toLocaleLowerCase() === activeCuisine.toLocaleLowerCase(),
       ))
       : matchingSearch
-    if (!guestPosition) return matching
+    if (onlyOpen) matching = matching.filter(restaurantIsOpenNow)
+    if (onlyFavourites) matching = matching.filter((restaurant) => favouriteIds.includes(restaurant.id))
+    if (priceLevels.length > 0) {
+      matching = matching.filter((restaurant) => restaurant.price_level != null
+        && priceLevels.includes(restaurant.price_level))
+    }
     return [...matching].sort((left, right) => {
+      if (sort === 'rating') return (right.rating?.value ?? 0) - (left.rating?.value ?? 0)
+      if (sort === 'reviews') return (right.rating?.count ?? 0) - (left.rating?.count ?? 0)
+      if (sort === 'newest') {
+        return Date.parse(right.added_at ?? '') - Date.parse(left.added_at ?? '') || 0
+      }
+      if (!guestPosition) return 0
       const leftDistance = left.coordinates ? distanceKm(guestPosition, left.coordinates) : Number.POSITIVE_INFINITY
       const rightDistance = right.coordinates ? distanceKm(guestPosition, right.coordinates) : Number.POSITIVE_INFINITY
       return leftDistance - rightDistance
     })
-  }, [activeCuisine, guestPosition, query, restaurants.data])
+  }, [activeCuisine, favouriteIds, guestPosition, onlyFavourites, onlyOpen, priceLevels, query, restaurants.data, sort])
 
   const cuisines = useMemo(() => {
     const unique = new Map<string, string>()
@@ -755,7 +887,12 @@ export function RestaurantDirectoryHome() {
   }
   const favourites = restaurantsByStoredIds(favouriteIds)
   const recent = restaurantsByStoredIds(recentIds)
-  const isFiltering = query.trim().length > 0 || activeCuisine !== null
+  const hasFilters = onlyOpen || onlyFavourites || priceLevels.length > 0
+  const isFiltering = query.trim().length > 0 || activeCuisine !== null || hasFilters || sort !== 'distance'
+  const sortLabel = sort === 'rating' ? copy.highestRated
+    : sort === 'reviews' ? copy.mostReviewed
+      : sort === 'newest' ? copy.newRestaurants
+        : copy.nearest
 
   const requestLocation = () => {
     if (!navigator.geolocation) {
@@ -805,11 +942,7 @@ export function RestaurantDirectoryHome() {
           </button>
         </header>
 
-        <div className="angle-discovery-intro">
-          <span>{copy.explore}</span>
-          <h1>{copy.discoverTitle}</h1>
-          <p>{copy.discoverSubtitle}</p>
-        </div>
+        <h1 className="sr-only">{copy.discoverTitle}</h1>
 
         <section className="angle-discovery-search" aria-label={copy.searchRegion}>
           <SearchIcon />
@@ -823,20 +956,8 @@ export function RestaurantDirectoryHome() {
         </section>
       </div>
 
-      <section className="angle-discovery-cuisines" aria-labelledby="cuisines-heading">
-        <div className="angle-discovery-section-title">
-          <h2 id="cuisines-heading">{copy.browseCuisine}</h2>
-        </div>
+      <section className="angle-discovery-cuisines" aria-label={copy.browseCuisine}>
         <div className="angle-discovery-cuisine-rail" role="group" aria-label={copy.filters}>
-          <button
-            type="button"
-            className={activeCuisine === null ? 'is-active' : ''}
-            aria-pressed={activeCuisine === null}
-            onClick={() => setActiveCuisine(null)}
-          >
-            <span><CuisineIcon cuisine={null} /></span>
-            <small>{copy.allCuisines}</small>
-          </button>
           {cuisines.map((cuisine) => (
             <button
               key={cuisine}
@@ -845,10 +966,55 @@ export function RestaurantDirectoryHome() {
               aria-pressed={activeCuisine === cuisine}
               onClick={() => setActiveCuisine((current) => current === cuisine ? null : cuisine)}
             >
-              <span><CuisineIcon cuisine={cuisine} /></span>
+              <span><CuisineArtwork cuisine={cuisine} /></span>
               <small>{cuisine}</small>
             </button>
           ))}
+        </div>
+      </section>
+
+      <section className="angle-discovery-controls" aria-label={copy.filters}>
+        <div className="angle-discovery-controls-rail">
+          <button
+            className={`angle-discovery-control-icon${hasFilters ? ' is-active' : ''}`}
+            type="button"
+            aria-label={copy.filterRestaurants}
+            onClick={() => setControlsView('filters')}
+          >
+            <SlidersIcon />
+          </button>
+          <button
+            className={`angle-discovery-control-icon${sort !== 'distance' ? ' is-active' : ''}`}
+            type="button"
+            aria-label={`${copy.sortRestaurants}: ${sortLabel}`}
+            onClick={() => setControlsView('sort')}
+          >
+            <SortIcon />
+          </button>
+          <button
+            className={`angle-discovery-control-chip${sort === 'rating' ? ' is-active' : ''}`}
+            type="button"
+            aria-pressed={sort === 'rating'}
+            onClick={() => setSort((current) => current === 'rating' ? 'distance' : 'rating')}
+          >
+            <span aria-hidden="true">★</span>{copy.topRestaurants}
+          </button>
+          <button
+            className={`angle-discovery-control-chip${sort === 'newest' ? ' is-active' : ''}`}
+            type="button"
+            aria-pressed={sort === 'newest'}
+            onClick={() => setSort((current) => current === 'newest' ? 'distance' : 'newest')}
+          >
+            {copy.newRestaurants}
+          </button>
+          <button
+            className={`angle-discovery-control-chip${onlyOpen ? ' is-active' : ''}`}
+            type="button"
+            aria-pressed={onlyOpen}
+            onClick={() => setOnlyOpen((current) => !current)}
+          >
+            <ClockIcon />{copy.openNow}
+          </button>
         </div>
       </section>
 
@@ -868,7 +1034,7 @@ export function RestaurantDirectoryHome() {
           isFiltering ? (
             <section className="angle-discovery-section" aria-labelledby="results-heading">
               <div className="angle-discovery-section-title">
-                <h2 id="results-heading">{activeCuisine || copy.searchResults}</h2>
+                <h2 id="results-heading">{activeCuisine || (sort !== 'distance' ? sortLabel : copy.searchResults)}</h2>
               </div>
               <div className="angle-discovery-grid">
                 {filtered.map((restaurant) => (
@@ -932,6 +1098,28 @@ export function RestaurantDirectoryHome() {
           onClose={() => setIsLocationPickerOpen(false)}
           onUseCurrent={requestLocation}
           onSelectAddress={selectAddress}
+        />
+      )}
+      {controlsView && (
+        <DiscoveryControlsSheet
+          view={controlsView}
+          copy={copy}
+          sort={sort}
+          onlyOpen={onlyOpen}
+          onlyFavourites={onlyFavourites}
+          priceLevels={priceLevels}
+          onSort={setSort}
+          onOnlyOpen={setOnlyOpen}
+          onOnlyFavourites={setOnlyFavourites}
+          onTogglePrice={(level) => setPriceLevels((current) => current.includes(level)
+            ? current.filter((value) => value !== level)
+            : [...current, level])}
+          onClear={() => {
+            setOnlyOpen(false)
+            setOnlyFavourites(false)
+            setPriceLevels([])
+          }}
+          onClose={() => setControlsView(null)}
         />
       )}
     </main>
