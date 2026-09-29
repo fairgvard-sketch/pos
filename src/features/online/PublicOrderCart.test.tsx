@@ -104,7 +104,9 @@ describe('открытая гостевая корзина после обнов
         modifiers: [{ ...item.modifier_groups[0].modifiers[0], name: 'Oat milk' }] }],
     })
     await waitFor(() => expect(cartText()).toContain('Very large · Oat milk'))
-    expect(readPublicCart(LOC)).toEqual([{ ...stored, variantName: 'Very large', modNames: ['Oat milk'] }])
+    await waitFor(() => expect(readPublicCart(LOC)).toEqual([
+      { ...stored, variantName: 'Very large', modNames: ['Oat milk'] },
+    ]))
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
   })
 
