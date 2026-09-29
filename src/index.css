@@ -5190,6 +5190,7 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
 .angle-venue-back {
   position: absolute;
   top: calc(1rem + env(safe-area-inset-top, 0px));
+  left: 1rem;
   inset-inline-start: 1rem;
   display: grid;
   width: 2.75rem;
@@ -5205,6 +5206,7 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
 .angle-venue-favourite {
   position: absolute;
   top: calc(1rem + env(safe-area-inset-top, 0px));
+  right: 1rem;
   inset-inline-end: 1rem;
   display: grid;
   width: 2.75rem;
@@ -5230,6 +5232,7 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
 .angle-venue-logo {
   position: absolute;
   top: -2.5rem;
+  right: 1.5rem;
   inset-inline-end: 1.5rem;
   width: 5rem;
   height: 5rem;
@@ -5488,6 +5491,21 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   font-size: .9375rem;
   font-weight: 800;
   text-decoration: none;
+}
+
+[dir='rtl'].angle-venue .angle-venue-back {
+  right: 1rem;
+  left: auto;
+}
+
+[dir='rtl'].angle-venue .angle-venue-favourite {
+  right: auto;
+  left: 1rem;
+}
+
+[dir='rtl'].angle-venue .angle-venue-logo {
+  right: auto;
+  left: 1.5rem;
 }
 
 [dir='rtl'].angle-venue .angle-venue-back svg { transform: scaleX(-1); }
