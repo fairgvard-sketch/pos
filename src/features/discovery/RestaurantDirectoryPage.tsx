@@ -22,7 +22,7 @@ const discoveryCopy = {
     area: 'Current area: Tel Aviv', searchRegion: 'Find a restaurant',
     searchPlaceholder: 'Search restaurants, cuisine...', searchLabel: 'Search restaurants',
     filters: 'Restaurant filters', near: 'Near you', bookmarks: 'Bookmarks',
-    reservations: 'Reservations', eyebrow: 'ANGLE restaurants', loading: 'Loading restaurants…',
+    reservations: 'Reservations', loading: 'Loading restaurants…',
     loadError: 'Restaurants could not be loaded.', retry: 'Try again',
     empty: 'No restaurants match this search.', navigation: 'Main navigation', home: 'Home',
     restaurants: 'Restaurants', profile: 'Profile', menuAvailable: 'Menu available',
@@ -58,7 +58,7 @@ const discoveryCopy = {
     area: 'האזור הנוכחי: תל אביב', searchRegion: 'חיפוש מסעדה',
     searchPlaceholder: 'חיפוש מסעדה או סוג מטבח...', searchLabel: 'חיפוש מסעדות',
     filters: 'מסנני מסעדות', near: 'קרוב אליי', bookmarks: 'שמורים',
-    reservations: 'הזמנות', eyebrow: 'מסעדות ANGLE', loading: 'טוענים מסעדות…',
+    reservations: 'הזמנות', loading: 'טוענים מסעדות…',
     loadError: 'לא הצלחנו לטעון את המסעדות.', retry: 'נסו שוב',
     empty: 'לא נמצאו מסעדות שמתאימות לחיפוש.', navigation: 'ניווט ראשי', home: 'בית',
     restaurants: 'מסעדות', profile: 'פרופיל', menuAvailable: 'התפריט זמין',
@@ -793,11 +793,7 @@ export function RestaurantDirectoryHome() {
 
       <section className="angle-discovery-list" aria-labelledby="nearby-heading">
         <div className="angle-discovery-section-title">
-          <div>
-            <p>{copy.eyebrow}</p>
-            <h1 id="nearby-heading">{copy.near}</h1>
-          </div>
-          <span>{filtered.length}</span>
+          <h1 id="nearby-heading">{copy.near}</h1>
         </div>
 
         {restaurants.isPending && <DirectoryState>{copy.loading}</DirectoryState>}
