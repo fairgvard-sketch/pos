@@ -24,4 +24,9 @@ describe('i18n паритет ключей ru/he', () => {
   it('количество ключей совпадает', () => {
     expect(ruKeys.length).toBe(heKeys.length)
   })
+
+  it('нижняя кнопка меню ведёт к заказу, а не описывает состав корзины', () => {
+    expect(translations.ru.pubShowItems).toBe('Перейти к заказу')
+    expect(translations.he.pubShowItems).toBe('המשך להזמנה')
+  })
 })
