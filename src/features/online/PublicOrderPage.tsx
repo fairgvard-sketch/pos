@@ -32,7 +32,7 @@ import TableServiceSheet from './TableServiceSheet'
  * Никакого Supabase-клиента: только Edge Functions с anon-ключом.
  */
 
-const ACTIVE_KEY = 'kassa-public-active' // {clientUuid, locId} — текущая заявка
+const ACTIVE_KEY = 'kassa-public-active' // текущая заявка и предыдущие партии этого браузера
 /** «~20–35 мин» / «~20 мин» / '' — вилка приготовления для гостя (061) */
 function formatPrepRange(lang: Lang, min: number, max: number): string {
   const hi = Math.max(min, max)
@@ -66,6 +66,7 @@ const decodedPublicMenuImages = new Set<string>()
 interface ActivePublicOrder {
   clientUuid: string
   items: CartLine[]
+  historyItems: CartLine[]
 }
 
 function isActiveCartLine(value: unknown): value is CartLine {
@@ -85,15 +86,54 @@ function isActiveCartLine(value: unknown): value is CartLine {
     && (line.qty ?? 0) > 0
 }
 
+/**
+ * Дозаказы отправляются отдельными заявками, но во вкладке «Ваш заказ» гость
+ * должен видеть весь свой заказ за текущий визит. Одинаковый состав по той же
+ * цене объединяем; при изменившейся цене оставляем отдельной строкой, чтобы не
+ * переписывать финансовый снимок предыдущей партии.
+ */
+function mergeOrderLines(...groups: CartLine[][]): CartLine[] {
+  const merged = new Map<string, CartLine>()
+  for (const group of groups) {
+    for (const line of group) {
+      const signature = JSON.stringify([
+        line.itemId,
+        line.variantId,
+        [...line.modIds].sort(),
+        line.unitPrice,
+      ])
+      const previous = merged.get(signature)
+      if (previous) {
+        merged.set(signature, { ...line, key: previous.key, qty: previous.qty + line.qty })
+      } else {
+        merged.set(signature, {
+          ...line,
+          modIds: [...line.modIds],
+          modNames: [...line.modNames],
+        })
+      }
+    }
+  }
+  return [...merged.values()]
+}
+
 function readActive(locId: string): ActivePublicOrder | null {
   try {
     const raw = localStorage.getItem(ACTIVE_KEY)
     if (!raw) return null
-    const parsed = JSON.parse(raw) as { clientUuid?: unknown; locId?: unknown; items?: unknown }
+    const parsed = JSON.parse(raw) as {
+      clientUuid?: unknown
+      locId?: unknown
+      items?: unknown
+      historyItems?: unknown
+    }
     if (parsed.locId !== locId || typeof parsed.clientUuid !== 'string') return null
     return {
       clientUuid: parsed.clientUuid,
       items: Array.isArray(parsed.items) ? parsed.items.filter(isActiveCartLine) : [],
+      historyItems: Array.isArray(parsed.historyItems)
+        ? parsed.historyItems.filter(isActiveCartLine)
+        : [],
     }
   } catch {
     return null
@@ -120,6 +160,9 @@ export default function PublicOrderPage() {
   // перезагрузку Safari. Сервер остаётся источником статуса и итоговой суммы.
   const [activeItems, setActiveItems] = useState<CartLine[]>(
     () => readActive(locId)?.items ?? [],
+  )
+  const [activeHistoryItems, setActiveHistoryItems] = useState<CartLine[]>(
+    () => readActive(locId)?.historyItems ?? [],
   )
 
   const [cart, setCart] = useState<CartLine[]>(() => readPublicCart(locId))
@@ -502,6 +545,7 @@ export default function PublicOrderPage() {
     localStorage.removeItem(ACTIVE_KEY)
     setActiveUuid(null)
     setActiveItems([])
+    setActiveHistoryItems([])
     setCart([])
     setConfigItem(null)
     setConfigClosing(false)
@@ -827,8 +871,15 @@ export default function PublicOrderPage() {
           onRecommend={openItem}
           onSubmitted={(clientUuid) => {
             window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
-            localStorage.setItem(ACTIVE_KEY, JSON.stringify({ clientUuid, locId, items: cart }))
+            const historyItems = mergeOrderLines(activeHistoryItems, activeItems)
+            localStorage.setItem(ACTIVE_KEY, JSON.stringify({
+              clientUuid,
+              locId,
+              items: cart,
+              historyItems,
+            }))
             setActiveUuid(clientUuid)
+            setActiveHistoryItems(historyItems)
             setActiveItems(cart)
             setCart([])
             setView('menu')
@@ -840,11 +891,13 @@ export default function PublicOrderPage() {
       {tableContext && liveTableTab === 'order' && activeUuid && !showCheckout && (
         <div className="angle-live-table-panel">
           <StatusScreen
+            key={activeUuid}
             lang={lang}
             clientUuid={activeUuid}
             onNewOrder={startNewOrder}
             readOnly
             items={activeItems}
+            historyItems={activeHistoryItems}
             itemImages={itemImages}
           />
         </div>
@@ -2401,7 +2454,7 @@ function CheckoutScreen({
 
 /** Статус заявки: поллинг каждые 5 секунд, пока не решена и не выдана */
 function StatusScreen({
-  lang, clientUuid, onNewOrder, readOnly = false, items = [], itemImages = {},
+  lang, clientUuid, onNewOrder, readOnly = false, items = [], historyItems = [], itemImages = {},
 }: {
   lang: Lang
   clientUuid: string
@@ -2410,6 +2463,8 @@ function StatusScreen({
   readOnly?: boolean
   /** Подтверждённый состав нужен только экрану заказа за столом. */
   items?: CartLine[]
+  /** Ранее отправленные партии текущего гостя, сохранённые этим браузером. */
+  historyItems?: CartLine[]
   itemImages?: Record<string, string | null>
 }) {
   const [status, setStatus] = useState<PublicStatus | null>(null)
@@ -2498,6 +2553,7 @@ function StatusScreen({
         lang={lang}
         status={status}
         items={items}
+        historyItems={historyItems}
         itemImages={itemImages}
       />
     )
@@ -2577,28 +2633,35 @@ function StatusScreen({
   )
 }
 
-function TableOrderSummary({ lang, status, items, itemImages }: {
+function TableOrderSummary({ lang, status, items, historyItems, itemImages }: {
   lang: Lang
   status: PublicStatus
   items: CartLine[]
+  historyItems: CartLine[]
   itemImages: Record<string, string | null>
 }) {
   const cancelled = status.status === 'rejected'
     || status.status === 'cancelled'
     || status.order_status === 'voided'
-  // Серверный снимок авторитетнее локальной копии: он содержит именно те
-  // названия, добавки и цены, которые были приняты при отправке. Локальная
-  // копия остаётся запасным вариантом на короткое окно релиза миграции.
-  const serverItems = (status.items ?? []).map((line, index) => ({
+  // Сервер авторитетен для последней партии. Предыдущие партии хранятся в
+  // браузере: сервер намеренно не отдаёт весь счёт стола, чтобы не раскрыть
+  // блюда, отправленные другим гостем с другого телефона.
+  const serverItems: CartLine[] = (status.items ?? []).map((line, index) => ({
     key: `${line.menu_item_id}:${line.variant_id ?? ''}:${index}`,
     itemId: line.menu_item_id,
     name: line.name,
+    variantId: line.variant_id,
     variantName: line.variant_name,
+    modIds: line.modifier_ids,
     modNames: line.mods.map((mod) => mod.name),
     unitPrice: line.unit_price,
     qty: line.qty,
   }))
-  const displayItems = serverItems.length > 0 ? serverItems : items
+  const latestItems = serverItems.length > 0 ? serverItems : items
+  const displayItems = mergeOrderLines(historyItems, latestItems)
+  const displayTotal = displayItems.length > 0
+    ? displayItems.reduce((sum, line) => sum + line.unitPrice * line.qty, 0)
+    : status.total
 
   return (
     <main
@@ -2650,7 +2713,7 @@ function TableOrderSummary({ lang, status, items, itemImages }: {
 
       <footer className="angle-live-order-total">
         <span>{t(lang, 'pubTotal')}</span>
-        <strong dir="ltr">{formatMoney(status.total, lang)}</strong>
+        <strong dir="ltr">{formatMoney(displayTotal, lang)}</strong>
       </footer>
     </main>
   )

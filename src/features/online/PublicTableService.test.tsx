@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { t } from '../../lib/i18n'
+import { formatMoney } from '../../lib/money'
 import PublicOrderPage from './PublicOrderPage'
 import {
   fetchPublicMenu,
@@ -25,6 +26,7 @@ const LOC = 'b1000000-0000-4000-8000-000000000001'
 const TABLE = 'b2000000-0000-4000-8000-000000000001'
 const CLIENT = 'b3000000-0000-4000-8000-000000000001'
 const CLIENT_2 = 'b3000000-0000-4000-8000-000000000002'
+const REORDER_CLIENT = 'b3000000-0000-4000-8000-000000000003'
 const ORDER = 'b4000000-0000-4000-8000-000000000001'
 const COFFEE = {
   id: 'coffee',
@@ -34,6 +36,12 @@ const COFFEE = {
   image_url: null,
   variants: [],
   modifier_groups: [],
+}
+const TEA = {
+  ...COFFEE,
+  id: 'tea',
+  name: 'Tea',
+  price: 1000,
 }
 const menu: PublicMenu = {
   location: {
@@ -207,7 +215,97 @@ describe('ANGLE Guest table service', () => {
       clientUuid: CLIENT,
       locId: LOC,
       items: [{ itemId: COFFEE.id, qty: 1 }],
+      historyItems: [],
     })
+  })
+
+  it('keeps previous table items when the guest submits an add-on order and reloads', async () => {
+    vi.spyOn(globalThis.crypto, 'randomUUID').mockReturnValue(REORDER_CLIENT)
+    localStorage.setItem('kassa-public-active', JSON.stringify({
+      clientUuid: CLIENT,
+      locId: LOC,
+      items: [{
+        key: 'coffee::::',
+        itemId: COFFEE.id,
+        name: COFFEE.name,
+        variantId: null,
+        variantName: null,
+        modIds: [],
+        modNames: [],
+        unitPrice: COFFEE.price,
+        qty: 1,
+      }],
+      historyItems: [],
+    }))
+    writePublicCart(LOC, [{
+      key: 'tea::::',
+      itemId: TEA.id,
+      name: TEA.name,
+      variantId: null,
+      variantName: null,
+      modIds: [],
+      modNames: [],
+      unitPrice: TEA.price,
+      qty: 1,
+    }])
+    vi.mocked(fetchPublicMenu).mockResolvedValue({
+      ...menu,
+      categories: [{ id: 'popular', name: 'Popular', items: [COFFEE, TEA] }],
+    })
+    vi.mocked(submitPublicOrder).mockResolvedValue({
+      online_id: ORDER,
+      total: TEA.price,
+      duplicate: false,
+    })
+    vi.mocked(fetchPublicStatus).mockResolvedValue({
+      status: 'new',
+      reject_reason: null,
+      total: TEA.price,
+      items: [{
+        menu_item_id: TEA.id,
+        variant_id: null,
+        modifier_ids: [],
+        qty: 1,
+        notes: null,
+        name: TEA.name,
+        variant_name: null,
+        unit_price: TEA.price,
+        line_total: TEA.price,
+        mods: [],
+      }],
+      daily_number: null,
+      order_status: null,
+      table_label: '12',
+      created_at: new Date().toISOString(),
+    })
+
+    const firstRender = renderTable()
+    fireEvent.click(await screen.findByRole('button', {
+      name: new RegExp(t('he', 'pubShowItems')),
+    }))
+    fireEvent.click(screen.getByRole('button', {
+      name: new RegExp(t('he', 'pubConfirmTableOrder')),
+    }))
+
+    expect(await screen.findByText(`1 × ${COFFEE.name}`)).toBeInTheDocument()
+    expect(screen.getByText(`1 × ${TEA.name}`)).toBeInTheDocument()
+    expect(document.querySelector('.angle-live-order-total')).toHaveTextContent(
+      formatMoney(COFFEE.price + TEA.price, 'he'),
+    )
+    expect(JSON.parse(localStorage.getItem('kassa-public-active') ?? '{}')).toMatchObject({
+      clientUuid: REORDER_CLIENT,
+      locId: LOC,
+      items: [{ itemId: TEA.id, qty: 1 }],
+      historyItems: [{ itemId: COFFEE.id, qty: 1 }],
+    })
+
+    firstRender.unmount()
+    renderTable()
+    fireEvent.click(await screen.findByRole('tab', {
+      name: new RegExp(t('he', 'pubYourOrder')),
+    }))
+    expect(await screen.findByText(`1 × ${COFFEE.name}`)).toBeInTheDocument()
+    expect(screen.getByText(`1 × ${TEA.name}`)).toBeInTheDocument()
   })
 
   it('restores the submitted item summary from the server after reload', async () => {
