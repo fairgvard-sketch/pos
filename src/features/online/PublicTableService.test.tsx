@@ -158,10 +158,18 @@ describe('ANGLE Guest table service', () => {
         notes: null,
       }],
     })))
-    expect(await screen.findByText(t('he', 'pubWaiting'))).toBeInTheDocument()
+    expect(await screen.findByTestId('table-live-order-summary')).toBeInTheDocument()
+    expect(screen.getByText(`1 × ${COFFEE.name}`)).toBeInTheDocument()
+    expect(screen.queryByText(t('he', 'pubWaiting'))).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(t('he', 'pubOrderProgress'))).not.toBeInTheDocument()
     expect(orderTab).toHaveAttribute('aria-selected', 'true')
     expect(screen.queryByRole('button', { name: t('he', 'pubNewOrder') })).not.toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: t('he', 'pubPaymentTitle') })).not.toBeInTheDocument()
+    expect(JSON.parse(localStorage.getItem('kassa-public-active') ?? '{}')).toMatchObject({
+      clientUuid: CLIENT,
+      locId: LOC,
+      items: [{ itemId: COFFEE.id, qty: 1 }],
+    })
   })
 
   it('sends water optimistically and then shows the accepted server state', async () => {

@@ -983,6 +983,129 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     font-weight: 750;
   }
 
+  /* «Ваш заказ» за столом: экран №4 из концепции без прогресс-ленты.
+     Строки читаются как чек — фото, состав, сумма — и не выглядят
+     интерактивными после отправки официанту. */
+  .angle-live-order-summary {
+    width: 100%;
+    max-width: 32rem;
+    min-height: calc(100svh - 7rem - env(safe-area-inset-top));
+    margin: 0 auto;
+    padding: 2rem 1rem calc(3rem + env(safe-area-inset-bottom));
+    background: #fff;
+  }
+
+  .angle-live-order-heading {
+    padding: 0 .25rem 1.5rem;
+  }
+
+  .angle-live-order-heading h1 {
+    margin: 0;
+    color: #111827;
+    font-size: 2rem;
+    font-weight: 850;
+    letter-spacing: -.04em;
+  }
+
+  .angle-live-order-heading p {
+    margin: .75rem 0 0;
+    padding: .75rem 1rem;
+    border-radius: .75rem;
+    background: #fff0f2;
+    color: #be123c;
+    font-size: .85rem;
+    font-weight: 750;
+  }
+
+  .angle-live-order-lines {
+    border-top: 1px solid #e5e7eb;
+  }
+
+  .angle-live-order-line {
+    display: grid;
+    grid-template-columns: 4.5rem minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 1rem;
+    min-height: 6.5rem;
+    padding: 1rem .25rem;
+    border-bottom: 1px solid #e5e7eb;
+  }
+
+  .angle-live-order-media {
+    display: grid;
+    width: 4.5rem;
+    height: 4.5rem;
+    overflow: hidden;
+    place-items: center;
+    border-radius: 1rem;
+    background: #f0f1f3;
+    color: #686a68;
+    font-size: 1.25rem;
+    font-weight: 800;
+  }
+
+  .angle-live-order-media img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .angle-live-order-copy {
+    min-width: 0;
+  }
+
+  .angle-live-order-copy strong,
+  .angle-live-order-copy small {
+    display: block;
+  }
+
+  .angle-live-order-copy strong {
+    color: #111827;
+    font-size: 1rem;
+    font-weight: 800;
+    line-height: 1.35;
+  }
+
+  .angle-live-order-copy small {
+    margin-top: .35rem;
+    overflow: hidden;
+    color: #6b7280;
+    font-size: .8rem;
+    line-height: 1.35;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .angle-live-order-price {
+    color: #111827;
+    font-size: .9rem;
+    font-weight: 800;
+    white-space: nowrap;
+  }
+
+  .angle-live-order-total {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1.5rem .25rem 0;
+    color: #111827;
+    font-size: 1.1rem;
+    font-weight: 800;
+  }
+
+  .angle-live-order-total strong {
+    font-size: 1.25rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .angle-live-order-fallback {
+    display: grid;
+    min-height: 12rem;
+    place-items: center;
+    border-block: 1px solid #e5e7eb;
+  }
+
   .angle-table-service-backdrop {
     position: fixed;
     inset: 0;

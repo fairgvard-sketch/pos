@@ -63,12 +63,38 @@ const DEFAULT_MENU_SYSTEM_UI_COLOR = '#f8f9fb'
  * уже подготовленный bitmap в первом кадре, без повторного shimmer. */
 const decodedPublicMenuImages = new Set<string>()
 
-function readActive(locId: string): string | null {
+interface ActivePublicOrder {
+  clientUuid: string
+  items: CartLine[]
+}
+
+function isActiveCartLine(value: unknown): value is CartLine {
+  if (!value || typeof value !== 'object') return false
+  const line = value as Partial<CartLine>
+  return typeof line.key === 'string'
+    && typeof line.itemId === 'string'
+    && typeof line.name === 'string'
+    && (line.variantId === null || typeof line.variantId === 'string')
+    && (line.variantName === null || typeof line.variantName === 'string')
+    && Array.isArray(line.modIds)
+    && line.modIds.every((id) => typeof id === 'string')
+    && Array.isArray(line.modNames)
+    && line.modNames.every((name) => typeof name === 'string')
+    && Number.isInteger(line.unitPrice)
+    && Number.isInteger(line.qty)
+    && (line.qty ?? 0) > 0
+}
+
+function readActive(locId: string): ActivePublicOrder | null {
   try {
     const raw = localStorage.getItem(ACTIVE_KEY)
     if (!raw) return null
-    const parsed = JSON.parse(raw) as { clientUuid: string; locId: string }
-    return parsed.locId === locId ? parsed.clientUuid : null
+    const parsed = JSON.parse(raw) as { clientUuid?: unknown; locId?: unknown; items?: unknown }
+    if (parsed.locId !== locId || typeof parsed.clientUuid !== 'string') return null
+    return {
+      clientUuid: parsed.clientUuid,
+      items: Array.isArray(parsed.items) ? parsed.items.filter(isActiveCartLine) : [],
+    }
   } catch {
     return null
   }
@@ -87,7 +113,14 @@ export default function PublicOrderPage() {
   const isRtl = true
 
   // Незавершённая заявка переживает перезагрузку страницы
-  const [activeUuid, setActiveUuid] = useState<string | null>(() => readActive(locId))
+  const [activeUuid, setActiveUuid] = useState<string | null>(
+    () => readActive(locId)?.clientUuid ?? null,
+  )
+  // Снапшот подтверждённых строк нужен экрану «Ваш заказ» и переживает
+  // перезагрузку Safari. Сервер остаётся источником статуса и итоговой суммы.
+  const [activeItems, setActiveItems] = useState<CartLine[]>(
+    () => readActive(locId)?.items ?? [],
+  )
 
   const [cart, setCart] = useState<CartLine[]>(() => readPublicCart(locId))
   const [view, setView] = useState<'menu' | 'checkout'>('menu')
@@ -469,6 +502,7 @@ export default function PublicOrderPage() {
     window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
     localStorage.removeItem(ACTIVE_KEY)
     setActiveUuid(null)
+    setActiveItems([])
     setCart([])
     setConfigItem(null)
     setConfigClosing(false)
@@ -793,8 +827,9 @@ export default function PublicOrderPage() {
           onRecommend={openItem}
           onSubmitted={(clientUuid) => {
             window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
-            localStorage.setItem(ACTIVE_KEY, JSON.stringify({ clientUuid, locId }))
+            localStorage.setItem(ACTIVE_KEY, JSON.stringify({ clientUuid, locId, items: cart }))
             setActiveUuid(clientUuid)
+            setActiveItems(cart)
             setCart([])
             setView('menu')
             if (tableContext) setLiveTableTab('order')
@@ -804,7 +839,14 @@ export default function PublicOrderPage() {
 
       {tableContext && liveTableTab === 'order' && activeUuid && !showCheckout && (
         <div className="angle-live-table-panel">
-          <StatusScreen lang={lang} clientUuid={activeUuid} onNewOrder={startNewOrder} readOnly />
+          <StatusScreen
+            lang={lang}
+            clientUuid={activeUuid}
+            onNewOrder={startNewOrder}
+            readOnly
+            items={activeItems}
+            itemImages={itemImages}
+          />
         </div>
       )}
 
@@ -2343,12 +2385,17 @@ function CheckoutScreen({
 }
 
 /** Статус заявки: поллинг каждые 5 секунд, пока не решена и не выдана */
-function StatusScreen({ lang, clientUuid, onNewOrder, readOnly = false }: {
+function StatusScreen({
+  lang, clientUuid, onNewOrder, readOnly = false, items = [], itemImages = {},
+}: {
   lang: Lang
   clientUuid: string
   onNewOrder: () => void
   /** В Live Table новый заказ начинается во вкладке «Меню». */
   readOnly?: boolean
+  /** Подтверждённый состав нужен только экрану заказа за столом. */
+  items?: CartLine[]
+  itemImages?: Record<string, string | null>
 }) {
   const [status, setStatus] = useState<PublicStatus | null>(null)
   const [lost, setLost] = useState(false)
@@ -2428,6 +2475,19 @@ function StatusScreen({ lang, clientUuid, onNewOrder, readOnly = false }: {
     )
   }
 
+  // За столом экран повторяет композицию №4 из концепции: состав заказа
+  // и итог без номера, таймера и ленты «отправлен → принят → готов».
+  if (readOnly) {
+    return (
+      <TableOrderSummary
+        lang={lang}
+        status={status}
+        items={items}
+        itemImages={itemImages}
+      />
+    )
+  }
+
   if (status.status === 'rejected') {
     return (
       <CenterCard>
@@ -2499,6 +2559,72 @@ function StatusScreen({ lang, clientUuid, onNewOrder, readOnly = false }: {
       {/* Пока заказ не выдан — вторичная, чтобы случайно не потерять экран с номером */}
       {!readOnly && <NewOrderBtn lang={lang} onClick={onNewOrder} secondary={!isDone} />}
     </CenterCard>
+  )
+}
+
+function TableOrderSummary({ lang, status, items, itemImages }: {
+  lang: Lang
+  status: PublicStatus
+  items: CartLine[]
+  itemImages: Record<string, string | null>
+}) {
+  const cancelled = status.status === 'rejected'
+    || status.status === 'cancelled'
+    || status.order_status === 'voided'
+
+  return (
+    <main
+      className="angle-live-order-summary public-menu-route-motion public-menu-route-focus"
+      data-testid="table-live-order-summary"
+      tabIndex={-1}
+    >
+      <header className="angle-live-order-heading">
+        <h1>{t(lang, 'pubYourOrder')}</h1>
+        {cancelled && (
+          <p role="alert">
+            {t(lang, status.status === 'rejected' ? 'pubRejectedTitle' : 'pubCancelledTitle')}
+          </p>
+        )}
+      </header>
+
+      {items.length > 0 ? (
+        <section className="angle-live-order-lines" aria-label={t(lang, 'pubYourOrder')}>
+          {items.map((line) => (
+            <article key={line.key} className="angle-live-order-line">
+              <span className="angle-live-order-media" aria-hidden>
+                {itemImages[line.itemId] ? (
+                  <img src={itemImages[line.itemId] ?? undefined} alt="" />
+                ) : (
+                  <span>{line.name.slice(0, 1)}</span>
+                )}
+              </span>
+              <span className="angle-live-order-copy">
+                <strong>{line.qty} × {line.name}</strong>
+                {(line.variantName || line.modNames.length > 0) && (
+                  <small>{[line.variantName, ...line.modNames].filter(Boolean).join(' · ')}</small>
+                )}
+              </span>
+              <span className="angle-live-order-price" dir="ltr">
+                {formatMoney(line.unitPrice * line.qty, lang)}
+              </span>
+            </article>
+          ))}
+        </section>
+      ) : (
+        <div className="angle-live-order-fallback">
+          <span className="angle-live-table-empty-icon" aria-hidden>
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M5 7h14l-1 13H6L5 7Z" /><path d="M9 10V6a3 3 0 0 1 6 0v4" />
+            </svg>
+          </span>
+        </div>
+      )}
+
+      <footer className="angle-live-order-total">
+        <span>{t(lang, 'pubTotal')}</span>
+        <strong dir="ltr">{formatMoney(status.total, lang)}</strong>
+      </footer>
+    </main>
   )
 }
 
