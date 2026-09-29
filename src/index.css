@@ -852,6 +852,7 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     border-radius: .875rem;
     background: #f3f4f6;
     color: #73767a;
+    transition: border-color 150ms ease, background-color 150ms ease, box-shadow 150ms ease;
   }
 
   .angle-live-table-search input {
@@ -3012,6 +3013,24 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   .public-menu-shell input:focus-visible {
     outline: 3px solid rgb(17 24 39 / 45%);
     outline-offset: 2px;
+  }
+
+  /* У Live Table поиск уже имеет собственную округлую оболочку. Safari
+     иначе рисует общий прямоугольный outline непосредственно вокруг input,
+     визуально разрезая плашку. Фокус остаётся заметным на всей оболочке. */
+  .public-menu-shell .angle-live-table-search:focus-within {
+    border-color: rgb(17 19 21 / 30%);
+    background: #fff;
+    box-shadow: 0 0 0 2px rgb(17 19 21 / 28%);
+  }
+
+  .public-menu-shell .angle-live-table-search input,
+  .public-menu-shell .angle-live-table-search input:focus,
+  .public-menu-shell .angle-live-table-search input:focus-visible {
+    appearance: none;
+    border: 0;
+    outline: none;
+    box-shadow: none;
   }
 
   /* Заголовок получает программный фокус после смены внутреннего экрана,
