@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { t, type Lang } from '../../lib/i18n'
 import {
   PublicApiError,
@@ -170,29 +170,107 @@ function HapticRequestControl({
 }
 
 function ServiceIcon({ kind }: { kind: PublicServiceRequestKind }) {
-  if (kind === 'water') {
-    return <svg className="angle-service-glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M12 3.25s5 5.5 5 9.65a5 5 0 0 1-10 0c0-4.15 5-9.65 5-9.65Z" /><path d="M9.4 13.3a2.8 2.8 0 0 0 2.1 2.35" /></svg>
+  let glyph: ReactNode
+
+  switch (kind) {
+    case 'water':
+      glyph = (
+        <>
+          <path className="angle-service-glyph-accent" d="M9.3 16.1h13.4L22 26H10l-.7-9.9Z" />
+          <path d="M8 6h16l-1.55 20H9.55L8 6Z" />
+          <path d="M9.25 15.75c2.2-1.4 4.25 1.4 6.45 0s4.25 1.4 6.45 0" />
+        </>
+      )
+      break
+    case 'cutlery':
+      glyph = (
+        <>
+          <path d="M7 5v8.5M4.25 5v5.5a2.75 2.75 0 0 0 5.5 0V5M7 13.5V27" />
+          <path d="M20 5v22M20 5c4 2.55 5.3 6.25 5.3 11H20" />
+          <path d="M4.25 9.5h5.5" />
+        </>
+      )
+      break
+    case 'napkins':
+      glyph = (
+        <>
+          <path className="angle-service-glyph-accent" d="M6 6h20v20H6V6Z" />
+          <path d="M6 6h20v20H6V6Z" />
+          <path d="m6 6 20 20M6 26l10-10L26 6" />
+          <path d="M9 29h17a3 3 0 0 0 3-3V9" />
+        </>
+      )
+      break
+    case 'bread':
+      glyph = (
+        <>
+          <path className="angle-service-glyph-accent" d="M5.5 18.5c-2.2-1.4-2-5 .35-6.1C6.25 8.3 10.2 6 16 6s9.75 2.3 10.15 6.4c2.35 1.1 2.55 4.7.35 6.1C25.2 23.5 21.5 26 16 26s-9.2-2.5-10.5-7.5Z" />
+          <path d="M5.5 18.5c-2.2-1.4-2-5 .35-6.1C6.25 8.3 10.2 6 16 6s9.75 2.3 10.15 6.4c2.35 1.1 2.55 4.7.35 6.1C25.2 23.5 21.5 26 16 26s-9.2-2.5-10.5-7.5Z" />
+          <path d="m11 10-1.25 4M16 9l-1.25 4.5M21 10l-1.25 4" />
+        </>
+      )
+      break
+    case 'next_course':
+      glyph = (
+        <>
+          <path className="angle-service-glyph-accent" d="M7.5 24a8.5 8.5 0 0 1 17 0h-17Z" />
+          <path d="M5 24h22M7.5 24a8.5 8.5 0 0 1 17 0M16 14.5V5" />
+          <path d="m12.5 8.5 3.5-3.5 3.5 3.5" />
+          <path d="M4 27h24" />
+        </>
+      )
+      break
+    case 'hold_course':
+      glyph = (
+        <>
+          <path className="angle-service-glyph-accent" d="M7.5 24a8.5 8.5 0 0 1 17 0h-17Z" />
+          <path d="M5 24h22M7.5 24a8.5 8.5 0 0 1 17 0M4 27h24" />
+          <path d="M12.5 5v8M19.5 5v8" strokeWidth="2.4" />
+        </>
+      )
+      break
+    case 'bill':
+      glyph = (
+        <>
+          <path className="angle-service-glyph-accent" d="M8 4h16v24l-2.65-1.75L18.7 28l-2.7-1.75L13.3 28l-2.65-1.75L8 28V4Z" />
+          <path d="M8 4h16v24l-2.65-1.75L18.7 28l-2.7-1.75L13.3 28l-2.65-1.75L8 28V4Z" />
+          <path d="M12 10h8M12 15h8M12 20h4.5" />
+          <circle cx="20" cy="20" r="1.1" fill="currentColor" stroke="none" />
+        </>
+      )
+      break
+    case 'problem':
+      glyph = (
+        <>
+          <path className="angle-service-glyph-accent" d="M6 5h20v17H14l-6.5 5v-5H6V5Z" />
+          <path d="M6 5h20v17H14l-6.5 5v-5H6V5Z" />
+          <path d="M16 10v6M16 19.5h.01" strokeWidth="2.4" />
+        </>
+      )
+      break
+    default:
+      glyph = (
+        <>
+          <path className="angle-service-glyph-accent" d="M7.5 23a8.5 8.5 0 0 1 17 0h-17Z" />
+          <path d="M5 23h22M7.5 23a8.5 8.5 0 0 1 17 0M16 13.5V9M13.5 9h5M4 27h24" />
+          <path d="M6.5 11.5 4.5 9.5M25.5 11.5l2-2" />
+        </>
+      )
   }
-  if (kind === 'cutlery') {
-    return <svg className="angle-service-glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M6.25 3.5v7.25M3.75 3.5v4.75a2.5 2.5 0 0 0 5 0V3.5M6.25 10.75v9.75M15.75 3.5v17M15.75 3.5c2.9 2 4 4.65 4 7.75h-4" /></svg>
-  }
-  if (kind === 'napkins') {
-    return <svg className="angle-service-glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M5 6.25h10.75L19 9.5v9.25H8.25L5 15.5V6.25Z" /><path d="M8.25 9.5H19M8.25 9.5v9.25" /><path d="m15.75 6.25 0 3.25L19 9.5" /></svg>
-  }
-  if (kind === 'bread') {
-    return <svg className="angle-service-glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M5 15c-2-1-2-4 0-5 0-3 3-5 7-5s7 2 7 5c2 1 2 4 0 5-1 3-4 4-7 4s-6-1-7-4Z" /><path d="m9 8-1 3M13 7l-1 4M17 8l-1 3" /></svg>
-  }
-  if (kind === 'next_course') {
-    return <svg className="angle-service-glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M4.5 18h15M6.5 18a5.5 5.5 0 0 1 11 0M12 7.25v5" /><path d="m9.5 9.75 2.5-2.5 2.5 2.5" /></svg>
-  }
-  if (kind === 'hold_course') {
-    return <svg className="angle-service-glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M4.5 18h15M6.5 18a5.5 5.5 0 0 1 11 0" /><path d="M9.5 7.25v5M14.5 7.25v5" /></svg>
-  }
-  if (kind === 'bill') {
-    return <svg className="angle-service-glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M7 3.5h10v17l-2-1.35L13 20.5l-2-1.35L9 20.5l-2-1.35V3.5Z" /><path d="M10 8h4M10 12h4M10 16h2.5" /></svg>
-  }
-  if (kind === 'problem') {
-    return <svg className="angle-service-glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden><circle cx="12" cy="12" r="8.5" /><path d="M12 7.5v5.75M12 16.75h.01" /></svg>
-  }
-  return <svg className="angle-service-glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M5 17.5h14M7.5 17.5v-5a4.5 4.5 0 0 1 9 0v5M12 5v2.5M4 20.5h16" /><path d="M9.5 12.5h5M18.5 5.25h2M19.5 4.25v2" /></svg>
+
+  return (
+    <svg
+      className="angle-service-glyph"
+      data-service-icon={kind}
+      viewBox="0 0 32 32"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.85"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      {glyph}
+    </svg>
+  )
 }

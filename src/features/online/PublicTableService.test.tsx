@@ -107,6 +107,18 @@ describe('ANGLE Guest table service', () => {
     expect(screen.getByRole('button', { name: t('he', 'serviceNextCourse') })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: t('he', 'serviceHoldCourse') })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: t('he', 'serviceBill') })).toBeInTheDocument()
+    expect(Array.from(document.querySelectorAll('[data-service-icon]')).map((icon) => (
+      icon.getAttribute('data-service-icon')
+    ))).toEqual([
+      'call_waiter',
+      'water',
+      'cutlery',
+      'napkins',
+      'problem',
+      'next_course',
+      'hold_course',
+      'bill',
+    ])
   })
 
   it('uses the whole Live Table item row without a separate black action tile', async () => {

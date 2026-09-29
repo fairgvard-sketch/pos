@@ -1304,8 +1304,20 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   }
 
   .angle-service-glyph {
-    width: 1.75rem;
-    height: 1.75rem;
+    width: 1.9rem;
+    height: 1.9rem;
+    overflow: visible;
+  }
+
+  .angle-service-glyph-accent {
+    fill: currentColor;
+    stroke: none;
+    opacity: .12;
+  }
+
+  .angle-table-service-primary-icon .angle-service-glyph {
+    width: 2.05rem;
+    height: 2.05rem;
   }
 
   .angle-table-service-icon.is-water {
@@ -1406,6 +1418,11 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     width: 2.75rem;
     height: 2.75rem;
     border-radius: .9rem;
+  }
+
+  .angle-table-service-row .angle-service-glyph {
+    width: 1.65rem;
+    height: 1.65rem;
   }
 
   .angle-table-service-chevron {
