@@ -4757,14 +4757,14 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
 .angle-discovery-header {
   position: relative;
   display: flex;
-  min-height: 4.5rem;
+  min-height: calc(4.5rem + env(safe-area-inset-top, 0px));
   align-items: center;
   justify-content: flex-start;
-  padding-top: env(safe-area-inset-top, 0px);
 }
 
 .angle-discovery-profile {
   position: absolute;
+  top: calc(1rem + env(safe-area-inset-top, 0px));
   left: 0;
   display: grid;
   width: 2.75rem;
@@ -4778,6 +4778,7 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
 
 .angle-discovery-location {
   position: absolute;
+  top: calc(1rem + env(safe-area-inset-top, 0px));
   left: 50%;
   display: inline-flex;
   max-width: 55%;
