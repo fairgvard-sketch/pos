@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import QrScanner from 'qr-scanner'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
   fetchPublicRestaurant,
@@ -42,6 +43,7 @@ const discoveryCopy = {
     scannerUnsupported: 'QR scanning is not supported in this browser. Open your camera app and scan the code there.',
     scannerDenied: 'Camera access is unavailable. Allow camera access or scan the code with your camera app.',
     scannerInvalid: 'This is not an ANGLE menu QR code.',
+    scannerPhoto: 'Scan from photo', scannerPhotoHint: 'Take a photo of the QR code or choose one from your library.',
     demoNote: (rating: string) => `★ The ${rating} rating and review count are demo data for the ANGLE prototype, not Google reviews.`,
     viewMenu: 'View menu', reserveTable: 'Reserve a table', loadingOne: 'Loading restaurant…',
     unavailable: 'This restaurant is not available.', backToRestaurants: 'Back to restaurants',
@@ -77,6 +79,7 @@ const discoveryCopy = {
     scannerUnsupported: 'הדפדפן הזה לא תומך בסריקת QR. פתחו את אפליקציית המצלמה וסרקו שם.',
     scannerDenied: 'הגישה למצלמה אינה זמינה. אשרו גישה או סרקו דרך אפליקציית המצלמה.',
     scannerInvalid: 'זה אינו קוד QR של תפריט ANGLE.',
+    scannerPhoto: 'סריקה מתמונה', scannerPhotoHint: 'צלמו את קוד ה־QR או בחרו תמונה מהספרייה.',
     demoNote: (rating: string) => `★ הדירוג ${rating} ומספר הביקורות הם נתוני דמו של ANGLE, ולא ביקורות Google.`,
     viewMenu: 'לתפריט', reserveTable: 'הזמנת שולחן', loadingOne: 'טוענים את המסעדה…',
     unavailable: 'המסעדה אינה זמינה כרגע.', backToRestaurants: 'חזרה למסעדות',
@@ -265,59 +268,42 @@ function todayHours(
   return windows.map(([from, to]) => `${from}–${to}`).join(' · ')
 }
 
-type BarcodeResult = { rawValue?: string }
-type BarcodeDetectorApi = { detect: (source: HTMLVideoElement) => Promise<BarcodeResult[]> }
-type BarcodeDetectorConstructor = new (options: { formats: string[] }) => BarcodeDetectorApi
-
 function QrScannerDialog({ copy, onClose, onNavigate }: {
   copy: typeof discoveryCopy.en | typeof discoveryCopy.he
   onClose: () => void
   onNavigate: (value: string) => boolean
 }) {
   const videoRef = useRef<HTMLVideoElement>(null)
+  const uploadRef = useRef<HTMLInputElement>(null)
   const [status, setStatus] = useState<'starting' | 'ready' | 'unsupported' | 'denied' | 'invalid'>('starting')
 
   useEffect(() => {
     let active = true
-    let stream: MediaStream | null = null
-    let scanTimer = 0
+    let scanner: QrScanner | null = null
 
     const start = async () => {
-      const Detector = (window as Window & { BarcodeDetector?: BarcodeDetectorConstructor }).BarcodeDetector
-      if (!Detector || !navigator.mediaDevices?.getUserMedia) {
+      if (!navigator.mediaDevices?.getUserMedia) {
         setStatus('unsupported')
         return
       }
+      const video = videoRef.current
+      if (!video) return
       try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          audio: false,
-          video: { facingMode: { ideal: 'environment' } },
-        })
-        if (!active) {
-          stream.getTracks().forEach((track) => track.stop())
-          return
-        }
-        const video = videoRef.current
-        if (!video) return
-        video.srcObject = stream
-        await video.play()
-        const detector = new Detector({ formats: ['qr_code'] })
-        setStatus('ready')
-
-        const scan = async () => {
+        scanner = new QrScanner(video, (result) => {
           if (!active) return
-          try {
-            const result = (await detector.detect(video)).find((code) => code.rawValue)
-            if (result?.rawValue) {
-              if (onNavigate(result.rawValue)) return
-              setStatus('invalid')
-            }
-          } catch {
-            // A frame can be unreadable while the camera is moving; keep scanning.
+          if (onNavigate(result.data)) {
+            scanner?.stop()
+            return
           }
-          scanTimer = window.setTimeout(scan, 250)
-        }
-        scanTimer = window.setTimeout(scan, 250)
+          setStatus('invalid')
+        }, {
+          preferredCamera: 'environment',
+          maxScansPerSecond: 8,
+          returnDetailedScanResult: true,
+        })
+        await scanner.start()
+        if (!active) return
+        setStatus('ready')
       } catch {
         if (active) setStatus('denied')
       }
@@ -326,10 +312,22 @@ function QrScannerDialog({ copy, onClose, onNavigate }: {
 
     return () => {
       active = false
-      window.clearTimeout(scanTimer)
-      stream?.getTracks().forEach((track) => track.stop())
+      scanner?.destroy()
     }
   }, [onNavigate])
+
+  const scanPhoto = async (file: File | undefined) => {
+    if (!file) return
+    setStatus('starting')
+    try {
+      const result = await QrScanner.scanImage(file, { returnDetailedScanResult: true })
+      if (!onNavigate(result.data)) setStatus('invalid')
+    } catch {
+      setStatus('invalid')
+    } finally {
+      if (uploadRef.current) uploadRef.current.value = ''
+    }
+  }
 
   const feedback = status === 'starting'
     ? copy.scannerStarting
@@ -353,6 +351,19 @@ function QrScannerDialog({ copy, onClose, onNavigate }: {
           <span aria-hidden="true" />
         </div>
         <p role="status">{feedback}</p>
+        <button type="button" className="angle-scanner-upload" onClick={() => uploadRef.current?.click()}>
+          <PhotoIcon />
+          <span><strong>{copy.scannerPhoto}</strong><small>{copy.scannerPhotoHint}</small></span>
+        </button>
+        <input
+          ref={uploadRef}
+          className="angle-scanner-file"
+          type="file"
+          accept="image/*"
+          capture="environment"
+          aria-label={copy.scannerPhoto}
+          onChange={(event) => void scanPhoto(event.target.files?.[0])}
+        />
       </section>
     </div>
   )
