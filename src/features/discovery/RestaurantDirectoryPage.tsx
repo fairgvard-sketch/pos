@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import QrScanner from 'qr-scanner'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
   fetchPublicRestaurant,
@@ -10,6 +9,13 @@ import {
 import { searchAddresses, type AddressSearchResult } from './geocoding'
 
 const fallbackHero = '/menu-backgrounds/ivory-food.webp'
+
+let qrScannerModule: Promise<typeof import('qr-scanner')> | null = null
+
+function loadQrScanner() {
+  qrScannerModule ??= import('qr-scanner')
+  return qrScannerModule
+}
 
 const discoveryCopy = {
   en: {
@@ -279,7 +285,7 @@ function QrScannerDialog({ copy, onClose, onNavigate }: {
 
   useEffect(() => {
     let active = true
-    let scanner: QrScanner | null = null
+    let scanner: { start: () => Promise<void>; stop: () => void; destroy: () => void } | null = null
 
     const start = async () => {
       if (!navigator.mediaDevices?.getUserMedia) {
@@ -289,6 +295,8 @@ function QrScannerDialog({ copy, onClose, onNavigate }: {
       const video = videoRef.current
       if (!video) return
       try {
+        const { default: QrScanner } = await loadQrScanner()
+        if (!active) return
         scanner = new QrScanner(video, (result) => {
           if (!active) return
           if (onNavigate(result.data)) {
@@ -320,6 +328,7 @@ function QrScannerDialog({ copy, onClose, onNavigate }: {
     if (!file) return
     setStatus('starting')
     try {
+      const { default: QrScanner } = await loadQrScanner()
       const result = await QrScanner.scanImage(file, { returnDetailedScanResult: true })
       if (!onNavigate(result.data)) setStatus('invalid')
     } catch {

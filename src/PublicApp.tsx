@@ -1,10 +1,11 @@
 import { Suspense, useEffect } from 'react'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { QueryClientProvider } from '@tanstack/react-query'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import RouteErrorBoundary from './components/RouteErrorBoundary'
 import SuspenseFallback from './components/ui/SuspenseFallback'
 import UpdateToast from './components/UpdateToast'
 import { lazyWithRetry } from './lib/lazyWithRetry'
+import { createPublicQueryClient } from './publicQueryClient'
 
 const PublicOrderPage = lazyWithRetry(
   () => import('./features/online/PublicOrderPage'),
@@ -25,15 +26,7 @@ const RestaurantDetailPage = lazyWithRetry(
   'RestaurantDetailPage',
 )
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      retry: 1,
-      refetchOnWindowFocus: false,
-      refetchOnReconnect: true,
-    },
-  },
-})
+const queryClient = createPublicQueryClient()
 
 /**
  * Сигнал «страница поднялась» родительскому окну.
