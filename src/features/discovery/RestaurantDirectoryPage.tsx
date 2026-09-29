@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
@@ -6,6 +6,7 @@ import {
   fetchPublicRestaurants,
   type PublicRestaurant,
 } from '../online/publicApi'
+import { searchAddresses, type AddressSearchResult } from './geocoding'
 
 const fallbackHero = '/menu-backgrounds/ivory-food.webp'
 
@@ -18,8 +19,16 @@ const discoveryCopy = {
     loadError: 'Restaurants could not be loaded.', retry: 'Try again',
     empty: 'No restaurants match this search.', navigation: 'Main navigation', home: 'Home',
     restaurants: 'Restaurants', profile: 'Profile', menuAvailable: 'Menu available',
-    live: 'Live', map: 'Restaurant map', useLocation: 'Use my location',
-    locating: 'Locating…', yourLocation: 'Near me', locationUnavailable: 'Location unavailable',
+    live: 'Live', map: 'Restaurant map', chooseLocation: 'Choose location',
+    changeLocation: 'Change location', locating: 'Locating…', yourLocation: 'My location',
+    locationUnavailable: 'Location unavailable', locationTitle: 'Choose your location',
+    locationIntro: 'Use your current position or enter any address.', close: 'Close',
+    useCurrentLocation: 'Use my current location', currentLocationNote: 'Uses your device location only after permission.',
+    orEnterAddress: 'or enter an address', addressLabel: 'Address',
+    addressPlaceholder: 'Street, city or place', findAddress: 'Find address',
+    searchingAddresses: 'Searching…', addressEmpty: 'No matching address found.',
+    addressError: 'Address search is unavailable. Try again.', selectAddress: 'Select address',
+    addressPrivacy: 'The search text is sent to OpenStreetMap only after you press Find.',
     kilometres: 'km',
     restaurant: 'Restaurant', demo: 'Demo', priceLevel: 'Price level', back: 'Back',
     logo: 'logo', sections: 'Restaurant sections', menu: 'Menu', liveTable: 'Live Table',
@@ -40,8 +49,16 @@ const discoveryCopy = {
     loadError: 'לא הצלחנו לטעון את המסעדות.', retry: 'נסו שוב',
     empty: 'לא נמצאו מסעדות שמתאימות לחיפוש.', navigation: 'ניווט ראשי', home: 'בית',
     restaurants: 'מסעדות', profile: 'פרופיל', menuAvailable: 'התפריט זמין',
-    live: 'פעיל', map: 'מפת מסעדות', useLocation: 'המיקום שלי',
-    locating: 'מאתרים…', yourLocation: 'קרוב אליי', locationUnavailable: 'המיקום לא זמין',
+    live: 'פעיל', map: 'מפת מסעדות', chooseLocation: 'בחירת מיקום',
+    changeLocation: 'שינוי מיקום', locating: 'מאתרים…', yourLocation: 'המיקום שלי',
+    locationUnavailable: 'המיקום לא זמין', locationTitle: 'בחירת המיקום שלכם',
+    locationIntro: 'אפשר להשתמש במיקום הנוכחי או להזין כל כתובת.', close: 'סגירה',
+    useCurrentLocation: 'שימוש במיקום הנוכחי', currentLocationNote: 'המיקום מהמכשיר משמש רק לאחר אישור.',
+    orEnterAddress: 'או הזינו כתובת', addressLabel: 'כתובת',
+    addressPlaceholder: 'רחוב, עיר או מקום', findAddress: 'חיפוש כתובת',
+    searchingAddresses: 'מחפשים…', addressEmpty: 'לא נמצאה כתובת מתאימה.',
+    addressError: 'חיפוש הכתובות אינו זמין. נסו שוב.', selectAddress: 'בחירת כתובת',
+    addressPrivacy: 'טקסט החיפוש נשלח ל-OpenStreetMap רק לאחר לחיצה על חיפוש.',
     kilometres: 'ק״מ',
     restaurant: 'מסעדה', demo: 'דמו', priceLevel: 'רמת מחיר', back: 'חזרה',
     logo: 'לוגו', sections: 'אפשרויות במסעדה', menu: 'תפריט', liveTable: 'השולחן שלי',
@@ -136,6 +153,10 @@ const LocateIcon = () => (
   <Icon size={17}><circle cx="12" cy="12" r="3" /><path d="M12 2v3M12 19v3M2 12h3M19 12h3" /><circle cx="12" cy="12" r="8" /></Icon>
 )
 
+const CloseIcon = () => (
+  <Icon><path d="m6 6 12 12M18 6 6 18" /></Icon>
+)
+
 type GuestPosition = { lat: number; lng: number }
 type LocationStatus = 'idle' | 'locating' | 'ready' | 'unavailable'
 
@@ -207,12 +228,12 @@ function RestaurantCard({ restaurant, copy, distance }: {
   )
 }
 
-function RestaurantMap({ restaurants, copy, guestPosition, locationStatus, onLocate }: {
+function RestaurantMap({ restaurants, copy, guestPosition, locationStatus, onChooseLocation }: {
   restaurants: PublicRestaurant[]
   copy: typeof discoveryCopy.en | typeof discoveryCopy.he
   guestPosition: GuestPosition | null
   locationStatus: LocationStatus
-  onLocate: () => void
+  onChooseLocation: () => void
 }) {
   const located = restaurants.filter((restaurant) => restaurant.coordinates)
   const first = located[0]?.coordinates ?? null
@@ -244,11 +265,9 @@ function RestaurantMap({ restaurants, copy, guestPosition, locationStatus, onLoc
     : null
   const locateLabel = locationStatus === 'locating'
     ? copy.locating
-    : locationStatus === 'unavailable'
-      ? copy.locationUnavailable
-      : locationStatus === 'ready'
-        ? copy.yourLocation
-        : copy.useLocation
+    : locationStatus === 'ready'
+      ? copy.changeLocation
+      : copy.chooseLocation
   return (
     <section className={`angle-discovery-map${mapUrl ? ' has-live-map' : ''}`} aria-label={copy.map}>
       {mapUrl && (
@@ -263,7 +282,7 @@ function RestaurantMap({ restaurants, copy, guestPosition, locationStatus, onLoc
       <button
         type="button"
         className="angle-discovery-locate"
-        onClick={onLocate}
+        onClick={onChooseLocation}
         disabled={locationStatus === 'locating'}
       >
         <LocateIcon /> <span>{locateLabel}</span>
@@ -294,6 +313,115 @@ function RestaurantMap({ restaurants, copy, guestPosition, locationStatus, onLoc
   )
 }
 
+function LocationPicker({ copy, status, onClose, onUseCurrent, onSelectAddress }: {
+  copy: typeof discoveryCopy.en | typeof discoveryCopy.he
+  status: LocationStatus
+  onClose: () => void
+  onUseCurrent: () => void
+  onSelectAddress: (result: AddressSearchResult) => void
+}) {
+  const [addressQuery, setAddressQuery] = useState('')
+  const [addressResults, setAddressResults] = useState<AddressSearchResult[]>([])
+  const [addressStatus, setAddressStatus] = useState<'idle' | 'searching' | 'empty' | 'error'>('idle')
+
+  const handleAddressSearch = async (event: FormEvent) => {
+    event.preventDefault()
+    if (addressQuery.trim().length < 3 || addressStatus === 'searching') return
+    setAddressStatus('searching')
+    try {
+      const results = await searchAddresses(addressQuery, navigator.language)
+      setAddressResults(results)
+      setAddressStatus(results.length > 0 ? 'idle' : 'empty')
+    } catch {
+      setAddressResults([])
+      setAddressStatus('error')
+    }
+  }
+
+  return (
+    <div className="angle-location-backdrop" role="presentation" onMouseDown={(event) => {
+      if (event.target === event.currentTarget) onClose()
+    }}>
+      <section
+        className="angle-location-sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="angle-location-title"
+      >
+        <header>
+          <div>
+            <h2 id="angle-location-title">{copy.locationTitle}</h2>
+            <p>{copy.locationIntro}</p>
+          </div>
+          <button type="button" onClick={onClose} aria-label={copy.close}><CloseIcon /></button>
+        </header>
+
+        <button
+          type="button"
+          className="angle-location-current"
+          onClick={onUseCurrent}
+          disabled={status === 'locating'}
+          aria-label={copy.useCurrentLocation}
+        >
+          <span><LocateIcon /></span>
+          <span>
+            <strong>{status === 'locating' ? copy.locating : copy.useCurrentLocation}</strong>
+            <small>{status === 'unavailable' ? copy.locationUnavailable : copy.currentLocationNote}</small>
+          </span>
+        </button>
+
+        <div className="angle-location-divider"><span>{copy.orEnterAddress}</span></div>
+
+        <form className="angle-location-form" onSubmit={handleAddressSearch}>
+          <label htmlFor="angle-location-address">{copy.addressLabel}</label>
+          <div>
+            <input
+              id="angle-location-address"
+              value={addressQuery}
+              onChange={(event) => {
+                setAddressQuery(event.target.value)
+                if (addressStatus !== 'idle') setAddressStatus('idle')
+              }}
+              placeholder={copy.addressPlaceholder}
+              autoComplete="street-address"
+            />
+            <button
+              type="submit"
+              disabled={addressQuery.trim().length < 3 || addressStatus === 'searching'}
+            >
+              {addressStatus === 'searching' ? copy.searchingAddresses : copy.findAddress}
+            </button>
+          </div>
+        </form>
+
+        {addressStatus === 'empty' && <p className="angle-location-feedback">{copy.addressEmpty}</p>}
+        {addressStatus === 'error' && <p className="angle-location-feedback is-error">{copy.addressError}</p>}
+
+        {addressResults.length > 0 && (
+          <div className="angle-location-results" aria-live="polite">
+            {addressResults.map((result) => (
+              <button
+                key={result.id}
+                type="button"
+                onClick={() => onSelectAddress(result)}
+                aria-label={`${copy.selectAddress}: ${result.label}`}
+              >
+                <span><PinIcon /></span>
+                <span>{result.label}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        <p className="angle-location-privacy">
+          {copy.addressPrivacy}{' '}
+          <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap</a>
+        </p>
+      </section>
+    </div>
+  )
+}
+
 function DirectoryState({ children }: { children: ReactNode }) {
   return <div className="angle-discovery-state">{children}</div>
 }
@@ -302,6 +430,8 @@ export function RestaurantDirectoryHome() {
   const [query, setQuery] = useState('')
   const [guestPosition, setGuestPosition] = useState<GuestPosition | null>(null)
   const [locationStatus, setLocationStatus] = useState<LocationStatus>('idle')
+  const [locationLabel, setLocationLabel] = useState('Tel Aviv, Israel')
+  const [isLocationPickerOpen, setIsLocationPickerOpen] = useState(false)
   const { copy, dir } = useDiscoveryLocale()
   const restaurants = useQuery({
     queryKey: ['public-restaurants'],
@@ -341,11 +471,20 @@ export function RestaurantDirectoryHome() {
     navigator.geolocation.getCurrentPosition(
       ({ coords }) => {
         setGuestPosition({ lat: coords.latitude, lng: coords.longitude })
+        setLocationLabel(copy.yourLocation)
         setLocationStatus('ready')
+        setIsLocationPickerOpen(false)
       },
       () => setLocationStatus('unavailable'),
       { enableHighAccuracy: false, timeout: 8_000, maximumAge: 300_000 },
     )
+  }
+
+  const selectAddress = (result: AddressSearchResult) => {
+    setGuestPosition({ lat: result.lat, lng: result.lng })
+    setLocationLabel(result.label)
+    setLocationStatus('ready')
+    setIsLocationPickerOpen(false)
   }
 
   return (
@@ -353,9 +492,14 @@ export function RestaurantDirectoryHome() {
       <div className="angle-discovery-panel">
         <header className="angle-discovery-header">
           <div className="angle-discovery-wordmark">ANGLE</div>
-          <button className="angle-discovery-location" type="button" aria-label={copy.area} onClick={requestLocation}>
+          <button
+            className="angle-discovery-location"
+            type="button"
+            aria-label={`${copy.locationTitle}: ${locationLabel}`}
+            onClick={() => setIsLocationPickerOpen(true)}
+          >
             <PinIcon />
-            <span>{locationStatus === 'ready' ? copy.yourLocation : 'Tel Aviv, Israel'}</span>
+            <span>{locationLabel}</span>
             <span aria-hidden="true">⌄</span>
           </button>
         </header>
@@ -383,7 +527,7 @@ export function RestaurantDirectoryHome() {
         copy={copy}
         guestPosition={guestPosition}
         locationStatus={locationStatus}
-        onLocate={requestLocation}
+        onChooseLocation={() => setIsLocationPickerOpen(true)}
       />
 
       <section className="angle-discovery-list" aria-labelledby="nearby-heading">
@@ -421,6 +565,16 @@ export function RestaurantDirectoryHome() {
         <span aria-disabled="true"><CalendarIcon /><small>{copy.reservations}</small></span>
         <span aria-disabled="true"><ProfileIcon /><small>{copy.profile}</small></span>
       </nav>
+
+      {isLocationPickerOpen && (
+        <LocationPicker
+          copy={copy}
+          status={locationStatus}
+          onClose={() => setIsLocationPickerOpen(false)}
+          onUseCurrent={requestLocation}
+          onSelectAddress={selectAddress}
+        />
+      )}
     </main>
   )
 }

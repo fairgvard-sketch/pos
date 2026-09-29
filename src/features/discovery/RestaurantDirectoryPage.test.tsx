@@ -51,6 +51,7 @@ afterEach(() => {
   cleanup()
   queryClient.clear()
   vi.clearAllMocks()
+  vi.unstubAllGlobals()
 })
 
 function renderAt(path: string) {
@@ -109,17 +110,57 @@ describe('ANGLE restaurant directory', () => {
       await screen.findByRole('heading', { name: 'Bulochka' })
       expect(getCurrentPosition).not.toHaveBeenCalled()
 
-      fireEvent.click(screen.getByRole('button', { name: 'Use my location' }))
+      fireEvent.click(screen.getByRole('button', { name: /Choose your location: Tel Aviv/i }))
+      expect(screen.getByRole('dialog', { name: 'Choose your location' })).toBeInTheDocument()
+      expect(getCurrentPosition).not.toHaveBeenCalled()
+
+      fireEvent.click(screen.getByRole('button', { name: 'Use my current location' }))
 
       expect(getCurrentPosition).toHaveBeenCalledTimes(1)
       expect(await screen.findByText(/km$/i)).toBeInTheDocument()
-      expect(screen.getAllByText('Near me').length).toBeGreaterThan(0)
+      expect(screen.getByRole('button', { name: /Choose your location: My location/i })).toBeInTheDocument()
     } finally {
       Object.defineProperty(navigator, 'geolocation', {
         configurable: true,
         value: originalGeolocation,
       })
     }
+  })
+
+  it('lets a guest search and select any address explicitly', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [{
+        place_id: 123,
+        osm_type: 'way',
+        osm_id: 456,
+        lat: '32.0631',
+        lon: '34.7738',
+        display_name: 'Rothschild Boulevard 1, Tel Aviv, Israel',
+      }],
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderAt('/')
+    await screen.findByRole('heading', { name: 'Bulochka' })
+    fireEvent.click(screen.getByRole('button', { name: /Choose your location: Tel Aviv/i }))
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'Address' }), {
+      target: { value: 'Rothschild 1, Tel Aviv' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Find address' }))
+
+    const result = await screen.findByRole('button', {
+      name: /Select address: Rothschild Boulevard 1/i,
+    })
+    fireEvent.click(result)
+
+    expect(screen.getByRole('button', {
+      name: /Choose your location: Rothschild Boulevard 1/i,
+    })).toBeInTheDocument()
+    expect(screen.getByText(/km$/i)).toBeInTheDocument()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(String(fetchMock.mock.calls[0][0])).toContain('q=Rothschild+1%2C+Tel+Aviv')
   })
 
   it('opens the venue page, links to the real menu and never presents demo data as Google', async () => {
