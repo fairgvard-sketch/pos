@@ -847,7 +847,7 @@ function RestaurantDetailContent({ restaurant }: { restaurant: PublicRestaurant 
     ? distanceKm(guestLocation.position, restaurant.coordinates)
     : null
   const hours = todayHours(restaurant.hours, restaurant.timezone, copy)
-  const menuHref = `/order/${restaurant.slug}?view=menu`
+  const menuHref = `/order/${restaurant.slug}?view=menu&browse=1`
 
   const openScannedMenu = (value: string) => {
     try {

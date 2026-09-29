@@ -13,6 +13,8 @@ export interface PublicOrderQueryContext {
   channel: PublicOrderChannel
   /** Открыть каталог сразу, минуя промо-hero (переход из карточки ANGLE). */
   startInMenu: boolean
+  /** Каталог из карточки ресторана: позиции можно смотреть, но не заказывать. */
+  browseOnly: boolean
   /** Автовозврат на hero нужен только общему киоск-устройству, не телефону гостя. */
   kiosk: boolean
 }
@@ -70,9 +72,20 @@ export function parsePublicOrderQuery(search: string): PublicOrderQueryContext {
       : 'link'
   const rawKiosk = params.get('kiosk')?.trim().toLowerCase()
   const kiosk = rawKiosk === '1' || rawKiosk === 'true'
-  const startInMenu = params.get('view')?.trim().toLowerCase() === 'menu'
+  const rawBrowse = params.get('browse')?.trim().toLowerCase()
+  // QR стола всегда остаётся заказным сценарием: произвольный browse в URL
+  // не должен лишать гостя возможности сделать заказ за своим столом.
+  const browseOnly = !tableToken && (rawBrowse === '1' || rawBrowse === 'true')
+  const startInMenu = browseOnly || params.get('view')?.trim().toLowerCase() === 'menu'
 
-  return { tableToken, requestedType: tableToken ? 'here' : requestedType, channel, startInMenu, kiosk }
+  return {
+    tableToken,
+    requestedType: tableToken ? 'here' : requestedType,
+    channel,
+    startInMenu,
+    browseOnly,
+    kiosk,
+  }
 }
 
 /**

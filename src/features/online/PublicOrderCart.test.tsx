@@ -67,16 +67,17 @@ function updateMenu(client: QueryClient, current: PublicItem) {
 const cartText = () => document.querySelector('.public-menu-cart-lines')?.textContent ?? ''
 
 describe('открытая гостевая корзина после обновления каталога', () => {
-  it('переход из карточки ресторана открывает каталог без hero и возвращается назад', async () => {
+  it('переход из карточки ресторана открывает каталог только для просмотра и возвращается назад', async () => {
+    writePublicCart(LOC, [stored])
     vi.mocked(fetchPublicMenu).mockResolvedValue(menu())
     const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } })
     clients.push(client)
-    window.history.replaceState({}, '', `/order/${LOC}?view=menu`)
+    window.history.replaceState({}, '', `/order/${LOC}?view=menu&browse=1`)
 
     render(
       <QueryClientProvider client={client}>
         <MemoryRouter
-          initialEntries={['/restaurants/bulochka', `/order/${LOC}?view=menu`]}
+          initialEntries={['/restaurants/bulochka', `/order/${LOC}?view=menu&browse=1`]}
           initialIndex={1}
         >
           <Routes>
@@ -89,6 +90,13 @@ describe('открытая гостевая корзина после обнов
 
     expect(await screen.findByRole('heading', { name: 'Drinks', level: 2 })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'להזמין' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: new RegExp(t('he', 'pubShowItems')) })).not.toBeInTheDocument()
+    const itemButton = screen.getByRole('button', { name: new RegExp(item.name) })
+    expect(itemButton.querySelector('.public-menu-item-action')).not.toBeInTheDocument()
+    fireEvent.click(itemButton)
+    expect(await screen.findByRole('heading', { name: item.name, level: 3 })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: new RegExp(t('he', 'pubAdd')) })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: t('he', 'close') }))
 
     fireEvent.click(screen.getByRole('button', { name: t('he', 'back') }))
     expect(await screen.findByRole('heading', { name: 'Restaurant detail' })).toBeInTheDocument()

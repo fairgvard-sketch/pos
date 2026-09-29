@@ -15,6 +15,7 @@ describe('parsePublicOrderQuery', () => {
       requestedType: null,
       channel: 'link',
       startInMenu: false,
+      browseOnly: false,
       kiosk: false,
     })
   })
@@ -25,6 +26,7 @@ describe('parsePublicOrderQuery', () => {
       requestedType: 'takeaway',
       channel: 'website',
       startInMenu: false,
+      browseOnly: false,
       kiosk: false,
     })
   })
@@ -35,6 +37,7 @@ describe('parsePublicOrderQuery', () => {
       requestedType: 'here',
       channel: 'table_qr',
       startInMenu: false,
+      browseOnly: false,
       kiosk: false,
     })
   })
@@ -51,6 +54,23 @@ describe('parsePublicOrderQuery', () => {
     expect(parsePublicOrderQuery('?view=menu')).toMatchObject({
       channel: 'link',
       startInMenu: true,
+      browseOnly: false,
+    })
+  })
+
+  it('opens directory menu links in browse-only mode', () => {
+    expect(parsePublicOrderQuery('?view=menu&browse=1')).toMatchObject({
+      tableToken: null,
+      startInMenu: true,
+      browseOnly: true,
+    })
+  })
+
+  it('never applies browse-only mode to a valid table QR', () => {
+    expect(parsePublicOrderQuery(`?table=${TABLE_TOKEN}&browse=1`)).toMatchObject({
+      tableToken: TABLE_TOKEN,
+      startInMenu: false,
+      browseOnly: false,
     })
   })
 })

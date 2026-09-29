@@ -556,7 +556,7 @@ export default function PublicOrderPage() {
   }
 
   // ── Экран статуса активной заявки ──────────────────────────
-  if (activeUuid && !serviceTableContext) {
+  if (!queryContext.browseOnly && activeUuid && !serviceTableContext) {
     return (
       <Shell
         isRtl={isRtl}
@@ -601,7 +601,7 @@ export default function PublicOrderPage() {
   // Организация без модуля online_orders (100): чистая витрина. Меню видно
   // всегда — без корзины, чекаута и баннеров «закрыто/пауза» (смены у
   // menu-only организации не бывает, вечное «закрыто» — ложь для гостя).
-  const viewOnly = isViewOnlyMenu(menu.location)
+  const viewOnly = queryContext.browseOnly || isViewOnlyMenu(menu.location)
   const orderTypes = menu.location.order_types ?? ['here', 'takeaway']
   const tableContext = serviceTableContext
   const requestedType = queryContext.requestedType
@@ -629,11 +629,11 @@ export default function PublicOrderPage() {
   const showMenu = tableContext
     ? liveTableTab === 'menu' && view === 'menu'
     : view === 'menu'
-  const showCheckout = tableContext
+  const showCheckout = !viewOnly && (tableContext
     // После первого заказа гость может дозаказать: сервер добавит новую
     // заявку в тот же открытый счёт стола. Статус показывает последнюю.
     ? liveTableTab === 'order' && view === 'checkout' && cartCount > 0
-    : view === 'checkout'
+    : view === 'checkout')
   const liveTableHeader = tableContext ? (
     <LiveTableHeader
       lang={lang}
@@ -737,6 +737,7 @@ export default function PublicOrderPage() {
                         lang={lang}
                         layout={tableContext ? 'row' : 'grid'}
                         priority={index < 6}
+                        viewOnly={viewOnly}
                         onTap={() => openItem(item)}
                       />
                     ))}
@@ -753,7 +754,7 @@ export default function PublicOrderPage() {
         )
       })()}
 
-      {showMenu && hasStarted && cartCount > 0 && (
+      {!viewOnly && showMenu && hasStarted && cartCount > 0 && (
         <CartBar
           key={bumpSeq}
           lang={lang}
@@ -896,7 +897,7 @@ export default function PublicOrderPage() {
 
       {/* Корзина изменилась после сверки с меню — говорим об этом сразу,
           а не даём гостю дойти до оплаты со старой суммой */}
-      {cartNotice && (
+      {!viewOnly && cartNotice && (
         <div className="public-menu-cart-notice" role="status">
           <span>{cartNotice}</span>
           <button type="button" onClick={() => setCartNotice(null)} aria-label={t(lang, 'close')}>
@@ -1437,11 +1438,13 @@ function SocialFooter({ links, lang, padForCart }: {
  * цена. Без фото — плейсхолдер с первой буквой названия,
  * чтобы список не «прыгал» по выравниванию.
  */
-function ItemRow({ item, lang, onTap, layout = 'row', priority = false }: {
+function ItemRow({ item, lang, onTap, layout = 'row', priority = false, viewOnly = false }: {
   item: PublicItem
   lang: Lang
   onTap: () => void
   layout?: 'row' | 'grid'
+  /** В каталоге из карточки ресторана нет визуальной affordance добавления. */
+  viewOnly?: boolean
   /** Первые видимые карточки загружаются сразу; остальной каталог — lazy. */
   priority?: boolean
 }) {
@@ -1506,7 +1509,7 @@ function ItemRow({ item, lang, onTap, layout = 'row', priority = false }: {
             {/* dir=ltr: цена не пляшет в bidi-контексте ивритских названий */}
             <span dir="ltr">{formatMoney(minPrice, lang)}</span>
           </span>
-          {layout === 'grid' && (
+          {!viewOnly && layout === 'grid' && (
             <span className="public-menu-item-action" aria-hidden>
               {item.variants.length > 0 || item.modifier_groups.length > 0 ? '⋯' : '+'}
             </span>
