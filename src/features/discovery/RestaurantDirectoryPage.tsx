@@ -20,7 +20,7 @@ function loadQrScanner() {
 const discoveryCopy = {
   en: {
     area: 'Current area: Tel Aviv', searchRegion: 'Find a restaurant',
-    searchPlaceholder: 'Search restaurants, cuisine...', searchLabel: 'Search restaurants',
+    searchPlaceholder: 'Search', searchLabel: 'Search restaurants',
     filters: 'Restaurant filters', near: 'Nearby restaurants', bookmarks: 'Favourites',
     reservations: 'Reservations', loading: 'Loading restaurants…',
     loadError: 'Restaurants could not be loaded.', retry: 'Try again',
@@ -60,7 +60,7 @@ const discoveryCopy = {
   },
   he: {
     area: 'האזור הנוכחי: תל אביב', searchRegion: 'חיפוש מסעדה',
-    searchPlaceholder: 'חיפוש מסעדה או סוג מטבח...', searchLabel: 'חיפוש מסעדות',
+    searchPlaceholder: 'חיפוש', searchLabel: 'חיפוש מסעדות',
     filters: 'מסנני מסעדות', near: 'מסעדות קרובות', bookmarks: 'מועדפים',
     reservations: 'הזמנות', loading: 'טוענים מסעדות…',
     loadError: 'לא הצלחנו לטעון את המסעדות.', retry: 'נסו שוב',

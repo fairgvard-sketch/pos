@@ -4828,27 +4828,33 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   display: flex;
   min-height: 3.25rem;
   align-items: center;
-  padding: 0 1rem;
-  border: 1px solid #dfe3e8;
-  border-radius: 1.125rem;
-  background: #fff;
-  color: #616161;
-  box-shadow: 0 2px 10px rgb(20 20 20 / 4%);
+  justify-content: center;
+  padding: 0 1.5rem;
+  border: 0;
+  border-radius: 999px;
+  background: #f1f0ee;
+  color: #242424;
 }
 
 .angle-discovery-search input {
-  width: 100%;
+  width: auto;
   min-width: 0;
+  max-width: 13rem;
+  flex: 0 1 13rem;
   margin-inline-start: .75rem;
   border: 0;
   outline: 0;
   background: transparent;
   color: #171717;
   font: inherit;
-  font-size: .875rem;
+  font-size: 1rem;
+  font-weight: 600;
 }
 
-.angle-discovery-search input::placeholder { color: #797979; }
+.angle-discovery-search input::placeholder { color: #303030; opacity: 1; }
+.angle-discovery-search:focus-within {
+  box-shadow: 0 0 0 2px #171717;
+}
 
 .angle-discovery-cuisines {
   padding: 1.5rem 0 1.5rem;
