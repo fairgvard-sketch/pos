@@ -31,6 +31,16 @@ const bulochka: PublicRestaurant = {
   hero_url: null,
   logo_url: null,
   price_level: 2,
+  hours: {
+    0: [['08:00', '20:00']],
+    1: [['08:00', '20:00']],
+    2: [['08:00', '20:00']],
+    3: [['08:00', '20:00']],
+    4: [['08:00', '20:00']],
+    5: [['08:00', '20:00']],
+    6: [['08:00', '20:00']],
+  },
+  timezone: 'Asia/Jerusalem',
   rating: { value: 4.8, count: 320, source: 'demo' },
   features: {
     menu: true,
@@ -43,6 +53,7 @@ const bulochka: PublicRestaurant = {
 let queryClient: QueryClient
 
 beforeEach(() => {
+  localStorage.clear()
   queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   vi.mocked(fetchPublicRestaurants).mockResolvedValue([bulochka])
   vi.mocked(fetchPublicRestaurant).mockResolvedValue(bulochka)
@@ -165,14 +176,24 @@ describe('ANGLE restaurant directory', () => {
     expect(String(fetchMock.mock.calls[0][0])).toContain('q=Rothschild+1%2C+Tel+Aviv')
   })
 
-  it('opens the venue page, links to the real menu and never presents demo data as Google', async () => {
+  it('opens the venue page with distance, cuisine, hours and a working QR action', async () => {
     renderAt('/restaurants/bulochka')
 
     expect(await screen.findByRole('heading', { name: 'Bulochka' })).toBeInTheDocument()
+    expect(screen.getByText(/km$/i)).toBeInTheDocument()
+    expect(screen.getByText('Bakery · Coffee')).toBeInTheDocument()
+    expect(screen.getByLabelText('Price level 2 / 4')).toHaveTextContent('₪₪')
+    const hours = screen.getByLabelText('Opening hours')
+    expect(within(hours).getByText('08:00–20:00')).toBeInTheDocument()
+    const scanButton = screen.getByRole('button', { name: /Scan QR menu/i })
+    expect(hours.compareDocumentPosition(scanButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(screen.getByRole('link', { name: /View menu/i }))
       .toHaveAttribute('href', '/order/bulochka')
     expect(screen.getByText(/not Google reviews/i)).toBeInTheDocument()
-    expect(screen.getByText('Live Table pilot')).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: /Reserve/i })).not.toBeInTheDocument()
+
+    fireEvent.click(scanButton)
+    expect(screen.getByRole('dialog', { name: 'Scan QR menu' })).toBeInTheDocument()
+    expect(await screen.findByText(/not supported in this browser/i)).toBeInTheDocument()
   })
 })

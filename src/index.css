@@ -5172,14 +5172,15 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
 
 .angle-venue {
   width: 100%;
-  max-width: 32rem;
+  max-width: 30rem;
   margin: 0 auto;
   padding-bottom: env(safe-area-inset-bottom, 0px);
+  background: #fff;
 }
 
 .angle-venue-hero {
   position: relative;
-  height: 21rem;
+  height: clamp(17rem, 76vw, 20rem);
   overflow: hidden;
   background: #eceff2;
 }
@@ -5220,9 +5221,9 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   position: relative;
   z-index: 2;
   min-height: 28rem;
-  margin-top: -2rem;
-  padding: 2rem 1rem 1.5rem;
-  border-radius: 2rem 2rem 0 0;
+  margin-top: -1.5rem;
+  padding: 1.5rem 1rem 2rem;
+  border-radius: 1.5rem 1.5rem 0 0;
   background: #fff;
 }
 
@@ -5244,7 +5245,7 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   margin: 0;
   color: #171717;
   font-family: 'Space Grotesk', 'Inter', sans-serif;
-  font-size: 2rem;
+  font-size: 1.875rem;
   letter-spacing: -.055em;
   line-height: 1.05;
 }
@@ -5254,40 +5255,41 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   min-height: 2.75rem;
   align-items: center;
   justify-content: space-between;
+  gap: 1rem;
 }
 
-.angle-venue-address {
+.angle-venue-distance {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
+  gap: .25rem;
+  color: #454545;
+  font-size: .75rem;
+  font-weight: 750;
+}
+
+.angle-venue-distance svg { width: 1rem; height: 1rem; }
+
+.angle-venue-meta {
+  display: flex;
+  min-height: 1.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: .375rem;
   margin: 0;
   color: #5f5f5f;
   font-size: .8125rem;
-}
-
-.angle-venue-address svg { margin-inline-end: .375rem; }
-
-.angle-venue-tags {
-  display: flex;
-  flex-wrap: wrap;
-  margin-top: .75rem;
-}
-
-.angle-venue-tags span {
-  margin: 0;
-  margin-inline-end: .5rem;
-  margin-bottom: .5rem;
-  padding: .5rem .75rem;
-  border-radius: .75rem;
-  background: #f1f3f5;
-  color: #4f4f4f;
-  font-size: .75rem;
   font-weight: 650;
 }
 
+.angle-venue-meta i { color: #a1a1aa; font-style: normal; }
+.angle-venue-meta [aria-label^='Price level'],
+.angle-venue-meta [aria-label^='רמת מחיר'] { color: #303030; letter-spacing: .05em; }
+
 .angle-venue-actions {
   display: grid;
-  margin-top: 1rem;
-  padding: 1rem 0;
+  margin-top: .75rem;
+  padding: .75rem 0;
   grid-template-columns: repeat(4, 1fr);
   border-top: 1px solid #e1e5ea;
   border-bottom: 1px solid #e1e5ea;
@@ -5309,55 +5311,159 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
 .angle-venue-actions a svg { margin-bottom: .375rem; }
 
 .angle-venue-summary {
-  margin: 1.5rem 0 0;
+  margin: 1rem 0 0;
   color: #535353;
   font-size: .9375rem;
   line-height: 1.6;
 }
 
-.angle-venue-live {
+.angle-venue-hours {
   display: flex;
-  margin-top: 1.5rem;
+  min-height: 4.75rem;
+  align-items: center;
+  margin-top: 1rem;
   padding: 1rem;
-  border: 1px solid #dfe3e8;
-  border-radius: 1.25rem;
-  background: #fff;
+  border-radius: 1rem;
+  background: #f1f3f5;
 }
 
-.angle-venue-live__icon {
+.angle-venue-hours__icon {
   display: grid;
-  width: 3rem;
-  height: 3rem;
+  width: 2.75rem;
+  height: 2.75rem;
   flex: 0 0 auto;
-  margin-inline-end: .75rem;
-  border-radius: .875rem;
-  background: #f1f3f5;
+  margin-inline-end: 1rem;
+  border-radius: .75rem;
+  background: #fff;
   color: #202020;
   place-items: center;
 }
 
-.angle-venue-live p {
+.angle-venue-hours p {
   margin: 0 0 .25rem;
   color: #686868;
-  font-size: .6875rem;
+  font-size: .625rem;
   font-weight: 800;
   letter-spacing: .06em;
   text-transform: uppercase;
 }
 
-.angle-venue-live h2 {
-  margin: 0;
+.angle-venue-hours strong {
+  display: block;
   color: #171717;
-  font-size: 1rem;
-  letter-spacing: -.02em;
+  font-size: .9375rem;
+  line-height: 1.25;
 }
 
-.angle-venue-live span {
+.angle-venue-scan {
+  display: grid;
+  width: 100%;
+  min-height: 5.5rem;
+  align-items: center;
+  margin-top: .75rem;
+  padding: 1rem;
+  grid-template-columns: 2.75rem minmax(0, 1fr) auto;
+  gap: .75rem;
+  border: 0;
+  border-radius: 1.25rem;
+  background: #171717;
+  color: #fff;
+  text-align: start;
+  transition: transform 120ms ease, background 120ms ease;
+}
+
+.angle-venue-scan:active { background: #292929; transform: scale(.985); }
+
+.angle-venue-scan__icon {
+  display: grid;
+  width: 2.75rem;
+  height: 2.75rem;
+  border: 1px solid rgb(255 255 255 / 26%);
+  border-radius: .75rem;
+  place-items: center;
+}
+
+.angle-venue-scan > span:nth-child(2) { min-width: 0; }
+.angle-venue-scan strong { display: block; font-size: .9375rem; line-height: 1.2; }
+.angle-venue-scan small {
   display: block;
-  margin-top: .375rem;
-  color: #616161;
+  margin-top: .25rem;
+  color: #cfd1d4;
+  font-size: .75rem;
+  font-weight: 550;
+  line-height: 1.35;
+}
+
+.angle-venue-scan b { font-size: 1.125rem; font-weight: 500; }
+[dir='rtl'].angle-venue .angle-venue-scan b { transform: scaleX(-1); }
+
+.angle-scanner-backdrop {
+  position: fixed;
+  z-index: 70;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-top: env(safe-area-inset-top, 0px);
+  background: rgb(12 12 12 / 58%);
+}
+
+.angle-scanner {
+  width: 100%;
+  max-width: 30rem;
+  padding: 1rem 1rem calc(1.5rem + env(safe-area-inset-bottom, 0px));
+  border-radius: 1.5rem 1.5rem 0 0;
+  background: #fff;
+  box-shadow: 0 -16px 48px rgb(0 0 0 / 18%);
+}
+
+.angle-scanner header {
+  display: grid;
+  min-height: 3rem;
+  align-items: center;
+  grid-template-columns: 1fr 2.75rem;
+  gap: 1rem;
+}
+
+.angle-scanner h2 { margin: 0; color: #171717; font-size: 1.25rem; letter-spacing: -.03em; }
+.angle-scanner header button {
+  display: grid;
+  width: 2.75rem;
+  height: 2.75rem;
+  border: 0;
+  border-radius: 999px;
+  background: #f1f3f5;
+  color: #27272a;
+  place-items: center;
+}
+
+.angle-scanner-viewport {
+  position: relative;
+  height: min(78vw, 22rem);
+  min-height: 16rem;
+  margin-top: 1rem;
+  overflow: hidden;
+  border-radius: 1.25rem;
+  background: #171717;
+}
+
+.angle-scanner-viewport video { width: 100%; height: 100%; object-fit: cover; }
+.angle-scanner-viewport > span {
+  position: absolute;
+  inset: 15%;
+  border: 2px solid rgb(255 255 255 / 90%);
+  border-radius: 1rem;
+  box-shadow: 0 0 0 999px rgb(0 0 0 / 22%);
+}
+
+.angle-scanner-viewport:not(.is-ready) video { opacity: .25; }
+.angle-scanner > p {
+  min-height: 2.75rem;
+  margin: .75rem 0 0;
+  color: #5d5d5d;
   font-size: .8125rem;
   line-height: 1.45;
+  text-align: center;
 }
 
 .angle-venue-demo-note {
@@ -5388,8 +5494,9 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
 
 .angle-venue-primary {
   justify-content: space-between;
-  background: #171717;
-  color: #fff;
+  border: 1px solid #d8dce2;
+  background: #fff;
+  color: #171717;
 }
 
 .angle-venue-secondary {
@@ -5404,7 +5511,8 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .angle-restaurant-card { transition: none; }
+  .angle-restaurant-card,
+  .angle-venue-scan { transition: none; }
 }
 
 /* ── Rise-in (появление строк корзины, оверлеев) ─────────── */

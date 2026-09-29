@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
@@ -31,14 +31,17 @@ const discoveryCopy = {
     searchingAddresses: 'Searching…', addressEmpty: 'No matching address found.',
     addressError: 'Address search is unavailable. Try again.', selectAddress: 'Select address',
     addressPrivacy: 'The search text is sent to OpenStreetMap only after you press Find.',
-    kilometres: 'km',
+    kilometres: 'km', today: 'Today', openAllDay: 'Open 24 hours', closedToday: 'Closed today',
+    workingHours: 'Opening hours',
     restaurant: 'Restaurant', demo: 'Demo', priceLevel: 'Price level', back: 'Back',
     logo: 'logo', sections: 'Restaurant sections', menu: 'Menu', liveTable: 'Live Table',
     photos: 'Photos', reviews: 'Reviews', info: 'Info', favourite: 'Save restaurant',
-    reserve: 'Reserve', availableAtTable: 'Available at your table', pilot: 'Live Table pilot',
-    scan: 'Scan the QR at your table', liveAvailable:
-      'Order, follow every dish, call a waiter and request the bill from one screen.',
-    livePilot: 'The menu is live now. Waiter requests and table service will appear here when the venue switches to table mode.',
+    reserve: 'Reserve', scanQrMenu: 'Scan QR menu', scanQrHint: 'Scan the code on your table to join and order',
+    scannerTitle: 'Scan QR menu', scannerStarting: 'Starting camera…',
+    scannerHint: 'Point the camera at the QR code on your table.',
+    scannerUnsupported: 'QR scanning is not supported in this browser. Open your camera app and scan the code there.',
+    scannerDenied: 'Camera access is unavailable. Allow camera access or scan the code with your camera app.',
+    scannerInvalid: 'This is not an ANGLE menu QR code.',
     demoNote: (rating: string) => `★ The ${rating} rating and review count are demo data for the ANGLE prototype, not Google reviews.`,
     viewMenu: 'View menu', reserveTable: 'Reserve a table', loadingOne: 'Loading restaurant…',
     unavailable: 'This restaurant is not available.', backToRestaurants: 'Back to restaurants',
@@ -63,14 +66,17 @@ const discoveryCopy = {
     searchingAddresses: 'מחפשים…', addressEmpty: 'לא נמצאה כתובת מתאימה.',
     addressError: 'חיפוש הכתובות אינו זמין. נסו שוב.', selectAddress: 'בחירת כתובת',
     addressPrivacy: 'טקסט החיפוש נשלח ל-OpenStreetMap רק לאחר לחיצה על חיפוש.',
-    kilometres: 'ק״מ',
+    kilometres: 'ק״מ', today: 'היום', openAllDay: 'פתוח 24 שעות', closedToday: 'סגור היום',
+    workingHours: 'שעות פתיחה',
     restaurant: 'מסעדה', demo: 'דמו', priceLevel: 'רמת מחיר', back: 'חזרה',
     logo: 'לוגו', sections: 'אפשרויות במסעדה', menu: 'תפריט', liveTable: 'השולחן שלי',
     photos: 'תמונות', reviews: 'ביקורות', info: 'מידע', favourite: 'שמירת מסעדה',
-    reserve: 'הזמנת שולחן', availableAtTable: 'זמין בשולחן שלכם', pilot: 'Live Table בפיילוט',
-    scan: 'סרקו את הקוד שעל השולחן', liveAvailable:
-      'מזמינים, עוקבים אחרי המנות, קוראים למלצר ומבקשים חשבון במסך אחד.',
-    livePilot: 'התפריט כבר פעיל. בקשות למלצר ושירות לשולחן יופיעו כאן כשהמקום יעבור למצב שולחנות.',
+    reserve: 'הזמנת שולחן', scanQrMenu: 'סריקת תפריט QR', scanQrHint: 'סרקו את הקוד שעל השולחן כדי להצטרף ולהזמין',
+    scannerTitle: 'סריקת תפריט QR', scannerStarting: 'מפעילים את המצלמה…',
+    scannerHint: 'כוונו את המצלמה לקוד ה־QR שעל השולחן.',
+    scannerUnsupported: 'הדפדפן הזה לא תומך בסריקת QR. פתחו את אפליקציית המצלמה וסרקו שם.',
+    scannerDenied: 'הגישה למצלמה אינה זמינה. אשרו גישה או סרקו דרך אפליקציית המצלמה.',
+    scannerInvalid: 'זה אינו קוד QR של תפריט ANGLE.',
     demoNote: (rating: string) => `★ הדירוג ${rating} ומספר הביקורות הם נתוני דמו של ANGLE, ולא ביקורות Google.`,
     viewMenu: 'לתפריט', reserveTable: 'הזמנת שולחן', loadingOne: 'טוענים את המסעדה…',
     unavailable: 'המסעדה אינה זמינה כרגע.', backToRestaurants: 'חזרה למסעדות',
@@ -115,10 +121,6 @@ const ArrowIcon = () => (
 
 const MenuIcon = () => (
   <Icon><rect x="4" y="3" width="16" height="18" rx="2" /><path d="M8 7h8M8 11h8M8 15h5" /></Icon>
-)
-
-const TableIcon = () => (
-  <Icon><path d="M5 11h14M7 11V7h10v4M6 11v9M18 11v9M4 20h4M16 20h4" /></Icon>
 )
 
 const CalendarIcon = () => (
@@ -173,9 +175,57 @@ const PlusIcon = () => (
   <Icon><path d="M12 5v14M5 12h14" /></Icon>
 )
 
+const ClockIcon = () => (
+  <Icon><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></Icon>
+)
+
+const QrIcon = () => (
+  <Icon size={24}>
+    <path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4z" />
+    <path d="M14 14h2v2h-2zM18 14h2v4h-2zM14 18h4v2h-4zM20 20h.01" />
+  </Icon>
+)
+
 type GuestPosition = { lat: number; lng: number }
 type LocationStatus = 'idle' | 'locating' | 'ready' | 'unavailable'
 type LocationSource = 'default' | 'device' | 'address'
+type StoredGuestLocation = {
+  position: GuestPosition
+  label: string
+  source: LocationSource
+}
+
+const DEFAULT_GUEST_LOCATION: StoredGuestLocation = {
+  position: { lat: 32.0853, lng: 34.7818 },
+  label: 'Tel Aviv, Israel',
+  source: 'default',
+}
+const GUEST_LOCATION_STORAGE_KEY = 'angle:guest-location'
+
+function readGuestLocation(): StoredGuestLocation {
+  try {
+    const stored = localStorage.getItem(GUEST_LOCATION_STORAGE_KEY)
+    if (!stored) return DEFAULT_GUEST_LOCATION
+    const parsed = JSON.parse(stored) as Partial<StoredGuestLocation>
+    const lat = parsed.position?.lat
+    const lng = parsed.position?.lng
+    if (typeof lat !== 'number' || !Number.isFinite(lat)
+      || typeof lng !== 'number' || !Number.isFinite(lng)
+      || typeof parsed.label !== 'string'
+      || !['device', 'address'].includes(parsed.source ?? '')) return DEFAULT_GUEST_LOCATION
+    return { position: { lat, lng }, label: parsed.label, source: parsed.source as LocationSource }
+  } catch {
+    return DEFAULT_GUEST_LOCATION
+  }
+}
+
+function saveGuestLocation(location: StoredGuestLocation) {
+  try {
+    localStorage.setItem(GUEST_LOCATION_STORAGE_KEY, JSON.stringify(location))
+  } catch {
+    // The page still works when storage is disabled; distance falls back to the selected session.
+  }
+}
 
 function distanceKm(from: GuestPosition, to: GuestPosition) {
   const radians = (degrees: number) => degrees * Math.PI / 180
@@ -190,6 +240,122 @@ function distanceKm(from: GuestPosition, to: GuestPosition) {
 
 function formatDistance(value: number) {
   return value < 10 ? value.toFixed(1) : Math.round(value).toString()
+}
+
+function dayOfWeekInTimezone(timezone?: string | null) {
+  try {
+    const weekday = new Intl.DateTimeFormat('en-US', {
+      weekday: 'short',
+      timeZone: timezone || undefined,
+    }).format(new Date())
+    return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(weekday)
+  } catch {
+    return new Date().getDay()
+  }
+}
+
+function todayHours(
+  hours: PublicRestaurant['hours'],
+  timezone: string | null | undefined,
+  copy: typeof discoveryCopy.en | typeof discoveryCopy.he,
+) {
+  if (!hours || Object.keys(hours).length === 0) return copy.openAllDay
+  const windows = hours[String(dayOfWeekInTimezone(timezone))] ?? []
+  if (windows.length === 0) return copy.closedToday
+  return windows.map(([from, to]) => `${from}–${to}`).join(' · ')
+}
+
+type BarcodeResult = { rawValue?: string }
+type BarcodeDetectorApi = { detect: (source: HTMLVideoElement) => Promise<BarcodeResult[]> }
+type BarcodeDetectorConstructor = new (options: { formats: string[] }) => BarcodeDetectorApi
+
+function QrScannerDialog({ copy, onClose, onNavigate }: {
+  copy: typeof discoveryCopy.en | typeof discoveryCopy.he
+  onClose: () => void
+  onNavigate: (value: string) => boolean
+}) {
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const [status, setStatus] = useState<'starting' | 'ready' | 'unsupported' | 'denied' | 'invalid'>('starting')
+
+  useEffect(() => {
+    let active = true
+    let stream: MediaStream | null = null
+    let scanTimer = 0
+
+    const start = async () => {
+      const Detector = (window as Window & { BarcodeDetector?: BarcodeDetectorConstructor }).BarcodeDetector
+      if (!Detector || !navigator.mediaDevices?.getUserMedia) {
+        setStatus('unsupported')
+        return
+      }
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: false,
+          video: { facingMode: { ideal: 'environment' } },
+        })
+        if (!active) {
+          stream.getTracks().forEach((track) => track.stop())
+          return
+        }
+        const video = videoRef.current
+        if (!video) return
+        video.srcObject = stream
+        await video.play()
+        const detector = new Detector({ formats: ['qr_code'] })
+        setStatus('ready')
+
+        const scan = async () => {
+          if (!active) return
+          try {
+            const result = (await detector.detect(video)).find((code) => code.rawValue)
+            if (result?.rawValue) {
+              if (onNavigate(result.rawValue)) return
+              setStatus('invalid')
+            }
+          } catch {
+            // A frame can be unreadable while the camera is moving; keep scanning.
+          }
+          scanTimer = window.setTimeout(scan, 250)
+        }
+        scanTimer = window.setTimeout(scan, 250)
+      } catch {
+        if (active) setStatus('denied')
+      }
+    }
+    void start()
+
+    return () => {
+      active = false
+      window.clearTimeout(scanTimer)
+      stream?.getTracks().forEach((track) => track.stop())
+    }
+  }, [onNavigate])
+
+  const feedback = status === 'starting'
+    ? copy.scannerStarting
+    : status === 'unsupported'
+      ? copy.scannerUnsupported
+      : status === 'denied'
+        ? copy.scannerDenied
+        : status === 'invalid'
+          ? copy.scannerInvalid
+          : copy.scannerHint
+
+  return (
+    <div className="angle-scanner-backdrop" role="presentation">
+      <section className="angle-scanner" role="dialog" aria-modal="true" aria-labelledby="angle-scanner-title">
+        <header>
+          <h2 id="angle-scanner-title">{copy.scannerTitle}</h2>
+          <button type="button" onClick={onClose} aria-label={copy.close}><CloseIcon /></button>
+        </header>
+        <div className={`angle-scanner-viewport is-${status}`}>
+          <video ref={videoRef} muted playsInline aria-label={copy.scannerTitle} />
+          <span aria-hidden="true" />
+        </div>
+        <p role="status">{feedback}</p>
+      </section>
+    </div>
+  )
 }
 
 function Rating({ restaurant, demo, compact = false }: {
@@ -492,11 +658,14 @@ function DirectoryState({ children }: { children: ReactNode }) {
 }
 
 export function RestaurantDirectoryHome() {
+  const initialLocation = useMemo(() => readGuestLocation(), [])
   const [query, setQuery] = useState('')
-  const [guestPosition, setGuestPosition] = useState<GuestPosition | null>(null)
-  const [locationStatus, setLocationStatus] = useState<LocationStatus>('idle')
-  const [locationLabel, setLocationLabel] = useState('Tel Aviv, Israel')
-  const [locationSource, setLocationSource] = useState<LocationSource>('default')
+  const [guestPosition, setGuestPosition] = useState<GuestPosition>(initialLocation.position)
+  const [locationStatus, setLocationStatus] = useState<LocationStatus>(
+    initialLocation.source === 'default' ? 'idle' : 'ready',
+  )
+  const [locationLabel, setLocationLabel] = useState(initialLocation.label)
+  const [locationSource, setLocationSource] = useState<LocationSource>(initialLocation.source)
   const [isLocationPickerOpen, setIsLocationPickerOpen] = useState(false)
   const { copy, dir } = useDiscoveryLocale()
   const restaurants = useQuery({
@@ -536,11 +705,13 @@ export function RestaurantDirectoryHome() {
     setLocationStatus('locating')
     navigator.geolocation.getCurrentPosition(
       ({ coords }) => {
-        setGuestPosition({ lat: coords.latitude, lng: coords.longitude })
+        const position = { lat: coords.latitude, lng: coords.longitude }
+        setGuestPosition(position)
         setLocationLabel(copy.yourLocation)
         setLocationSource('device')
         setLocationStatus('ready')
         setIsLocationPickerOpen(false)
+        saveGuestLocation({ position, label: copy.yourLocation, source: 'device' })
       },
       () => setLocationStatus('unavailable'),
       { enableHighAccuracy: false, timeout: 8_000, maximumAge: 300_000 },
@@ -548,11 +719,13 @@ export function RestaurantDirectoryHome() {
   }
 
   const selectAddress = (result: AddressSearchResult) => {
-    setGuestPosition({ lat: result.lat, lng: result.lng })
+    const position = { lat: result.lat, lng: result.lng }
+    setGuestPosition(position)
     setLocationLabel(result.label)
     setLocationSource('address')
     setLocationStatus('ready')
     setIsLocationPickerOpen(false)
+    saveGuestLocation({ position, label: result.label, source: 'address' })
   }
 
   return (
@@ -593,7 +766,7 @@ export function RestaurantDirectoryHome() {
       <RestaurantMap
         restaurants={filtered}
         copy={copy}
-        guestPosition={guestPosition}
+        guestPosition={locationSource === 'default' ? null : guestPosition}
         locationStatus={locationStatus}
         onChooseLocation={() => setIsLocationPickerOpen(true)}
       />
@@ -652,6 +825,25 @@ export function RestaurantDirectoryHome() {
 function RestaurantDetailContent({ restaurant }: { restaurant: PublicRestaurant }) {
   const navigate = useNavigate()
   const { copy, dir } = useDiscoveryLocale()
+  const [scannerOpen, setScannerOpen] = useState(false)
+  const guestLocation = useMemo(() => readGuestLocation(), [])
+  const distance = restaurant.coordinates
+    ? distanceKm(guestLocation.position, restaurant.coordinates)
+    : null
+  const hours = todayHours(restaurant.hours, restaurant.timezone, copy)
+
+  const openScannedMenu = (value: string) => {
+    try {
+      const url = new URL(value, window.location.origin)
+      const trustedHost = url.host === window.location.host || url.host === 'menu.angle.co.il'
+      if (!trustedHost || !url.pathname.startsWith('/order/')) return false
+      navigate(`${url.pathname}${url.search}${url.hash}`)
+      setScannerOpen(false)
+      return true
+    } catch {
+      return false
+    }
+  }
 
   return (
     <main className="angle-venue" dir={dir}>
@@ -672,14 +864,15 @@ function RestaurantDetailContent({ restaurant }: { restaurant: PublicRestaurant 
         <h1>{restaurant.name}</h1>
         <div className="angle-venue-rating-line" id="venue-reviews">
           <Rating restaurant={restaurant} demo={copy.demo} />
+          {distance != null && (
+            <span className="angle-venue-distance"><PinIcon /> {formatDistance(distance)} {copy.kilometres}</span>
+          )}
+        </div>
+        <p className="angle-venue-meta">
+          <span>{restaurant.cuisine.join(' · ') || copy.restaurant}</span>
+          {restaurant.price_level && <i aria-hidden="true">·</i>}
           <PriceLevel value={restaurant.price_level} label={copy.priceLevel} />
-        </div>
-        <p className="angle-venue-address">
-          <PinIcon /> {restaurant.address || [restaurant.city, restaurant.country_code].filter(Boolean).join(', ')}
         </p>
-        <div className="angle-venue-tags">
-          {restaurant.cuisine.map((label) => <span key={label}>{label}</span>)}
-        </div>
 
         <nav className="angle-venue-actions" aria-label={copy.sections}>
           <Link to={`/order/${restaurant.slug}`}><MenuIcon /><span>{copy.menu}</span></Link>
@@ -690,24 +883,22 @@ function RestaurantDetailContent({ restaurant }: { restaurant: PublicRestaurant 
 
         {restaurant.summary && <p className="angle-venue-summary" id="venue-info">{restaurant.summary}</p>}
 
-        <section className="angle-venue-live" id="live-table">
-          <div className="angle-venue-live__icon"><TableIcon /></div>
+        <section className="angle-venue-hours" aria-label={copy.workingHours}>
+          <span className="angle-venue-hours__icon"><ClockIcon /></span>
           <div>
-            <p>{restaurant.features.table_service ? copy.availableAtTable : copy.pilot}</p>
-            <h2>{copy.scan}</h2>
-            <span>
-              {restaurant.features.table_service
-                ? copy.liveAvailable
-                : copy.livePilot}
-            </span>
+            <p>{copy.today}</p>
+            <strong>{hours}</strong>
           </div>
         </section>
 
-        {restaurant.rating?.source === 'demo' && (
-          <p className="angle-venue-demo-note">
-            {copy.demoNote(restaurant.rating.value.toFixed(1))}
-          </p>
-        )}
+        <button type="button" className="angle-venue-scan" onClick={() => setScannerOpen(true)}>
+          <span className="angle-venue-scan__icon"><QrIcon /></span>
+          <span>
+            <strong>{copy.scanQrMenu}</strong>
+            <small>{copy.scanQrHint}</small>
+          </span>
+          <b aria-hidden="true">→</b>
+        </button>
 
         <Link className="angle-venue-primary" to={`/order/${restaurant.slug}`}>
           {copy.viewMenu}
@@ -718,7 +909,21 @@ function RestaurantDetailContent({ restaurant }: { restaurant: PublicRestaurant 
             {copy.reserveTable}
           </Link>
         )}
+
+        {restaurant.rating?.source === 'demo' && (
+          <p className="angle-venue-demo-note">
+            {copy.demoNote(restaurant.rating.value.toFixed(1))}
+          </p>
+        )}
       </section>
+
+      {scannerOpen && (
+        <QrScannerDialog
+          copy={copy}
+          onClose={() => setScannerOpen(false)}
+          onNavigate={openScannedMenu}
+        />
+      )}
     </main>
   )
 }

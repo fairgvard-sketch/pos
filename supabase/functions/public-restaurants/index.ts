@@ -42,9 +42,13 @@ type LocationRow = {
   receipt_address: string | null
   logo_url: string | null
   service_mode: string
+  timezone: string | null
   settings: {
     display_name?: string | null
-    online_orders?: { header_url?: string | null }
+    online_orders?: {
+      header_url?: string | null
+      hours?: Record<string, [string, string][]> | null
+    }
     reservations?: { enabled?: boolean; lat?: number | null; lng?: number | null }
   } | null
 }
@@ -99,7 +103,7 @@ Deno.serve(async (req) => {
   const [locationsRes, slugsRes] = await Promise.all([
     supabase
       .from('locations')
-      .select('id, org_id, name, receipt_business_name, receipt_address, logo_url, service_mode, settings')
+      .select('id, org_id, name, receipt_business_name, receipt_address, logo_url, service_mode, timezone, settings')
       .in('id', locationIds),
     supabase
       .from('location_slugs')
@@ -156,6 +160,8 @@ Deno.serve(async (req) => {
       hero_url: heroUrl,
       logo_url: location.logo_url,
       price_level: profile.price_level,
+      hours: location.settings?.online_orders?.hours ?? null,
+      timezone: location.timezone,
       rating: profile.demo_rating == null ? null : {
         value: Number(profile.demo_rating),
         count: profile.demo_rating_count ?? 0,

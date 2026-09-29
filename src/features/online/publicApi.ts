@@ -153,6 +153,9 @@ export interface PublicRestaurant {
   hero_url: string | null
   logo_url: string | null
   price_level: number | null
+  /** Public opening windows used by the restaurant detail card. */
+  hours: Record<string, [string, string][]> | null
+  timezone: string | null
   /** Демонстрационная оценка всегда приходит с source=demo и так же подписывается в UI. */
   rating: {
     value: number
