@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -144,6 +144,8 @@ describe('ANGLE restaurant directory', () => {
     renderAt('/')
     await screen.findByRole('heading', { name: 'Bulochka' })
     fireEvent.click(screen.getByRole('button', { name: /Choose your location: Tel Aviv/i }))
+    expect(within(screen.getByRole('dialog')).getByRole('button', { name: /Tel Aviv.*Israel/i })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Add address' }))
 
     fireEvent.change(screen.getByRole('textbox', { name: 'Address' }), {
       target: { value: 'Rothschild 1, Tel Aviv' },

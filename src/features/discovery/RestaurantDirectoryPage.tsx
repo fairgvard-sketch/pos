@@ -21,10 +21,12 @@ const discoveryCopy = {
     restaurants: 'Restaurants', profile: 'Profile', menuAvailable: 'Menu available',
     live: 'Live', map: 'Restaurant map', chooseLocation: 'Choose location',
     changeLocation: 'Change location', locating: 'Locating…', yourLocation: 'My location',
-    locationUnavailable: 'Location unavailable', locationTitle: 'Choose your location',
-    locationIntro: 'Use your current position or enter any address.', close: 'Close',
+    locationUnavailable: 'Location unavailable', locationTitle: 'Choose your location', close: 'Close',
     useCurrentLocation: 'Use my current location', currentLocationNote: 'Uses your device location only after permission.',
-    orEnterAddress: 'or enter an address', addressLabel: 'Address',
+    selectedArea: 'Selected area', allAddresses: 'All addresses',
+    allAddressesNote: 'Search by street, city or place', addAddress: 'Add address',
+    addressTitle: 'Add an address', addressIntro: 'Enter a street, city or place.',
+    backToLocations: 'Back to locations', addressLabel: 'Address',
     addressPlaceholder: 'Street, city or place', findAddress: 'Find address',
     searchingAddresses: 'Searching…', addressEmpty: 'No matching address found.',
     addressError: 'Address search is unavailable. Try again.', selectAddress: 'Select address',
@@ -51,10 +53,12 @@ const discoveryCopy = {
     restaurants: 'מסעדות', profile: 'פרופיל', menuAvailable: 'התפריט זמין',
     live: 'פעיל', map: 'מפת מסעדות', chooseLocation: 'בחירת מיקום',
     changeLocation: 'שינוי מיקום', locating: 'מאתרים…', yourLocation: 'המיקום שלי',
-    locationUnavailable: 'המיקום לא זמין', locationTitle: 'בחירת המיקום שלכם',
-    locationIntro: 'אפשר להשתמש במיקום הנוכחי או להזין כל כתובת.', close: 'סגירה',
+    locationUnavailable: 'המיקום לא זמין', locationTitle: 'בחירת המיקום שלכם', close: 'סגירה',
     useCurrentLocation: 'שימוש במיקום הנוכחי', currentLocationNote: 'המיקום מהמכשיר משמש רק לאחר אישור.',
-    orEnterAddress: 'או הזינו כתובת', addressLabel: 'כתובת',
+    selectedArea: 'האזור שנבחר', allAddresses: 'כל הכתובות',
+    allAddressesNote: 'חיפוש לפי רחוב, עיר או מקום', addAddress: 'הוספת כתובת',
+    addressTitle: 'הוספת כתובת', addressIntro: 'הזינו רחוב, עיר או מקום.',
+    backToLocations: 'חזרה למיקומים', addressLabel: 'כתובת',
     addressPlaceholder: 'רחוב, עיר או מקום', findAddress: 'חיפוש כתובת',
     searchingAddresses: 'מחפשים…', addressEmpty: 'לא נמצאה כתובת מתאימה.',
     addressError: 'חיפוש הכתובות אינו זמין. נסו שוב.', selectAddress: 'בחירת כתובת',
@@ -157,8 +161,21 @@ const CloseIcon = () => (
   <Icon><path d="m6 6 12 12M18 6 6 18" /></Icon>
 )
 
+const CheckIcon = () => (
+  <Icon><path d="m5 12 4 4L19 6" /></Icon>
+)
+
+const ListIcon = () => (
+  <Icon><path d="M9 6h11M9 12h11M9 18h11" /><circle cx="4" cy="6" r="1" /><circle cx="4" cy="12" r="1" /><circle cx="4" cy="18" r="1" /></Icon>
+)
+
+const PlusIcon = () => (
+  <Icon><path d="M12 5v14M5 12h14" /></Icon>
+)
+
 type GuestPosition = { lat: number; lng: number }
 type LocationStatus = 'idle' | 'locating' | 'ready' | 'unavailable'
+type LocationSource = 'default' | 'device' | 'address'
 
 function distanceKm(from: GuestPosition, to: GuestPosition) {
   const radians = (degrees: number) => degrees * Math.PI / 180
@@ -313,16 +330,25 @@ function RestaurantMap({ restaurants, copy, guestPosition, locationStatus, onCho
   )
 }
 
-function LocationPicker({ copy, status, onClose, onUseCurrent, onSelectAddress }: {
+function splitLocationLabel(label: string) {
+  const [title, ...rest] = label.split(',').map((part) => part.trim()).filter(Boolean)
+  return { title: title || label, subtitle: rest.join(', ') }
+}
+
+function LocationPicker({ copy, status, selectedLabel, selectionSource, onClose, onUseCurrent, onSelectAddress }: {
   copy: typeof discoveryCopy.en | typeof discoveryCopy.he
   status: LocationStatus
+  selectedLabel: string
+  selectionSource: LocationSource
   onClose: () => void
   onUseCurrent: () => void
   onSelectAddress: (result: AddressSearchResult) => void
 }) {
+  const [view, setView] = useState<'locations' | 'search'>('locations')
   const [addressQuery, setAddressQuery] = useState('')
   const [addressResults, setAddressResults] = useState<AddressSearchResult[]>([])
   const [addressStatus, setAddressStatus] = useState<'idle' | 'searching' | 'empty' | 'error'>('idle')
+  const selectedAddress = splitLocationLabel(selectedLabel)
 
   const handleAddressSearch = async (event: FormEvent) => {
     event.preventDefault()
@@ -348,75 +374,114 @@ function LocationPicker({ copy, status, onClose, onUseCurrent, onSelectAddress }
         aria-modal="true"
         aria-labelledby="angle-location-title"
       >
-        <header>
-          <div>
-            <h2 id="angle-location-title">{copy.locationTitle}</h2>
-            <p>{copy.locationIntro}</p>
-          </div>
+        <div className="angle-location-handle" aria-hidden="true" />
+        <header className={`angle-location-header${view === 'search' ? ' is-search' : ''}`}>
+          {view === 'search'
+            ? <button type="button" onClick={() => setView('locations')} aria-label={copy.backToLocations}><ArrowIcon /></button>
+            : <span aria-hidden="true" />}
+          <h2 id="angle-location-title">{view === 'search' ? copy.addressTitle : copy.locationTitle}</h2>
           <button type="button" onClick={onClose} aria-label={copy.close}><CloseIcon /></button>
         </header>
 
-        <button
-          type="button"
-          className="angle-location-current"
-          onClick={onUseCurrent}
-          disabled={status === 'locating'}
-          aria-label={copy.useCurrentLocation}
-        >
-          <span><LocateIcon /></span>
-          <span>
-            <strong>{status === 'locating' ? copy.locating : copy.useCurrentLocation}</strong>
-            <small>{status === 'unavailable' ? copy.locationUnavailable : copy.currentLocationNote}</small>
-          </span>
-        </button>
-
-        <div className="angle-location-divider"><span>{copy.orEnterAddress}</span></div>
-
-        <form className="angle-location-form" onSubmit={handleAddressSearch}>
-          <label htmlFor="angle-location-address">{copy.addressLabel}</label>
-          <div>
-            <input
-              id="angle-location-address"
-              value={addressQuery}
-              onChange={(event) => {
-                setAddressQuery(event.target.value)
-                if (addressStatus !== 'idle') setAddressStatus('idle')
-              }}
-              placeholder={copy.addressPlaceholder}
-              autoComplete="street-address"
-            />
-            <button
-              type="submit"
-              disabled={addressQuery.trim().length < 3 || addressStatus === 'searching'}
-            >
-              {addressStatus === 'searching' ? copy.searchingAddresses : copy.findAddress}
-            </button>
-          </div>
-        </form>
-
-        {addressStatus === 'empty' && <p className="angle-location-feedback">{copy.addressEmpty}</p>}
-        {addressStatus === 'error' && <p className="angle-location-feedback is-error">{copy.addressError}</p>}
-
-        {addressResults.length > 0 && (
-          <div className="angle-location-results" aria-live="polite">
-            {addressResults.map((result) => (
+        {view === 'locations' ? (
+          <>
+            <div className="angle-location-list">
               <button
-                key={result.id}
                 type="button"
-                onClick={() => onSelectAddress(result)}
-                aria-label={`${copy.selectAddress}: ${result.label}`}
+                className={selectionSource === 'device' ? 'is-selected' : ''}
+                onClick={onUseCurrent}
+                disabled={status === 'locating'}
+                aria-label={copy.useCurrentLocation}
               >
-                <span><PinIcon /></span>
-                <span>{result.label}</span>
+                <span className="angle-location-row-icon is-current"><LocateIcon /></span>
+                <span className="angle-location-row-copy">
+                  <strong>{status === 'locating' ? copy.locating : copy.useCurrentLocation}</strong>
+                  <small>{status === 'unavailable' ? copy.locationUnavailable : copy.currentLocationNote}</small>
+                </span>
+                {selectionSource === 'device' && <span className="angle-location-row-check"><CheckIcon /></span>}
               </button>
-            ))}
+
+              {selectionSource !== 'device' && (
+                <button type="button" className="is-selected" onClick={onClose}>
+                  <span className="angle-location-row-icon"><PinIcon /></span>
+                  <span className="angle-location-row-copy">
+                    <strong>{selectedAddress.title}</strong>
+                    <small>{selectedAddress.subtitle || copy.selectedArea}</small>
+                  </span>
+                  <span className="angle-location-row-check"><CheckIcon /></span>
+                </button>
+              )}
+
+              <button type="button" onClick={() => setView('search')}>
+                <span className="angle-location-row-icon is-plain"><ListIcon /></span>
+                <span className="angle-location-row-copy">
+                  <strong>{copy.allAddresses}</strong>
+                  <small>{copy.allAddressesNote}</small>
+                </span>
+              </button>
+            </div>
+
+            <button type="button" className="angle-location-add" onClick={() => setView('search')}>
+              <PlusIcon /><span>{copy.addAddress}</span>
+            </button>
+          </>
+        ) : (
+          <div className="angle-location-search-view">
+            <p>{copy.addressIntro}</p>
+            <form className="angle-location-form" onSubmit={handleAddressSearch}>
+              <label htmlFor="angle-location-address">{copy.addressLabel}</label>
+              <div>
+                <input
+                  id="angle-location-address"
+                  value={addressQuery}
+                  onChange={(event) => {
+                    setAddressQuery(event.target.value)
+                    if (addressStatus !== 'idle') setAddressStatus('idle')
+                  }}
+                  placeholder={copy.addressPlaceholder}
+                  autoComplete="street-address"
+                  autoFocus
+                />
+                <button
+                  type="submit"
+                  disabled={addressQuery.trim().length < 3 || addressStatus === 'searching'}
+                >
+                  {addressStatus === 'searching' ? copy.searchingAddresses : copy.findAddress}
+                </button>
+              </div>
+            </form>
+
+            {addressStatus === 'empty' && <p className="angle-location-feedback">{copy.addressEmpty}</p>}
+            {addressStatus === 'error' && <p className="angle-location-feedback is-error">{copy.addressError}</p>}
+
+            {addressResults.length > 0 && (
+              <div className="angle-location-results" aria-live="polite">
+                {addressResults.map((result) => {
+                  const address = splitLocationLabel(result.label)
+                  return (
+                    <button
+                      key={result.id}
+                      type="button"
+                      onClick={() => onSelectAddress(result)}
+                      aria-label={`${copy.selectAddress}: ${result.label}`}
+                    >
+                      <span className="angle-location-row-icon"><PinIcon /></span>
+                      <span className="angle-location-row-copy">
+                        <strong>{address.title}</strong>
+                        <small>{address.subtitle}</small>
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+
+            <p className="angle-location-privacy">
+              {copy.addressPrivacy}{' '}
+              <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap</a>
+            </p>
           </div>
         )}
-
-        <p className="angle-location-privacy">
-          {copy.addressPrivacy}{' '}
-          <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap</a>
-        </p>
       </section>
     </div>
   )
@@ -431,6 +496,7 @@ export function RestaurantDirectoryHome() {
   const [guestPosition, setGuestPosition] = useState<GuestPosition | null>(null)
   const [locationStatus, setLocationStatus] = useState<LocationStatus>('idle')
   const [locationLabel, setLocationLabel] = useState('Tel Aviv, Israel')
+  const [locationSource, setLocationSource] = useState<LocationSource>('default')
   const [isLocationPickerOpen, setIsLocationPickerOpen] = useState(false)
   const { copy, dir } = useDiscoveryLocale()
   const restaurants = useQuery({
@@ -472,6 +538,7 @@ export function RestaurantDirectoryHome() {
       ({ coords }) => {
         setGuestPosition({ lat: coords.latitude, lng: coords.longitude })
         setLocationLabel(copy.yourLocation)
+        setLocationSource('device')
         setLocationStatus('ready')
         setIsLocationPickerOpen(false)
       },
@@ -483,6 +550,7 @@ export function RestaurantDirectoryHome() {
   const selectAddress = (result: AddressSearchResult) => {
     setGuestPosition({ lat: result.lat, lng: result.lng })
     setLocationLabel(result.label)
+    setLocationSource('address')
     setLocationStatus('ready')
     setIsLocationPickerOpen(false)
   }
@@ -570,6 +638,8 @@ export function RestaurantDirectoryHome() {
         <LocationPicker
           copy={copy}
           status={locationStatus}
+          selectedLabel={locationLabel}
+          selectionSource={locationSource}
           onClose={() => setIsLocationPickerOpen(false)}
           onUseCurrent={requestLocation}
           onSelectAddress={selectAddress}
