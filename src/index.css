@@ -5777,7 +5777,6 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   line-height: 1.45;
 }
 
-.angle-venue-primary,
 .angle-venue-secondary {
   display: flex;
   min-height: 3.25rem;
@@ -5807,13 +5806,6 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
 }
 
 [dir='rtl'].angle-venue .angle-venue-back svg { transform: scaleX(-1); }
-
-.angle-venue-primary {
-  justify-content: space-between;
-  border: 1px solid #d8dce2;
-  background: #fff;
-  color: #171717;
-}
 
 .angle-venue-secondary {
   border: 1px solid #171717;

@@ -51,7 +51,7 @@ const discoveryCopy = {
     scannerInvalid: 'This is not an ANGLE menu QR code.',
     scannerPhoto: 'Scan from photo', scannerPhotoHint: 'Take a photo of the QR code or choose one from your library.',
     demoNote: (rating: string) => `★ The ${rating} rating and review count are demo data for the ANGLE prototype, not Google reviews.`,
-    viewMenu: 'View menu', reserveTable: 'Reserve a table', loadingOne: 'Loading restaurant…',
+    reserveTable: 'Reserve a table', loadingOne: 'Loading restaurant…',
     unavailable: 'This restaurant is not available.', backToRestaurants: 'Back to restaurants',
   },
   he: {
@@ -87,7 +87,7 @@ const discoveryCopy = {
     scannerInvalid: 'זה אינו קוד QR של תפריט ANGLE.',
     scannerPhoto: 'סריקה מתמונה', scannerPhotoHint: 'צלמו את קוד ה־QR או בחרו תמונה מהספרייה.',
     demoNote: (rating: string) => `★ הדירוג ${rating} ומספר הביקורות הם נתוני דמו של ANGLE, ולא ביקורות Google.`,
-    viewMenu: 'לתפריט', reserveTable: 'הזמנת שולחן', loadingOne: 'טוענים את המסעדה…',
+    reserveTable: 'הזמנת שולחן', loadingOne: 'טוענים את המסעדה…',
     unavailable: 'המסעדה אינה זמינה כרגע.', backToRestaurants: 'חזרה למסעדות',
   },
 } as const
@@ -921,10 +921,6 @@ function RestaurantDetailContent({ restaurant }: { restaurant: PublicRestaurant 
           <b aria-hidden="true">→</b>
         </button>
 
-        <Link className="angle-venue-primary" to={menuHref}>
-          {copy.viewMenu}
-          <span aria-hidden="true">→</span>
-        </Link>
         {restaurant.features.reservations && (
           <Link className="angle-venue-secondary" to={`/reserve/${restaurant.slug}`}>
             {copy.reserveTable}
