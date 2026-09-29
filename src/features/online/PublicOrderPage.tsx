@@ -598,7 +598,7 @@ export default function PublicOrderPage() {
   const showCheckout = tableContext
     // После первого заказа гость может дозаказать: сервер добавит новую
     // заявку в тот же открытый счёт стола. Статус показывает последнюю.
-    ? view === 'checkout' && cartCount > 0
+    ? liveTableTab === 'order' && view === 'checkout' && cartCount > 0
     : view === 'checkout'
   const liveTableHeader = tableContext ? (
     <LiveTableHeader
@@ -612,12 +612,15 @@ export default function PublicOrderPage() {
       serviceCount={activeServiceCount}
       onTab={(tab) => {
         window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
-        // Корзина и её подтверждение принадлежат вкладке «Меню».
-        // «Ваш заказ» показывает только уже отправленную заявку, поэтому
-        // переход по вкладкам закрывает проверку корзины, но не очищает её.
         setCheckoutStage('cart')
-        setView('menu')
         setLiveTableTab(tab)
+        if (tab === 'order' && !activeUuid && cartCount > 0) {
+          // До отправки «Ваш заказ» — проверка выбранных блюд и явное
+          // подтверждение. После отправки на этом же месте живёт статус.
+          setView('checkout')
+        } else {
+          setView('menu')
+        }
       }}
     />
   ) : undefined
@@ -726,6 +729,7 @@ export default function PublicOrderPage() {
             navigateWithTransition('forward', () => {
               setCheckoutStage('cart')
               setView('checkout')
+              if (tableContext) setLiveTableTab('order')
             })
           }}
         />
@@ -798,13 +802,13 @@ export default function PublicOrderPage() {
         />
       )}
 
-      {tableContext && liveTableTab === 'order' && activeUuid && (
+      {tableContext && liveTableTab === 'order' && activeUuid && !showCheckout && (
         <div className="angle-live-table-panel">
           <StatusScreen lang={lang} clientUuid={activeUuid} onNewOrder={startNewOrder} readOnly />
         </div>
       )}
 
-      {tableContext && liveTableTab === 'order' && !activeUuid && (
+      {tableContext && liveTableTab === 'order' && !activeUuid && cartCount === 0 && (
         <LiveTableEmptyOrder lang={lang} onMenu={() => setLiveTableTab('menu')} />
       )}
 

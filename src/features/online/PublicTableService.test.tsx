@@ -95,7 +95,7 @@ describe('ANGLE Guest table service', () => {
     expect(screen.getByRole('button', { name: t('he', 'serviceBill') })).toBeInTheDocument()
   })
 
-  it('keeps an unsubmitted cart in Menu and sends it without a payment step', async () => {
+  it('opens the cart from Your Order, confirms it, and replaces it with status', async () => {
     vi.spyOn(globalThis.crypto, 'randomUUID').mockReturnValue(CLIENT)
     vi.mocked(fetchPublicMenu).mockResolvedValue({
       ...menu,
@@ -130,15 +130,10 @@ describe('ANGLE Guest table service', () => {
 
     const orderTab = await screen.findByRole('tab', { name: t('he', 'pubYourOrder') })
     fireEvent.click(orderTab)
-    expect(screen.getByRole('heading', { name: t('he', 'guestEmptyOrder') })).toBeInTheDocument()
-    expect(screen.queryByText(COFFEE.name)).not.toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: t('he', 'guestBackToMenu') }))
-    fireEvent.click(screen.getByRole('button', {
-      name: new RegExp(t('he', 'pubShowItems')),
-    }))
-
+    expect(orderTab).toHaveAttribute('aria-selected', 'true')
     expect(screen.getByRole('heading', { name: t('he', 'pubYourOrder') })).toBeInTheDocument()
+    expect(screen.getByText(COFFEE.name)).toBeInTheDocument()
     expect(screen.getByRole('button', {
       name: new RegExp(t('he', 'pubConfirmTableOrder')),
     })).toBeInTheDocument()
@@ -164,6 +159,7 @@ describe('ANGLE Guest table service', () => {
       }],
     })))
     expect(await screen.findByText(t('he', 'pubWaiting'))).toBeInTheDocument()
+    expect(orderTab).toHaveAttribute('aria-selected', 'true')
     expect(screen.queryByRole('button', { name: t('he', 'pubNewOrder') })).not.toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: t('he', 'pubPaymentTitle') })).not.toBeInTheDocument()
   })
