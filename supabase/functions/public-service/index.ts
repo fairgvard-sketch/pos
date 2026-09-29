@@ -24,7 +24,10 @@ const json = (body: unknown, status = 200) =>
   })
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-const KINDS = new Set(['call_waiter', 'water', 'cutlery', 'napkins', 'problem', 'bill'])
+const KINDS = new Set([
+  'call_waiter', 'water', 'cutlery', 'napkins', 'bread',
+  'next_course', 'hold_course', 'problem', 'bill',
+])
 const KNOWN_ERRORS = [
   'invalid_client_uuid', 'invalid_location', 'invalid_table', 'invalid_kind',
   'module_disabled', 'service_unavailable', 'rate_limited', 'busy', 'not_found',

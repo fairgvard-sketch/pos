@@ -68,11 +68,17 @@ describe('ANGLE Guest table service', () => {
 
     expect(await screen.findByRole('heading', { name: 'Popular', level: 2 })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'להזמין' })).not.toBeInTheDocument()
+    const search = screen.getByRole('searchbox', { name: t('he', 'guestSearchMenu') })
+    fireEvent.change(search, { target: { value: 'missing dish' } })
+    expect(screen.getByText(t('he', 'guestNoDishes'))).toBeInTheDocument()
 
     expect(screen.getAllByRole('tab')).toHaveLength(3)
     fireEvent.click(screen.getByRole('tab', { name: t('he', 'serviceTab') }))
     expect(await screen.findByRole('heading', { name: t('he', 'serviceCallWaiter'), level: 1 })).toBeInTheDocument()
     expect(screen.getByText(`${t('he', 'pubTable')} 12`)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: t('he', 'serviceBread') })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: t('he', 'serviceNextCourse') })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: t('he', 'serviceHoldCourse') })).toBeInTheDocument()
   })
 
   it('sends water optimistically and then shows the accepted server state', async () => {

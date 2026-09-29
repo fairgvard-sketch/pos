@@ -831,6 +831,7 @@ function RestaurantDetailContent({ restaurant }: { restaurant: PublicRestaurant 
     ? distanceKm(guestLocation.position, restaurant.coordinates)
     : null
   const hours = todayHours(restaurant.hours, restaurant.timezone, copy)
+  const menuHref = `/order/${restaurant.slug}?view=menu`
 
   const openScannedMenu = (value: string) => {
     try {
@@ -875,7 +876,7 @@ function RestaurantDetailContent({ restaurant }: { restaurant: PublicRestaurant 
         </p>
 
         <nav className="angle-venue-actions" aria-label={copy.sections}>
-          <Link to={`/order/${restaurant.slug}`}><MenuIcon /><span>{copy.menu}</span></Link>
+          <Link to={menuHref}><MenuIcon /><span>{copy.menu}</span></Link>
           <a href="#venue-gallery"><PhotoIcon /><span>{copy.photos}</span></a>
           <a href="#venue-reviews"><ReviewsIcon /><span>{copy.reviews}</span></a>
           <a href="#venue-info"><InfoIcon /><span>{copy.info}</span></a>
@@ -900,7 +901,7 @@ function RestaurantDetailContent({ restaurant }: { restaurant: PublicRestaurant 
           <b aria-hidden="true">→</b>
         </button>
 
-        <Link className="angle-venue-primary" to={`/order/${restaurant.slug}`}>
+        <Link className="angle-venue-primary" to={menuHref}>
           {copy.viewMenu}
           <span aria-hidden="true">→</span>
         </Link>

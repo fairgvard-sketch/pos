@@ -360,6 +360,9 @@ export type PublicServiceRequestKind =
   | 'water'
   | 'cutlery'
   | 'napkins'
+  | 'bread'
+  | 'next_course'
+  | 'hold_course'
   | 'problem'
   | 'bill'
 

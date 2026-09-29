@@ -33,6 +33,7 @@ const clients: QueryClient[] = []
 
 beforeEach(() => {
   localStorage.clear()
+  window.history.replaceState({}, '', '/')
   vi.stubGlobal('fetch', vi.fn(() => { throw new Error('Unexpected real network request') }))
 })
 afterEach(() => {
@@ -66,6 +67,33 @@ function updateMenu(client: QueryClient, current: PublicItem) {
 const cartText = () => document.querySelector('.public-menu-cart-lines')?.textContent ?? ''
 
 describe('открытая гостевая корзина после обновления каталога', () => {
+  it('переход из карточки ресторана открывает каталог без hero и возвращается назад', async () => {
+    vi.mocked(fetchPublicMenu).mockResolvedValue(menu())
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } })
+    clients.push(client)
+    window.history.replaceState({}, '', `/order/${LOC}?view=menu`)
+
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter
+          initialEntries={['/restaurants/bulochka', `/order/${LOC}?view=menu`]}
+          initialIndex={1}
+        >
+          <Routes>
+            <Route path="/restaurants/:slug" element={<h1>Restaurant detail</h1>} />
+            <Route path="/order/:locId" element={<PublicOrderPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+
+    expect(await screen.findByRole('heading', { name: 'Drinks', level: 2 })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'להזמין' })).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: t('he', 'back') }))
+    expect(await screen.findByRole('heading', { name: 'Restaurant detail' })).toBeInTheDocument()
+  })
+
   it('возврат из меню на hero начинает новый заказ с пустой корзиной', async () => {
     await openCart()
 

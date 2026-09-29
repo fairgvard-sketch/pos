@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { t, formatTime, type Lang } from '../../lib/i18n'
 import { formatMoney, formatMoneyDelta } from '../../lib/money'
@@ -76,6 +76,7 @@ function readActive(locId: string): string | null {
 
 export default function PublicOrderPage() {
   const { locId = '' } = useParams()
+  const navigate = useNavigate()
   const queryContext = useMemo(() => parsePublicOrderQuery(window.location.search), [])
   // Гостевая страница — всегда иврит (заказ he-first), без переключения языка.
   const lang: Lang = 'he'
@@ -91,9 +92,11 @@ export default function PublicOrderPage() {
   const [cart, setCart] = useState<CartLine[]>(() => readPublicCart(locId))
   const [view, setView] = useState<'menu' | 'checkout'>('menu')
   const [checkoutStage, setCheckoutStage] = useState<'cart' | 'payment'>('cart')
-  // QR конкретного стола уже является входом в Live Table: не заставляем
-  // сидящего гостя проходить ресторанный hero ещё одним тапом.
-  const [hasStarted, setHasStarted] = useState(() => !!queryContext.tableToken)
+  // QR конкретного стола и явный переход из карточки ресторана уже являются
+  // входом в меню: не заставляем гостя проходить hero ещё одним тапом.
+  const [hasStarted, setHasStarted] = useState(
+    () => !!queryContext.tableToken || queryContext.startInMenu,
+  )
   const [activeServiceCount, setActiveServiceCount] = useState(0)
   const [liveTableTab, setLiveTableTab] = useState<LiveTableTab>('menu')
   const [configItem, setConfigItem] = useState<PublicItem | null>(null)
@@ -102,6 +105,7 @@ export default function PublicOrderPage() {
   const [editingKey, setEditingKey] = useState<string | null>(null)
   // null = hero; id = экран позиций категории
   const [activeCat, setActiveCat] = useState<string | null>(null)
+  const [menuSearch, setMenuSearch] = useState('')
   // Категория слегка сдвигается только после тапа по соседнему чипу.
   // Нельзя выводить это из routeTransition.phase: иначе после hero → menu
   // список получает вторую анимацию и визуально «мигает».
@@ -163,6 +167,7 @@ export default function PublicOrderPage() {
     setEditingKey(null)
     setCartNotice(null)
     setActiveCat(null)
+    setMenuSearch('')
     setCategoryMotion(false)
     setCheckoutStage('cart')
     setView('menu')
@@ -579,6 +584,12 @@ export default function PublicOrderPage() {
     ? `${liveTableTab}-${liveTableTab === 'order' ? checkoutStage : 'root'}`
     : view === 'checkout' ? checkoutStage : 'menu'
   const visibleCategoryId = activeCat ?? menu.categories[0]?.id ?? null
+  const normalizedMenuSearch = menuSearch.trim().toLocaleLowerCase()
+  const searchedTableItems = normalizedMenuSearch
+    ? menu.categories.flatMap((category) => category.items).filter((item) =>
+      `${item.name} ${item.description ?? ''}`.toLocaleLowerCase().includes(normalizedMenuSearch),
+    )
+    : null
   const showMenu = tableContext ? liveTableTab === 'menu' : view === 'menu'
   const showCheckout = tableContext
     ? liveTableTab === 'order' && !activeUuid && cartCount > 0
@@ -630,7 +641,9 @@ export default function PublicOrderPage() {
             ? () => navigateWithTransition('back', () => setCheckoutStage('cart'))
             : () => navigateWithTransition('back', () => setView('menu'))
           : hasStarted && !tableContext
-            ? () => navigateWithTransition('back', resetToStart)
+            ? queryContext.startInMenu
+              ? () => navigate(-1)
+              : () => navigateWithTransition('back', resetToStart)
             : undefined
       }
       backLabel={t(lang, 'back')}
@@ -641,8 +654,12 @@ export default function PublicOrderPage() {
       {showMenu && hasStarted && visibleCategoryId && (() => {
         const cat = menu.categories.find((c) => c.id === visibleCategoryId)
         if (!cat) return null
+        const visibleItems = searchedTableItems ?? cat.items
         return (
           <div className="public-menu-route-motion">
+            {tableContext && (
+              <LiveTableMenuSearch value={menuSearch} onChange={setMenuSearch} lang={lang} />
+            )}
             {/* Навигация не перемонтируется при смене категории: движется
                 активный чип и обновляется только список товаров. */}
             <CategoryChips
@@ -652,7 +669,7 @@ export default function PublicOrderPage() {
               liveTable={!!tableContext}
             />
             <div
-              key={visibleCategoryId}
+              key={searchedTableItems ? 'search-results' : visibleCategoryId}
               data-category-motion={categoryMotion ? 'on' : 'off'}
               className="public-menu-category-content"
               onAnimationEnd={(event) => {
@@ -662,21 +679,25 @@ export default function PublicOrderPage() {
               <div className="public-menu-products-section px-4 pb-4">
                 <div className="public-menu-section-heading">
                   <h2 className="public-menu-section-title public-menu-route-focus public-menu-route-heading" tabIndex={-1}>
-                    {cat.name}
+                    {searchedTableItems ? t(lang, 'guestSearchResults') : cat.name}
                   </h2>
                 </div>
-                <div className={tableContext ? 'angle-live-table-product-list' : 'public-menu-product-grid'}>
-                  {cat.items.map((item, index) => (
-                    <ItemRow
-                      key={item.id}
-                      item={item}
-                      lang={lang}
-                      layout={tableContext ? 'row' : 'grid'}
-                      priority={index < 6}
-                      onTap={() => openItem(item)}
-                    />
-                  ))}
-                </div>
+                {visibleItems.length > 0 ? (
+                  <div className={tableContext ? 'angle-live-table-product-list' : 'public-menu-product-grid'}>
+                    {visibleItems.map((item, index) => (
+                      <ItemRow
+                        key={item.id}
+                        item={item}
+                        lang={lang}
+                        layout={tableContext ? 'row' : 'grid'}
+                        priority={index < 6}
+                        onTap={() => openItem(item)}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <p className="angle-live-table-search-empty">{t(lang, 'guestNoDishes')}</p>
+                )}
               </div>
               {!tableContext && (
                 <SocialFooter links={menu.location.links} lang={lang} padForCart={cartCount > 0} />
@@ -904,6 +925,32 @@ function LiveTableHeader({
         ))}
       </nav>
     </header>
+  )
+}
+
+function LiveTableMenuSearch({
+  value,
+  onChange,
+  lang,
+}: {
+  value: string
+  onChange: (value: string) => void
+  lang: Lang
+}) {
+  return (
+    <div className="angle-live-table-search">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden>
+        <circle cx="11" cy="11" r="7" />
+        <path d="m20 20-4-4" />
+      </svg>
+      <input
+        type="search"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={t(lang, 'guestSearchMenu')}
+        aria-label={t(lang, 'guestSearchMenu')}
+      />
+    </div>
   )
 }
 

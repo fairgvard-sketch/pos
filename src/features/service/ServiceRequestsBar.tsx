@@ -14,6 +14,9 @@ function serviceRequestLabel(lang: Lang, kind: ServiceRequestKind): string {
     water: 'serviceWater',
     cutlery: 'serviceCutlery',
     napkins: 'serviceNapkins',
+    bread: 'serviceBread',
+    next_course: 'serviceNextCourse',
+    hold_course: 'serviceHoldCourse',
     problem: 'serviceProblem',
     bill: 'serviceBill',
   }

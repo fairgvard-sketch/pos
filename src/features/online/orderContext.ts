@@ -11,6 +11,8 @@ export interface PublicOrderQueryContext {
   tableToken: string | null
   requestedType: PublicOrderType | null
   channel: PublicOrderChannel
+  /** Открыть каталог сразу, минуя промо-hero (переход из карточки ANGLE). */
+  startInMenu: boolean
   /** Автовозврат на hero нужен только общему киоск-устройству, не телефону гостя. */
   kiosk: boolean
 }
@@ -68,8 +70,9 @@ export function parsePublicOrderQuery(search: string): PublicOrderQueryContext {
       : 'link'
   const rawKiosk = params.get('kiosk')?.trim().toLowerCase()
   const kiosk = rawKiosk === '1' || rawKiosk === 'true'
+  const startInMenu = params.get('view')?.trim().toLowerCase() === 'menu'
 
-  return { tableToken, requestedType: tableToken ? 'here' : requestedType, channel, kiosk }
+  return { tableToken, requestedType: tableToken ? 'here' : requestedType, channel, startInMenu, kiosk }
 }
 
 /**

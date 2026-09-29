@@ -187,8 +187,10 @@ describe('ANGLE restaurant directory', () => {
     expect(within(hours).getByText('08:00–20:00')).toBeInTheDocument()
     const scanButton = screen.getByRole('button', { name: /Scan QR menu/i })
     expect(hours.compareDocumentPosition(scanButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(screen.getByRole('link', { name: /^Menu$/i }))
+      .toHaveAttribute('href', '/order/bulochka?view=menu')
     expect(screen.getByRole('link', { name: /View menu/i }))
-      .toHaveAttribute('href', '/order/bulochka')
+      .toHaveAttribute('href', '/order/bulochka?view=menu')
     expect(screen.getByText(/not Google reviews/i)).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: /Reserve/i })).not.toBeInTheDocument()
 

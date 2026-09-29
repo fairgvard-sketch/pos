@@ -14,6 +14,7 @@ describe('parsePublicOrderQuery', () => {
       tableToken: null,
       requestedType: null,
       channel: 'link',
+      startInMenu: false,
       kiosk: false,
     })
   })
@@ -23,6 +24,7 @@ describe('parsePublicOrderQuery', () => {
       tableToken: null,
       requestedType: 'takeaway',
       channel: 'website',
+      startInMenu: false,
       kiosk: false,
     })
   })
@@ -32,6 +34,7 @@ describe('parsePublicOrderQuery', () => {
       tableToken: TABLE_TOKEN,
       requestedType: 'here',
       channel: 'table_qr',
+      startInMenu: false,
       kiosk: false,
     })
   })
@@ -42,6 +45,13 @@ describe('parsePublicOrderQuery', () => {
       kiosk: true,
     })
     expect(parsePublicOrderQuery('?source=counter_qr')).toMatchObject({ kiosk: false })
+  })
+
+  it('recognizes an explicit direct entry into the menu catalogue', () => {
+    expect(parsePublicOrderQuery('?view=menu')).toMatchObject({
+      channel: 'link',
+      startInMenu: true,
+    })
   })
 })
 

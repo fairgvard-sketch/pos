@@ -1,6 +1,6 @@
 -- pgTAP: ANGLE Guest service requests (172).
 BEGIN;
-SELECT plan(35);
+SELECT plan(36);
 
 -- ── Contract and privileges ────────────────────────────────
 SELECT has_table('service_requests', 'service_requests exists');
@@ -161,6 +161,16 @@ SELECT throws_ok($$
     'a4000000-0000-4000-8000-000000000003',
     'open_cash_drawer')
 $$, 'invalid_kind', 'request kind is an allow-list');
+SELECT is(
+  submit_service_request(
+    'a1000000-0000-4000-8000-000000000001',
+    'a2100000-0000-4000-8000-000000000001',
+    'a4000000-0000-4000-8000-000000000004',
+    'bread'
+  ) ->> 'status',
+  'new',
+  'expanded waiter-request allow-list accepts bread'
+);
 SELECT is(
   get_service_request_status('a4000000-0000-4000-8000-000000000001') ->> 'status',
   'new',

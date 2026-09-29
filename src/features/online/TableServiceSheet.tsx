@@ -22,6 +22,9 @@ const labels: Record<PublicServiceRequestKind, Parameters<typeof t>[1]> = {
   water: 'serviceWater',
   cutlery: 'serviceCutlery',
   napkins: 'serviceNapkins',
+  bread: 'serviceBread',
+  next_course: 'serviceNextCourse',
+  hold_course: 'serviceHoldCourse',
   problem: 'serviceProblem',
   bill: 'serviceBill',
 }
@@ -287,14 +290,14 @@ export default function TableServiceSheet({
       <div className="angle-table-service-group">
         <h2>{t(lang, 'serviceQuickRequests')}</h2>
         <div className="angle-table-service-quick-grid">
-          {(['water', 'cutlery', 'napkins'] as PublicServiceRequestKind[]).map((kind) => requestButton(kind, 'quick'))}
+          {(['water', 'cutlery', 'napkins', 'bread'] as PublicServiceRequestKind[]).map((kind) => requestButton(kind, 'quick'))}
         </div>
       </div>
 
       <div className="angle-table-service-group">
         <h2>{t(lang, 'serviceOtherRequests')}</h2>
         <div className="angle-table-service-row-list">
-          {(['problem', 'bill'] as PublicServiceRequestKind[]).map((kind) => requestButton(kind, 'row'))}
+          {(['problem', 'next_course', 'hold_course', 'bill'] as PublicServiceRequestKind[]).map((kind) => requestButton(kind, 'row'))}
         </div>
       </div>
 
@@ -320,6 +323,15 @@ function ServiceIcon({ kind }: { kind: PublicServiceRequestKind }) {
   }
   if (kind === 'napkins') {
     return <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" aria-hidden><path d="M5 5h11l3 3v11H8l-3-3V5Z" /><path d="M8 8h11M8 8v11" /></svg>
+  }
+  if (kind === 'bread') {
+    return <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M5 15c-2-1-2-4 0-5 0-3 3-5 7-5s7 2 7 5c2 1 2 4 0 5-1 3-4 4-7 4s-6-1-7-4Z" /><path d="m9 8-1 3M13 7l-1 4M17 8l-1 3" /></svg>
+  }
+  if (kind === 'next_course') {
+    return <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M5 17h14M7 17a5 5 0 0 1 10 0M12 8v4" /><path d="m9 10 3-3 3 3" /></svg>
+  }
+  if (kind === 'hold_course') {
+    return <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M5 17h14M7 17a5 5 0 0 1 10 0" /><path d="M9 7v5M15 7v5" /></svg>
   }
   if (kind === 'bill') {
     return <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden><path d="M7 3h10v18l-2-1.5L13 21l-2-1.5L9 21l-2-1.5V3Z" /><path d="M10 8h4M10 12h4" /></svg>
