@@ -90,7 +90,7 @@ $$, 'service_unavailable', 'closed shift cannot receive an unstaffed service tas
 UPDATE shifts SET status = 'open'
 WHERE id = 'a3200000-0000-4000-8000-000000000001';
 
--- ── Public creation, idempotency and deduplication ─────────
+-- ── Public creation, idempotency and repeatable taps ───────
 SELECT is(
   submit_service_request(
     'a1000000-0000-4000-8000-000000000001',
@@ -138,14 +138,14 @@ SELECT is(
     'a4000000-0000-4000-8000-000000000002',
     'water'
   ) ->> 'client_uuid',
-  'a4000000-0000-4000-8000-000000000001',
-  'same active table request is joined instead of duplicated'
+  'a4000000-0000-4000-8000-000000000002',
+  'a new tap creates a separate request even while the previous one is active'
 );
 SELECT is(
   (SELECT COUNT(*)::INTEGER FROM service_requests
    WHERE table_id = 'a2000000-0000-4000-8000-000000000001' AND kind = 'water'),
-  1,
-  'deduplication leaves one staff task'
+  2,
+  'repeat tap leaves a second staff task'
 );
 SELECT throws_ok($$
   SELECT submit_service_request(

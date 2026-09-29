@@ -1,21 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useState } from 'react'
 import { t, type Lang } from '../../lib/i18n'
 import {
-  fetchPublicServiceRequest,
   PublicApiError,
   submitPublicServiceRequest,
   type PublicServiceRequestKind,
-  type PublicServiceRequestStatus,
 } from './publicApi'
-
-const STORAGE_KEY = 'angle-table-service-requests-v1'
-const KEEP_MS = 6 * 60 * 60_000
-
-interface StoredContext {
-  locId: string
-  tableToken: string
-  requests: PublicServiceRequestStatus[]
-}
 
 const labels: Record<PublicServiceRequestKind, Parameters<typeof t>[1]> = {
   call_waiter: 'serviceCallWaiter',
@@ -29,30 +18,6 @@ const labels: Record<PublicServiceRequestKind, Parameters<typeof t>[1]> = {
   bill: 'serviceBill',
 }
 
-function readStored(locId: string, tableToken: string): PublicServiceRequestStatus[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return []
-    const stored = JSON.parse(raw) as StoredContext
-    if (stored.locId !== locId || stored.tableToken !== tableToken || !Array.isArray(stored.requests)) {
-      return []
-    }
-    const cutoff = Date.now() - KEEP_MS
-    return stored.requests
-      .filter((request) => new Date(request.created_at).getTime() >= cutoff)
-      .slice(-10)
-  } catch {
-    return []
-  }
-}
-
-function statusLabel(lang: Lang, status: PublicServiceRequestStatus['status']): string {
-  if (status === 'accepted') return t(lang, 'serviceAcceptedGuest')
-  if (status === 'completed') return t(lang, 'serviceCompletedGuest')
-  if (status === 'cancelled') return t(lang, 'serviceCancelledGuest')
-  return t(lang, 'serviceSentGuest')
-}
-
 function errorLabel(lang: Lang, error: unknown): string {
   if (error instanceof PublicApiError) {
     if (error.code === 'rate_limited' || error.code === 'busy') return t(lang, 'serviceBusyError')
@@ -64,33 +29,6 @@ function errorLabel(lang: Lang, error: unknown): string {
   return t(lang, 'serviceSendError')
 }
 
-export function TableServiceButton({
-  lang,
-  activeCount,
-  onClick,
-}: {
-  lang: Lang
-  activeCount: number
-  onClick: () => void
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={t(lang, 'serviceOpen')}
-      className="relative h-11 min-w-11 px-3 rounded-full bg-gray-100 text-gray-900 flex items-center justify-center gap-2 text-sm font-bold active:scale-[0.96] transition-all"
-    >
-      <ServiceIcon kind="call_waiter" />
-      <span>{t(lang, 'serviceTab')}</span>
-      {activeCount > 0 && (
-        <span className="absolute -top-1 -end-1 min-w-[18px] h-[18px] px-1 rounded-full bg-gray-900 text-white text-[10px] flex items-center justify-center tabular-nums">
-          {activeCount}
-        </span>
-      )}
-    </button>
-  )
-}
-
 export default function TableServiceSheet({
   open,
   lang,
@@ -98,7 +36,6 @@ export default function TableServiceSheet({
   tableToken,
   tableLabel,
   onClose,
-  onActiveCountChange,
   mode = 'sheet',
 }: {
   open: boolean
@@ -107,137 +44,42 @@ export default function TableServiceSheet({
   tableToken: string
   tableLabel: string
   onClose: () => void
-  onActiveCountChange?: (count: number) => void
   mode?: 'sheet' | 'page'
 }) {
-  const [requests, setRequests] = useState<PublicServiceRequestStatus[]>(
-    () => readStored(locId, tableToken),
-  )
-  const [sendingKind, setSendingKind] = useState<PublicServiceRequestKind | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const activeRequests = useMemo(
-    () => requests.filter((request) => request.status === 'new' || request.status === 'accepted'),
-    [requests],
-  )
-  const activeByKind = useMemo(
-    () => new Map(activeRequests.map((request) => [request.kind, request])),
-    [activeRequests],
-  )
-  const visibleRequests = useMemo(() => requests.slice(-4).reverse(), [requests])
-  const activeIds = activeRequests.map((request) => request.client_uuid).join(',')
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ locId, tableToken, requests }))
-    onActiveCountChange?.(activeRequests.length)
-  }, [activeRequests.length, locId, onActiveCountChange, requests, tableToken])
-
-  // Poll only while an unfinished task exists. Returning to the foreground
-  // refreshes immediately, so a sleeping phone never waits for the next tick.
-  useEffect(() => {
-    if (activeRequests.length === 0) return
-    let stopped = false
-    let timer: ReturnType<typeof setTimeout> | undefined
-
-    const poll = async () => {
-      if (document.visibilityState !== 'visible') return
-      const updates = await Promise.all(activeRequests.map(async (request) => {
-        try {
-          return await fetchPublicServiceRequest(request.client_uuid)
-        } catch {
-          return request
-        }
-      }))
-      if (stopped) return
-      setRequests((current) => current.map((request) =>
-        updates.find((update) => update.client_uuid === request.client_uuid) ?? request,
-      ))
-    }
-    const loop = () => {
-      void poll()
-      timer = setTimeout(loop, 5_000)
-    }
-    loop()
-    const onVisibility = () => {
-      if (document.visibilityState === 'visible') void poll()
-    }
-    document.addEventListener('visibilitychange', onVisibility)
-    return () => {
-      stopped = true
-      if (timer) clearTimeout(timer)
-      document.removeEventListener('visibilitychange', onVisibility)
-    }
-  // `activeIds` stays stable when a poll returns the same state, preventing
-  // this effect from restarting into a tight request loop after each fetch.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeIds])
-
   async function send(kind: PublicServiceRequestKind) {
-    if (activeByKind.has(kind) || sendingKind) return
     const clientUuid = crypto.randomUUID()
-    const optimistic: PublicServiceRequestStatus = {
-      client_uuid: clientUuid,
-      kind,
-      status: 'new',
-      table_label: tableLabel,
-      created_at: new Date().toISOString(),
-      accepted_at: null,
-      completed_at: null,
-    }
+    navigator.vibrate?.(18)
     setError(null)
-    setSendingKind(kind)
-    setRequests((current) => [...current, optimistic])
     try {
-      const result = await submitPublicServiceRequest({
+      await submitPublicServiceRequest({
         loc: locId,
         table_token: tableToken,
         client_uuid: clientUuid,
         kind,
       })
-      const tracked = await fetchPublicServiceRequest(result.client_uuid)
-      setRequests((current) => {
-        const withoutOptimistic = current.filter((request) => request.client_uuid !== clientUuid)
-        const existingIndex = withoutOptimistic.findIndex(
-          (request) => request.client_uuid === tracked.client_uuid,
-        )
-        if (existingIndex >= 0) {
-          return withoutOptimistic.map((request, index) => index === existingIndex ? tracked : request)
-        }
-        return [...withoutOptimistic, tracked]
-      })
     } catch (requestError) {
-      setRequests((current) => current.filter((request) => request.client_uuid !== clientUuid))
       setError(errorLabel(lang, requestError))
-    } finally {
-      setSendingKind(null)
     }
   }
 
   if (!open) return null
 
-  const callWaiter = activeByKind.get('call_waiter')
-  const callWaiterSending = sendingKind === 'call_waiter'
-
   const requestButton = (kind: PublicServiceRequestKind, variant: 'quick' | 'row') => {
-    const active = activeByKind.get(kind)
-    const sending = sendingKind === kind
     return (
-      <button
+      <label
         key={kind}
-        type="button"
-        disabled={!!active || !!sendingKind}
-        onClick={() => void send(kind)}
-        className={`${variant === 'quick' ? 'angle-table-service-quick' : 'angle-table-service-row'} ${active ? 'is-active' : ''}`}
+        className={variant === 'quick' ? 'angle-table-service-quick' : 'angle-table-service-row'}
       >
-        <span className="angle-table-service-icon"><ServiceIcon kind={kind} /></span>
-        <span className="angle-table-service-label">{t(lang, labels[kind])}</span>
-        {(active || sending) && (
-          <span className="angle-table-service-state">
-            {sending ? t(lang, 'serviceSending') : statusLabel(lang, active!.status)}
-          </span>
-        )}
-        {variant === 'row' && !active && !sending && <span className="angle-table-service-chevron" aria-hidden>›</span>}
-      </button>
+        <HapticRequestControl
+          label={t(lang, labels[kind])}
+          onActivate={() => void send(kind)}
+        />
+        <span className={`angle-table-service-icon is-${kind}`} aria-hidden><ServiceIcon kind={kind} /></span>
+        <span className="angle-table-service-label" aria-hidden>{t(lang, labels[kind])}</span>
+        {variant === 'row' && <span className="angle-table-service-chevron" aria-hidden>›</span>}
+      </label>
     )
   }
 
@@ -264,38 +106,17 @@ export default function TableServiceSheet({
         <h1 id="table-service-title" className="sr-only">{t(lang, 'serviceCallWaiter')}</h1>
       )}
 
-      <button
-        type="button"
-        disabled={!!callWaiter || !!sendingKind}
-        onClick={() => void send('call_waiter')}
-        className={`angle-table-service-primary ${callWaiter ? 'is-active' : ''}`}
-      >
-        <span className="angle-table-service-primary-icon"><ServiceIcon kind="call_waiter" /></span>
-        <span className="angle-table-service-primary-copy">
+      <label className="angle-table-service-primary">
+        <HapticRequestControl
+          label={t(lang, 'serviceCallWaiter')}
+          onActivate={() => void send('call_waiter')}
+        />
+        <span className="angle-table-service-primary-icon is-call_waiter" aria-hidden><ServiceIcon kind="call_waiter" /></span>
+        <span className="angle-table-service-primary-copy" aria-hidden>
           <strong>{t(lang, 'serviceCallWaiter')}</strong>
-          <small>
-            {callWaiterSending
-              ? t(lang, 'serviceSending')
-              : callWaiter
-                ? statusLabel(lang, callWaiter.status)
-                : t(lang, 'serviceCallHint')}
-          </small>
+          <small>{t(lang, 'serviceCallHint')}</small>
         </span>
-      </button>
-
-      {visibleRequests.length > 0 && (
-        <div className="angle-table-service-activity" aria-live="polite">
-          {visibleRequests.map((request) => (
-            <div key={request.client_uuid}>
-              <span className={`angle-table-service-dot is-${request.status}`} />
-              <p>
-                <strong>{t(lang, labels[request.kind])}</strong>
-                <small>{statusLabel(lang, request.status)}</small>
-              </p>
-            </div>
-          ))}
-        </div>
-      )}
+      </label>
 
       <div className="angle-table-service-group">
         <h2>{t(lang, 'serviceQuickRequests')}</h2>
@@ -324,6 +145,30 @@ export default function TableServiceSheet({
   )
 }
 
+function HapticRequestControl({
+  label,
+  onActivate,
+}: {
+  label: string
+  onActivate: () => void
+}) {
+  return (
+    <input
+      {...{ switch: '' }}
+      type="checkbox"
+      role="button"
+      aria-label={label}
+      className="angle-service-haptic-control"
+      onChange={(event) => {
+        // Safari 18+ gives its native switch a physical tap. Resetting the
+        // control keeps every touch actionable without exposing toggle state.
+        event.currentTarget.checked = false
+        onActivate()
+      }}
+    />
+  )
+}
+
 function ServiceIcon({ kind }: { kind: PublicServiceRequestKind }) {
   if (kind === 'water') {
     return <svg className="angle-service-glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M12 3.25s5 5.5 5 9.65a5 5 0 0 1-10 0c0-4.15 5-9.65 5-9.65Z" /><path d="M9.4 13.3a2.8 2.8 0 0 0 2.1 2.35" /></svg>
@@ -349,5 +194,5 @@ function ServiceIcon({ kind }: { kind: PublicServiceRequestKind }) {
   if (kind === 'problem') {
     return <svg className="angle-service-glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden><circle cx="12" cy="12" r="8.5" /><path d="M12 7.5v5.75M12 16.75h.01" /></svg>
   }
-  return <svg className="angle-service-glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M5 17.5h14M7.5 17.5v-5a4.5 4.5 0 0 1 9 0v5M12 5v2.5M4 20.5h16" /><path d="M9.5 12.5h5" /></svg>
+  return <svg className="angle-service-glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M5 17.5h14M7.5 17.5v-5a4.5 4.5 0 0 1 9 0v5M12 5v2.5M4 20.5h16" /><path d="M9.5 12.5h5M18.5 5.25h2M19.5 4.25v2" /></svg>
 }

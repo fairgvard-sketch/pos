@@ -130,7 +130,6 @@ export default function PublicOrderPage() {
   const [hasStarted, setHasStarted] = useState(
     () => !!queryContext.tableToken || queryContext.startInMenu,
   )
-  const [activeServiceCount, setActiveServiceCount] = useState(0)
   const [liveTableTab, setLiveTableTab] = useState<LiveTableTab>('menu')
   const [configItem, setConfigItem] = useState<PublicItem | null>(null)
   const [configClosing, setConfigClosing] = useState(false)
@@ -644,7 +643,6 @@ export default function PublicOrderPage() {
       // Бейдж «Ваш заказ» относится только к уже отправленной заявке.
       // Неотправленные блюда остаются частью меню и нижней корзины.
       orderCount={activeUuid ? 1 : 0}
-      serviceCount={activeServiceCount}
       onTab={(tab) => {
         window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
         setCheckoutStage('cart')
@@ -919,7 +917,6 @@ export default function PublicOrderPage() {
           tableToken={queryContext.tableToken}
           tableLabel={tableContext.label}
           onClose={() => setLiveTableTab('menu')}
-          onActiveCountChange={setActiveServiceCount}
         />
       )}
     </Shell>
@@ -933,7 +930,6 @@ function LiveTableHeader({
   tableLabel,
   activeTab,
   orderCount,
-  serviceCount,
   onTab,
 }: {
   lang: Lang
@@ -942,13 +938,12 @@ function LiveTableHeader({
   tableLabel: string
   activeTab: LiveTableTab
   orderCount: number
-  serviceCount: number
   onTab: (tab: LiveTableTab) => void
 }) {
   const tabs: Array<{ id: LiveTableTab; label: string; count: number }> = [
     { id: 'menu', label: t(lang, 'guestMenuTab'), count: 0 },
     { id: 'order', label: t(lang, 'pubYourOrder'), count: orderCount },
-    { id: 'service', label: t(lang, 'serviceTab'), count: serviceCount },
+    { id: 'service', label: t(lang, 'serviceTab'), count: 0 },
   ]
 
   return (

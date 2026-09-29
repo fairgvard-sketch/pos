@@ -2,7 +2,7 @@
  * public-service — ANGLE Guest service requests (172).
  *
  * POST { loc, table_token, client_uuid, kind }
- *   → tracked request, idempotent and deduplicated per table/kind.
+ *   → one tracked request per guest action, idempotent per client_uuid.
  * GET ?id=<client_uuid>
  *   → public status for the browser that created/joined the request.
  *

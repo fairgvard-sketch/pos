@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -7,7 +7,6 @@ import PublicOrderPage from './PublicOrderPage'
 import {
   fetchPublicMenu,
   fetchPublicStatus,
-  fetchPublicServiceRequest,
   submitPublicOrder,
   submitPublicServiceRequest,
   type PublicMenu,
@@ -19,13 +18,13 @@ vi.mock('./publicApi', async (importOriginal) => ({
   fetchPublicMenu: vi.fn(),
   fetchPublicStatus: vi.fn(),
   submitPublicOrder: vi.fn(),
-  fetchPublicServiceRequest: vi.fn(),
   submitPublicServiceRequest: vi.fn(),
 }))
 
 const LOC = 'b1000000-0000-4000-8000-000000000001'
 const TABLE = 'b2000000-0000-4000-8000-000000000001'
 const CLIENT = 'b3000000-0000-4000-8000-000000000001'
+const CLIENT_2 = 'b3000000-0000-4000-8000-000000000002'
 const ORDER = 'b4000000-0000-4000-8000-000000000001'
 const COFFEE = {
   id: 'coffee',
@@ -63,6 +62,7 @@ afterEach(() => {
   client.clear()
   vi.clearAllMocks()
   vi.restoreAllMocks()
+  Reflect.deleteProperty(navigator, 'vibrate')
 })
 
 function renderTable() {
@@ -252,45 +252,51 @@ describe('ANGLE Guest table service', () => {
     expect(screen.queryByLabelText(t('he', 'pubOrderProgress'))).not.toBeInTheDocument()
   })
 
-  it('sends water optimistically and then shows the accepted server state', async () => {
-    let resolveSubmit!: (value: Awaited<ReturnType<typeof submitPublicServiceRequest>>) => void
-    vi.spyOn(globalThis.crypto, 'randomUUID').mockReturnValue(CLIENT)
-    vi.mocked(submitPublicServiceRequest).mockImplementation(() => new Promise((resolve) => {
-      resolveSubmit = resolve
-    }))
-    vi.mocked(fetchPublicServiceRequest).mockResolvedValue({
+  it('sends repeatable water requests with tactile feedback and no persistent status', async () => {
+    const vibrate = vi.fn()
+    Object.defineProperty(navigator, 'vibrate', { configurable: true, value: vibrate })
+    vi.spyOn(globalThis.crypto, 'randomUUID')
+      .mockReturnValueOnce(CLIENT)
+      .mockReturnValueOnce(CLIENT_2)
+    vi.mocked(submitPublicServiceRequest).mockResolvedValue({
+      request_id: 'b4000000-0000-4000-8000-000000000001',
       client_uuid: CLIENT,
-      kind: 'water',
-      status: 'accepted',
-      table_label: '12',
-      created_at: new Date().toISOString(),
-      accepted_at: new Date().toISOString(),
-      completed_at: null,
+      status: 'new',
+      duplicate: false,
     })
     renderTable()
 
-    fireEvent.click(await screen.findByRole('tab', { name: t('he', 'serviceTab') }))
-    fireEvent.click(screen.getByRole('button', { name: t('he', 'serviceWater') }))
+    const serviceTab = await screen.findByRole('tab', { name: t('he', 'serviceTab') })
+    fireEvent.click(serviceTab)
+    const waterButton = screen.getByRole('button', { name: t('he', 'serviceWater') })
+    expect(waterButton).toHaveAttribute('switch')
+    expect(waterButton).toHaveAttribute('type', 'checkbox')
+    fireEvent.click(waterButton)
+    fireEvent.click(waterButton)
 
-    expect(screen.getByText(t('he', 'serviceSentGuest'))).toBeInTheDocument()
-    await act(async () => {
-      resolveSubmit({
-        request_id: 'b4000000-0000-4000-8000-000000000001',
-        client_uuid: CLIENT,
-        status: 'new',
-        duplicate: false,
-      })
-    })
-    await waitFor(() => expect(screen.getAllByText(t('he', 'serviceAcceptedGuest'))).not.toHaveLength(0))
-    expect(submitPublicServiceRequest).toHaveBeenCalledWith({
+    expect(waterButton).not.toBeDisabled()
+    expect(vibrate).toHaveBeenNthCalledWith(1, 18)
+    expect(vibrate).toHaveBeenNthCalledWith(2, 18)
+    await waitFor(() => expect(submitPublicServiceRequest).toHaveBeenCalledTimes(2))
+    expect(submitPublicServiceRequest).toHaveBeenNthCalledWith(1, {
       loc: LOC,
       table_token: TABLE,
       client_uuid: CLIENT,
       kind: 'water',
     })
+    expect(submitPublicServiceRequest).toHaveBeenNthCalledWith(2, {
+      loc: LOC,
+      table_token: TABLE,
+      client_uuid: CLIENT_2,
+      kind: 'water',
+    })
+    expect(screen.queryByText(t('he', 'serviceSentGuest'))).not.toBeInTheDocument()
+    expect(screen.queryByText(t('he', 'serviceAcceptedGuest'))).not.toBeInTheDocument()
+    expect(document.querySelector('.angle-table-service-activity')).not.toBeInTheDocument()
+    expect(serviceTab.querySelector('.angle-live-table-tab-count')).not.toBeInTheDocument()
   })
 
-  it('keeps the completed confirmation visible without counting it as active', async () => {
+  it('ignores legacy tracked confirmations and keeps the service tab clean', async () => {
     localStorage.setItem('angle-table-service-requests-v1', JSON.stringify({
       locId: LOC,
       tableToken: TABLE,
@@ -307,8 +313,10 @@ describe('ANGLE Guest table service', () => {
     renderTable()
 
     const serviceButton = await screen.findByRole('tab', { name: t('he', 'serviceTab') })
-    expect(serviceButton).not.toHaveTextContent('1')
+    expect(serviceButton.querySelector('.angle-live-table-tab-count')).not.toBeInTheDocument()
     fireEvent.click(serviceButton)
-    expect(await screen.findByText(t('he', 'serviceCompletedGuest'))).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: t('he', 'serviceBill') })).toBeInTheDocument()
+    expect(screen.queryByText(t('he', 'serviceCompletedGuest'))).not.toBeInTheDocument()
+    expect(document.querySelector('.angle-table-service-activity')).not.toBeInTheDocument()
   })
 })
