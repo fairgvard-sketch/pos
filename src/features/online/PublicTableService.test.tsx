@@ -95,6 +95,38 @@ describe('ANGLE Guest table service', () => {
     expect(screen.getByRole('button', { name: t('he', 'serviceBill') })).toBeInTheDocument()
   })
 
+  it('uses the whole Live Table item row without a separate black action tile', async () => {
+    vi.mocked(fetchPublicMenu).mockResolvedValue({
+      ...menu,
+      categories: [{
+        id: 'popular',
+        name: 'Popular',
+        items: [{
+          ...COFFEE,
+          modifier_groups: [{
+            id: 'milk',
+            name: 'Milk',
+            min_select: 0,
+            max_select: 1,
+            modifiers: [{
+              id: 'oat',
+              name: 'Oat milk',
+              price_delta: 200,
+              is_default: false,
+            }],
+          }],
+        }],
+      }],
+    })
+    renderTable()
+
+    const itemRow = await screen.findByRole('button', { name: new RegExp(COFFEE.name) })
+    expect(itemRow.querySelector('.public-menu-item-action')).not.toBeInTheDocument()
+
+    fireEvent.click(itemRow)
+    expect(await screen.findByText('Oat milk')).toBeInTheDocument()
+  })
+
   it('opens the cart from Your Order, confirms it, and replaces it with status', async () => {
     vi.spyOn(globalThis.crypto, 'randomUUID').mockReturnValue(CLIENT)
     vi.mocked(fetchPublicMenu).mockResolvedValue({

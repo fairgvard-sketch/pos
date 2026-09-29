@@ -922,14 +922,6 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     font-size: .75rem;
   }
 
-  .angle-live-table-product-list .public-menu-item-card.is-row .public-menu-item-action {
-    display: grid;
-    width: 2.75rem;
-    height: 2.75rem;
-    border-radius: .75rem;
-    background: #111315;
-  }
-
   .angle-live-table-frame .public-menu-checkout,
   .angle-live-table-panel {
     min-height: calc(100svh - 7rem - env(safe-area-inset-top));

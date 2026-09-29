@@ -1491,9 +1491,11 @@ function ItemRow({ item, lang, onTap, layout = 'row', priority = false }: {
             {/* dir=ltr: цена не пляшет в bidi-контексте ивритских названий */}
             <span dir="ltr">{formatMoney(minPrice, lang)}</span>
           </span>
-          <span className="public-menu-item-action" aria-hidden>
-            {item.variants.length > 0 || item.modifier_groups.length > 0 ? '⋯' : '+'}
-          </span>
+          {layout === 'grid' && (
+            <span className="public-menu-item-action" aria-hidden>
+              {item.variants.length > 0 || item.modifier_groups.length > 0 ? '⋯' : '+'}
+            </span>
+          )}
         </span>
       </span>
     </button>
