@@ -1,4 +1,13 @@
-import { useEffect, useId, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import {
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentProps,
+  type FormEvent,
+  type ReactNode,
+} from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
@@ -6,6 +15,7 @@ import {
   fetchPublicRestaurants,
   type PublicRestaurant,
 } from '../online/publicApi'
+import { navigateWithTransition, type NavDirection } from '../online/viewTransition'
 import { searchAddresses, type AddressSearchResult } from './geocoding'
 
 const fallbackHero = '/menu-backgrounds/ivory-food.webp'
@@ -482,6 +492,30 @@ function PriceLevel({ value, label }: { value: number | null; label: string }) {
   return <span aria-label={`${label} ${value} / 4`}>{'₪'.repeat(value)}</span>
 }
 
+function TransitionLink({ direction = 'forward', onClick, to, ...props }: ComponentProps<typeof Link> & {
+  direction?: NavDirection
+}) {
+  const navigate = useNavigate()
+  return (
+    <Link
+      {...props}
+      to={to}
+      onClick={(event) => {
+        onClick?.(event)
+        const isPlainPrimaryClick = event.button === 0
+          && !event.metaKey
+          && !event.ctrlKey
+          && !event.shiftKey
+          && !event.altKey
+          && event.currentTarget.target !== '_blank'
+        if (event.defaultPrevented || !isPlainPrimaryClick) return
+        event.preventDefault()
+        navigateWithTransition(direction, () => navigate(to))
+      }}
+    />
+  )
+}
+
 function RestaurantCard({ restaurant, copy, distance, compact = false }: {
   restaurant: PublicRestaurant
   copy: typeof discoveryCopy.en | typeof discoveryCopy.he
@@ -489,7 +523,7 @@ function RestaurantCard({ restaurant, copy, distance, compact = false }: {
   compact?: boolean
 }) {
   return (
-    <Link className={`angle-restaurant-card${compact ? ' is-compact' : ''}`} to={`/restaurants/${restaurant.slug}`}>
+    <TransitionLink className={`angle-restaurant-card${compact ? ' is-compact' : ''}`} to={`/restaurants/${restaurant.slug}`}>
       <div className="angle-restaurant-card__media">
         <img src={restaurant.hero_url || fallbackHero} alt="" />
         {restaurant.coordinates && distance != null && (
@@ -512,7 +546,7 @@ function RestaurantCard({ restaurant, copy, distance, compact = false }: {
           <PriceLevel value={restaurant.price_level} label={copy.priceLevel} />
         </div>
       </div>
-    </Link>
+    </TransitionLink>
   )
 }
 
@@ -1145,8 +1179,10 @@ function RestaurantDetailContent({ restaurant }: { restaurant: PublicRestaurant 
       const url = new URL(value, window.location.origin)
       const trustedHost = url.host === window.location.host || url.host === 'menu.angle.co.il'
       if (!trustedHost || !url.pathname.startsWith('/order/')) return false
-      navigate(`${url.pathname}${url.search}${url.hash}`)
-      setScannerOpen(false)
+      navigateWithTransition('forward', () => {
+        navigate(`${url.pathname}${url.search}${url.hash}`)
+        setScannerOpen(false)
+      })
       return true
     } catch {
       return false
@@ -1157,7 +1193,12 @@ function RestaurantDetailContent({ restaurant }: { restaurant: PublicRestaurant 
     <main className="angle-venue" dir={dir}>
       <section className="angle-venue-hero" id="venue-gallery">
         <img src={restaurant.hero_url || fallbackHero} alt="" />
-        <button type="button" className="angle-venue-back" onClick={() => navigate(-1)} aria-label={copy.back}>
+        <button
+          type="button"
+          className="angle-venue-back"
+          onClick={() => navigateWithTransition('back', () => navigate('/'))}
+          aria-label={copy.back}
+        >
           <ArrowIcon />
         </button>
         <button
@@ -1189,7 +1230,7 @@ function RestaurantDetailContent({ restaurant }: { restaurant: PublicRestaurant 
         </p>
 
         <nav className="angle-venue-actions" aria-label={copy.sections}>
-          <Link to={menuHref}><MenuIcon /><span>{copy.menu}</span></Link>
+          <TransitionLink to={menuHref}><MenuIcon /><span>{copy.menu}</span></TransitionLink>
           <a href="#venue-gallery"><PhotoIcon /><span>{copy.photos}</span></a>
           <a href="#venue-reviews"><ReviewsIcon /><span>{copy.reviews}</span></a>
           <a href="#venue-info"><InfoIcon /><span>{copy.info}</span></a>
@@ -1215,9 +1256,9 @@ function RestaurantDetailContent({ restaurant }: { restaurant: PublicRestaurant 
         </button>
 
         {restaurant.features.reservations && (
-          <Link className="angle-venue-secondary" to={`/reserve/${restaurant.slug}`}>
+          <TransitionLink className="angle-venue-secondary" to={`/reserve/${restaurant.slug}`}>
             {copy.reserveTable}
-          </Link>
+          </TransitionLink>
         )}
 
         {restaurant.rating?.source === 'demo' && (
@@ -1255,7 +1296,7 @@ export function RestaurantDetailPage() {
       <main className="angle-discovery" dir={dir}>
         <DirectoryState>
           <p>{copy.unavailable}</p>
-          <Link to="/">{copy.backToRestaurants}</Link>
+          <TransitionLink direction="back" to="/">{copy.backToRestaurants}</TransitionLink>
         </DirectoryState>
       </main>
     )

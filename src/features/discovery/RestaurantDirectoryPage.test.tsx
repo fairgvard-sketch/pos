@@ -77,6 +77,8 @@ afterEach(() => {
   queryClient.clear()
   vi.clearAllMocks()
   vi.unstubAllGlobals()
+  Reflect.deleteProperty(document, 'startViewTransition')
+  delete document.documentElement.dataset.nav
 })
 
 function renderAt(path: string) {
@@ -112,6 +114,26 @@ describe('ANGLE restaurant directory', () => {
     expect(screen.queryByText('ANGLE restaurants')).not.toBeInTheDocument()
     expect(screen.getByText('Demo')).toBeInTheDocument()
     expect(screen.getByText('Pinsker 29, Tel Aviv')).toBeInTheDocument()
+  })
+
+  it('uses the guest screen transition when opening a restaurant', async () => {
+    const startViewTransition = vi.fn((update: () => void) => {
+      update()
+      return { finished: Promise.resolve() }
+    })
+    Object.defineProperty(document, 'startViewTransition', {
+      configurable: true,
+      value: startViewTransition,
+    })
+    renderAt('/')
+
+    fireEvent.click((await screen.findAllByRole('link', { name: /Bulochka/i }))[0])
+
+    expect(await screen.findByRole('heading', { name: 'Bulochka', level: 1 })).toBeInTheDocument()
+    expect(startViewTransition).toHaveBeenCalledTimes(1)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }))
+    expect(await screen.findByRole('heading', { name: 'Nearby restaurants', level: 2 })).toBeInTheDocument()
   })
 
   it('builds cuisine filters from every published restaurant', async () => {
