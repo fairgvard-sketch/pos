@@ -638,6 +638,7 @@ export default function PublicOrderPage() {
     <LiveTableHeader
       lang={lang}
       restaurantName={menu.location.business_name || menu.location.name}
+      restaurantLogo={menu.location.logo_url}
       tableLabel={tableContext.label}
       activeTab={liveTableTab}
       // Бейдж «Ваш заказ» относится только к уже отправленной заявке.
@@ -927,6 +928,7 @@ export default function PublicOrderPage() {
 function LiveTableHeader({
   lang,
   restaurantName,
+  restaurantLogo,
   tableLabel,
   activeTab,
   orderCount,
@@ -935,6 +937,7 @@ function LiveTableHeader({
 }: {
   lang: Lang
   restaurantName: string
+  restaurantLogo?: string | null
   tableLabel: string
   activeTab: LiveTableTab
   orderCount: number
@@ -950,7 +953,7 @@ function LiveTableHeader({
   return (
     <header className="angle-live-table-header">
       <div className="angle-live-table-context">
-        <AngleTableMark />
+        <RestaurantTableMark logo={restaurantLogo} />
         <div className="angle-live-table-context-copy">
           <strong>{t(lang, 'pubTable')} {tableLabel}</strong>
           <span>{restaurantName}</span>
@@ -1007,15 +1010,27 @@ function LiveTableMenuSearch({
   )
 }
 
-function AngleTableMark() {
+function RestaurantTableMark({ logo }: { logo?: string | null }) {
+  const [failedLogo, setFailedLogo] = useState<string | null>(null)
+  const showLogo = Boolean(logo && failedLogo !== logo)
+
   return (
-    <span className="angle-live-table-mark" aria-hidden>
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.65">
-        <path d="M12 11.2C8.8 10.9 6.8 9.3 6.8 7.2A2.8 2.8 0 0 1 9.6 4.4c2.1 0 2.4 2.4 2.4 6.8Z" />
-        <path d="M12.8 12c.3-3.2 1.9-5.2 4-5.2a2.8 2.8 0 0 1 2.8 2.8c0 2.1-2.4 2.4-6.8 2.4Z" />
-        <path d="M12 12.8c3.2.3 5.2 1.9 5.2 4a2.8 2.8 0 0 1-2.8 2.8c-2.1 0-2.4-2.4-2.4-6.8Z" />
-        <path d="M11.2 12c-.3 3.2-1.9 5.2-4 5.2a2.8 2.8 0 0 1-2.8-2.8c0-2.1 2.4-2.4 6.8-2.4Z" />
-      </svg>
+    <span className={`angle-live-table-mark${showLogo ? ' has-avatar' : ''}`} aria-hidden>
+      {showLogo ? (
+        <img
+          src={logo ?? undefined}
+          alt=""
+          decoding="async"
+          onError={() => setFailedLogo(logo ?? null)}
+        />
+      ) : (
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.65">
+          <path d="M12 11.2C8.8 10.9 6.8 9.3 6.8 7.2A2.8 2.8 0 0 1 9.6 4.4c2.1 0 2.4 2.4 2.4 6.8Z" />
+          <path d="M12.8 12c.3-3.2 1.9-5.2 4-5.2a2.8 2.8 0 0 1 2.8 2.8c0 2.1-2.4 2.4-6.8 2.4Z" />
+          <path d="M12 12.8c3.2.3 5.2 1.9 5.2 4a2.8 2.8 0 0 1-2.8 2.8c-2.1 0-2.4-2.4-2.4-6.8Z" />
+          <path d="M11.2 12c-.3 3.2-1.9 5.2-4 5.2a2.8 2.8 0 0 1-2.8-2.8c0-2.1 2.4-2.4 6.8-2.4Z" />
+        </svg>
+      )}
     </span>
   )
 }

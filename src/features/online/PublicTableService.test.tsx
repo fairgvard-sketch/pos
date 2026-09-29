@@ -43,6 +43,7 @@ const menu: PublicMenu = {
     currency: 'ILS',
     is_open: true,
     accepting: true,
+    logo_url: 'https://cdn.test/casa-test-logo.png',
     modules: { online_orders: true, table_service: true },
   },
   order_context: { kind: 'table', label: '12', zone: 'Main' },
@@ -81,6 +82,10 @@ describe('ANGLE Guest table service', () => {
 
     expect(await screen.findByRole('heading', { name: 'Popular', level: 2 })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'להזמין' })).not.toBeInTheDocument()
+    expect(document.querySelector('.angle-live-table-mark img')).toHaveAttribute(
+      'src',
+      menu.location.logo_url,
+    )
     const search = screen.getByRole('searchbox', { name: t('he', 'guestSearchMenu') })
     fireEvent.change(search, { target: { value: 'missing dish' } })
     expect(screen.getByText(t('he', 'guestNoDishes'))).toBeInTheDocument()
