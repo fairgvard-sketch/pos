@@ -90,3 +90,22 @@ export function playNewOrderChime() {
     osc.stop(now + n.at + 0.36)
   }
 }
+
+/** Запрос гостя со стола: один мягкий короткий тон, без повторного звона. */
+export function playServiceRequestChime() {
+  const ac = getCtx()
+  if (!ac) return
+  if (ac.state === 'suspended') ac.resume().catch(() => {})
+
+  const now = ac.currentTime
+  const osc = ac.createOscillator()
+  const gain = ac.createGain()
+  osc.type = 'sine'
+  osc.frequency.value = 1174.7 // D6
+  gain.gain.setValueAtTime(0, now)
+  gain.gain.linearRampToValueAtTime(0.14, now + 0.01)
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.32)
+  osc.connect(gain).connect(ac.destination)
+  osc.start(now)
+  osc.stop(now + 0.33)
+}

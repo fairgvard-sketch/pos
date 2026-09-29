@@ -9,9 +9,10 @@ import { fetchCurrentLocation } from '../features/auth/api'
 import { voidTableOrder } from '../features/tables/api'
 import { fetchOnlineOrders, subscribeOnlineOrders } from '../features/online/api'
 import { fetchReservations, subscribeReservations } from '../features/reservations/api'
+import { fetchServiceRequests, subscribeServiceRequests } from '../features/service/api'
 import { useOutboxStore } from '../lib/offline/outboxStore'
 import { enqueueTableVoid } from '../lib/offline/enqueue'
-import { playNewOrderChime, playReservationChime } from '../lib/sound'
+import { playNewOrderChime, playReservationChime, playServiceRequestChime } from '../lib/sound'
 import { t } from '../lib/i18n'
 import { can } from '../lib/perms'
 import Icon from './Icon'
@@ -107,6 +108,33 @@ export default function AppSidebar({ active }: { active: SidebarPage }) {
     knownResStatuses.current = statuses
   }, [reservations, lang])
 
+  // ── Запросы обслуживания: живут в существующем экране зала, поэтому
+  // бейдж ведёт туда, а не создаёт персоналу ещё один обязательный экран.
+  const { data: serviceRequests = [] } = useQuery({
+    queryKey: ['service_requests'],
+    queryFn: fetchServiceRequests,
+    refetchInterval: 30_000,
+    enabled: tablesMode,
+  })
+  useEffect(() => {
+    if (!tablesMode) return
+    return subscribeServiceRequests(() => qc.invalidateQueries({ queryKey: ['service_requests'] }))
+  }, [qc, tablesMode])
+  const serviceRequestCount = serviceRequests.length
+  const knownServiceIds = useRef<Set<string> | null>(null)
+  useEffect(() => {
+    const ids = new Set(serviceRequests.filter((request) => request.status === 'new').map((request) => request.id))
+    if (knownServiceIds.current === null) {
+      knownServiceIds.current = ids
+      return
+    }
+    if ([...ids].some((id) => !knownServiceIds.current!.has(id))) {
+      playServiceRequestChime()
+      toast(t(lang, 'serviceNewToast'))
+    }
+    knownServiceIds.current = ids
+  }, [serviceRequests, lang])
+
   const tableCtx = useCartStore((s) => s.tableCtx)
   const lines = useCartStore((s) => s.lines)
   const clearCart = useCartStore((s) => s.clear)
@@ -155,6 +183,7 @@ export default function AppSidebar({ active }: { active: SidebarPage }) {
             active={active === 'hall'}
             label={t(lang, 'hall')}
             iconName="hall"
+            badge={serviceRequestCount}
             // Выход в зал сбрасывает контекст стола → «Продажа» снова скрывается,
             // пустой счёт отменяется, черновик дозаказа отбрасывается.
             onClick={goHall}

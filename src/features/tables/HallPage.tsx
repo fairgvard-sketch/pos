@@ -21,6 +21,8 @@ import { failedNoCache } from '../../lib/queryState'
 import ShiftGate from '../shift/ShiftGate'
 import TableActionSheet from './TableActionSheet'
 import { tableBoxStyle, withDefaultPositions } from './floorPlanUtils'
+import { fetchServiceRequests } from '../service/api'
+import ServiceRequestsBar from '../service/ServiceRequestsBar'
 
 /** Порог «стол сидит долго» (мин): до него жёлтая рамка, после — красная */
 const TABLE_WARN_MIN = 30
@@ -48,6 +50,11 @@ export default function HallPage() {
   const { data: zones = [] } = zonesQ
   const { data: tables = [] } = tablesQ
   const { data: open = [] } = openQ
+  const { data: serviceRequests = [] } = useQuery({
+    queryKey: ['service_requests'],
+    queryFn: fetchServiceRequests,
+    refetchInterval: 30_000,
+  })
   // Брони «скоро» (053): окно now−30мин..now+2ч вычисляется в queryFn,
   // поэтому перезапрашиваем раз в минуту — граница окна ползёт со временем
   const { data: upcomingRes = [] } = useQuery({
@@ -119,6 +126,17 @@ export default function HallPage() {
     }
     return map
   }, [upcomingRes])
+
+  const serviceByTable = useMemo(() => {
+    const map = new Map<string, { count: number; hasNew: boolean }>()
+    for (const request of serviceRequests) {
+      const current = map.get(request.table_id) ?? { count: 0, hasNew: false }
+      current.count += 1
+      current.hasNew ||= request.status === 'new'
+      map.set(request.table_id, current)
+    }
+    return map
+  }, [serviceRequests])
 
   // Зоны — вкладки-фильтр: зал открывается целиком, а участок (терраса,
   // бар) выбирают, когда нужно смотреть только на него. Старые данные без
@@ -274,6 +292,8 @@ export default function HallPage() {
           )}
         </div>
 
+        {modeOk && <ServiceRequestsBar lang={lang} requests={serviceRequests} />}
+
         {modeOk && (zones.length > 1 || unassignedCount > 0) && (
           <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-1">
             <button
@@ -344,16 +364,21 @@ export default function HallPage() {
               // Резерв: ручной флаг стола ИЛИ подтверждённая бронь в ближайшие 2ч
               const upcomingAt = reservationByTable.get(tb.id)
               const reserved = !busy && (tb.status === 'reserved' || !!upcomingAt)
+              const service = serviceByTable.get(tb.id)
               // Возраст счёта красит стол: до 30 мин — жёлтый, дальше — красный
               const ageMin = occ ? Math.floor((nowTs - new Date(occ.opened_at).getTime()) / 60000) : 0
               const overdue = ageMin >= TABLE_WARN_MIN
-              const border = busy
-                ? overdue ? 'border-red-500' : 'border-amber-400'
-                : reserved
-                  ? 'border-blue-500'
-                  : disabled
-                    ? 'border-gray-300 text-gray-400'
-                    : 'border-emerald-500 hover:border-emerald-600'
+              const border = service?.hasNew
+                ? 'border-red-500'
+                : service
+                  ? 'border-emerald-500'
+                  : busy
+                    ? overdue ? 'border-red-500' : 'border-amber-400'
+                    : reserved
+                      ? 'border-blue-500'
+                      : disabled
+                        ? 'border-gray-300 text-gray-400'
+                        : 'border-emerald-500 hover:border-emerald-600'
               return (
                 <button
                   key={tb.id}
@@ -377,6 +402,13 @@ export default function HallPage() {
                     </svg>
                     {tb.seats}
                   </span>
+                  {service && (
+                    <span className={`absolute top-1 start-1.5 min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-black text-white flex items-center justify-center tabular-nums ${
+                      service.hasNew ? 'bg-red-600' : 'bg-emerald-600'
+                    }`}>
+                      {service.count}
+                    </span>
+                  )}
                   <span className="text-xl font-black tabular-nums leading-none">{tb.label}</span>
                   {/* Карточка чистая: только статус, детали — в окне стола (долгий тап) */}
                   {busy ? (

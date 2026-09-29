@@ -67,7 +67,7 @@ Deno.serve(async (req) => {
 
   const [locRes, shiftRes, catRes] = await Promise.all([
     // Наружу — только флаг онлайн-заказов, НЕ весь settings (там права ролей)
-    supabase.from('locations').select('id, org_id, name, currency, timezone, receipt_business_name, logo_url, display_name:settings->>display_name, online_settings:settings->online_orders').eq('id', loc).maybeSingle(),
+    supabase.from('locations').select('id, org_id, name, currency, timezone, service_mode, receipt_business_name, logo_url, display_name:settings->>display_name, online_settings:settings->online_orders').eq('id', loc).maybeSingle(),
     supabase.from('shifts').select('id').eq('location_id', loc).eq('status', 'open').limit(1),
     supabase
       .from('menu_categories')
@@ -105,6 +105,7 @@ Deno.serve(async (req) => {
   const gates = gatesRes.data as {
     public_menu: boolean
     online_orders: boolean
+    table_service?: boolean
     pos: boolean
   }
   if (!gates?.public_menu) return json({ error: 'module_disabled' }, 404)
@@ -279,7 +280,16 @@ Deno.serve(async (req) => {
         // Модули организации (100): online_orders=false — витрина без заказа
         // (меню видно всегда, независимо от смены POS). Старые клиенты поле
         // игнорируют — поведение не меняется.
-        modules: { online_orders: orderingModuleOn },
+        modules: {
+          online_orders: orderingModuleOn,
+          // Запрос нельзя оставить «в пустоту»: показываем его только для
+          // живого стола POS-точки с открытой сменой.
+          table_service:
+            gates.table_service === true
+            && locRes.data.service_mode === 'tables'
+            && shiftOpen
+            && orderContext?.kind === 'table',
+        },
         // Тумблер 051 + пауза 054: false = заявки сейчас не принимаются
         accepting: onlineSettings?.enabled !== false && !pausedUntil,
         // Пауза с кассы: когда приём возобновится (null = паузы нет)

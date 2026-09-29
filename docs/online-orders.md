@@ -8,6 +8,30 @@
 [общий план](../../anglesite/docs/product-completion-plan.md), блок C.
 Исторические результаты ниже не переносить на новый релиз без проверки.
 
+## Каталог заведений ANGLE Guest (173)
+
+Публичный корень `menu.angle.co.il/` является каталогом заведений, а
+`/restaurants/:slug` — карточкой конкретной точки. Это не вторая база меню:
+карточка ссылается на существующую `locations`, её слаг и тот же
+`/order/:slug`, поэтому Bulochka использует уже загруженные категории, товары,
+цены и фотографии.
+
+Публикация opt-in: наличие QR-меню само по себе не добавляет клиента в общий
+каталог. `restaurant_directory_profiles.is_published` управляет карточкой, а
+Edge Function `public-restaurants` дополнительно проверяет действующий
+`public_menu` capability и возвращает только разрешённый DTO без `org_id` и
+полных `locations.settings`.
+
+Для прототипа карточка Bulochka содержит демонстрационную оценку. В схеме и
+ответе API источник называется `demo`, а UI явно пишет, что это не Google и не
+реальные отзывы. В production такой блок следует скрыть или заменить
+официальным источником; выдавать demo-оценку за пользовательскую нельзя.
+
+Карточка показывает только реально включённые переходы. Меню доступно через
+существующий слаг. Бронь появляется при `public_reservations` и включённом
+приёме. Live Table считается активным только при capability `table_service` и
+`service_mode=tables`; миграция каталога не меняет операционный режим точки.
+
 ## Сверка сохранённой и открытой корзины
 
 Правка B2/B3 от 13–14.09.2026; статус выпуска — в журнале ниже. После получения
@@ -186,6 +210,50 @@
 а каталог открывается сразу и не остаётся за видео. Возврат из меню на hero
 сбрасывает корзину; следующий вход через «Заказать» открывает новый заказ.
 
+### ANGLE Guest: запросы обслуживания стола (172)
+
+QR конкретного стола открывает отдельную оболочку ANGLE Live Table сразу,
+без ресторанного hero-тапа. У неё постоянные вкладки «Меню / Ваш заказ /
+Сервис», нейтральный фон ANGLE и графитовый основной акцент; загруженное
+рестораном фоновое оформление применяется только к обычной публичной ссылке,
+но не подменяет интерфейс стола. Зелёный в Live Table остаётся семантическим
+цветом статусов, а не брендовым акцентом. Раздел «Сервис» является отдельной
+страницей, не шторкой: позвать официанта, запросить воду, приборы, салфетки,
+сообщить о проблеме с блюдом или попросить счёт. Это пока запрос счёта, не
+онлайн-оплата.
+
+Путь запроса:
+
+```text
+телефон гостя → Edge public-service → submit_service_request
+                                        ↓
+                                  service_requests
+                                        ↓ Realtime
+                                существующий экран /hall
+                                        ↓ один тап
+                              accepted → completed
+                                        ↓ polling 5 c
+                                  телефон гостя
+```
+
+- Анонимный браузер не читает таблицы Supabase. `table_token` разрешается на
+  сервере, `client_uuid` служит идемпотентным ключом и секретом поллинга.
+- Одинаковая активная просьба одного стола схлопывается в одну задачу, чтобы
+  два телефона не создавали двойное уведомление. На стол действует rate limit.
+- У сотрудника нет отдельного экрана: активные карточки находятся над планом
+  зала, их количество видно на столе и на пункте «Зал» в общей навигации.
+  `new → accepted → completed` выполняется без подтверждающих диалогов.
+- Создание и каждый переход пишутся в append-only
+  `service_request_events`; это источник будущих метрик времени реакции.
+- Возможность серверно гейтится capability `table_service`, которую получает
+  продукт `online_orders`. Кнопка и серверный приём включаются только для
+  режима полноценного зала (`service_mode=tables`) с открытой POS-сменой —
+  задача не может остаться без сотрудника. Прямые INSERT/UPDATE гостю и кассе
+  не выдаются.
+- В текущем срезе гость получает статусы безопасным поллингом раз в 5 секунд,
+  как в существующем статусе онлайн-заказа. Consumer app, push, оплата,
+  разделение счёта и управление курсами сюда не входят.
+
 ## Развёртывание (строго в этом порядке)
 
 Проект: `qgmnxrgtlpyqglwqmsej` (сверить ref с `VITE_SUPABASE_URL`!).
@@ -195,11 +263,14 @@
    `099_qr_table_ordering.sql` (QR столов), `101_standalone_online_orders.sql`
    (режим без кассы), `112`/`116` (часы и предзаказ),
    `139`–`142` (номер заявки, история переходов, рабочий стол кабинета и
-   правило долга).
+   правило долга), `172_guest_service_requests.sql` (ANGLE Guest Service),
+   `173_restaurant_directory.sql` (публичный каталог заведений).
 2. **Edge Functions:**
    ```bash
    supabase functions deploy public-menu --project-ref qgmnxrgtlpyqglwqmsej
    supabase functions deploy public-order --project-ref qgmnxrgtlpyqglwqmsej
+   supabase functions deploy public-service --project-ref qgmnxrgtlpyqglwqmsej
+   supabase functions deploy public-restaurants --project-ref qgmnxrgtlpyqglwqmsej
    ```
    Секреты не нужны: `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY` инжектятся сами.
 3. **Фронтенд** — пуш в `main` (Vercel). Порядок важен: клиент запрашивает
@@ -240,11 +311,13 @@ https://menu.angle.co.il/order/<slug|location_id>?table=<public_token>&source=ta
 | Слой | Файлы |
 |------|-------|
 | Миграции | `supabase/migrations/050_online_orders.sql`, `099_qr_table_ordering.sql`, `106_location_slugs.sql`, `113_online_order_loyalty.sql` |
-| Edge Functions | `supabase/functions/public-menu/`, `supabase/functions/public-order/` |
+| Edge Functions | `supabase/functions/public-restaurants/`, `supabase/functions/public-menu/`, `supabase/functions/public-order/`, `supabase/functions/public-service/` |
 | Экран кассы | `src/features/online/OnlineOrdersPage.tsx` + `api.ts` (маршрут `/online`) |
 | Бейдж/звонок | `src/components/AppSidebar.tsx` (пункт «Онлайн», подписка realtime) |
 | Очередь бариста | `src/features/queue/api.ts` (open+site), бейдж «Онлайн · к 12:30» в карточке |
-| Страница гостя | `src/features/online/PublicOrderPage.tsx` + `publicApi.ts` (маршрут `/order/:locId`) |
+| Каталог и карточка | `src/features/discovery/RestaurantDirectoryPage.tsx` (маршруты `/`, `/restaurants/:slug`) |
+| Страница гостя | `src/features/online/PublicOrderPage.tsx`, `TableServiceSheet.tsx` + `publicApi.ts` (маршрут `/order/:locId`) |
+| Запросы в зале | `src/features/service/` + `src/features/tables/HallPage.tsx` |
 
 ## Поведение кассы
 

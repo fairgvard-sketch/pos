@@ -23,6 +23,7 @@ import {
   resolveMenuBackgroundUrl,
 } from './menuBackgrounds'
 import { resolvePublicHeroVideo } from './heroVideo'
+import TableServiceSheet from './TableServiceSheet'
 
 /**
  * Публичная страница «закажи и забери» (050): меню → корзина → заявка →
@@ -52,6 +53,8 @@ interface CartLine {
   unitPrice: number // агороты, оценка для показа (сервер пересчитает)
   qty: number
 }
+
+type LiveTableTab = 'menu' | 'order' | 'service'
 
 const ITEM_SHEET_EXIT_MS = 480
 const HERO_SYSTEM_UI_COLOR = '#202124'
@@ -88,7 +91,11 @@ export default function PublicOrderPage() {
   const [cart, setCart] = useState<CartLine[]>(() => readPublicCart(locId))
   const [view, setView] = useState<'menu' | 'checkout'>('menu')
   const [checkoutStage, setCheckoutStage] = useState<'cart' | 'payment'>('cart')
-  const [hasStarted, setHasStarted] = useState(false)
+  // QR конкретного стола уже является входом в Live Table: не заставляем
+  // сидящего гостя проходить ресторанный hero ещё одним тапом.
+  const [hasStarted, setHasStarted] = useState(() => !!queryContext.tableToken)
+  const [activeServiceCount, setActiveServiceCount] = useState(0)
+  const [liveTableTab, setLiveTableTab] = useState<LiveTableTab>('menu')
   const [configItem, setConfigItem] = useState<PublicItem | null>(null)
   const [configClosing, setConfigClosing] = useState(false)
   /** Правится строка корзины (её key), а не добавляется новая позиция */
@@ -159,7 +166,7 @@ export default function PublicOrderPage() {
     setCategoryMotion(false)
     setCheckoutStage('cart')
     setView('menu')
-    setHasStarted(false)
+    setHasStarted(!!queryContext.tableToken)
   }
   /**
    * Автосброс включается только явным ?kiosk=1. Обычный QR открывается на
@@ -226,7 +233,13 @@ export default function PublicOrderPage() {
     })
   }, [menu, lang])
 
-  const menuBackground = resolveMenuBackgroundUrl(menu?.location.background_url)
+  const serviceTableContext = menu?.order_context?.kind === 'table' ? menu.order_context : null
+  // Live Table — продуктовая оболочка ANGLE. Ресторанный фон остаётся у
+  // обычной витрины и не должен включать её dark-theme классы в QR стола.
+  const menuBackground = serviceTableContext
+    ? null
+    : resolveMenuBackgroundUrl(menu?.location.background_url)
+  const tableServiceEnabled = menu?.location.modules?.table_service === true
   const installedMenuName = menu?.location.business_name || menu?.location.name
   useEffect(() => {
     if (!installedMenuName) return
@@ -455,7 +468,8 @@ export default function PublicOrderPage() {
     setConfigItem(null)
     setConfigClosing(false)
     setView('menu')
-    setHasStarted(false)
+    setLiveTableTab('menu')
+    setHasStarted(!!queryContext.tableToken)
     setActiveCat(null)
     setCategoryMotion(false)
   }
@@ -503,7 +517,7 @@ export default function PublicOrderPage() {
   }
 
   // ── Экран статуса активной заявки ──────────────────────────
-  if (activeUuid) {
+  if (activeUuid && !serviceTableContext) {
     return (
       <Shell
         isRtl={isRtl}
@@ -550,7 +564,7 @@ export default function PublicOrderPage() {
   // menu-only организации не бывает, вечное «закрыто» — ложь для гостя).
   const viewOnly = isViewOnlyMenu(menu.location)
   const orderTypes = menu.location.order_types ?? ['here', 'takeaway']
-  const tableContext = menu.order_context?.kind === 'table' ? menu.order_context : null
+  const tableContext = serviceTableContext
   const requestedType = queryContext.requestedType
   const initialOrderType: PublicOrderType =
     tableContext
@@ -561,8 +575,33 @@ export default function PublicOrderPage() {
   // Hero — обложка над уже готовым каталогом, а не отдельный route.
   // Благодаря стабильному ключу каталог не перемонтируется и не мигает
   // при открытии или возврате на заставку.
-  const routeKey = view === 'checkout' ? checkoutStage : 'menu'
+  const routeKey = tableContext
+    ? `${liveTableTab}-${liveTableTab === 'order' ? checkoutStage : 'root'}`
+    : view === 'checkout' ? checkoutStage : 'menu'
   const visibleCategoryId = activeCat ?? menu.categories[0]?.id ?? null
+  const showMenu = tableContext ? liveTableTab === 'menu' : view === 'menu'
+  const showCheckout = tableContext
+    ? liveTableTab === 'order' && !activeUuid && cartCount > 0
+    : view === 'checkout'
+  const liveTableHeader = tableContext ? (
+    <LiveTableHeader
+      lang={lang}
+      restaurantName={menu.location.business_name || menu.location.name}
+      tableLabel={tableContext.label}
+      activeTab={liveTableTab}
+      orderCount={cartCount}
+      serviceCount={activeServiceCount}
+      onTab={(tab) => {
+        window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+        setLiveTableTab(tab)
+        if (tab === 'menu') setView('menu')
+        if (tab === 'order' && !activeUuid) {
+          setCheckoutStage('cart')
+          setView('checkout')
+        }
+      }}
+    />
+  ) : undefined
   return (
     <Shell
       isRtl={isRtl}
@@ -571,8 +610,9 @@ export default function PublicOrderPage() {
       hero={view === 'menu' && !hasStarted}
       headerImg={menu.location.header_url}
       heroVideo={resolvePublicHeroVideo(menu.location.id, menu.location.hero_video_url)}
-      bgImg={menuBackground}
+      bgImg={tableContext ? undefined : menuBackground}
       routeKey={routeKey}
+      liveTableHeader={liveTableHeader}
       onHeroStart={() => {
         navigateWithTransition('forward', () => {
           setCategoryMotion(false)
@@ -589,7 +629,7 @@ export default function PublicOrderPage() {
           ? checkoutStage === 'payment'
             ? () => navigateWithTransition('back', () => setCheckoutStage('cart'))
             : () => navigateWithTransition('back', () => setView('menu'))
-          : hasStarted
+          : hasStarted && !tableContext
             ? () => navigateWithTransition('back', resetToStart)
             : undefined
       }
@@ -598,14 +638,19 @@ export default function PublicOrderPage() {
       {/* Каталог не существует, пока показан hero: раньше он лежал под
           обложкой ради слоя-клона в анимации, и на iOS просвечивал в
           зоне под плавающим тулбаром. Снапшот «до» браузер снимает сам. */}
-      {view === 'menu' && hasStarted && visibleCategoryId && (() => {
+      {showMenu && hasStarted && visibleCategoryId && (() => {
         const cat = menu.categories.find((c) => c.id === visibleCategoryId)
         if (!cat) return null
         return (
           <div className="public-menu-route-motion">
             {/* Навигация не перемонтируется при смене категории: движется
                 активный чип и обновляется только список товаров. */}
-            <CategoryChips categories={menu.categories} activeCat={visibleCategoryId} onSelect={selectCategory} />
+            <CategoryChips
+              categories={menu.categories}
+              activeCat={visibleCategoryId}
+              onSelect={selectCategory}
+              liveTable={!!tableContext}
+            />
             <div
               key={visibleCategoryId}
               data-category-motion={categoryMotion ? 'on' : 'off'}
@@ -620,26 +665,28 @@ export default function PublicOrderPage() {
                     {cat.name}
                   </h2>
                 </div>
-                <div className="public-menu-product-grid">
+                <div className={tableContext ? 'angle-live-table-product-list' : 'public-menu-product-grid'}>
                   {cat.items.map((item, index) => (
                     <ItemRow
                       key={item.id}
                       item={item}
                       lang={lang}
-                      layout="grid"
+                      layout={tableContext ? 'row' : 'grid'}
                       priority={index < 6}
                       onTap={() => openItem(item)}
                     />
                   ))}
                 </div>
               </div>
-              <SocialFooter links={menu.location.links} lang={lang} padForCart={cartCount > 0} />
+              {!tableContext && (
+                <SocialFooter links={menu.location.links} lang={lang} padForCart={cartCount > 0} />
+              )}
             </div>
           </div>
         )
       })()}
 
-      {view === 'menu' && hasStarted && cartCount > 0 && (
+      {showMenu && hasStarted && cartCount > 0 && (
         <CartBar
           key={bumpSeq}
           lang={lang}
@@ -650,12 +697,13 @@ export default function PublicOrderPage() {
             navigateWithTransition('forward', () => {
               setCheckoutStage('cart')
               setView('checkout')
+              if (tableContext) setLiveTableTab('order')
             })
           }}
         />
       )}
 
-      {view === 'checkout' && (
+      {showCheckout && (
         <CheckoutScreen
           lang={lang}
           locId={locId}
@@ -703,7 +751,10 @@ export default function PublicOrderPage() {
                 : 'pubTableQrExpired')
               : null
           }
-          onAddItems={() => navigateWithTransition('back', () => setView('menu'))}
+          onAddItems={() => navigateWithTransition('back', () => {
+            setView('menu')
+            if (tableContext) setLiveTableTab('menu')
+          })}
           onContinue={() => navigateWithTransition('forward', () => setCheckoutStage('payment'))}
           onQty={updateQty}
           onEditLine={editCartLine}
@@ -714,8 +765,29 @@ export default function PublicOrderPage() {
             setActiveUuid(clientUuid)
             setCart([])
             setView('menu')
+            if (tableContext) setLiveTableTab('order')
           }}
         />
+      )}
+
+      {tableContext && liveTableTab === 'order' && activeUuid && (
+        <div className="angle-live-table-panel">
+          <StatusScreen lang={lang} clientUuid={activeUuid} onNewOrder={startNewOrder} />
+        </div>
+      )}
+
+      {tableContext && liveTableTab === 'order' && !activeUuid && cartCount === 0 && (
+        <LiveTableEmptyOrder lang={lang} onMenu={() => setLiveTableTab('menu')} />
+      )}
+
+      {tableContext && liveTableTab === 'service' && !tableServiceEnabled && (
+        <div className="angle-live-table-empty public-menu-route-focus" tabIndex={-1}>
+          <span className="angle-live-table-empty-icon" aria-hidden>
+            <ServiceBellIcon />
+          </span>
+          <h1>{t(lang, 'serviceTitle')}</h1>
+          <p>{t(lang, 'serviceUnavailable')}</p>
+        </div>
       )}
 
       {/* Товар исчез из каталога, пока карточка открыта: карточка остаётся
@@ -761,7 +833,113 @@ export default function PublicOrderPage() {
       {countdown !== null && (
         <StillHereDialog lang={lang} secondsLeft={countdown} onStay={stayActive} />
       )}
+
+      {tableContext && queryContext.tableToken && tableServiceEnabled && (
+        <TableServiceSheet
+          open={liveTableTab === 'service'}
+          mode="page"
+          lang={lang}
+          locId={locId}
+          tableToken={queryContext.tableToken}
+          tableLabel={tableContext.label}
+          onClose={() => setLiveTableTab('menu')}
+          onActiveCountChange={setActiveServiceCount}
+        />
+      )}
     </Shell>
+  )
+}
+
+function LiveTableHeader({
+  lang,
+  restaurantName,
+  tableLabel,
+  activeTab,
+  orderCount,
+  serviceCount,
+  onTab,
+}: {
+  lang: Lang
+  restaurantName: string
+  tableLabel: string
+  activeTab: LiveTableTab
+  orderCount: number
+  serviceCount: number
+  onTab: (tab: LiveTableTab) => void
+}) {
+  const tabs: Array<{ id: LiveTableTab; label: string; count: number }> = [
+    { id: 'menu', label: t(lang, 'guestMenuTab'), count: 0 },
+    { id: 'order', label: t(lang, 'pubYourOrder'), count: orderCount },
+    { id: 'service', label: t(lang, 'serviceTab'), count: serviceCount },
+  ]
+
+  return (
+    <header className="angle-live-table-header">
+      <div className="angle-live-table-context">
+        <AngleTableMark />
+        <div className="angle-live-table-context-copy">
+          <strong>{t(lang, 'pubTable')} {tableLabel}</strong>
+          <span>{restaurantName}</span>
+        </div>
+        <span className="angle-live-table-session" aria-hidden>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM16 10a2.5 2.5 0 1 0 0-5" />
+            <path d="M3 19v-1.5A4.5 4.5 0 0 1 7.5 13h1A4.5 4.5 0 0 1 13 17.5V19M15 13.5h1.5A4.5 4.5 0 0 1 21 18v1" />
+          </svg>
+        </span>
+      </div>
+      <nav className="angle-live-table-tabs" role="tablist" aria-label={t(lang, 'guestTableNavigation')}>
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === tab.id}
+            onClick={() => onTab(tab.id)}
+            className="angle-live-table-tab"
+          >
+            <span>{tab.label}</span>
+            {tab.count > 0 && <span className="angle-live-table-tab-count">{tab.count}</span>}
+          </button>
+        ))}
+      </nav>
+    </header>
+  )
+}
+
+function AngleTableMark() {
+  return (
+    <span className="angle-live-table-mark" aria-hidden>
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.65">
+        <path d="M12 11.2C8.8 10.9 6.8 9.3 6.8 7.2A2.8 2.8 0 0 1 9.6 4.4c2.1 0 2.4 2.4 2.4 6.8Z" />
+        <path d="M12.8 12c.3-3.2 1.9-5.2 4-5.2a2.8 2.8 0 0 1 2.8 2.8c0 2.1-2.4 2.4-6.8 2.4Z" />
+        <path d="M12 12.8c3.2.3 5.2 1.9 5.2 4a2.8 2.8 0 0 1-2.8 2.8c-2.1 0-2.4-2.4-2.4-6.8Z" />
+        <path d="M11.2 12c-.3 3.2-1.9 5.2-4 5.2a2.8 2.8 0 0 1-2.8-2.8c0-2.1 2.4-2.4 6.8-2.4Z" />
+      </svg>
+    </span>
+  )
+}
+
+function ServiceBellIcon() {
+  return (
+    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden>
+      <path d="M6 17h12M8 17v-5a4 4 0 0 1 8 0v5M12 5v2M4 20h16" />
+    </svg>
+  )
+}
+
+function LiveTableEmptyOrder({ lang, onMenu }: { lang: Lang; onMenu: () => void }) {
+  return (
+    <section className="angle-live-table-empty public-menu-route-focus" tabIndex={-1}>
+      <span className="angle-live-table-empty-icon" aria-hidden>
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M5 7h14l-1 13H6L5 7Z" /><path d="M9 10V6a3 3 0 0 1 6 0v4" />
+        </svg>
+      </span>
+      <h1>{t(lang, 'guestEmptyOrder')}</h1>
+      <p>{t(lang, 'guestEmptyOrderHint')}</p>
+      <button type="button" onClick={onMenu}>{t(lang, 'guestBackToMenu')}</button>
+    </section>
   )
 }
 
@@ -779,7 +957,7 @@ export default function PublicOrderPage() {
  */
 function Shell({
   isRtl, title, logo, hero, headerImg, heroVideo, bgImg, onHeroStart, onBack, backLabel,
-  routeKey, children,
+  routeKey, headerAction, liveTableHeader, children,
 }: {
   isRtl: boolean
   title?: string
@@ -794,6 +972,10 @@ function Shell({
   backLabel?: string
   /** Семантический экран для восстановления фокуса после перехода. */
   routeKey?: string
+  /** Контекстное действие Live Table; на обычной публичной ссылке отсутствует. */
+  headerAction?: React.ReactNode
+  /** Единая шапка ANGLE Live Table вместо оформления конкретного ресторана. */
+  liveTableHeader?: React.ReactNode
   children: React.ReactNode
 }) {
   const hasBg = !!bgImg
@@ -835,11 +1017,11 @@ function Shell({
     // на html/body в index.css.
     <div
       dir={isRtl ? 'rtl' : 'ltr'}
-      className={`public-menu-shell min-h-screen ${hasBg ? 'bg-transparent' : 'bg-[#eceef1]'}`}
+      className={`public-menu-shell min-h-screen ${liveTableHeader ? 'angle-live-table-shell' : ''} ${hasBg ? 'bg-transparent' : 'bg-[#eceef1]'}`}
     >
       <div
         ref={frameRef}
-        className={`public-menu-frame relative mx-auto min-h-screen flex flex-col ${hasBg ? '' : 'bg-white'}`}
+        className={`public-menu-frame relative mx-auto min-h-screen flex flex-col ${liveTableHeader ? 'angle-live-table-frame' : ''} ${hasBg ? '' : 'bg-white'}`}
       >
         {showHero && (
           <div key="hero" className="public-menu-hero-viewport">
@@ -888,7 +1070,8 @@ function Shell({
             </header>
           </div>
         )}
-        {showCompactHeader && (
+        {liveTableHeader}
+        {showCompactHeader && !liveTableHeader && (
           <header
             key="compact"
             className="public-menu-compact-header sticky top-0 z-10 bg-white border-b border-gray-100 px-4 flex items-center justify-center relative"
@@ -912,8 +1095,11 @@ function Shell({
                 <span>{backLabel}</span>
               </button>
             )}
-            {logo && <img src={logo} alt="" className="absolute start-4 w-9 h-9 rounded-full object-cover" />}
-            <span className="public-menu-header-title font-display px-14 text-center font-bold text-xl text-gray-900 truncate">
+            {logo && !headerAction && <img src={logo} alt="" className="absolute start-4 w-9 h-9 rounded-full object-cover" />}
+            {headerAction && <div className="absolute right-2">{headerAction}</div>}
+            <span className={`public-menu-header-title font-display text-center font-bold text-xl text-gray-900 truncate ${
+              headerAction ? 'px-24' : 'px-14'
+            }`}>
               {title ?? ''}
             </span>
           </header>
@@ -1009,27 +1195,24 @@ function CartBar({ lang, count, total, bumping, onOpen }: {
  * Полоса чипов категорий. Скроллбар скрыт (на десктопе рисовал линию под
  * чипами); вместо него прокрутка перетаскиванием самих чипов мышью —
  * на тач-экранах и так работает свайп. Клик после протяжки гасится,
- * чтобы drag не срабатывал как выбор категории. Активный чип сам
- * подъезжает в видимую зону.
+ * чтобы drag не срабатывал как выбор категории. Не используем
+ * scrollIntoView: в узком RTL viewport он прокручивал весь документ по X
+ * и визуально обрезал правый край меню.
  */
-function CategoryChips({ categories, activeCat, onSelect }: {
+function CategoryChips({ categories, activeCat, onSelect, liveTable = false }: {
   categories: PublicMenu['categories']
   activeCat: string
   onSelect: (id: string) => void
+  liveTable?: boolean
 }) {
   const navRef = useRef<HTMLElement>(null)
   const drag = useRef({ down: false, moved: false, startX: 0, startLeft: 0 })
 
-  useEffect(() => {
-    navRef.current?.querySelector<HTMLElement>('[data-active="true"]')
-      ?.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' })
-  }, [activeCat])
-
   return (
     <nav
       ref={navRef}
-      className="public-menu-category-nav sticky z-10 bg-white/95 backdrop-blur border-b border-gray-100 px-4 py-2 flex gap-2 overflow-x-auto select-none [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-      style={{ top: 'calc(3.5rem + env(safe-area-inset-top))' }}
+      className={`public-menu-category-nav sticky z-10 bg-white/95 backdrop-blur border-b border-gray-100 px-4 py-2 flex gap-2 overflow-x-auto select-none [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${liveTable ? 'angle-live-table-category-nav' : ''}`}
+      style={{ top: `calc(${liveTable ? '7rem' : '3.5rem'} + env(safe-area-inset-top))` }}
       onMouseDown={(e) => {
         drag.current = { down: true, moved: false, startX: e.clientX, startLeft: navRef.current?.scrollLeft ?? 0 }
       }}

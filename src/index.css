@@ -668,6 +668,538 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     display: none;
   }
 
+  /* ANGLE Live Table — единая продуктовая оболочка для QR конкретного
+     стола. Ресторан управляет контентом меню, но не подменяет фон, шапку
+     и навигацию ANGLE своим оформлением. Акцент — графитовый; зелёный
+     используется ниже только как семантический статус выполненного запроса. */
+  .angle-live-table-shell {
+    background: #e9e7e2 !important;
+    color: #171918;
+  }
+
+  .angle-live-table-frame {
+    background: #f8f7f3 !important;
+  }
+
+  .angle-live-table-header {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    flex-shrink: 0;
+    border-bottom: 1px solid rgb(17 19 21 / 9%);
+    background: rgb(250 249 246 / 97%);
+    -webkit-backdrop-filter: blur(18px);
+    backdrop-filter: blur(18px);
+  }
+
+  .angle-live-table-context {
+    display: flex;
+    min-height: calc(4rem + env(safe-area-inset-top));
+    align-items: center;
+    gap: .75rem;
+    padding: calc(.5rem + env(safe-area-inset-top)) 1rem .5rem;
+  }
+
+  .angle-live-table-mark,
+  .angle-live-table-session {
+    display: grid;
+    width: 2.75rem;
+    height: 2.75rem;
+    flex-shrink: 0;
+    place-items: center;
+    border: 1px solid rgb(17 19 21 / 9%);
+    border-radius: 999px;
+    background: #efede8;
+    color: #171918;
+  }
+
+  .angle-live-table-context-copy {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .angle-live-table-context-copy strong,
+  .angle-live-table-context-copy span {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .angle-live-table-context-copy strong {
+    color: #171918;
+    font-size: .95rem;
+    font-weight: 800;
+    line-height: 1.25;
+  }
+
+  .angle-live-table-context-copy span {
+    margin-top: .15rem;
+    color: #686a68;
+    font-size: .75rem;
+    line-height: 1.2;
+  }
+
+  .angle-live-table-session {
+    background: #fff;
+  }
+
+  .angle-live-table-tabs {
+    display: grid;
+    height: 3rem;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    padding: 0 .5rem;
+  }
+
+  .angle-live-table-tab {
+    position: relative;
+    display: flex;
+    min-width: 0;
+    min-height: 3rem;
+    align-items: center;
+    justify-content: center;
+    gap: .4rem;
+    border: 0;
+    background: transparent;
+    color: #626461;
+    font-size: .8rem;
+    font-weight: 650;
+    transition: color 150ms ease, transform 150ms ease;
+  }
+
+  .angle-live-table-tab::after {
+    position: absolute;
+    right: .65rem;
+    bottom: 0;
+    left: .65rem;
+    height: 2px;
+    border-radius: 999px 999px 0 0;
+    background: transparent;
+    content: '';
+  }
+
+  .angle-live-table-tab[aria-selected='true'] {
+    color: #111315;
+    font-weight: 800;
+  }
+
+  .angle-live-table-tab[aria-selected='true']::after {
+    background: #111315;
+  }
+
+  .angle-live-table-tab:active {
+    transform: scale(.97);
+  }
+
+  .angle-live-table-tab-count {
+    display: grid;
+    min-width: 1.15rem;
+    height: 1.15rem;
+    place-items: center;
+    border-radius: 999px;
+    background: #111315;
+    color: #fff;
+    font-size: .62rem;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .angle-live-table-category-nav {
+    border-color: rgb(17 19 21 / 8%);
+    background: rgb(248 247 243 / 96%);
+  }
+
+  .angle-live-table-category-nav .public-menu-category-chip {
+    border-radius: .65rem;
+    background: #eeece7;
+    color: #5e605d;
+  }
+
+  .angle-live-table-category-nav .public-menu-category-chip[data-active='true'] {
+    background: #111315;
+    color: #fff;
+    box-shadow: none;
+  }
+
+  .angle-live-table-frame .public-menu-products-section {
+    padding-top: 1.5rem;
+  }
+
+  .angle-live-table-frame .public-menu-section-title {
+    color: #171918;
+    font-size: 1.5rem;
+    letter-spacing: -.03em;
+  }
+
+  .angle-live-table-product-list {
+    overflow: hidden;
+    border: 1px solid rgb(17 19 21 / 8%);
+    border-radius: 1.25rem;
+    background: rgb(255 255 255 / 82%);
+  }
+
+  .angle-live-table-product-list .public-menu-item-card.is-row {
+    min-height: 7.25rem;
+    gap: .75rem;
+    padding: .75rem;
+    border: 0;
+    border-bottom: 1px solid rgb(17 19 21 / 8%);
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .angle-live-table-product-list .public-menu-item-card.is-row:last-child {
+    border-bottom: 0;
+  }
+
+  .angle-live-table-product-list .public-menu-item-card.is-row:active {
+    background: #f0eee9;
+    box-shadow: none;
+  }
+
+  .angle-live-table-product-list .public-menu-item-card.is-row .public-menu-item-media {
+    width: 5.5rem;
+    height: 5.5rem;
+    border-radius: 1rem;
+    background: #eeebe4;
+  }
+
+  .angle-live-table-product-list .public-menu-item-card.is-row .public-menu-item-media img {
+    place-self: stretch;
+    padding: 0;
+    object-fit: cover;
+  }
+
+  .angle-live-table-product-list .public-menu-item-card.is-row .public-menu-item-body {
+    min-height: 5.5rem;
+    padding: .15rem 0;
+  }
+
+  .angle-live-table-product-list .public-menu-item-primary {
+    color: #171918;
+    font-size: 1rem;
+  }
+
+  .angle-live-table-product-list .public-menu-item-muted {
+    color: #686a68;
+    font-size: .75rem;
+  }
+
+  .angle-live-table-product-list .public-menu-item-card.is-row .public-menu-item-action {
+    display: grid;
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: .75rem;
+    background: #111315;
+  }
+
+  .angle-live-table-frame .public-menu-checkout,
+  .angle-live-table-panel {
+    min-height: calc(100svh - 7rem - env(safe-area-inset-top));
+    background: #f8f7f3;
+  }
+
+  .angle-live-table-empty {
+    display: flex;
+    min-height: calc(100svh - 7rem - env(safe-area-inset-top));
+    align-items: center;
+    flex-direction: column;
+    justify-content: center;
+    padding: 3rem 1.5rem calc(6rem + env(safe-area-inset-bottom));
+    text-align: center;
+  }
+
+  .angle-live-table-empty-icon {
+    display: grid;
+    width: 4rem;
+    height: 4rem;
+    place-items: center;
+    border-radius: 1.25rem;
+    background: #ebe9e4;
+    color: #313331;
+  }
+
+  .angle-live-table-empty h1 {
+    margin: 1.25rem 0 0;
+    color: #171918;
+    font-size: 1.5rem;
+    font-weight: 850;
+    letter-spacing: -.03em;
+  }
+
+  .angle-live-table-empty p {
+    max-width: 20rem;
+    margin: .5rem 0 0;
+    color: #686a68;
+    font-size: .9rem;
+    line-height: 1.55;
+  }
+
+  .angle-live-table-empty button {
+    min-height: 3rem;
+    margin-top: 1.5rem;
+    padding: 0 1.5rem;
+    border-radius: .75rem;
+    background: #111315;
+    color: #fff;
+    font-size: .9rem;
+    font-weight: 750;
+  }
+
+  .angle-table-service-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    background: rgb(0 0 0 / 40%);
+  }
+
+  .angle-table-service-sheet,
+  .angle-table-service-page {
+    position: relative;
+    width: 100%;
+    color: #171918;
+  }
+
+  .angle-table-service-sheet {
+    max-width: 32rem;
+    max-height: 90dvh;
+    overflow-y: auto;
+    padding: 1.5rem 1rem calc(1.5rem + env(safe-area-inset-bottom));
+    border-radius: 2rem 2rem 0 0;
+    background: #f8f7f3;
+    box-shadow: 0 -18px 48px rgb(0 0 0 / 18%);
+  }
+
+  .angle-table-service-page {
+    min-height: calc(100svh - 7rem - env(safe-area-inset-top));
+    padding: 2rem 1rem calc(2rem + env(safe-area-inset-bottom));
+    background: #f8f7f3;
+  }
+
+  .angle-table-service-close {
+    position: absolute;
+    top: 1rem;
+    inset-inline-end: 1rem;
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: 999px;
+    background: #ebe9e4;
+    color: #171918;
+    font-size: 1.25rem;
+    font-weight: 750;
+  }
+
+  .angle-table-service-intro h1 {
+    margin: 0;
+    color: #171918;
+    font-size: 1.55rem;
+    font-weight: 850;
+    letter-spacing: -.035em;
+  }
+
+  .angle-table-service-intro > p {
+    margin: 0 0 .25rem;
+    color: #686a68;
+    font-size: .78rem;
+    font-weight: 750;
+  }
+
+  .angle-table-service-intro > span {
+    display: block;
+    margin-top: .5rem;
+    color: #686a68;
+    font-size: .85rem;
+    line-height: 1.5;
+  }
+
+  .angle-table-service-primary {
+    display: flex;
+    width: 100%;
+    min-height: 3.5rem;
+    align-items: center;
+    justify-content: center;
+    gap: .65rem;
+    margin-top: 1.25rem;
+    padding: .75rem 1rem;
+    border-radius: .85rem;
+    background: #111315;
+    color: #fff;
+    font-size: .95rem;
+    font-weight: 800;
+    transition: transform 150ms ease;
+  }
+
+  .angle-table-service-primary:active {
+    transform: scale(.98);
+  }
+
+  .angle-table-service-primary.is-active {
+    background: #e8f5eb;
+    color: #176c35;
+  }
+
+  .angle-table-service-primary small {
+    color: inherit;
+    font-size: .7rem;
+    font-weight: 650;
+  }
+
+  .angle-table-service-activity {
+    display: grid;
+    gap: .5rem;
+    margin-top: 1rem;
+  }
+
+  .angle-table-service-activity > div {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    padding: .75rem 1rem;
+    border: 1px solid rgb(17 19 21 / 8%);
+    border-radius: .85rem;
+    background: rgb(255 255 255 / 72%);
+  }
+
+  .angle-table-service-dot {
+    width: .6rem;
+    height: .6rem;
+    flex-shrink: 0;
+    border-radius: 999px;
+    background: #d39a10;
+  }
+
+  .angle-table-service-dot.is-accepted,
+  .angle-table-service-dot.is-completed {
+    background: #178044;
+  }
+
+  .angle-table-service-dot.is-cancelled {
+    background: #be3d4b;
+  }
+
+  .angle-table-service-activity p,
+  .angle-table-service-activity strong,
+  .angle-table-service-activity small {
+    display: block;
+    margin: 0;
+  }
+
+  .angle-table-service-activity strong {
+    color: #282a28;
+    font-size: .82rem;
+  }
+
+  .angle-table-service-activity small {
+    margin-top: .15rem;
+    color: #686a68;
+    font-size: .72rem;
+  }
+
+  .angle-table-service-group {
+    margin-top: 2rem;
+  }
+
+  .angle-table-service-group h2 {
+    margin: 0 0 .75rem;
+    color: #242624;
+    font-size: 1rem;
+    font-weight: 800;
+  }
+
+  .angle-table-service-quick-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: .5rem;
+  }
+
+  .angle-table-service-quick {
+    display: flex;
+    min-width: 0;
+    min-height: 7rem;
+    align-items: center;
+    flex-direction: column;
+    justify-content: center;
+    gap: .55rem;
+    padding: .75rem .5rem;
+    border: 1px solid rgb(17 19 21 / 8%);
+    border-radius: 1rem;
+    background: rgb(255 255 255 / 74%);
+    color: #242624;
+    text-align: center;
+  }
+
+  .angle-table-service-icon {
+    display: grid;
+    color: #2688c7;
+    place-items: center;
+  }
+
+  .angle-table-service-label {
+    font-size: .8rem;
+    font-weight: 750;
+    line-height: 1.2;
+  }
+
+  .angle-table-service-state {
+    color: #176c35;
+    font-size: .65rem;
+    font-weight: 700;
+    line-height: 1.2;
+  }
+
+  .angle-table-service-quick.is-active,
+  .angle-table-service-row.is-active {
+    border-color: rgb(23 128 68 / 30%);
+    background: #edf7ef;
+  }
+
+  .angle-table-service-row-list {
+    overflow: hidden;
+    border: 1px solid rgb(17 19 21 / 8%);
+    border-radius: 1rem;
+    background: rgb(255 255 255 / 74%);
+  }
+
+  .angle-table-service-row {
+    display: grid;
+    width: 100%;
+    min-height: 3.5rem;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: .75rem;
+    padding: .5rem 1rem;
+    border-bottom: 1px solid rgb(17 19 21 / 8%);
+    color: #242624;
+    text-align: start;
+  }
+
+  .angle-table-service-row:last-child {
+    border-bottom: 0;
+  }
+
+  .angle-table-service-row .angle-table-service-state {
+    grid-column: 2;
+  }
+
+  .angle-table-service-chevron {
+    color: #8a8c89;
+    font-size: 1.25rem;
+  }
+
+  .angle-table-service-error {
+    margin: 1rem 0 0;
+    padding: .75rem 1rem;
+    border-radius: .85rem;
+    background: #fff0f1;
+    color: #9c2f3c;
+    font-size: .8rem;
+    font-weight: 650;
+  }
+
   /* Тот же светлый фон, что на экране товаров (body): бежевый #f3efe7
      с градиентом делал оформление отдельным «документом», хотя это
      продолжение того же сценария. */
@@ -2226,6 +2758,12 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   .public-menu-shell input:focus-visible {
     outline: 3px solid rgb(17 24 39 / 45%);
     outline-offset: 2px;
+  }
+
+  /* Заголовок получает программный фокус после смены внутреннего экрана,
+     но не является интерактивным контролом и не попадает в Tab-порядок. */
+  .public-menu-route-focus:focus {
+    outline: none;
   }
 
   /* У полей-строк фокус показывает нижняя линия (см. правило выше):
@@ -3918,6 +4456,505 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     background-image: repeating-linear-gradient(
       45deg, #fff, #fff 6px, #f4f5f7 6px, #f4f5f7 12px);
   }
+}
+
+/* ── ANGLE Guest: каталог заведений ──────────────────────── */
+.angle-discovery,
+.angle-venue {
+  min-height: 100vh;
+  background: #f7f4ee;
+  color: #171717;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+.angle-discovery {
+  width: 100%;
+  max-width: 32rem;
+  margin: 0 auto;
+  padding: 0 1rem calc(6rem + env(safe-area-inset-bottom, 0px));
+}
+
+.angle-discovery-header {
+  display: flex;
+  min-height: 5rem;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+.angle-discovery-wordmark {
+  font-family: 'Archivo Black', 'Inter', sans-serif;
+  font-size: 1.25rem;
+  letter-spacing: -.04em;
+}
+
+.angle-discovery-location {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  border: 0;
+  background: transparent;
+  color: #383838;
+  font-size: .8125rem;
+  font-weight: 650;
+}
+
+.angle-discovery-location > * + * { margin-inline-start: .375rem; }
+
+.angle-discovery-search {
+  display: flex;
+  min-height: 3rem;
+  align-items: center;
+  padding: 0 .875rem;
+  border: 1px solid #dedbd4;
+  border-radius: 1rem;
+  background: #fff;
+  color: #616161;
+  box-shadow: 0 2px 10px rgb(20 20 20 / 4%);
+}
+
+.angle-discovery-search input {
+  width: 100%;
+  min-width: 0;
+  margin-inline-start: .75rem;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #171717;
+  font: inherit;
+  font-size: .875rem;
+}
+
+.angle-discovery-search input::placeholder { color: #797979; }
+
+.angle-discovery-filters {
+  display: flex;
+  overflow-x: auto;
+  padding: .75rem 0 1.5rem;
+}
+
+.angle-discovery-filters > * + * { margin-inline-start: .5rem; }
+
+.angle-discovery-filters button {
+  min-height: 2.75rem;
+  flex: 0 0 auto;
+  padding: 0 1rem;
+  border: 1px solid #e1ded7;
+  border-radius: .875rem;
+  background: #fff;
+  color: #4d4d4d;
+  font-size: .8125rem;
+  font-weight: 650;
+}
+
+.angle-discovery-filters button.is-active {
+  border-color: #171717;
+  background: #171717;
+  color: #fff;
+}
+
+.angle-discovery-filters button:disabled { opacity: .62; }
+
+.angle-discovery-section-title {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.angle-discovery-section-title p {
+  margin: 0 0 .25rem;
+  color: #6b6b6b;
+  font-size: .75rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.angle-discovery-section-title h1 {
+  margin: 0;
+  font-family: 'Space Grotesk', 'Inter', sans-serif;
+  font-size: 1.75rem;
+  letter-spacing: -.045em;
+  line-height: 1.1;
+}
+
+.angle-discovery-section-title > span {
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 999px;
+  background: #eae6de;
+  color: #4d4d4d;
+  font-size: .75rem;
+  font-weight: 750;
+  place-items: center;
+}
+
+.angle-restaurant-card {
+  display: block;
+  overflow: hidden;
+  margin-bottom: 1rem;
+  border: 1px solid #e4e0d8;
+  border-radius: 1.5rem;
+  background: #fff;
+  color: inherit;
+  text-decoration: none;
+  box-shadow: 0 10px 28px rgb(27 24 20 / 7%);
+  transition: transform 140ms ease, box-shadow 140ms ease;
+}
+
+.angle-restaurant-card:active { transform: scale(.985); }
+
+.angle-restaurant-card__media {
+  position: relative;
+  height: 12.5rem;
+  overflow: hidden;
+  background: #e8e3da;
+}
+
+.angle-restaurant-card__media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.angle-restaurant-card__availability {
+  position: absolute;
+  inset-inline-end: .75rem;
+  bottom: .75rem;
+  padding: .5rem .75rem;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 92%);
+  color: #242424;
+  font-size: .75rem;
+  font-weight: 750;
+  box-shadow: 0 4px 14px rgb(0 0 0 / 12%);
+}
+
+.angle-restaurant-card__body { padding: 1rem; }
+
+.angle-restaurant-card__body h2 {
+  margin: 0;
+  color: #171717;
+  font-family: 'Space Grotesk', 'Inter', sans-serif;
+  font-size: 1.25rem;
+  letter-spacing: -.03em;
+}
+
+.angle-restaurant-card__body p {
+  margin: .25rem 0 .75rem;
+  color: #606060;
+  font-size: .8125rem;
+}
+
+.angle-discovery-rating {
+  display: inline-flex;
+  min-height: 1.75rem;
+  align-items: center;
+  color: #4b4b4b;
+  font-size: .8125rem;
+}
+
+.angle-discovery-rating > * + * { margin-inline-start: .25rem; }
+.angle-discovery-rating > span:first-child { color: #c47a0a; }
+.angle-discovery-rating strong { color: #222; }
+.angle-discovery-rating small {
+  margin-inline-start: .5rem;
+  padding: .1875rem .375rem;
+  border-radius: .375rem;
+  background: #f2eee6;
+  color: #666;
+  font-size: .625rem;
+  font-weight: 750;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.angle-restaurant-card__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: .75rem;
+  padding-top: .75rem;
+  border-top: 1px solid #eeeae3;
+  color: #5d5d5d;
+  font-size: .75rem;
+}
+
+.angle-discovery-state {
+  display: grid;
+  min-height: 14rem;
+  padding: 2rem;
+  align-content: center;
+  justify-items: center;
+  color: #5f5f5f;
+  text-align: center;
+}
+
+.angle-discovery-state p { margin: 0 0 1rem; }
+.angle-discovery-state button,
+.angle-discovery-state a {
+  min-height: 2.75rem;
+  padding: .75rem 1rem;
+  border: 0;
+  border-radius: .75rem;
+  background: #171717;
+  color: #fff;
+  font-weight: 750;
+  text-decoration: none;
+}
+
+.angle-discovery-bottom {
+  position: fixed;
+  z-index: 20;
+  right: 50%;
+  bottom: 0;
+  display: grid;
+  width: 100%;
+  max-width: 32rem;
+  min-height: calc(4.5rem + env(safe-area-inset-bottom, 0px));
+  padding: .625rem .75rem env(safe-area-inset-bottom, .5rem);
+  grid-template-columns: repeat(4, 1fr);
+  border-top: 1px solid #ddd9d1;
+  background: rgb(255 255 255 / 96%);
+  box-shadow: 0 -8px 24px rgb(20 20 20 / 6%);
+  transform: translateX(50%);
+}
+
+.angle-discovery-bottom a,
+.angle-discovery-bottom span {
+  display: grid;
+  min-height: 2.75rem;
+  align-items: center;
+  color: #737373;
+  font-size: .6875rem;
+  font-weight: 650;
+  text-align: center;
+  text-decoration: none;
+}
+
+.angle-discovery-bottom .is-active { color: #171717; font-weight: 800; }
+
+.angle-venue {
+  width: 100%;
+  max-width: 32rem;
+  margin: 0 auto;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.angle-venue-hero {
+  position: relative;
+  height: 21rem;
+  overflow: hidden;
+  background: #e8e3da;
+}
+
+.angle-venue-hero > img { width: 100%; height: 100%; object-fit: cover; }
+
+.angle-venue-back {
+  position: absolute;
+  top: calc(1rem + env(safe-area-inset-top, 0px));
+  inset-inline-start: 1rem;
+  display: grid;
+  width: 2.75rem;
+  height: 2.75rem;
+  border: 0;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 94%);
+  color: #171717;
+  box-shadow: 0 5px 18px rgb(0 0 0 / 16%);
+  place-items: center;
+}
+
+.angle-venue-sheet {
+  position: relative;
+  z-index: 2;
+  min-height: 28rem;
+  margin-top: -2rem;
+  padding: 2rem 1rem 1.5rem;
+  border-radius: 2rem 2rem 0 0;
+  background: #f7f4ee;
+}
+
+.angle-venue-logo {
+  position: absolute;
+  top: -2.5rem;
+  inset-inline-end: 1.5rem;
+  width: 5rem;
+  height: 5rem;
+  border: .25rem solid #f7f4ee;
+  border-radius: 1.25rem;
+  background: #fff;
+  object-fit: cover;
+  box-shadow: 0 8px 20px rgb(0 0 0 / 10%);
+}
+
+.angle-venue-sheet > h1 {
+  max-width: calc(100% - 5.5rem);
+  margin: 0;
+  color: #171717;
+  font-family: 'Space Grotesk', 'Inter', sans-serif;
+  font-size: 2rem;
+  letter-spacing: -.055em;
+  line-height: 1.05;
+}
+
+.angle-venue-rating-line {
+  display: flex;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.angle-venue-address {
+  display: flex;
+  align-items: center;
+  margin: 0;
+  color: #5f5f5f;
+  font-size: .8125rem;
+}
+
+.angle-venue-address svg { margin-inline-end: .375rem; }
+
+.angle-venue-tags {
+  display: flex;
+  flex-wrap: wrap;
+  margin-top: .75rem;
+}
+
+.angle-venue-tags span {
+  margin: 0;
+  margin-inline-end: .5rem;
+  margin-bottom: .5rem;
+  padding: .5rem .75rem;
+  border-radius: .75rem;
+  background: #eae6de;
+  color: #4f4f4f;
+  font-size: .75rem;
+  font-weight: 650;
+}
+
+.angle-venue-actions {
+  display: grid;
+  margin-top: 1rem;
+  padding: 1rem 0;
+  grid-template-columns: repeat(3, 1fr);
+  border-top: 1px solid #dedad2;
+  border-bottom: 1px solid #dedad2;
+}
+
+.angle-venue-actions a {
+  display: grid;
+  min-height: 3.75rem;
+  align-content: center;
+  justify-items: center;
+  color: #242424;
+  font-size: .6875rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.angle-venue-actions a svg { margin-bottom: .375rem; }
+
+.angle-venue-summary {
+  margin: 1.5rem 0 0;
+  color: #535353;
+  font-size: .9375rem;
+  line-height: 1.6;
+}
+
+.angle-venue-live {
+  display: flex;
+  margin-top: 1.5rem;
+  padding: 1rem;
+  border: 1px solid #ddd8cf;
+  border-radius: 1.25rem;
+  background: #fff;
+}
+
+.angle-venue-live__icon {
+  display: grid;
+  width: 3rem;
+  height: 3rem;
+  flex: 0 0 auto;
+  margin-inline-end: .75rem;
+  border-radius: .875rem;
+  background: #ece8e0;
+  color: #202020;
+  place-items: center;
+}
+
+.angle-venue-live p {
+  margin: 0 0 .25rem;
+  color: #686868;
+  font-size: .6875rem;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.angle-venue-live h2 {
+  margin: 0;
+  color: #171717;
+  font-size: 1rem;
+  letter-spacing: -.02em;
+}
+
+.angle-venue-live span {
+  display: block;
+  margin-top: .375rem;
+  color: #616161;
+  font-size: .8125rem;
+  line-height: 1.45;
+}
+
+.angle-venue-demo-note {
+  margin: 1rem 0 0;
+  padding: .75rem;
+  border-radius: .75rem;
+  background: #eeeae2;
+  color: #626262;
+  font-size: .6875rem;
+  line-height: 1.45;
+}
+
+.angle-venue-primary,
+.angle-venue-secondary {
+  display: flex;
+  min-height: 3.25rem;
+  align-items: center;
+  justify-content: center;
+  margin-top: 1rem;
+  padding: .75rem 1rem;
+  border-radius: 1rem;
+  font-size: .9375rem;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+[dir='rtl'].angle-venue .angle-venue-back svg { transform: scaleX(-1); }
+
+.angle-venue-primary {
+  justify-content: space-between;
+  background: #171717;
+  color: #fff;
+}
+
+.angle-venue-secondary {
+  border: 1px solid #171717;
+  background: transparent;
+  color: #171717;
+}
+
+@media (min-width: 40rem) {
+  .angle-discovery,
+  .angle-venue { box-shadow: 0 0 60px rgb(25 22 18 / 12%); }
+  .angle-discovery { padding-inline: 1.5rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .angle-restaurant-card { transition: none; }
 }
 
 /* ── Rise-in (появление строк корзины, оверлеев) ─────────── */

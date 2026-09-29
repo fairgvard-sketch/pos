@@ -14,6 +14,16 @@ const PublicReservePage = lazyWithRetry(
   () => import('./features/reservations/PublicReservePage'),
   'PublicReservePage',
 )
+const RestaurantDirectoryHome = lazyWithRetry(
+  () => import('./features/discovery/RestaurantDirectoryPage')
+    .then((module) => ({ default: module.RestaurantDirectoryHome })),
+  'RestaurantDirectoryHome',
+)
+const RestaurantDetailPage = lazyWithRetry(
+  () => import('./features/discovery/RestaurantDirectoryPage')
+    .then((module) => ({ default: module.RestaurantDetailPage })),
+  'RestaurantDetailPage',
+)
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -24,25 +34,6 @@ const queryClient = new QueryClient({
     },
   },
 })
-
-function PublicLandingPage() {
-  return (
-    <main
-      dir="rtl"
-      className="min-h-screen bg-[#f8f5ee] px-6 flex items-center justify-center text-center"
-    >
-      <div className="w-full max-w-sm rounded-3xl bg-white px-8 py-10 shadow-[0_24px_70px_rgba(17,24,39,0.10)]">
-        <div className="mx-auto h-12 w-12 rounded-2xl bg-gray-900 text-white flex items-center justify-center text-lg font-black">
-          A
-        </div>
-        <h1 className="mt-6 text-2xl font-black text-gray-900">Angle Menu</h1>
-        <p className="mt-3 text-base leading-7 text-gray-600">
-          כדי לפתוח את התפריט, סרקו את קוד ה־QR של בית העסק.
-        </p>
-      </div>
-    </main>
-  )
-}
 
 /**
  * Сигнал «страница поднялась» родительскому окну.
@@ -76,7 +67,8 @@ export default function PublicApp() {
         <RouteErrorBoundary>
           <Suspense fallback={<SuspenseFallback />}>
             <Routes>
-              <Route path="/" element={<PublicLandingPage />} />
+              <Route path="/" element={<RestaurantDirectoryHome />} />
+              <Route path="/restaurants/:slug" element={<RestaurantDetailPage />} />
               <Route path="/order/:locId" element={<PublicOrderPage />} />
               <Route path="/reserve/:locId" element={<PublicReservePage />} />
               <Route path="*" element={<Navigate to="/" replace />} />

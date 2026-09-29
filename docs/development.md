@@ -44,7 +44,8 @@ npm run dev
 npm run dev:menu -- --host 127.0.0.1 --port 5174 --strictPort
 ```
 
-Его маршруты — `/order/:locId` и `/reserve/:locId`, данные — из указанного
+Его маршруты — `/`, `/restaurants/:slug`, `/order/:locId` и
+`/reserve/:locId`, данные — из указанного
 в `.env` Supabase. Для разработки используйте тестовую БД, не живые заказы.
 Сайт/кабинет запускаются из соседнего `anglesite` по
 [общей инструкции](../../anglesite/docs/development.md).

@@ -1,0 +1,137 @@
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { t } from '../../lib/i18n'
+import PublicOrderPage from './PublicOrderPage'
+import {
+  fetchPublicMenu,
+  fetchPublicServiceRequest,
+  submitPublicServiceRequest,
+  type PublicMenu,
+} from './publicApi'
+
+vi.mock('./publicApi', async (importOriginal) => ({
+  ...await importOriginal<typeof import('./publicApi')>(),
+  fetchPublicMenu: vi.fn(),
+  fetchPublicStatus: vi.fn(),
+  submitPublicOrder: vi.fn(),
+  fetchPublicServiceRequest: vi.fn(),
+  submitPublicServiceRequest: vi.fn(),
+}))
+
+const LOC = 'b1000000-0000-4000-8000-000000000001'
+const TABLE = 'b2000000-0000-4000-8000-000000000001'
+const CLIENT = 'b3000000-0000-4000-8000-000000000001'
+const menu: PublicMenu = {
+  location: {
+    id: LOC,
+    name: 'Casa Test',
+    currency: 'ILS',
+    is_open: true,
+    accepting: true,
+    modules: { online_orders: true, table_service: true },
+  },
+  order_context: { kind: 'table', label: '12', zone: 'Main' },
+  categories: [{ id: 'popular', name: 'Popular', items: [] }],
+}
+
+let client: QueryClient
+
+beforeEach(() => {
+  localStorage.clear()
+  client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } })
+  vi.mocked(fetchPublicMenu).mockResolvedValue(menu)
+})
+
+afterEach(() => {
+  cleanup()
+  client.clear()
+  vi.clearAllMocks()
+  vi.restoreAllMocks()
+})
+
+function renderTable() {
+  window.history.pushState({}, '', `/order/${LOC}?table=${TABLE}&source=table_qr`)
+  return render(
+    <QueryClientProvider client={client}>
+      <MemoryRouter initialEntries={[`/order/${LOC}?table=${TABLE}&source=table_qr`]}>
+        <Routes><Route path="/order/:locId" element={<PublicOrderPage />} /></Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
+  )
+}
+
+describe('ANGLE Guest table service', () => {
+  it('table QR opens the menu directly and exposes service without another hero tap', async () => {
+    renderTable()
+
+    expect(await screen.findByRole('heading', { name: 'Popular', level: 2 })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'להזמין' })).not.toBeInTheDocument()
+
+    expect(screen.getAllByRole('tab')).toHaveLength(3)
+    fireEvent.click(screen.getByRole('tab', { name: t('he', 'serviceTab') }))
+    expect(await screen.findByRole('heading', { name: t('he', 'serviceCallWaiter'), level: 1 })).toBeInTheDocument()
+    expect(screen.getByText(`${t('he', 'pubTable')} 12`)).toBeInTheDocument()
+  })
+
+  it('sends water optimistically and then shows the accepted server state', async () => {
+    let resolveSubmit!: (value: Awaited<ReturnType<typeof submitPublicServiceRequest>>) => void
+    vi.spyOn(globalThis.crypto, 'randomUUID').mockReturnValue(CLIENT)
+    vi.mocked(submitPublicServiceRequest).mockImplementation(() => new Promise((resolve) => {
+      resolveSubmit = resolve
+    }))
+    vi.mocked(fetchPublicServiceRequest).mockResolvedValue({
+      client_uuid: CLIENT,
+      kind: 'water',
+      status: 'accepted',
+      table_label: '12',
+      created_at: new Date().toISOString(),
+      accepted_at: new Date().toISOString(),
+      completed_at: null,
+    })
+    renderTable()
+
+    fireEvent.click(await screen.findByRole('tab', { name: t('he', 'serviceTab') }))
+    fireEvent.click(screen.getByRole('button', { name: t('he', 'serviceWater') }))
+
+    expect(screen.getByText(t('he', 'serviceSentGuest'))).toBeInTheDocument()
+    await act(async () => {
+      resolveSubmit({
+        request_id: 'b4000000-0000-4000-8000-000000000001',
+        client_uuid: CLIENT,
+        status: 'new',
+        duplicate: false,
+      })
+    })
+    await waitFor(() => expect(screen.getAllByText(t('he', 'serviceAcceptedGuest'))).not.toHaveLength(0))
+    expect(submitPublicServiceRequest).toHaveBeenCalledWith({
+      loc: LOC,
+      table_token: TABLE,
+      client_uuid: CLIENT,
+      kind: 'water',
+    })
+  })
+
+  it('keeps the completed confirmation visible without counting it as active', async () => {
+    localStorage.setItem('angle-table-service-requests-v1', JSON.stringify({
+      locId: LOC,
+      tableToken: TABLE,
+      requests: [{
+        client_uuid: CLIENT,
+        kind: 'bill',
+        status: 'completed',
+        table_label: '12',
+        created_at: new Date().toISOString(),
+        accepted_at: new Date().toISOString(),
+        completed_at: new Date().toISOString(),
+      }],
+    }))
+    renderTable()
+
+    const serviceButton = await screen.findByRole('tab', { name: t('he', 'serviceTab') })
+    expect(serviceButton).not.toHaveTextContent('1')
+    fireEvent.click(serviceButton)
+    expect(await screen.findByText(t('he', 'serviceCompletedGuest'))).toBeInTheDocument()
+  })
+})

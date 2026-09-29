@@ -97,7 +97,7 @@ export interface PublicMenu {
      * заказов: страница работает чистой витриной (без корзины, чекаута и
      * статуса приёма). Отсутствие поля (старая edge function) = заказ доступен.
      */
-    modules?: { online_orders?: boolean }
+    modules?: { online_orders?: boolean; table_service?: boolean }
     /** false = приём сейчас не идёт: выключен (051) или пауза (054) */
     accepting?: boolean
     /** Пауза с кассы (054): ISO-время, когда приём возобновится */
@@ -137,6 +137,55 @@ export interface PublicMenu {
   /** Просроченный/неверный table-token: меню доступно, но заказ не привязан к столу. */
   context_error?: 'invalid_table' | 'table_ordering_disabled' | null
   categories: { id: string; name: string; cover_url?: string | null; items: PublicItem[] }[]
+}
+
+export interface PublicRestaurant {
+  id: string
+  slug: string
+  name: string
+  address: string | null
+  city: string | null
+  country_code: string
+  cuisine: string[]
+  summary: string | null
+  hero_url: string | null
+  logo_url: string | null
+  price_level: number | null
+  /** Демонстрационная оценка всегда приходит с source=demo и так же подписывается в UI. */
+  rating: {
+    value: number
+    count: number
+    source: 'demo'
+  } | null
+  features: {
+    menu: boolean
+    ordering: boolean
+    table_service: boolean
+    reservations: boolean
+  }
+}
+
+/** Опубликованные карточки ANGLE. Таблицы locations гостю напрямую не открываются. */
+export async function fetchPublicRestaurants(): Promise<PublicRestaurant[]> {
+  const res = await fetchWithTimeout(
+    `${FN_BASE}/public-restaurants`,
+    { headers },
+    READ_TIMEOUT_MS,
+  )
+  if (!res.ok) await parseError(res)
+  const body = await res.json() as { restaurants?: PublicRestaurant[] }
+  return body.restaurants ?? []
+}
+
+export async function fetchPublicRestaurant(slug: string): Promise<PublicRestaurant> {
+  const res = await fetchWithTimeout(
+    `${FN_BASE}/public-restaurants?slug=${encodeURIComponent(slug)}`,
+    { headers },
+    READ_TIMEOUT_MS,
+  )
+  if (!res.ok) await parseError(res)
+  const body = await res.json() as { restaurant: PublicRestaurant }
+  return body.restaurant
 }
 
 /**
@@ -294,6 +343,70 @@ export interface PublicStatus {
 export async function fetchPublicStatus(clientUuid: string): Promise<PublicStatus> {
   const res = await fetchWithTimeout(
     `${FN_BASE}/public-order?id=${encodeURIComponent(clientUuid)}`,
+    { headers },
+    READ_TIMEOUT_MS,
+  )
+  if (!res.ok) await parseError(res)
+  return res.json()
+}
+
+export type PublicServiceRequestKind =
+  | 'call_waiter'
+  | 'water'
+  | 'cutlery'
+  | 'napkins'
+  | 'problem'
+  | 'bill'
+
+export type PublicServiceRequestState = 'new' | 'accepted' | 'completed' | 'cancelled'
+
+export interface PublicServiceRequestStatus {
+  client_uuid: string
+  kind: PublicServiceRequestKind
+  status: PublicServiceRequestState
+  table_label: string
+  created_at: string
+  accepted_at: string | null
+  completed_at: string | null
+}
+
+export interface SubmitServiceRequestResult {
+  request_id: string
+  client_uuid: string
+  status: PublicServiceRequestState
+  duplicate: boolean
+}
+
+/**
+ * Service request from a verified table QR. The browser-generated UUID is
+ * both the idempotency key and the secret used to poll the public status.
+ */
+export async function submitPublicServiceRequest(payload: {
+  loc: string
+  table_token: string
+  client_uuid: string
+  kind: PublicServiceRequestKind
+}): Promise<SubmitServiceRequestResult> {
+  const loc = await resolveLocationId(payload.loc)
+  const res = await fetchWithTimeout(
+    `${FN_BASE}/public-service`,
+    {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ ...payload, loc }),
+    },
+    WRITE_TIMEOUT_MS,
+  )
+  if (!res.ok) await parseError(res)
+  return res.json()
+}
+
+/** Public status contains no table/order internals or guest data. */
+export async function fetchPublicServiceRequest(
+  clientUuid: string,
+): Promise<PublicServiceRequestStatus> {
+  const res = await fetchWithTimeout(
+    `${FN_BASE}/public-service?id=${encodeURIComponent(clientUuid)}`,
     { headers },
     READ_TIMEOUT_MS,
   )

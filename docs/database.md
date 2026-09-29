@@ -251,6 +251,19 @@ supabase test db
   кабинет; клиенту доступно только чтение. У заявок, созданных до 140,
   восстановимы лишь «получена» и последнее решение — промежуточных шагов у них
   не записывалось;
+- `service_requests` (172) — активные просьбы гостя по проверенному QR стола:
+  `new → accepted → completed/cancelled`, с org/location-скоупом, снимком
+  названия стола и идемпотентным `client_uuid`; создание разрешено только
+  полноценному залу с открытой сменой и сериализовано по столу, чтобы
+  параллельные телефоны не обходили дедупликацию и rate limit;
+- `service_request_events` (172) — append-only история каждого перехода
+  сервисной задачи для времени реакции и разбора пропущенных просьб;
+- `restaurant_directory_profiles` (173) — отдельный opt-in профиль точки в
+  каталоге ANGLE Guest. `location_id` ссылается на существующую `locations`,
+  поэтому каталог не копирует меню или заведение. `is_published` не даёт
+  точке появиться публично только из-за наличия QR-меню. Поля
+  `demo_rating/demo_rating_count` разрешены лишь как явно подписанные данные
+  прототипа; анонимный браузер таблицу напрямую не читает;
 - `reservations` — заявки и подтверждённые брони;
 - `client_errors` — журнал клиентских ошибок телеметрии (074): дедупликация по
   `fingerprint` в пределах дня, retention 30 дней, закрыта для клиентов
@@ -585,6 +598,9 @@ ANGLE → Locations → Fiscal export.
 
 - `submit_online_order`, `get_online_order_status`, `accept_online_order`,
   `reject_online_order`, `set_online_pause`, `set_online_prep_range`;
+- `submit_service_request`, `get_service_request_status` — закрытый на
+  `service_role` публичный контур запроса; `set_service_request_status` —
+  строгий PIN-session переход задачи на текущей точке;
 - `get_online_orders_web` (141, правило долга уточнено в 142) — рабочий стол
   заказов кабинета одним вызовом:
   разрезы `active` / `older` / `scheduled` / `all` в сутках ТОЧКИ, серверные
@@ -933,7 +949,9 @@ UUID должен создаваться до первой попытки зап
 | Функция | Назначение | Статус |
 |---|---|---|
 | `public-menu` | безопасная публичная витрина каталога | production |
+| `public-restaurants` | опубликованные карточки заведений ANGLE; allow-list без `org_id/settings` | построена, деплой pending |
 | `public-order` | приём заказа и чтение статуса по client UUID | production |
+| `public-service` | запросы обслуживания стола и чтение статуса по client UUID | построена, деплой pending |
 | `public-reserve` | профиль точки, слоты, создание/отмена брони | production |
 | `uniform-format-export` | набор Единого формата 1.31 за период (INI/BKMVDATA) | построена, деплой pending |
 | `cardcom-payment` | будущая платёжная интеграция | карантин, `503`/`501` |
