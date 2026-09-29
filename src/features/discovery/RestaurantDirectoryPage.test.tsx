@@ -50,6 +50,17 @@ const bulochka: PublicRestaurant = {
   },
 }
 
+const casaRoma: PublicRestaurant = {
+  ...bulochka,
+  id: '10000000-0000-4000-8000-000000000002',
+  slug: 'casa-roma',
+  name: 'Casa Roma',
+  address: 'Dizengoff 100, Tel Aviv',
+  coordinates: { lat: 32.0809, lng: 34.7806 },
+  cuisine: ['Italian', 'Pizza'],
+  rating: { value: 4.6, count: 180, source: 'demo' },
+}
+
 let queryClient: QueryClient
 
 beforeEach(() => {
@@ -83,13 +94,31 @@ describe('ANGLE restaurant directory', () => {
     renderAt('/')
 
     const restaurantLinks = await screen.findAllByRole('link', { name: /Bulochka/i })
-    expect(restaurantLinks).toHaveLength(2)
+    expect(restaurantLinks).toHaveLength(1)
     expect(restaurantLinks.every((link) => link.getAttribute('href') === '/restaurants/bulochka')).toBe(true)
-    expect(screen.getByRole('heading', { name: 'Near you', level: 1 })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Good places, close to you', level: 1 })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Nearby restaurants', level: 2 })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Browse by cuisine', level: 2 })).toBeInTheDocument()
+    expect(document.querySelector('.angle-discovery-map')).not.toBeInTheDocument()
     expect(screen.queryByText('ANGLE restaurants')).not.toBeInTheDocument()
-    expect(document.querySelector('.angle-discovery-section-title > span')).not.toBeInTheDocument()
     expect(screen.getByText('Demo')).toBeInTheDocument()
     expect(screen.getByText('Pinsker 29, Tel Aviv')).toBeInTheDocument()
+  })
+
+  it('builds cuisine filters from every published restaurant', async () => {
+    vi.mocked(fetchPublicRestaurants).mockResolvedValue([bulochka, casaRoma])
+    renderAt('/')
+
+    await screen.findByRole('heading', { name: 'Bulochka' })
+    expect(screen.getByRole('heading', { name: 'Casa Roma' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Coffee' }))
+    expect(screen.getByRole('heading', { name: 'Bulochka' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Casa Roma' })).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Italian' }))
+    expect(screen.queryByRole('heading', { name: 'Bulochka' })).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Casa Roma' })).toBeInTheDocument()
   })
 
   it('filters by restaurant and cuisine without another server request', async () => {
@@ -203,5 +232,20 @@ describe('ANGLE restaurant directory', () => {
     const photoInput = screen.getByLabelText('Scan from photo')
     expect(photoInput).toHaveAttribute('accept', 'image/*')
     expect(photoInput).toHaveAttribute('capture', 'environment')
+  })
+
+  it('persists favourites and recent visits as real home sections', async () => {
+    const detail = renderAt('/restaurants/bulochka')
+    await screen.findByRole('heading', { name: 'Bulochka' })
+
+    const favourite = screen.getByRole('button', { name: 'Save restaurant' })
+    fireEvent.click(favourite)
+    expect(favourite).toHaveAttribute('aria-pressed', 'true')
+    detail.unmount()
+
+    renderAt('/')
+    expect(await screen.findByRole('heading', { name: 'Favourites', level: 2 })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Recently visited', level: 2 })).toBeInTheDocument()
+    expect(screen.getAllByRole('link', { name: /Bulochka/i })).toHaveLength(3)
   })
 })

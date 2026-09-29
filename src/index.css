@@ -4750,12 +4750,8 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
 }
 
 .angle-discovery-panel {
-  position: relative;
-  z-index: 3;
-  padding: 0 var(--angle-discovery-gutter) 1rem;
-  border-bottom: 1px solid rgb(17 24 39 / 8%);
+  padding: 0 var(--angle-discovery-gutter) 1.5rem;
   background: #fff;
-  box-shadow: 0 8px 22px rgb(17 24 39 / 6%);
 }
 
 .angle-discovery-header {
@@ -4796,6 +4792,38 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   white-space: nowrap;
 }
 
+.angle-discovery-intro {
+  padding: 1rem 0 1.5rem;
+}
+
+.angle-discovery-intro > span {
+  display: block;
+  margin-bottom: .5rem;
+  color: #6b7280;
+  font-size: .6875rem;
+  font-weight: 800;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.angle-discovery-intro h1 {
+  max-width: 23rem;
+  margin: 0;
+  color: #171717;
+  font-family: 'Space Grotesk', 'Inter', sans-serif;
+  font-size: clamp(2rem, 9vw, 2.75rem);
+  letter-spacing: -.06em;
+  line-height: .98;
+}
+
+.angle-discovery-intro p {
+  max-width: 22rem;
+  margin: .75rem 0 0;
+  color: #5f6368;
+  font-size: .8125rem;
+  line-height: 1.5;
+}
+
 .angle-discovery-search {
   display: flex;
   min-height: 3.25rem;
@@ -4822,143 +4850,73 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
 
 .angle-discovery-search input::placeholder { color: #797979; }
 
-.angle-discovery-filters {
-  display: grid;
-  padding: .75rem 0 0;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: .5rem;
-}
-
-.angle-discovery-filters button {
-  width: 100%;
-  min-height: 2.75rem;
-  min-width: 0;
-  padding: 0 .5rem;
-  border: 1px solid #e1e5ea;
-  border-radius: .875rem;
+.angle-discovery-cuisines {
+  padding: 1.5rem 0 1.5rem;
+  border-top: 1px solid #e7e9ec;
+  border-bottom: 1px solid #e7e9ec;
   background: #fff;
-  color: #4d4d4d;
-  font-size: .8125rem;
-  font-weight: 650;
 }
 
-.angle-discovery-filters button.is-active {
+.angle-discovery-cuisines .angle-discovery-section-title {
+  padding: 0 var(--angle-discovery-gutter);
+}
+
+.angle-discovery-cuisine-rail {
+  display: flex;
+  overflow-x: auto;
+  gap: .75rem;
+  padding: 0 var(--angle-discovery-gutter) .25rem;
+  scrollbar-width: none;
+  scroll-padding-inline: var(--angle-discovery-gutter);
+  scroll-snap-type: x proximity;
+}
+
+.angle-discovery-cuisine-rail::-webkit-scrollbar { display: none; }
+
+.angle-discovery-cuisine-rail button {
+  display: grid;
+  min-width: 4.75rem;
+  min-height: 5.75rem;
+  flex: 0 0 auto;
+  gap: .5rem;
+  justify-items: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #4b5563;
+  scroll-snap-align: start;
+}
+
+.angle-discovery-cuisine-rail button > span {
+  display: grid;
+  width: 3.75rem;
+  height: 3.75rem;
+  border: 1px solid #e2e6ea;
+  border-radius: 999px;
+  background: #f4f5f6;
+  color: #30343a;
+  transition: border-color 140ms ease, background 140ms ease, color 140ms ease, transform 140ms ease;
+  place-items: center;
+}
+
+.angle-discovery-cuisine-rail button:active > span { transform: scale(.96); }
+.angle-discovery-cuisine-rail button svg { width: 1.375rem; height: 1.375rem; }
+
+.angle-discovery-cuisine-rail button small {
+  max-width: 5.5rem;
+  overflow: hidden;
+  font-size: .6875rem;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.angle-discovery-cuisine-rail button.is-active { color: #171717; }
+.angle-discovery-cuisine-rail button.is-active > span {
   border-color: #171717;
   background: #171717;
   color: #fff;
 }
-
-.angle-discovery-filters button:disabled { opacity: .62; }
-
-.angle-discovery-map {
-  position: relative;
-  height: clamp(13.5rem, 57vw, 14.5rem);
-  overflow: hidden;
-  border-bottom: 1px solid rgb(17 24 39 / 9%);
-  background: #eceff2 url('/discovery/tel-aviv-map.svg') center / cover no-repeat;
-  box-shadow: inset 0 -18px 28px rgb(17 24 39 / 7%);
-}
-
-.angle-discovery-map::after {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(180deg, rgb(255 255 255 / 5%), transparent 45%, rgb(17 24 39 / 5%));
-  content: '';
-  pointer-events: none;
-}
-
-.angle-discovery-map-frame {
-  position: absolute;
-  z-index: 0;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  border: 0;
-  filter: grayscale(.12) saturate(.78) contrast(.94) brightness(1.04);
-  pointer-events: none;
-}
-
-.angle-discovery-locate {
-  position: absolute;
-  z-index: 5;
-  top: 1rem;
-  inset-inline-start: var(--angle-discovery-gutter);
-  display: inline-flex;
-  min-height: 2.75rem;
-  align-items: center;
-  gap: .5rem;
-  padding: 0 .75rem;
-  border: 1px solid rgb(17 24 39 / 12%);
-  border-radius: .875rem;
-  background: rgb(255 255 255 / 94%);
-  color: #111827;
-  box-shadow: 0 5px 16px rgb(17 24 39 / 14%);
-  font-size: .75rem;
-  font-weight: 750;
-  -webkit-backdrop-filter: blur(10px);
-  backdrop-filter: blur(10px);
-}
-
-.angle-discovery-locate:disabled { color: #6b7280; }
-
-.angle-discovery-map-attribution {
-  position: absolute;
-  z-index: 5;
-  inset-inline-end: .375rem;
-  bottom: .375rem;
-  padding: .1875rem .375rem;
-  border-radius: .375rem;
-  background: rgb(255 255 255 / 90%);
-  color: #4b5563;
-  font-size: .5625rem;
-  font-weight: 650;
-  text-decoration: none;
-}
-
-.angle-discovery-current-location {
-  position: absolute;
-  z-index: 2;
-  top: 56%;
-  inset-inline-start: 46%;
-  display: grid;
-  width: 1.75rem;
-  height: 1.75rem;
-  border: 3px solid #fff;
-  border-radius: 999px;
-  background: #2f8ee5;
-  box-shadow: 0 2px 10px rgb(32 92 151 / 45%), 0 0 0 8px rgb(47 142 229 / 16%);
-  transform: translate(-50%, -50%);
-  place-items: center;
-}
-
-[dir='rtl'] .angle-discovery-current-location { transform: translate(50%, -50%); }
-
-.angle-discovery-current-location i {
-  width: .5rem;
-  height: .5rem;
-  border-radius: inherit;
-  background: #fff;
-}
-
-.angle-discovery-map-marker {
-  position: absolute;
-  z-index: 2;
-  display: block;
-  width: 3.5rem;
-  height: 3.5rem;
-  overflow: hidden;
-  border: 3px solid #fff;
-  border-radius: 1rem;
-  background: #dfe3e8;
-  box-shadow: 0 5px 16px rgb(17 24 39 / 20%);
-  transform: translate(-50%, -50%);
-  transition: transform 140ms ease;
-}
-
-[dir='rtl'] .angle-discovery-map-marker { transform: translate(50%, -50%); }
-.angle-discovery-map-marker:active { transform: translate(-50%, -50%) scale(.94); }
-[dir='rtl'] .angle-discovery-map-marker:active { transform: translate(50%, -50%) scale(.94); }
-.angle-discovery-map-marker img { width: 100%; height: 100%; object-fit: cover; }
 
 .angle-location-backdrop {
   position: fixed;
@@ -5211,34 +5169,60 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
 
 .angle-location-privacy a { color: inherit; font-weight: 750; }
 
-.angle-discovery-list {
-  position: relative;
-  z-index: 2;
-  margin-top: -.5rem;
-  padding: 1.5rem var(--angle-discovery-gutter) 0;
-  border-radius: 1.5rem 1.5rem 0 0;
-  background: #f7f8fa;
-}
+.angle-discovery-content { padding: 1.5rem 0 0; }
+.angle-discovery-section { margin-bottom: 2rem; }
 
 .angle-discovery-section-title {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
   margin-bottom: 1rem;
 }
 
-.angle-discovery-section-title h1 {
+.angle-discovery-content .angle-discovery-section-title {
+  padding: 0 var(--angle-discovery-gutter);
+}
+
+.angle-discovery-section-title h2 {
   margin: 0;
   font-family: 'Space Grotesk', 'Inter', sans-serif;
-  font-size: 1.75rem;
+  font-size: 1.375rem;
   letter-spacing: -.045em;
   line-height: 1.1;
 }
 
-.angle-restaurant-card {
-  display: grid;
+.angle-discovery-section-title > span {
   overflow: hidden;
-  margin-bottom: 1rem;
-  padding: .75rem;
-  grid-template-columns: 5.25rem minmax(0, 1fr);
+  max-width: 45%;
+  color: #6b7280;
+  font-size: .6875rem;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.angle-discovery-grid {
+  display: grid;
+  gap: 1rem;
+  padding: 0 var(--angle-discovery-gutter);
+}
+
+.angle-discovery-rail {
+  display: flex;
+  overflow-x: auto;
   gap: .75rem;
+  padding: 0 var(--angle-discovery-gutter) .25rem;
+  scrollbar-width: none;
+  scroll-padding-inline: var(--angle-discovery-gutter);
+  scroll-snap-type: x proximity;
+}
+
+.angle-discovery-rail::-webkit-scrollbar { display: none; }
+
+.angle-restaurant-card {
+  display: block;
+  overflow: hidden;
   border: 1px solid #e2e6eb;
   border-radius: 1.25rem;
   background: #fff;
@@ -5252,11 +5236,9 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
 
 .angle-restaurant-card__media {
   position: relative;
-  width: 5.25rem;
-  height: 5.25rem;
+  width: 100%;
+  height: 10rem;
   overflow: hidden;
-  align-self: start;
-  border-radius: .875rem;
   background: #eceff2;
 }
 
@@ -5264,6 +5246,23 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+.angle-restaurant-card__distance {
+  position: absolute;
+  inset-inline-end: .75rem;
+  bottom: .75rem;
+  min-height: 1.75rem;
+  padding: .375rem .625rem;
+  border: 1px solid rgb(255 255 255 / 50%);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 92%);
+  color: #1f2937;
+  box-shadow: 0 4px 12px rgb(17 24 39 / 12%);
+  font-size: .6875rem;
+  font-weight: 800;
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
 }
 
 .angle-restaurant-card__availability {
@@ -5287,7 +5286,7 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   background: currentColor;
 }
 
-.angle-restaurant-card__body { min-width: 0; padding: .125rem 0; }
+.angle-restaurant-card__body { min-width: 0; padding: 1rem; }
 
 .angle-restaurant-card__heading {
   display: flex;
@@ -5302,14 +5301,14 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   margin: 0;
   color: #171717;
   font-family: 'Space Grotesk', 'Inter', sans-serif;
-  font-size: 1rem;
+  font-size: 1.125rem;
   letter-spacing: -.03em;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .angle-restaurant-card__body p {
-  margin: .25rem 0 .375rem;
+  margin: .375rem 0 .5rem;
   color: #606060;
   font-size: .75rem;
 }
@@ -5341,8 +5340,8 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: .375rem;
-  padding-top: .375rem;
+  margin-top: .5rem;
+  padding-top: .5rem;
   border-top: 1px solid #e8ebef;
   color: #5d5d5d;
   font-size: .75rem;
@@ -5354,11 +5353,18 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   white-space: nowrap;
 }
 
-.angle-restaurant-card__distance {
-  flex: 0 0 auto;
-  color: #374151;
-  font-weight: 750;
+.angle-restaurant-card.is-compact {
+  width: 14rem;
+  flex: 0 0 14rem;
+  scroll-snap-align: start;
 }
+
+.angle-restaurant-card.is-compact .angle-restaurant-card__media { height: 8rem; }
+.angle-restaurant-card.is-compact .angle-restaurant-card__body { padding: .75rem; }
+.angle-restaurant-card.is-compact .angle-restaurant-card__body h2 { font-size: 1rem; }
+.angle-restaurant-card.is-compact .angle-restaurant-card__availability { display: none; }
+.angle-restaurant-card.is-compact .angle-discovery-rating small { display: none; }
+.angle-restaurant-card.is-compact .angle-restaurant-card__meta { font-size: .6875rem; }
 
 .angle-discovery-state {
   display: grid;
@@ -5464,6 +5470,11 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   color: #171717;
   box-shadow: 0 5px 18px rgb(0 0 0 / 16%);
   place-items: center;
+}
+
+.angle-venue-favourite.is-active {
+  background: #171717;
+  color: #fff;
 }
 
 .angle-venue-sheet {

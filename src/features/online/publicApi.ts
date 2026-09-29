@@ -146,7 +146,7 @@ export interface PublicRestaurant {
   address: string | null
   city: string | null
   country_code: string
-  /** Публичные координаты входа в заведение для карты и расчёта расстояния. */
+  /** Публичные координаты входа в заведение для сортировки и расчёта расстояния. */
   coordinates?: { lat: number; lng: number } | null
   cuisine: string[]
   summary: string | null

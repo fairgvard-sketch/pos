@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useId, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
@@ -21,12 +21,16 @@ const discoveryCopy = {
   en: {
     area: 'Current area: Tel Aviv', searchRegion: 'Find a restaurant',
     searchPlaceholder: 'Search restaurants, cuisine...', searchLabel: 'Search restaurants',
-    filters: 'Restaurant filters', near: 'Near you', bookmarks: 'Bookmarks',
+    filters: 'Restaurant filters', near: 'Nearby restaurants', bookmarks: 'Favourites',
     reservations: 'Reservations', loading: 'Loading restaurants…',
     loadError: 'Restaurants could not be loaded.', retry: 'Try again',
     empty: 'No restaurants match this search.', navigation: 'Main navigation', home: 'Home',
     restaurants: 'Restaurants', profile: 'Profile', menuAvailable: 'Menu available',
-    live: 'Live', map: 'Restaurant map', chooseLocation: 'Choose location',
+    live: 'Live', chooseLocation: 'Choose location',
+    explore: 'Explore ANGLE', discoverTitle: 'Good places, close to you',
+    discoverSubtitle: 'Restaurants, cafés and bakeries selected for your area.',
+    browseCuisine: 'Browse by cuisine', allCuisines: 'All', recent: 'Recently visited',
+    searchResults: 'Search results', removeFavourite: 'Remove restaurant from favourites',
     changeLocation: 'Change location', locating: 'Locating…', yourLocation: 'My location',
     locationUnavailable: 'Location unavailable', locationTitle: 'Choose your location', close: 'Close',
     useCurrentLocation: 'Use my current location', currentLocationNote: 'Uses your device location only after permission.',
@@ -57,12 +61,16 @@ const discoveryCopy = {
   he: {
     area: 'האזור הנוכחי: תל אביב', searchRegion: 'חיפוש מסעדה',
     searchPlaceholder: 'חיפוש מסעדה או סוג מטבח...', searchLabel: 'חיפוש מסעדות',
-    filters: 'מסנני מסעדות', near: 'קרוב אליי', bookmarks: 'שמורים',
+    filters: 'מסנני מסעדות', near: 'מסעדות קרובות', bookmarks: 'מועדפים',
     reservations: 'הזמנות', loading: 'טוענים מסעדות…',
     loadError: 'לא הצלחנו לטעון את המסעדות.', retry: 'נסו שוב',
     empty: 'לא נמצאו מסעדות שמתאימות לחיפוש.', navigation: 'ניווט ראשי', home: 'בית',
     restaurants: 'מסעדות', profile: 'פרופיל', menuAvailable: 'התפריט זמין',
-    live: 'פעיל', map: 'מפת מסעדות', chooseLocation: 'בחירת מיקום',
+    live: 'פעיל', chooseLocation: 'בחירת מיקום',
+    explore: 'לגלות עם ANGLE', discoverTitle: 'מקומות טובים, קרוב אליכם',
+    discoverSubtitle: 'מסעדות, בתי קפה ומאפיות שנבחרו לאזור שלכם.',
+    browseCuisine: 'חיפוש לפי מטבח', allCuisines: 'הכול', recent: 'ביקרתם לאחרונה',
+    searchResults: 'תוצאות חיפוש', removeFavourite: 'הסרת המסעדה מהמועדפים',
     changeLocation: 'שינוי מיקום', locating: 'מאתרים…', yourLocation: 'המיקום שלי',
     locationUnavailable: 'המיקום לא זמין', locationTitle: 'בחירת המיקום שלכם', close: 'סגירה',
     useCurrentLocation: 'שימוש במיקום הנוכחי', currentLocationNote: 'המיקום מהמכשיר משמש רק לאחר אישור.',
@@ -148,8 +156,8 @@ const ProfileIcon = () => (
   <Icon><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></Icon>
 )
 
-const HeartIcon = () => (
-  <Icon><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z" /></Icon>
+const HeartIcon = ({ filled = false }: { filled?: boolean }) => (
+  <Icon><path fill={filled ? 'currentColor' : 'none'} d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z" /></Icon>
 )
 
 const PhotoIcon = () => (
@@ -188,6 +196,35 @@ const ClockIcon = () => (
   <Icon><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></Icon>
 )
 
+const DishIcon = () => (
+  <Icon><path d="M4 18h16M6 18a6 6 0 0 1 12 0M12 9V6" /><path d="M10 6h4" /></Icon>
+)
+
+const CoffeeIcon = () => (
+  <Icon><path d="M5 8h12v6a5 5 0 0 1-5 5h-2a5 5 0 0 1-5-5Z" /><path d="M17 10h1a3 3 0 0 1 0 6h-2M8 3v2M12 3v2" /></Icon>
+)
+
+const BakeryIcon = () => (
+  <Icon><path d="M5 16c0-5 3-9 7-9s7 4 7 9c0 2-1 3-3 3H8c-2 0-3-1-3-3Z" /><path d="m9 8 2 3M15 8l-2 3M8 14h8" /></Icon>
+)
+
+const BowlIcon = () => (
+  <Icon><path d="M4 11h16c0 5-3 8-8 8s-8-3-8-8ZM8 7l8-3M9 5l7 3" /></Icon>
+)
+
+const PizzaIcon = () => (
+  <Icon><path d="m5 19 7-15 7 15Z" /><path d="M8 13h.01M14 10h.01M13 16h.01" /></Icon>
+)
+
+function CuisineIcon({ cuisine }: { cuisine: string | null }) {
+  const value = cuisine?.toLocaleLowerCase() ?? ''
+  if (/(coffee|café|cafe)/.test(value)) return <CoffeeIcon />
+  if (/(bakery|pastry|dessert|מאפ)/.test(value)) return <BakeryIcon />
+  if (/(italian|pizza|איטלק)/.test(value)) return <PizzaIcon />
+  if (/(asian|sushi|japanese|thai|אסי|יפנ)/.test(value)) return <BowlIcon />
+  return <DishIcon />
+}
+
 const QrIcon = () => (
   <Icon size={24}>
     <path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4z" />
@@ -210,6 +247,28 @@ const DEFAULT_GUEST_LOCATION: StoredGuestLocation = {
   source: 'default',
 }
 const GUEST_LOCATION_STORAGE_KEY = 'angle:guest-location'
+const FAVOURITE_RESTAURANTS_STORAGE_KEY = 'angle:favourite-restaurants'
+const RECENT_RESTAURANTS_STORAGE_KEY = 'angle:recent-restaurants'
+const MAX_RECENT_RESTAURANTS = 8
+
+function readStoredRestaurantIds(key: string): string[] {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(key) ?? '[]') as unknown
+    return Array.isArray(parsed)
+      ? parsed.filter((value): value is string => typeof value === 'string').slice(0, MAX_RECENT_RESTAURANTS)
+      : []
+  } catch {
+    return []
+  }
+}
+
+function saveStoredRestaurantIds(key: string, ids: string[]) {
+  try {
+    localStorage.setItem(key, JSON.stringify(ids))
+  } catch {
+    // Discovery remains usable when local storage is unavailable.
+  }
+}
 
 function readGuestLocation(): StoredGuestLocation {
   try {
@@ -399,15 +458,21 @@ function PriceLevel({ value, label }: { value: number | null; label: string }) {
   return <span aria-label={`${label} ${value} / 4`}>{'₪'.repeat(value)}</span>
 }
 
-function RestaurantCard({ restaurant, copy, distance }: {
+function RestaurantCard({ restaurant, copy, distance, compact = false }: {
   restaurant: PublicRestaurant
   copy: typeof discoveryCopy.en | typeof discoveryCopy.he
   distance?: number
+  compact?: boolean
 }) {
   return (
-    <Link className="angle-restaurant-card" to={`/restaurants/${restaurant.slug}`}>
+    <Link className={`angle-restaurant-card${compact ? ' is-compact' : ''}`} to={`/restaurants/${restaurant.slug}`}>
       <div className="angle-restaurant-card__media">
         <img src={restaurant.hero_url || fallbackHero} alt="" />
+        {restaurant.coordinates && distance != null && (
+          <span className="angle-restaurant-card__distance">
+            {formatDistance(distance)} {copy.kilometres}
+          </span>
+        )}
       </div>
       <div className="angle-restaurant-card__body">
         <div className="angle-restaurant-card__heading">
@@ -420,99 +485,10 @@ function RestaurantCard({ restaurant, copy, distance }: {
         <Rating restaurant={restaurant} demo={copy.demo} compact />
         <div className="angle-restaurant-card__meta">
           <span>{restaurant.address || restaurant.city || 'Tel Aviv'}</span>
-          <span className="angle-restaurant-card__distance">
-            {restaurant.coordinates && distance != null
-              ? `${formatDistance(distance)} ${copy.kilometres}`
-              : <PriceLevel value={restaurant.price_level} label={copy.priceLevel} />}
-          </span>
+          <PriceLevel value={restaurant.price_level} label={copy.priceLevel} />
         </div>
       </div>
     </Link>
-  )
-}
-
-function RestaurantMap({ restaurants, copy, guestPosition, locationStatus, onChooseLocation }: {
-  restaurants: PublicRestaurant[]
-  copy: typeof discoveryCopy.en | typeof discoveryCopy.he
-  guestPosition: GuestPosition | null
-  locationStatus: LocationStatus
-  onChooseLocation: () => void
-}) {
-  const located = restaurants.filter((restaurant) => restaurant.coordinates)
-  const first = located[0]?.coordinates ?? null
-  const nearbyGuest = first && guestPosition && distanceKm(first, guestPosition) <= 50
-    ? guestPosition
-    : null
-  // Keep the guest coordinate in the browser: the third-party map request is
-  // framed only by public venue coordinates. The blue dot is a local overlay.
-  const visiblePoints = located.map((restaurant) => restaurant.coordinates as GuestPosition)
-  const centre = first ?? { lat: 32.0853, lng: 34.7818 }
-  const latValues = visiblePoints.length ? visiblePoints.map((point) => point.lat) : [centre.lat]
-  const lngValues = visiblePoints.length ? visiblePoints.map((point) => point.lng) : [centre.lng]
-  const rawLatSpan = Math.max(...latValues) - Math.min(...latValues)
-  const rawLngSpan = Math.max(...lngValues) - Math.min(...lngValues)
-  const latPadding = Math.max(.009, rawLatSpan * .35)
-  const lngPadding = Math.max(.014, rawLngSpan * .35)
-  const bounds = {
-    minLat: Math.min(...latValues) - latPadding,
-    maxLat: Math.max(...latValues) + latPadding,
-    minLng: Math.min(...lngValues) - lngPadding,
-    maxLng: Math.max(...lngValues) + lngPadding,
-  }
-  const place = (point: GuestPosition) => ({
-    insetInlineStart: `${Math.max(6, Math.min(94, (point.lng - bounds.minLng) / (bounds.maxLng - bounds.minLng) * 100))}%`,
-    top: `${Math.max(6, Math.min(94, (bounds.maxLat - point.lat) / (bounds.maxLat - bounds.minLat) * 100))}%`,
-  })
-  const mapUrl = first
-    ? `https://www.openstreetmap.org/export/embed.html?bbox=${bounds.minLng}%2C${bounds.minLat}%2C${bounds.maxLng}%2C${bounds.maxLat}&layer=mapnik&marker=${first.lat}%2C${first.lng}`
-    : null
-  const locateLabel = locationStatus === 'locating'
-    ? copy.locating
-    : locationStatus === 'ready'
-      ? copy.changeLocation
-      : copy.chooseLocation
-  return (
-    <section className={`angle-discovery-map${mapUrl ? ' has-live-map' : ''}`} aria-label={copy.map}>
-      {mapUrl && (
-        <iframe
-          className="angle-discovery-map-frame"
-          src={mapUrl}
-          title={copy.map}
-          loading="lazy"
-          tabIndex={-1}
-        />
-      )}
-      <button
-        type="button"
-        className="angle-discovery-locate"
-        onClick={onChooseLocation}
-        disabled={locationStatus === 'locating'}
-      >
-        <LocateIcon /> <span>{locateLabel}</span>
-      </button>
-      {nearbyGuest && (
-        <span className="angle-discovery-current-location" style={place(nearbyGuest)} aria-hidden="true"><i /></span>
-      )}
-      {located.slice(0, 4).map((restaurant) => (
-        <Link
-          key={restaurant.id}
-          className="angle-discovery-map-marker"
-          style={place(restaurant.coordinates as GuestPosition)}
-          to={`/restaurants/${restaurant.slug}`}
-          aria-label={`${restaurant.name}: ${copy.menuAvailable}`}
-        >
-          <img src={restaurant.hero_url || fallbackHero} alt="" />
-        </Link>
-      ))}
-      {mapUrl && (
-        <a
-          className="angle-discovery-map-attribution"
-          href="https://www.openstreetmap.org/copyright"
-          target="_blank"
-          rel="noreferrer"
-        >© OpenStreetMap</a>
-      )}
-    </section>
   )
 }
 
@@ -677,6 +653,34 @@ function DirectoryState({ children }: { children: ReactNode }) {
   return <div className="angle-discovery-state">{children}</div>
 }
 
+function RestaurantRail({ title, restaurants, copy, distances }: {
+  title: string
+  restaurants: PublicRestaurant[]
+  copy: typeof discoveryCopy.en | typeof discoveryCopy.he
+  distances: Map<string, number>
+}) {
+  const headingId = useId()
+  if (restaurants.length === 0) return null
+  return (
+    <section className="angle-discovery-section" aria-labelledby={headingId}>
+      <div className="angle-discovery-section-title">
+        <h2 id={headingId}>{title}</h2>
+      </div>
+      <div className="angle-discovery-rail">
+        {restaurants.map((restaurant) => (
+          <RestaurantCard
+            key={restaurant.id}
+            restaurant={restaurant}
+            copy={copy}
+            distance={distances.get(restaurant.id)}
+            compact
+          />
+        ))}
+      </div>
+    </section>
+  )
+}
+
 export function RestaurantDirectoryHome() {
   const initialLocation = useMemo(() => readGuestLocation(), [])
   const [query, setQuery] = useState('')
@@ -687,6 +691,9 @@ export function RestaurantDirectoryHome() {
   const [locationLabel, setLocationLabel] = useState(initialLocation.label)
   const [locationSource, setLocationSource] = useState<LocationSource>(initialLocation.source)
   const [isLocationPickerOpen, setIsLocationPickerOpen] = useState(false)
+  const [activeCuisine, setActiveCuisine] = useState<string | null>(null)
+  const [favouriteIds] = useState(() => readStoredRestaurantIds(FAVOURITE_RESTAURANTS_STORAGE_KEY))
+  const [recentIds] = useState(() => readStoredRestaurantIds(RECENT_RESTAURANTS_STORAGE_KEY))
   const { copy, dir } = useDiscoveryLocale()
   const restaurants = useQuery({
     queryKey: ['public-restaurants'],
@@ -695,7 +702,7 @@ export function RestaurantDirectoryHome() {
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase()
-    const matching = needle
+    const matchingSearch = needle
       ? (restaurants.data ?? []).filter((restaurant) => [
         restaurant.name,
         restaurant.city,
@@ -703,19 +710,52 @@ export function RestaurantDirectoryHome() {
         ...restaurant.cuisine,
       ].filter(Boolean).join(' ').toLocaleLowerCase().includes(needle))
       : restaurants.data ?? []
+    const matching = activeCuisine
+      ? matchingSearch.filter((restaurant) => restaurant.cuisine.some(
+        (cuisine) => cuisine.toLocaleLowerCase() === activeCuisine.toLocaleLowerCase(),
+      ))
+      : matchingSearch
     if (!guestPosition) return matching
     return [...matching].sort((left, right) => {
       const leftDistance = left.coordinates ? distanceKm(guestPosition, left.coordinates) : Number.POSITIVE_INFINITY
       const rightDistance = right.coordinates ? distanceKm(guestPosition, right.coordinates) : Number.POSITIVE_INFINITY
       return leftDistance - rightDistance
     })
-  }, [guestPosition, query, restaurants.data])
+  }, [activeCuisine, guestPosition, query, restaurants.data])
+
+  const cuisines = useMemo(() => {
+    const unique = new Map<string, string>()
+    for (const restaurant of restaurants.data ?? []) {
+      for (const cuisine of restaurant.cuisine) {
+        const key = cuisine.trim().toLocaleLowerCase()
+        if (key && !unique.has(key)) unique.set(key, cuisine.trim())
+      }
+    }
+    return [...unique.values()].sort((left, right) => left.localeCompare(right))
+  }, [restaurants.data])
 
   const distances = useMemo(() => new Map(filtered.flatMap((restaurant) =>
     guestPosition && restaurant.coordinates
       ? [[restaurant.id, distanceKm(guestPosition, restaurant.coordinates)] as const]
       : [],
   )), [filtered, guestPosition])
+
+  const allDistances = useMemo(() => new Map((restaurants.data ?? []).flatMap((restaurant) =>
+    guestPosition && restaurant.coordinates
+      ? [[restaurant.id, distanceKm(guestPosition, restaurant.coordinates)] as const]
+      : [],
+  )), [guestPosition, restaurants.data])
+
+  const restaurantsByStoredIds = (ids: string[]) => {
+    const byId = new Map((restaurants.data ?? []).map((restaurant) => [restaurant.id, restaurant]))
+    return ids.flatMap((id) => {
+      const restaurant = byId.get(id)
+      return restaurant ? [restaurant] : []
+    })
+  }
+  const favourites = restaurantsByStoredIds(favouriteIds)
+  const recent = restaurantsByStoredIds(recentIds)
+  const isFiltering = query.trim().length > 0 || activeCuisine !== null
 
   const requestLocation = () => {
     if (!navigator.geolocation) {
@@ -765,6 +805,12 @@ export function RestaurantDirectoryHome() {
           </button>
         </header>
 
+        <div className="angle-discovery-intro">
+          <span>{copy.explore}</span>
+          <h1>{copy.discoverTitle}</h1>
+          <p>{copy.discoverSubtitle}</p>
+        </div>
+
         <section className="angle-discovery-search" aria-label={copy.searchRegion}>
           <SearchIcon />
           <input
@@ -775,26 +821,38 @@ export function RestaurantDirectoryHome() {
             aria-label={copy.searchLabel}
           />
         </section>
-
-        <nav className="angle-discovery-filters" aria-label={copy.filters}>
-          <button type="button" className="is-active">{copy.near}</button>
-          <button type="button" disabled>{copy.bookmarks}</button>
-          <button type="button" disabled>{copy.reservations}</button>
-        </nav>
       </div>
 
-      <RestaurantMap
-        restaurants={filtered}
-        copy={copy}
-        guestPosition={locationSource === 'default' ? null : guestPosition}
-        locationStatus={locationStatus}
-        onChooseLocation={() => setIsLocationPickerOpen(true)}
-      />
-
-      <section className="angle-discovery-list" aria-labelledby="nearby-heading">
+      <section className="angle-discovery-cuisines" aria-labelledby="cuisines-heading">
         <div className="angle-discovery-section-title">
-          <h1 id="nearby-heading">{copy.near}</h1>
+          <h2 id="cuisines-heading">{copy.browseCuisine}</h2>
         </div>
+        <div className="angle-discovery-cuisine-rail" role="group" aria-label={copy.filters}>
+          <button
+            type="button"
+            className={activeCuisine === null ? 'is-active' : ''}
+            aria-pressed={activeCuisine === null}
+            onClick={() => setActiveCuisine(null)}
+          >
+            <span><CuisineIcon cuisine={null} /></span>
+            <small>{copy.allCuisines}</small>
+          </button>
+          {cuisines.map((cuisine) => (
+            <button
+              key={cuisine}
+              type="button"
+              className={activeCuisine === cuisine ? 'is-active' : ''}
+              aria-pressed={activeCuisine === cuisine}
+              onClick={() => setActiveCuisine((current) => current === cuisine ? null : cuisine)}
+            >
+              <span><CuisineIcon cuisine={cuisine} /></span>
+              <small>{cuisine}</small>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <div className="angle-discovery-content">
 
         {restaurants.isPending && <DirectoryState>{copy.loading}</DirectoryState>}
         {restaurants.isError && (
@@ -806,15 +864,57 @@ export function RestaurantDirectoryHome() {
         {!restaurants.isPending && !restaurants.isError && filtered.length === 0 && (
           <DirectoryState>{copy.empty}</DirectoryState>
         )}
-        {filtered.map((restaurant) => (
-          <RestaurantCard
-            key={restaurant.id}
-            restaurant={restaurant}
-            copy={copy}
-            distance={distances.get(restaurant.id)}
-          />
-        ))}
-      </section>
+        {!restaurants.isPending && !restaurants.isError && filtered.length > 0 && (
+          isFiltering ? (
+            <section className="angle-discovery-section" aria-labelledby="results-heading">
+              <div className="angle-discovery-section-title">
+                <h2 id="results-heading">{activeCuisine || copy.searchResults}</h2>
+              </div>
+              <div className="angle-discovery-grid">
+                {filtered.map((restaurant) => (
+                  <RestaurantCard
+                    key={restaurant.id}
+                    restaurant={restaurant}
+                    copy={copy}
+                    distance={distances.get(restaurant.id)}
+                  />
+                ))}
+              </div>
+            </section>
+          ) : (
+            <>
+              <RestaurantRail
+                title={copy.bookmarks}
+                restaurants={favourites}
+                copy={copy}
+                distances={allDistances}
+              />
+              <RestaurantRail
+                title={copy.recent}
+                restaurants={recent}
+                copy={copy}
+                distances={allDistances}
+              />
+              <section className="angle-discovery-section" aria-labelledby="nearby-heading">
+                <div className="angle-discovery-section-title">
+                  <h2 id="nearby-heading">{copy.near}</h2>
+                  <span>{locationLabel}</span>
+                </div>
+                <div className="angle-discovery-grid">
+                  {filtered.map((restaurant) => (
+                    <RestaurantCard
+                      key={restaurant.id}
+                      restaurant={restaurant}
+                      copy={copy}
+                      distance={distances.get(restaurant.id)}
+                    />
+                  ))}
+                </div>
+              </section>
+            </>
+          )
+        )}
+      </div>
 
       <nav className="angle-discovery-bottom" aria-label={copy.navigation}>
         <Link className="is-active" to="/"><HomeIcon /><small>{copy.home}</small></Link>
@@ -842,12 +942,34 @@ function RestaurantDetailContent({ restaurant }: { restaurant: PublicRestaurant 
   const navigate = useNavigate()
   const { copy, dir } = useDiscoveryLocale()
   const [scannerOpen, setScannerOpen] = useState(false)
+  const [isFavourite, setIsFavourite] = useState(
+    () => readStoredRestaurantIds(FAVOURITE_RESTAURANTS_STORAGE_KEY).includes(restaurant.id),
+  )
   const guestLocation = useMemo(() => readGuestLocation(), [])
   const distance = restaurant.coordinates
     ? distanceKm(guestLocation.position, restaurant.coordinates)
     : null
   const hours = todayHours(restaurant.hours, restaurant.timezone, copy)
   const menuHref = `/order/${restaurant.slug}?view=menu&browse=1`
+
+  useEffect(() => {
+    const recent = readStoredRestaurantIds(RECENT_RESTAURANTS_STORAGE_KEY)
+    saveStoredRestaurantIds(
+      RECENT_RESTAURANTS_STORAGE_KEY,
+      [restaurant.id, ...recent.filter((id) => id !== restaurant.id)].slice(0, MAX_RECENT_RESTAURANTS),
+    )
+  }, [restaurant.id])
+
+  const toggleFavourite = () => {
+    setIsFavourite((current) => {
+      const favourites = readStoredRestaurantIds(FAVOURITE_RESTAURANTS_STORAGE_KEY)
+      const next = current
+        ? favourites.filter((id) => id !== restaurant.id)
+        : [restaurant.id, ...favourites.filter((id) => id !== restaurant.id)]
+      saveStoredRestaurantIds(FAVOURITE_RESTAURANTS_STORAGE_KEY, next)
+      return !current
+    })
+  }
 
   const openScannedMenu = (value: string) => {
     try {
@@ -869,8 +991,14 @@ function RestaurantDetailContent({ restaurant }: { restaurant: PublicRestaurant 
         <button type="button" className="angle-venue-back" onClick={() => navigate(-1)} aria-label={copy.back}>
           <ArrowIcon />
         </button>
-        <button type="button" className="angle-venue-favourite" aria-label={copy.favourite}>
-          <HeartIcon />
+        <button
+          type="button"
+          className={`angle-venue-favourite${isFavourite ? ' is-active' : ''}`}
+          aria-label={isFavourite ? copy.removeFavourite : copy.favourite}
+          aria-pressed={isFavourite}
+          onClick={toggleFavourite}
+        >
+          <HeartIcon filled={isFavourite} />
         </button>
       </section>
 
