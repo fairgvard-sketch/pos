@@ -4462,7 +4462,7 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
 .angle-discovery,
 .angle-venue {
   min-height: 100vh;
-  background: #f7f4ee;
+  background: #f7f8fa;
   color: #171717;
   font-family: 'Inter', system-ui, sans-serif;
 }
@@ -4471,7 +4471,17 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   width: 100%;
   max-width: 32rem;
   margin: 0 auto;
-  padding: 0 1rem calc(6rem + env(safe-area-inset-bottom, 0px));
+  overflow-x: hidden;
+  padding-bottom: calc(6rem + env(safe-area-inset-bottom, 0px));
+}
+
+.angle-discovery-panel {
+  position: relative;
+  z-index: 3;
+  padding: 0 1rem .75rem;
+  border-bottom: 1px solid rgb(17 24 39 / 8%);
+  background: #fff;
+  box-shadow: 0 8px 22px rgb(17 24 39 / 6%);
 }
 
 .angle-discovery-header {
@@ -4506,7 +4516,7 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   min-height: 3rem;
   align-items: center;
   padding: 0 .875rem;
-  border: 1px solid #dedbd4;
+  border: 1px solid #dfe3e8;
   border-radius: 1rem;
   background: #fff;
   color: #616161;
@@ -4530,7 +4540,7 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
 .angle-discovery-filters {
   display: flex;
   overflow-x: auto;
-  padding: .75rem 0 1.5rem;
+  padding: .75rem 0 0;
 }
 
 .angle-discovery-filters > * + * { margin-inline-start: .5rem; }
@@ -4539,7 +4549,7 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   min-height: 2.75rem;
   flex: 0 0 auto;
   padding: 0 1rem;
-  border: 1px solid #e1ded7;
+  border: 1px solid #e1e5ea;
   border-radius: .875rem;
   background: #fff;
   color: #4d4d4d;
@@ -4554,6 +4564,125 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
 }
 
 .angle-discovery-filters button:disabled { opacity: .62; }
+
+.angle-discovery-map {
+  position: relative;
+  height: 15.5rem;
+  overflow: hidden;
+  border-bottom: 1px solid rgb(17 24 39 / 9%);
+  background: #eceff2 url('/discovery/tel-aviv-map.svg') center / cover no-repeat;
+  box-shadow: inset 0 -18px 28px rgb(17 24 39 / 7%);
+}
+
+.angle-discovery-map::after {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgb(255 255 255 / 5%), transparent 45%, rgb(17 24 39 / 5%));
+  content: '';
+  pointer-events: none;
+}
+
+.angle-discovery-map-frame {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  filter: grayscale(.12) saturate(.78) contrast(.94) brightness(1.04);
+  pointer-events: none;
+}
+
+.angle-discovery-locate {
+  position: absolute;
+  z-index: 5;
+  top: .75rem;
+  inset-inline-start: .75rem;
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  gap: .5rem;
+  padding: 0 .75rem;
+  border: 1px solid rgb(17 24 39 / 12%);
+  border-radius: .875rem;
+  background: rgb(255 255 255 / 94%);
+  color: #111827;
+  box-shadow: 0 5px 16px rgb(17 24 39 / 14%);
+  font-size: .75rem;
+  font-weight: 750;
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+
+.angle-discovery-locate:disabled { color: #6b7280; }
+
+.angle-discovery-map-attribution {
+  position: absolute;
+  z-index: 5;
+  inset-inline-end: .375rem;
+  bottom: .375rem;
+  padding: .1875rem .375rem;
+  border-radius: .375rem;
+  background: rgb(255 255 255 / 90%);
+  color: #4b5563;
+  font-size: .5625rem;
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.angle-discovery-current-location {
+  position: absolute;
+  z-index: 2;
+  top: 56%;
+  inset-inline-start: 46%;
+  display: grid;
+  width: 1.75rem;
+  height: 1.75rem;
+  border: 3px solid #fff;
+  border-radius: 999px;
+  background: #2f8ee5;
+  box-shadow: 0 2px 10px rgb(32 92 151 / 45%), 0 0 0 8px rgb(47 142 229 / 16%);
+  transform: translate(-50%, -50%);
+  place-items: center;
+}
+
+[dir='rtl'] .angle-discovery-current-location { transform: translate(50%, -50%); }
+
+.angle-discovery-current-location i {
+  width: .5rem;
+  height: .5rem;
+  border-radius: inherit;
+  background: #fff;
+}
+
+.angle-discovery-map-marker {
+  position: absolute;
+  z-index: 2;
+  display: block;
+  width: 3.5rem;
+  height: 3.5rem;
+  overflow: hidden;
+  border: 3px solid #fff;
+  border-radius: 1rem;
+  background: #dfe3e8;
+  box-shadow: 0 5px 16px rgb(17 24 39 / 20%);
+  transform: translate(-50%, -50%);
+  transition: transform 140ms ease;
+}
+
+[dir='rtl'] .angle-discovery-map-marker { transform: translate(50%, -50%); }
+.angle-discovery-map-marker:active { transform: translate(-50%, -50%) scale(.94); }
+[dir='rtl'] .angle-discovery-map-marker:active { transform: translate(50%, -50%) scale(.94); }
+.angle-discovery-map-marker img { width: 100%; height: 100%; object-fit: cover; }
+
+.angle-discovery-list {
+  position: relative;
+  z-index: 2;
+  margin-top: -.25rem;
+  padding: 1.25rem 1rem 0;
+  border-radius: 1.25rem 1.25rem 0 0;
+  background: #f7f8fa;
+}
 
 .angle-discovery-section-title {
   display: flex;
@@ -4584,7 +4713,7 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   width: 2rem;
   height: 2rem;
   border-radius: 999px;
-  background: #eae6de;
+  background: #eceff2;
   color: #4d4d4d;
   font-size: .75rem;
   font-weight: 750;
@@ -4592,15 +4721,18 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
 }
 
 .angle-restaurant-card {
-  display: block;
+  display: grid;
   overflow: hidden;
   margin-bottom: 1rem;
-  border: 1px solid #e4e0d8;
-  border-radius: 1.5rem;
+  padding: .75rem;
+  grid-template-columns: 5.25rem minmax(0, 1fr);
+  gap: .75rem;
+  border: 1px solid #e2e6eb;
+  border-radius: 1.25rem;
   background: #fff;
   color: inherit;
   text-decoration: none;
-  box-shadow: 0 10px 28px rgb(27 24 20 / 7%);
+  box-shadow: 0 8px 22px rgb(17 24 39 / 6%);
   transition: transform 140ms ease, box-shadow 140ms ease;
 }
 
@@ -4608,9 +4740,12 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
 
 .angle-restaurant-card__media {
   position: relative;
-  height: 12.5rem;
+  width: 5.25rem;
+  height: 5.25rem;
   overflow: hidden;
-  background: #e8e3da;
+  align-self: start;
+  border-radius: .875rem;
+  background: #eceff2;
 }
 
 .angle-restaurant-card__media img {
@@ -4620,32 +4755,51 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
 }
 
 .angle-restaurant-card__availability {
-  position: absolute;
-  inset-inline-end: .75rem;
-  bottom: .75rem;
-  padding: .5rem .75rem;
+  display: inline-flex;
+  min-height: 1.75rem;
+  flex: 0 0 auto;
+  align-items: center;
+  padding: 0 .5rem;
   border-radius: 999px;
-  background: rgb(255 255 255 / 92%);
-  color: #242424;
-  font-size: .75rem;
+  background: #e8f7ec;
+  color: #22733b;
+  font-size: .6875rem;
   font-weight: 750;
-  box-shadow: 0 4px 14px rgb(0 0 0 / 12%);
 }
 
-.angle-restaurant-card__body { padding: 1rem; }
+.angle-restaurant-card__availability i {
+  width: .375rem;
+  height: .375rem;
+  margin-inline-end: .375rem;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.angle-restaurant-card__body { min-width: 0; padding: .125rem 0; }
+
+.angle-restaurant-card__heading {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: .5rem;
+}
 
 .angle-restaurant-card__body h2 {
+  overflow: hidden;
   margin: 0;
   color: #171717;
   font-family: 'Space Grotesk', 'Inter', sans-serif;
-  font-size: 1.25rem;
+  font-size: 1rem;
   letter-spacing: -.03em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .angle-restaurant-card__body p {
-  margin: .25rem 0 .75rem;
+  margin: .25rem 0 .375rem;
   color: #606060;
-  font-size: .8125rem;
+  font-size: .75rem;
 }
 
 .angle-discovery-rating {
@@ -4663,7 +4817,7 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   margin-inline-start: .5rem;
   padding: .1875rem .375rem;
   border-radius: .375rem;
-  background: #f2eee6;
+  background: #eef0f3;
   color: #666;
   font-size: .625rem;
   font-weight: 750;
@@ -4675,11 +4829,23 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: .75rem;
-  padding-top: .75rem;
-  border-top: 1px solid #eeeae3;
+  margin-top: .375rem;
+  padding-top: .375rem;
+  border-top: 1px solid #e8ebef;
   color: #5d5d5d;
   font-size: .75rem;
+}
+
+.angle-restaurant-card__meta > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.angle-restaurant-card__distance {
+  flex: 0 0 auto;
+  color: #374151;
+  font-weight: 750;
 }
 
 .angle-discovery-state {
@@ -4716,7 +4882,7 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   min-height: calc(4.5rem + env(safe-area-inset-bottom, 0px));
   padding: .625rem .75rem env(safe-area-inset-bottom, .5rem);
   grid-template-columns: repeat(4, 1fr);
-  border-top: 1px solid #ddd9d1;
+  border-top: 1px solid #dfe3e8;
   background: rgb(255 255 255 / 96%);
   box-shadow: 0 -8px 24px rgb(20 20 20 / 6%);
   transform: translateX(50%);
@@ -4724,15 +4890,20 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
 
 .angle-discovery-bottom a,
 .angle-discovery-bottom span {
-  display: grid;
+  display: flex;
   min-height: 2.75rem;
+  flex-direction: column;
   align-items: center;
+  justify-content: center;
+  gap: .25rem;
   color: #737373;
-  font-size: .6875rem;
   font-weight: 650;
   text-align: center;
   text-decoration: none;
 }
+
+.angle-discovery-bottom small { font-size: .625rem; line-height: 1; }
+.angle-discovery-bottom svg { width: 1.25rem; height: 1.25rem; }
 
 .angle-discovery-bottom .is-active { color: #171717; font-weight: 800; }
 
@@ -4747,7 +4918,7 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   position: relative;
   height: 21rem;
   overflow: hidden;
-  background: #e8e3da;
+  background: #eceff2;
 }
 
 .angle-venue-hero > img { width: 100%; height: 100%; object-fit: cover; }
@@ -4767,6 +4938,21 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   place-items: center;
 }
 
+.angle-venue-favourite {
+  position: absolute;
+  top: calc(1rem + env(safe-area-inset-top, 0px));
+  inset-inline-end: 1rem;
+  display: grid;
+  width: 2.75rem;
+  height: 2.75rem;
+  border: 0;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 94%);
+  color: #171717;
+  box-shadow: 0 5px 18px rgb(0 0 0 / 16%);
+  place-items: center;
+}
+
 .angle-venue-sheet {
   position: relative;
   z-index: 2;
@@ -4774,7 +4960,7 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   margin-top: -2rem;
   padding: 2rem 1rem 1.5rem;
   border-radius: 2rem 2rem 0 0;
-  background: #f7f4ee;
+  background: #fff;
 }
 
 .angle-venue-logo {
@@ -4783,7 +4969,7 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   inset-inline-end: 1.5rem;
   width: 5rem;
   height: 5rem;
-  border: .25rem solid #f7f4ee;
+  border: .25rem solid #fff;
   border-radius: 1.25rem;
   background: #fff;
   object-fit: cover;
@@ -4829,7 +5015,7 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   margin-bottom: .5rem;
   padding: .5rem .75rem;
   border-radius: .75rem;
-  background: #eae6de;
+  background: #f1f3f5;
   color: #4f4f4f;
   font-size: .75rem;
   font-weight: 650;
@@ -4839,9 +5025,9 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   display: grid;
   margin-top: 1rem;
   padding: 1rem 0;
-  grid-template-columns: repeat(3, 1fr);
-  border-top: 1px solid #dedad2;
-  border-bottom: 1px solid #dedad2;
+  grid-template-columns: repeat(4, 1fr);
+  border-top: 1px solid #e1e5ea;
+  border-bottom: 1px solid #e1e5ea;
 }
 
 .angle-venue-actions a {
@@ -4854,6 +5040,8 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   font-weight: 700;
   text-decoration: none;
 }
+
+.angle-venue-actions a + a { border-inline-start: 1px solid #e1e5ea; }
 
 .angle-venue-actions a svg { margin-bottom: .375rem; }
 
@@ -4868,7 +5056,7 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   display: flex;
   margin-top: 1.5rem;
   padding: 1rem;
-  border: 1px solid #ddd8cf;
+  border: 1px solid #dfe3e8;
   border-radius: 1.25rem;
   background: #fff;
 }
@@ -4880,7 +5068,7 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   flex: 0 0 auto;
   margin-inline-end: .75rem;
   border-radius: .875rem;
-  background: #ece8e0;
+  background: #f1f3f5;
   color: #202020;
   place-items: center;
 }
@@ -4913,7 +5101,7 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   margin: 1rem 0 0;
   padding: .75rem;
   border-radius: .75rem;
-  background: #eeeae2;
+  background: #f1f3f5;
   color: #626262;
   font-size: .6875rem;
   line-height: 1.45;
@@ -4950,7 +5138,6 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
 @media (min-width: 40rem) {
   .angle-discovery,
   .angle-venue { box-shadow: 0 0 60px rgb(25 22 18 / 12%); }
-  .angle-discovery { padding-inline: 1.5rem; }
 }
 
 @media (prefers-reduced-motion: reduce) {

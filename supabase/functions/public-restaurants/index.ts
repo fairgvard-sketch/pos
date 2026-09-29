@@ -45,9 +45,15 @@ type LocationRow = {
   settings: {
     display_name?: string | null
     online_orders?: { header_url?: string | null }
-    reservations?: { enabled?: boolean }
+    reservations?: { enabled?: boolean; lat?: number | null; lng?: number | null }
   } | null
 }
+
+const publicCoordinates = (lat: number | null | undefined, lng: number | null | undefined) =>
+  typeof lat === 'number' && Number.isFinite(lat) && lat >= -90 && lat <= 90
+    && typeof lng === 'number' && Number.isFinite(lng) && lng >= -180 && lng <= 180
+    ? { lat, lng }
+    : null
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
@@ -141,6 +147,10 @@ Deno.serve(async (req) => {
       address: location.receipt_address,
       city: profile.city,
       country_code: profile.country_code,
+      coordinates: publicCoordinates(
+        location.settings?.reservations?.lat,
+        location.settings?.reservations?.lng,
+      ),
       cuisine: profile.cuisine_labels ?? [],
       summary: profile.summary,
       hero_url: heroUrl,

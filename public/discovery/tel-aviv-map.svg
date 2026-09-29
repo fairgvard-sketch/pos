@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 360" role="img" aria-label="Abstract city map">
+  <rect width="720" height="360" fill="#edf0f3"/>
+  <path d="M0 0h128c-7 51-10 105 4 153 15 51 2 105-28 145-18 24-27 42-34 62H0Z" fill="#bfd9e8"/>
+  <path d="M135 0c-13 63-4 111 11 156 11 32 4 69-10 101" fill="none" stroke="#fff" stroke-width="19"/>
+  <path d="M136 0c-10 59-2 107 13 153 12 38 4 77-13 111" fill="none" stroke="#cbd2d9" stroke-width="3"/>
+  <path d="M196 0c19 55 25 115 7 174s-8 123 36 186M327 0c-1 52 11 96 43 130 40 42 52 92 36 150-7 24-7 51 4 80M500 0c-36 70-35 129 2 178 35 46 38 105 7 182" fill="none" stroke="#fff" stroke-width="15"/>
+  <path d="M196 0c19 55 25 115 7 174s-8 123 36 186M327 0c-1 52 11 96 43 130 40 42 52 92 36 150-7 24-7 51 4 80M500 0c-36 70-35 129 2 178 35 46 38 105 7 182" fill="none" stroke="#cbd2d9" stroke-width="2"/>
+  <path d="M105 87c91 9 185 2 274-22 90-24 209-20 341 19M91 184c124-21 242-12 352 27 93 33 184 35 277 8M89 287c103-42 204-55 303-40 111 17 220 6 328-33" fill="none" stroke="#fff" stroke-width="14"/>
+  <path d="M105 87c91 9 185 2 274-22 90-24 209-20 341 19M91 184c124-21 242-12 352 27 93 33 184 35 277 8M89 287c103-42 204-55 303-40 111 17 220 6 328-33" fill="none" stroke="#cbd2d9" stroke-width="2"/>
+  <g fill="#cfe1c4" opacity=".95">
+    <path d="m270 113 72-13 29 53-43 42-69-24Z" fill="#d8e5d5"/>
+    <path d="m541 226 105-17 45 54-31 66-111-8-35-45Z" fill="#d8e5d5"/>
+    <path d="m420 18 73-8 20 57-67 35-46-39Z" fill="#d8e5d5"/>
+  </g>
+  <g fill="none" stroke="#d7dde3" stroke-width="3" opacity=".9">
+    <path d="m162 35 512 285M119 133l501 216M248 0l-81 360M405 0l-85 360M600 0l-95 360"/>
+    <path d="M107 44h589M94 135h626M86 235h634M76 327h644"/>
+  </g>
+  <g fill="#98a1ab" font-family="Arial, sans-serif" font-size="11" letter-spacing="1">
+    <text x="184" y="72">CITY CENTRE</text>
+    <text x="540" y="120">NORTH</text>
+    <text x="278" y="228">PARK</text>
+  </g>
+</svg>

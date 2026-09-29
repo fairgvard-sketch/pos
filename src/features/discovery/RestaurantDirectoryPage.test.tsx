@@ -25,6 +25,7 @@ const bulochka: PublicRestaurant = {
   address: 'Pinsker 29, Tel Aviv',
   city: 'Tel Aviv',
   country_code: 'IL',
+  coordinates: { lat: 32.0913157, lng: 34.8841284 },
   cuisine: ['Bakery', 'Coffee'],
   summary: 'Fresh pastries and coffee.',
   hero_url: null,
@@ -69,8 +70,9 @@ describe('ANGLE restaurant directory', () => {
   it('lists the existing Bulochka location and labels synthetic ratings as demo', async () => {
     renderAt('/')
 
-    const card = await screen.findByRole('link', { name: /Bulochka/i })
-    expect(card).toHaveAttribute('href', '/restaurants/bulochka')
+    const restaurantLinks = await screen.findAllByRole('link', { name: /Bulochka/i })
+    expect(restaurantLinks).toHaveLength(2)
+    expect(restaurantLinks.every((link) => link.getAttribute('href') === '/restaurants/bulochka')).toBe(true)
     expect(screen.getByText('Demo')).toBeInTheDocument()
     expect(screen.getByText('Pinsker 29, Tel Aviv')).toBeInTheDocument()
   })
@@ -90,6 +92,34 @@ describe('ANGLE restaurant directory', () => {
     })
     expect(screen.getByRole('heading', { name: 'Bulochka' })).toBeInTheDocument()
     expect(fetchPublicRestaurants).toHaveBeenCalledTimes(1)
+  })
+
+  it('uses browser location only after a guest asks and then shows the distance', async () => {
+    const getCurrentPosition = vi.fn().mockImplementation((onSuccess) => onSuccess({
+      coords: { latitude: 32.09, longitude: 34.88 },
+    }))
+    const originalGeolocation = navigator.geolocation
+    Object.defineProperty(navigator, 'geolocation', {
+      configurable: true,
+      value: { getCurrentPosition },
+    })
+
+    try {
+      renderAt('/')
+      await screen.findByRole('heading', { name: 'Bulochka' })
+      expect(getCurrentPosition).not.toHaveBeenCalled()
+
+      fireEvent.click(screen.getByRole('button', { name: 'Use my location' }))
+
+      expect(getCurrentPosition).toHaveBeenCalledTimes(1)
+      expect(await screen.findByText(/km$/i)).toBeInTheDocument()
+      expect(screen.getAllByText('Near me').length).toBeGreaterThan(0)
+    } finally {
+      Object.defineProperty(navigator, 'geolocation', {
+        configurable: true,
+        value: originalGeolocation,
+      })
+    }
   })
 
   it('opens the venue page, links to the real menu and never presents demo data as Google', async () => {
