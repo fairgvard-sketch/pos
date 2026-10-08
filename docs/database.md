@@ -962,6 +962,29 @@ ANGLE → Locations → Fiscal export.
 - Инварианты — `supabase/tests/document_issuer_snapshot.test.sql` и
   `src/features/receipt/issuerSnapshot.test.ts`.
 
+### Телефон официанта (180)
+
+Таблицы закрыты целиком, доступ только функциями. Подробности и обоснование —
+[waiter-phone](waiter-phone.md).
+
+| Объект | Назначение |
+|---|---|
+| `waiter_devices` | допущенные телефоны: точка, отдельный Auth-аккаунт без организации, `last_seen_at`, `revoked_at` |
+| `waiter_pairing_codes` | одноразовые коды допуска, 10 минут, только sha256 |
+| `print_jobs` | тикеты с телефонов для печати на T2; `id` = `op_uuid`; SELECT — касса своей точки (RLS по `auth_location_id()`), Realtime |
+| `waiter_unlock(pin)` | PIN официанта → staff-сессия; неверный PIN — `ok:false` без исключения, иначе откат стёр бы след throttle |
+| `waiter_hall`, `waiter_menu`, `waiter_bill` | зал своей точки, меню без себестоимости, открытый счёт стола |
+| `waiter_send(session, table, op_uuid, items)` | открыть/взять счёт + дозаказ + задание печати одной транзакцией; только каталог и доступные блюда, `unit_price_override`/`custom_name` — `waiter_price_forbidden` |
+| `waiter_fire`, `waiter_print_status` | Fire придержанного с тикетом; статус тикетов |
+| `claim_print_jobs(device_uuid)`, `finish_print_job` | касса T2 забирает задание (`SKIP LOCKED`) и отчитывается; 30 мин → `expired`, прерванное 2 мин → `failed/interrupted` |
+| `create_waiter_pairing_code`, `list_waiter_devices_web`, `revoke_waiter_device_web` | кабинет (owner/manager) или касса с `manage`: код допуска, список, отключение с удалением аккаунта телефона |
+| `waiter_pair_check`, `waiter_pair_bind` | только `service_role` (Edge Function `waiter-pair`) |
+
+Тела `_waiter_*` подставляют точку телефона в `request.jwt.claims`, чтобы
+переиспользовать функции кассы; публичные обёртки `waiter_*` возвращают
+исходные claims перед выходом — без этого подстановка дожила бы до конца
+транзакции. Регрессия — `supabase/tests/waiter_phones.test.sql`.
+
 ## Идемпотентность и время клиента
 
 Миграция `042_offline_idempotency.sql` добавляет `op_log` и UUID-параметры для
@@ -986,6 +1009,7 @@ UUID должен создаваться до первой попытки зап
 | `public-reserve` | профиль точки, слоты, создание/отмена брони | production |
 | `uniform-format-export` | набор Единого формата 1.31 за период (INI/BKMVDATA) | построена, деплой pending |
 | `cardcom-payment` | будущая платёжная интеграция | карантин, `503`/`501` |
+| `waiter-pair` | допуск телефона официанта по коду: создаёт аккаунт без организации и отдаёт сессию (180) | построена, деплой pending |
 
 Публичные функции используют `service_role` только внутри Deno runtime и
 возвращают allow-listed поля. Они не отдают гостю внутренние settings, staff,

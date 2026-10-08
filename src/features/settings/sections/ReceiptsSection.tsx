@@ -14,10 +14,12 @@ export default function ReceiptsSection() {
   const autoPrintReceipt = useDeviceStore((s) => s.autoPrintReceipt)
   const receiptPrompt = useDeviceStore((s) => s.receiptPrompt)
   const printKitchenTicket = useDeviceStore((s) => s.printKitchenTicket)
+  const printWaiterTickets = useDeviceStore((s) => s.printWaiterTickets)
   const setPrintMode = useDeviceStore((s) => s.setPrintMode)
   const setAutoPrintReceipt = useDeviceStore((s) => s.setAutoPrintReceipt)
   const setReceiptPrompt = useDeviceStore((s) => s.setReceiptPrompt)
   const setPrintKitchenTicket = useDeviceStore((s) => s.setPrintKitchenTicket)
+  const setPrintWaiterTickets = useDeviceStore((s) => s.setPrintWaiterTickets)
 
   return (
     <div className="space-y-6">
@@ -58,6 +60,13 @@ export default function ReceiptsSection() {
           device
           checked={printKitchenTicket}
           onChange={setPrintKitchenTicket}
+        />
+        <ToggleRow
+          label={t(lang, 'waiterTicketsTitle')}
+          hint={t(lang, 'waiterTicketsHint')}
+          device
+          checked={printWaiterTickets}
+          onChange={setPrintWaiterTickets}
         />
       </Group>
     </div>

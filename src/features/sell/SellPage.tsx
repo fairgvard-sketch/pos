@@ -5,7 +5,7 @@ import toast from 'react-hot-toast'
 import { fetchCategories, fetchItems, fetchModifierGroups, toggleItemAvailability, reorderItems } from '../menu/api'
 import { fetchCurrentShift } from '../shift/api'
 import { fetchCurrentLocation } from '../auth/api'
-import { useCartStore, cartSubtotal, cartTotal, discountAmount, loyaltyAmount, lineUnitPrice, type CartLine, type CartMod } from '../../store/cartStore'
+import { useCartStore, cartSubtotal, cartTotal, discountAmount, loyaltyAmount, lineUnitPrice, type CartLine } from '../../store/cartStore'
 import { useAuthStore } from '../../store/authStore'
 import { useLangStore } from '../../store/langStore'
 import { useDeviceStore, DEFAULT_ACTION_ORDER } from '../../store/deviceStore'
@@ -18,8 +18,9 @@ import { formatMoney, formatMoneyList } from '../../lib/money'
 import type { MenuItem, ModifierGroup } from '../../types'
 import { usePayFlow } from './usePayFlow'
 import { useTableBill } from './useTableBill'
-import { fireTargets, nextCourse, nextHeldCourse, normalizeCourse } from './courses'
+import { fireTargets, nextCourse, nextHeldCourse } from './courses'
 import ItemPicker from './ItemPicker'
+import { courseOf, defaultConfig, linkedGroups, needsPicker } from './itemConfig'
 import PaymentSheet from './PaymentSheet'
 import TipSheet from './TipSheet'
 import DiscountSheet from './DiscountSheet'
@@ -42,36 +43,6 @@ import Icon from '../../components/Icon'
 import LoadErrorState from '../../components/LoadErrorState'
 import { failedNoCache } from '../../lib/queryState'
 import { goLiveBlocked, goLiveGaps, GAP_LABELS } from '../golive/checks'
-
-/**
- * Курс подачи новой строки (179) — из каталога. Кэш меню до 179 поля не
- * знает: тогда ключа нет, и курс решит сервер, а не «без курса» кассы.
- */
-function courseOf(item: MenuItem): Pick<CartLine, 'course'> {
-  return item.course === undefined ? {} : { course: normalizeCourse(item.course) }
-}
-
-/** Дефолтная конфигурация товара — для добавления в 1 тап */
-function defaultConfig(item: MenuItem, groups: ModifierGroup[]) {
-  const variants = (item.item_variants ?? []).slice().sort((a, b) => a.sort_order - b.sort_order)
-  const variant = variants.find((v) => v.is_default) ?? variants[0] ?? null
-  const mods: CartMod[] = groups.flatMap((g) =>
-    (g.modifiers ?? [])
-      .filter((m) => m.is_default && m.is_available)
-      .map((m) => ({ id: m.id, name: m.name, priceDelta: m.price_delta }))
-  )
-  return {
-    itemId: item.id,
-    name: item.name,
-    variantId: variant?.id ?? null,
-    variantName: variant?.name ?? null,
-    basePrice: variant?.price ?? item.price,
-    mods,
-    notes: '',
-    priceOverride: null,
-    ...courseOf(item),
-  }
-}
 
 export default function SellPage() {
   const lang = useLangStore((s) => s.lang)
@@ -443,15 +414,12 @@ export default function SellPage() {
   }, [items, hiddenCatIds, activeCat, search, editMode, tileOrder])
 
   function itemGroups(item: MenuItem): ModifierGroup[] {
-    const links = (item.menu_item_modifier_groups ?? []).slice().sort((a, b) => a.sort_order - b.sort_order)
-    return links
-      .map((l) => allGroups.find((g) => g.id === l.group_id))
-      .filter((g): g is ModifierGroup => !!g)
+    return linkedGroups(item, allGroups)
   }
 
   function handleItemTap(item: MenuItem) {
     const groups = itemGroups(item)
-    if (item.ask_modifiers && (groups.length > 0 || (item.item_variants?.length ?? 0) > 0)) {
+    if (needsPicker(item, groups)) {
       setPicker({ item, line: null })
       return
     }

@@ -10,7 +10,10 @@
   )
   var href = window.__ANGLE_APP_SURFACE__ === 'menu'
     ? '/menu.webmanifest'
-    : '/manifest.webmanifest'
+    : /^\/waiter(\/|$)/.test(window.location.pathname)
+      // Телефон официанта (180): «На экран Домой» открывает /waiter, а не кассу
+      ? '/waiter.webmanifest'
+      : '/manifest.webmanifest'
 
   if (guestMatch) {
     var incoming = new URLSearchParams(window.location.search)

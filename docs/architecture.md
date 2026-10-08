@@ -50,9 +50,12 @@ Canvas receipt ─► ESC/POS raster ─► APK JS bridge ─► Sunmi printer
 этого монтирует React. Глобальный `AppErrorBoundary` ловит runtime-сбой всего
 приложения.
 
-Точка входа выбирает одну из двух независимых поверхностей: `App.tsx` для POS
-или `PublicApp.tsx` при `VITE_APP_SURFACE=menu`. Публичная сборка содержит
-гостевые маршруты, без запуска POS device sync и offline replay.
+Точка входа выбирает одну из независимых поверхностей: `App.tsx` для POS,
+`PublicApp.tsx` при `VITE_APP_SURFACE=menu` или `waiter/WaiterApp.tsx` на
+путях `/waiter` POS-сборки (телефон официанта, 180). Публичная сборка содержит
+гостевые маршруты, без запуска POS device sync и offline replay; приложение
+официанта — без device sync, offline-очереди, телеметрии и печати кассы,
+только вызовы `waiter_*` ([waiter-phone](waiter-phone.md)).
 Сайт и кабинет — отдельный репозиторий; общая карта —
 [system-overview](../../anglesite/docs/system-overview.md).
 
@@ -95,6 +98,7 @@ chunk.
 | `reports`, `dashboard` | отчёты и мобильная сводка владельца |
 | `settings` | настройки точки, сотрудников, устройства и тумблеры интерфейса POS (`settings.interface`) |
 | `offline` | экран ручного разбора очереди |
+| `src/waiter/` | телефон официанта (180): допуск, PIN, столы, счёт, меню, отправка и Fire через `waiter_*`; печать тикетов на кассе — `lib/waiterPrintRelay.ts` |
 
 Обычно feature содержит страницу/компоненты и `api.ts`. Общие примитивы лежат
 в `src/lib/`, глобальные stores — в `src/store/`, доменные типы — в
@@ -120,6 +124,8 @@ chunk.
 | `/transactions` | PIN-сессия | операции и возвраты |
 | `/inventory` | PIN-сессия | склад; действия дополнительно гейтятся правами; при `interface.inventory_enabled = false` редиректит на стартовый экран |
 | `/settings` | `owner`, `manager` | настройки этой кассы (device-scoped) + лояльность точки (113) |
+| `/waiter/pair` | публичный | допуск телефона официанта одноразовым кодом из ANGLE (180) |
+| `/waiter`, `/waiter/table/:id` | аккаунт телефона + PIN официанта | столы и заказ к столу с телефона; оплата и возвраты — только на кассе |
 | `/` (`PublicApp`) | публичный | каталог опубликованных заведений ANGLE Guest |
 | `/restaurants/:slug` | публичный | карточка заведения и вход в его меню/бронь/Live Table |
 | `/order/:locId` | публичный | гостевой онлайн-заказ |

@@ -11,6 +11,7 @@ import { initScope } from './lib/offline/scope'
 import { initDeviceSync } from './lib/deviceSync'
 import { initOrientation } from './lib/orientation'
 import { initTelemetry } from './lib/telemetry'
+import { initWaiterPrintRelay } from './lib/waiterPrintRelay'
 import DeviceSetupPage from './features/auth/DeviceSetupPage'
 import PinLoginPage from './features/auth/PinLoginPage'
 import ProtectedRoute from './features/auth/ProtectedRoute'
@@ -96,6 +97,7 @@ initOrientation()  // применяет настройку ориентации
 initNet()          // детекция сети (события браузера + проба Supabase)
 initDrain(queryClient)  // движок replay офлайн-очереди
 initTelemetry()    // журнал ошибок + heartbeat парка (074)
+initWaiterPrintRelay()  // тикеты с телефонов официантов (180), если включено на кассе
 
 /** "/" → куда нужно: нет сессии устройства → /setup, есть → /pin */
 function RootRedirect() {

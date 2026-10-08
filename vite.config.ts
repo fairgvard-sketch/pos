@@ -69,6 +69,7 @@ export default defineConfig(({ mode }) => {
           'icons.svg',
           'manifest.webmanifest',
           'menu.webmanifest',
+          'waiter.webmanifest',
           'install-manifest.js',
         ],
         // Манифест выбирается синхронно в install-manifest.js:

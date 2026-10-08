@@ -128,6 +128,7 @@ export function sanitizeDeviceSettings(
     autoPrintReceipt: bool(r.autoPrintReceipt, d.autoPrintReceipt),
     receiptPrompt: bool(r.receiptPrompt, d.receiptPrompt),
     printKitchenTicket: bool(r.printKitchenTicket, d.printKitchenTicket),
+    printWaiterTickets: bool(r.printWaiterTickets, d.printWaiterTickets),
     startScreen: enumValue<StartScreen>(r.startScreen, ['sell', 'hall', 'queue'], d.startScreen),
     orientation: enumValue<Orientation>(r.orientation, ['auto', 'landscape', 'portrait'], d.orientation),
     tapeWidth: enumValue<TapeWidth>(r.tapeWidth, [58, 80], d.tapeWidth),

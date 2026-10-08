@@ -31,6 +31,13 @@ if (!caps.ok) {
   // Один репозиторий, две независимые поверхности. В menu-сборке Rollup
   // удаляет недостижимую ветку POS, поэтому гостю не отдаются кассовые
   // маршруты и не запускаются device sync / offline queue / auth.
-  const appModule = isPublicSurface ? import('./PublicApp') : import('./App')
+  // Телефон официанта (180) — третья поверхность POS-сборки: свой вход
+  // /waiter, без device sync, офлайн-очереди и печати кассы.
+  const isWaiter = !isPublicSurface && /^\/waiter(\/|$)/.test(window.location.pathname)
+  const appModule = isPublicSurface
+    ? import('./PublicApp')
+    : isWaiter
+      ? import('./waiter/WaiterApp')
+      : import('./App')
   void appModule.then(({ default: App }) => mountApp(App))
 }

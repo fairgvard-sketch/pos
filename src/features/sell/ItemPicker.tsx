@@ -7,7 +7,7 @@ import type { CartLine, CartMod } from '../../store/cartStore'
 import { lineUnitPrice } from '../../store/cartStore'
 
 interface Props {
-  item: MenuItem
+  item: Pick<MenuItem, 'id' | 'name' | 'price' | 'item_variants'>
   groups: ModifierGroup[] // только привязанные к товару, в порядке привязки
   /** Существующая строка корзины (редактирование) или null (добавление) */
   line: CartLine | null

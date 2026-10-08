@@ -1,0 +1,32 @@
+{
+  "name": "Angle — Waiter",
+  "short_name": "Angle Waiter",
+  "description": "Заказ к столу с телефона официанта",
+  "id": "/waiter",
+  "start_url": "/waiter",
+  "scope": "/waiter",
+  "lang": "he",
+  "dir": "rtl",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f8f9fb",
+  "theme_color": "#f8f9fb",
+  "icons": [
+    {
+      "src": "/pwa-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/pwa-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/pwa-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

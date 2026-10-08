@@ -54,6 +54,11 @@ export interface DevicePreferences {
   receiptPrompt: boolean
   /** Печать тикета на кухню/бар при оплате и дозаказе стола */
   printKitchenTicket: boolean
+  /**
+   * Эта касса печатает тикеты с телефонов официантов (180). Включают на
+   * одной кассе — той, чей принтер у кухни; задание получает ровно одна.
+   */
+  printWaiterTickets: boolean
   /** Стартовый экран после PIN (per-device, P5) */
   startScreen: StartScreen
   /** Ориентация интерфейса (per-device, P5) */
@@ -109,6 +114,7 @@ interface DeviceState extends DevicePreferences {
   setAutoPrintReceipt: (v: boolean) => void
   setReceiptPrompt: (v: boolean) => void
   setPrintKitchenTicket: (v: boolean) => void
+  setPrintWaiterTickets: (v: boolean) => void
   setStartScreen: (v: StartScreen) => void
   setOrientation: (v: Orientation) => void
   setTapeWidth: (v: TapeWidth) => void
@@ -142,6 +148,7 @@ export const DEFAULT_DEVICE_PREFERENCES: DevicePreferences = {
   autoPrintReceipt: false,
   receiptPrompt: false,
   printKitchenTicket: false,
+  printWaiterTickets: false,
   startScreen: 'sell',
   orientation: 'auto',
   tapeWidth: 80,
@@ -174,6 +181,7 @@ export const useDeviceStore = create<DeviceState>()(
       setAutoPrintReceipt: (autoPrintReceipt) => set({ autoPrintReceipt }),
       setReceiptPrompt: (receiptPrompt) => set({ receiptPrompt }),
       setPrintKitchenTicket: (printKitchenTicket) => set({ printKitchenTicket }),
+      setPrintWaiterTickets: (printWaiterTickets) => set({ printWaiterTickets }),
       setStartScreen: (startScreen) => set({ startScreen }),
       setOrientation: (orientation) => set({ orientation }),
       setTapeWidth: (tapeWidth) => set({ tapeWidth }),
