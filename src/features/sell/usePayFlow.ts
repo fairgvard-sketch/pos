@@ -23,6 +23,7 @@ import type { OrderBuyer } from './PaymentSheet'
 import type { TipOption } from './TipSheet'
 import { tipPercentBase, buildTipOptions } from './tipMath'
 import { toTicketLine } from './ticket'
+import type { KitchenTicketLine } from '../receipt/printCanvas'
 
 /** Заказ в потоке оплаты: после place, до pay (см. комментарий у payingOrder) */
 export interface PayingOrder {
@@ -39,6 +40,11 @@ export interface PayingOrder {
    * ставит place+pay в офлайн-очередь одной группой.
    */
   offline?: boolean
+  /**
+   * Придержанные курсы счёта стола (179): оплата отпускает их на кухню,
+   * поэтому они печатаются в кухонном тикете вместе с новыми позициями.
+   */
+  releasedLines?: KitchenTicketLine[]
 }
 
 /**
@@ -105,6 +111,9 @@ export function usePayFlow() {
   const [splitRemainder, setSplitRemainder] = useState<{ orderId: string; total: number } | null>(null)
   // Режим столов: после финальной части цепочки сплита вернуться в зал
   const returnToHall = useRef(false)
+  // Придержанное, которое отпустит оплата счёта стола (179): печатается
+  // один раз — первой оплаченной частью цепочки
+  const releasedOnPay = useRef<KitchenTicketLine[]>([])
 
   // Настройка кассы «PIN после каждой продажи» (Square: after each sale) —
   // по завершении продажи сбрасываем сотрудника и уводим на PIN
@@ -135,6 +144,7 @@ export function usePayFlow() {
   // Вход в оплату заказа. Чаевые с кнопки — сразу в оплату (не спрашиваем
   // второй раз, расходуем); иначе авто-шаг TipSheet, если включён
   function startPayment(o: PayingOrder) {
+    if (o.releasedLines) releasedOnPay.current = o.releasedLines
     setPayingOrder(null)
     if (collectTips && cartTip > 0) {
       const tip = cartTip
@@ -166,6 +176,7 @@ export function usePayFlow() {
   function cancelPayFlow(o: PayingOrder) {
     setTipping(null)
     setPayingOrder(null)
+    releasedOnPay.current = []
     if (o.fromCart) {
       setClientUuid(crypto.randomUUID())
       if (!o.offline) voidTableOrder(o.orderId).catch(() => {})
@@ -177,7 +188,9 @@ export function usePayFlow() {
     // Автопечать — ДО очистки корзины (тикету нужны заметки позиций).
     // Тикет печатается один раз на заказ: при сплите остаток его не дублирует
     // (корзина к тому моменту уже пуста).
-    if (kitchenTicketOn && cart.lines.length > 0) {
+    const ticketLines = [...cart.lines.map(toTicketLine), ...releasedOnPay.current]
+    releasedOnPay.current = []
+    if (kitchenTicketOn && ticketLines.length > 0) {
       void printKitchenTicket(
         {
           dailyNumber: num,
@@ -186,7 +199,7 @@ export function usePayFlow() {
           tableLabel: cart.tableCtx?.tableLabel ?? cart.tableLabel,
           staffName: staff?.name ?? '',
           deviceName,
-          lines: cart.lines.map(toTicketLine),
+          lines: ticketLines,
         },
         printMode === 'rawbt'
       )

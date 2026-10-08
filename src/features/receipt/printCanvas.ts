@@ -956,6 +956,12 @@ export interface KitchenTicketData {
   /** Имя устройства из настроек — строка מדפסת в шапке */
   deviceName: string
   lines: KitchenTicketLine[]
+  /**
+   * Fire (179): придержанный курс стола отправлен официантом — вместо
+   * пометки дозаказа строка FIRE, чтобы кухня не спутала его с новым
+   * заказом и начала готовить сразу.
+   */
+  fire?: boolean
 }
 
 // Тикет, как и чек, печатается только на иврите — независимо от языка кассы
@@ -967,6 +973,8 @@ const TICKET_HE = {
   order: 'הזמנה',
   table: 'שולחן',
   addon: 'תוספת להזמנה',
+  // Кухонная команда «готовить сейчас» — общий термин, а не перевод
+  fire: 'FIRE',
   here: 'כאן',
   takeaway: 'לקחת',
   delivery: 'משלוח',
@@ -1043,7 +1051,7 @@ export function renderKitchenTicketCanvas(d: KitchenTicketData, tape?: TapeWidth
   }
   subRow(d.tableLabel ? `${TICKET_HE.table} ${d.tableLabel}` : TICKET_HE[d.orderType])
   if (d.customerName) subRow(d.customerName)
-  subRow(numText ? `${TICKET_HE.order}: ${numText}` : TICKET_HE.addon)
+  subRow(d.fire ? TICKET_HE.fire : numText ? `${TICKET_HE.order}: ${numText}` : TICKET_HE.addon)
   y += 6
   divider()
 

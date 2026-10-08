@@ -1,4 +1,5 @@
 import type { CartLine } from '../../store/cartStore'
+import type { BillLine } from '../tables/api'
 import type { KitchenTicketLine } from '../receipt/printCanvas'
 
 /** Строка корзины → строка кухонного тикета (с заметками) */
@@ -9,5 +10,16 @@ export function toTicketLine(l: CartLine): KitchenTicketLine {
     variantName: l.variantName,
     modifiers: l.mods.map((m) => m.name),
     notes: l.notes,
+  }
+}
+
+/** Строка открытого счёта → строка кухонного тикета (Fire, освобождение оплатой) */
+export function billLineToTicketLine(l: BillLine): KitchenTicketLine {
+  return {
+    qty: l.qty,
+    name: l.name,
+    variantName: l.variant_name,
+    modifiers: l.modifiers,
+    notes: l.notes ?? '',
   }
 }

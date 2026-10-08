@@ -7,6 +7,7 @@ import {
   voidTableOrder,
   setOrderDiscount,
   voidOrderItem,
+  fireOrderItems,
   type TableOrderResult,
 } from '../../features/tables/api'
 import { markItemReady, markOrderReady, setOrderUrgent } from '../../features/queue/api'
@@ -160,6 +161,11 @@ async function runOp(op: OutboxOp): Promise<string | undefined> {
       if (!orderId) throw new Error('offline order not synced')
       await withTimeout(appendToOrder(orderId, op.payload.staffId, op.payload.lines, op.id))
       return orderId
+    }
+    case 'table.fire': {
+      // Строки уже на сервере (append раньше по FIFO); повтор — no-op
+      await withTimeout(fireOrderItems(op.payload.itemIds, op.payload.staffId))
+      return resolveOrderId(op) ?? undefined
     }
     case 'table.void': {
       const orderId = resolveOrderId(op)

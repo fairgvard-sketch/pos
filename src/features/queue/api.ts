@@ -66,6 +66,8 @@ export async function fetchQueue(): Promise<QueueOrder[]> {
     `)
     .or('status.eq.paid,and(status.eq.open,table_id.not.is.null),and(status.eq.open,source.eq.site)')
     .is('order_items.voided_at', null)
+    // Придержанные курсы стола (179) кухня не видит до Fire
+    .eq('order_items.held', false)
     .order('created_at', { ascending: true })
   if (error) throw error
   return (data as (QueueOrder & { table_id: string | null })[]).filter((o) => {

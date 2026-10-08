@@ -29,7 +29,10 @@ export function receiptToKitchenTicket(r: Receipt, deviceName: string): KitchenT
   }
 }
 
-/** Тикет по открытому счёту стола (зал): весь текущий счёт одним тикетом */
+/**
+ * Тикет по открытому счёту стола (зал): весь текущий счёт одним тикетом.
+ * Придержанные курсы (179) кухня не видит до Fire — в перепечатку не идут.
+ */
 export function billToKitchenTicket(args: {
   dailyNumber: number
   tableLabel: string
@@ -44,7 +47,7 @@ export function billToKitchenTicket(args: {
     tableLabel: args.tableLabel,
     staffName: args.staffName,
     deviceName: args.deviceName,
-    lines: args.lines.map((l) => ({
+    lines: args.lines.filter((l) => !l.held).map((l) => ({
       qty: l.qty,
       name: l.name,
       variantName: l.variant_name,

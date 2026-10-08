@@ -89,6 +89,8 @@ export default function QueuePage() {
 
   const orders = useMemo<MergedQueueOrder[]>(() => {
     const echo: MergedQueueOrder[] = Object.values(localOrders)
+      // Придержанные курсы (179) кухня не видит до Fire
+      .map((lo) => ({ ...lo, lines: lo.lines.filter((l) => !l.held) }))
       .filter((lo) => lo.status !== 'synced' && !lo.localFulfilled && lo.lines.length > 0)
       // counter-эхо появляется после оплаты (есть чек); столы — сразу
       .filter((lo) => lo.kind === 'table' || lo.receipt !== null)

@@ -183,6 +183,7 @@ HEAD 200 доказывает лишь доступность объекта с�
 | 13.09.2026 | Replay 001–167 → изолированный restore → 168 | 93 auth/public таблицы, 1 585 строк: хеши совпали до/после 168; 5 sequences; 217 FK / 4 974 ссылки без нарушений; деньги/счётчики/смены без расхождений; аварийная загрузка откатилась |
 | 13.09.2026 | Storage и Dashboard | 27/27 используемых объектов есть среди 78 metadata-строк; разрешённые HEAD: 27 HTTP 200. Blob-копии нет. Free: scheduled backups/PITR не активны |
 | 13.09.2026 | Перед 169, схема 168: `backups/2026-09-13T16-42-26.866Z-ZM7VqN` | Штатный db:dump завершён; manifest, SHA256 и COPY auth.users/orders/payments проверены. Roles 297 B, schema 958 627 B, data 545 676 B; каталог 0700, файлы 0600, Git-ignored, FileVault On. Новый restore/offsite/Storage/PITR NOT RUN; F5 остаётся OPEN |
+| 08.10.2026 | Перед 179, схема 178: `backups/2026-10-08T07-57-14.875Z-Vs6S0d` | Штатный `createBackup` из `scripts/db-dump.mjs`; CLI 2.118.0 вместо свежего npx 2.120.0 — новой версии нужен ручной допуск к Связке ключей macOS. Manifest `complete`, SHA256 записаны, COPY orders/payments на месте. Roles 358 B, schema 986 174 B, data 590 111 B; каталог 0700, файлы 0600, Git-ignored. Restore/offsite/Storage/PITR NOT RUN; F5 остаётся OPEN |
 
 Точный протокол — в общем [журнале](../../anglesite/docs/verification-log.md).
 F5 закрыт только в части локального restore; production RPO/RTO не подтверждены.

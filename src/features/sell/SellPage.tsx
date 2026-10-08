@@ -18,6 +18,7 @@ import { formatMoney, formatMoneyList } from '../../lib/money'
 import type { MenuItem, ModifierGroup } from '../../types'
 import { usePayFlow } from './usePayFlow'
 import { useTableBill } from './useTableBill'
+import { fireTargets, nextCourse, nextHeldCourse, normalizeCourse } from './courses'
 import ItemPicker from './ItemPicker'
 import PaymentSheet from './PaymentSheet'
 import TipSheet from './TipSheet'
@@ -42,6 +43,14 @@ import LoadErrorState from '../../components/LoadErrorState'
 import { failedNoCache } from '../../lib/queryState'
 import { goLiveBlocked, goLiveGaps, GAP_LABELS } from '../golive/checks'
 
+/**
+ * Курс подачи новой строки (179) — из каталога. Кэш меню до 179 поля не
+ * знает: тогда ключа нет, и курс решит сервер, а не «без курса» кассы.
+ */
+function courseOf(item: MenuItem): Pick<CartLine, 'course'> {
+  return item.course === undefined ? {} : { course: normalizeCourse(item.course) }
+}
+
 /** Дефолтная конфигурация товара — для добавления в 1 тап */
 function defaultConfig(item: MenuItem, groups: ModifierGroup[]) {
   const variants = (item.item_variants ?? []).slice().sort((a, b) => a.sort_order - b.sort_order)
@@ -60,6 +69,7 @@ function defaultConfig(item: MenuItem, groups: ModifierGroup[]) {
     mods,
     notes: '',
     priceOverride: null,
+    ...courseOf(item),
   }
 }
 
@@ -145,7 +155,10 @@ export default function SellPage() {
     existingLines, existingSubtotal, billLinesFailed, retryBillLines,
     tableDiscount, orderDiscount, voidItem,
     saveBill, billToPay, voidBill, exitTable,
+    selectedHeld, toggleHeld, fire,
   } = useTableBill(startPayment)
+  // Fire оптимистичен: двойной тап отправил бы сразу и следующий курс
+  const lastFireAt = useRef(0)
 
   // null = все товары. Категории всегда остаются на экране, поэтому товар
   // доступен первым тапом без отдельного «корня» витрины.
@@ -885,31 +898,74 @@ export default function SellPage() {
               <LoadErrorState title={t(lang, 'billLoadError')} onRetry={retryBillLines} />
             </div>
           )}
-          {/* Режим стола: уже заказанные позиции. Свайп влево → снять с счёта (void). */}
-          {tableCtx && existingLines.length > 0 && (
-            <div className="rounded-2xl bg-gray-50 border border-gray-100 p-3 space-y-1.5">
-              <div className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">{t(lang, 'alreadyInBill')}</div>
-              {existingLines.map((l) => (
-                <ExistingBillRow
-                  key={l.id}
-                  line={l}
-                  lang={lang}
-                  isRtl={isRtl}
-                  busy={voidItem.isPending}
-                  onVoid={() => requirePerm(canVoidOrder, () => {
-                    // Офлайн-строки (эхо) и работа без сети: снятие позиции
-                    // требует сервера — упрощение v1, см. план фазы 7
-                    const isEchoLine = (tableEcho?.lines ?? []).some((el) => el.key === l.id)
-                    if (isEchoLine || !online) {
-                      toast.error(t(lang, 'offlineBlockedHint'))
-                      return
-                    }
-                    if (confirm(t(lang, 'confirmVoidItem'))) voidItem.mutate(l.id)
-                  })}
-                />
-              ))}
-            </div>
-          )}
+          {/* Режим стола: уже заказанные позиции. Свайп влево → снять с счёта (void).
+              Придержанные курсы (179) — отдельным блоком: кухня их не видит,
+              официант выделяет строки тапом или отправляет ближайший курс. */}
+          {tableCtx && existingLines.length > 0 && (() => {
+            const sentLines = existingLines.filter((l) => !l.held)
+            const heldLines = existingLines.filter((l) => l.held)
+            const targets = fireTargets(existingLines, selectedHeld)
+            const picked = heldLines.filter((l) => selectedHeld.has(l.id)).length
+            const renderRow = (l: (typeof existingLines)[number]) => (
+              <ExistingBillRow
+                key={l.id}
+                line={l}
+                lang={lang}
+                isRtl={isRtl}
+                busy={voidItem.isPending}
+                selected={selectedHeld.has(l.id)}
+                onToggle={l.held ? () => toggleHeld(l.id) : undefined}
+                onVoid={() => requirePerm(canVoidOrder, () => {
+                  // Офлайн-строки (эхо) и работа без сети: снятие позиции
+                  // требует сервера — упрощение v1, см. план фазы 7
+                  const isEchoLine = (tableEcho?.lines ?? []).some((el) => (el.lineId ?? el.key) === l.id)
+                  if (isEchoLine || !online) {
+                    toast.error(t(lang, 'offlineBlockedHint'))
+                    return
+                  }
+                  if (confirm(t(lang, 'confirmVoidItem'))) voidItem.mutate(l.id)
+                })}
+              />
+            )
+            return (
+              <>
+                {sentLines.length > 0 && (
+                  <div className="rounded-2xl bg-gray-50 border border-gray-100 p-3 space-y-1.5">
+                    <div className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">{t(lang, 'alreadyInBill')}</div>
+                    {sentLines.map(renderRow)}
+                  </div>
+                )}
+                {heldLines.length > 0 && (
+                  <div className="rounded-2xl bg-gray-50 border border-gray-100 p-3 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-bold text-gray-500 uppercase tracking-wide flex items-center gap-1">
+                        <Icon name="fire" size={14} />
+                        {t(lang, 'heldTitle')}
+                      </span>
+                      <button
+                        type="button"
+                        disabled={targets.length === 0 || fire.isPending}
+                        onClick={() => {
+                          const now = Date.now()
+                          if (now - lastFireAt.current < 1000) return
+                          lastFireAt.current = now
+                          fire.mutate(targets)
+                        }}
+                        className="btn-primary h-11 !rounded-xl !px-4 flex items-center gap-1.5 shrink-0"
+                      >
+                        <Icon name="fire" size={18} />
+                        {picked > 0
+                          ? t(lang, 'fireSelected').replace('{n}', String(picked))
+                          : t(lang, 'fireCourse').replace('{n}', String(nextHeldCourse(existingLines) ?? ''))}
+                      </button>
+                    </div>
+                    <p className="text-xs text-gray-500 leading-snug">{t(lang, 'heldHint')}</p>
+                    {heldLines.map(renderRow)}
+                  </div>
+                )}
+              </>
+            )
+          })()}
 
           {cart.lines.length === 0 && (!tableCtx || (existingLines.length === 0 && !billLinesFailed)) && (
             <div className="min-h-[240px] h-full flex flex-col items-center justify-center text-center px-6 pb-8">
@@ -943,6 +999,7 @@ export default function SellPage() {
                 onEditPrice={() => requirePerm(canPriceEdit, () => setEditingPrice(l))}
                 onRemove={() => cart.removeLine(l.key)}
                 onQty={() => setEditingQty(l)}
+                onCycleCourse={tableCtx ? () => cart.updateLine(l.key, { course: nextCourse(l.course) }) : undefined}
               />
             )
           })}
@@ -1172,7 +1229,7 @@ export default function SellPage() {
             if (picker.line) {
               cart.updateLine(picker.line.key, { ...cfg, priceOverride: null })
             } else {
-              cart.addLine({ itemId: picker.item.id, name: picker.item.name, ...cfg, priceOverride: null })
+              cart.addLine({ itemId: picker.item.id, name: picker.item.name, ...cfg, priceOverride: null, ...courseOf(picker.item) })
             }
             setPicker(null)
           }}

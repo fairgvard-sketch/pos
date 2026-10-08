@@ -20,6 +20,7 @@ import transactionsOutline from '../assets/icons/transactions.svg?raw'
 import workShiftOutline from '../assets/icons/work-shift.svg?raw'
 import inventoryOutline from '../assets/icons/inventory.svg?raw'
 import guestOutline from '../assets/icons/guest.svg?raw'
+import fireOutline from '../assets/icons/fire.svg?raw'
 
 import ordersDark from '../assets/icons/active/orders-dark.svg?raw'
 import menuDark from '../assets/icons/active/menu-dark.svg?raw'
@@ -33,7 +34,7 @@ export type IconName =
   | 'orders' | 'menu' | 'analytics' | 'settings' | 'customers'
   | 'cash' | 'card' | 'customItem' | 'discount' | 'note' | 'refund' | 'queue' | 'shift'
   | 'register' | 'hall' | 'reservations' | 'orderQueue' | 'online'
-  | 'transactions' | 'workShift' | 'inventory' | 'guest'
+  | 'transactions' | 'workShift' | 'inventory' | 'guest' | 'fire'
 
 const outline: Record<IconName, string> = {
   orders: ordersOutline,
@@ -58,6 +59,7 @@ const outline: Record<IconName, string> = {
   workShift: workShiftOutline,
   inventory: inventoryOutline,
   guest: guestOutline,
+  fire: fireOutline,
 }
 
 // Тёмный (активный) вариант есть не у всех — падаем на outline

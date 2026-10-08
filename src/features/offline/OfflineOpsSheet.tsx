@@ -23,6 +23,7 @@ const KIND_LABEL: Record<OutboxOp['kind'], TranslationKey> = {
   'order.pay': 'offlineOpPay',
   'table.open': 'offlineOpOpen',
   'table.append': 'offlineOpAppend',
+  'table.fire': 'offlineOpFire',
   'table.void': 'offlineOpVoid',
   'table.discount': 'offlineOpDiscount',
   'table.void_item': 'offlineOpVoidItem',

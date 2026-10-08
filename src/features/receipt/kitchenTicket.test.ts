@@ -98,8 +98,8 @@ describe('receiptToKitchenTicket', () => {
 describe('billToKitchenTicket', () => {
   it('открытый счёт стола → тикет с номером заказа и столом', () => {
     const lines: BillLine[] = [
-      { id: 'i1', name: 'כריך', variant_name: null, qty: 1, line_total: 3200, modifiers: ['ללא בצל'], notes: 'לחלק לשניים' },
-      { id: 'i2', name: 'לימונדה', variant_name: 'קטן', qty: 3, line_total: 3600, modifiers: [], notes: null },
+      { id: 'i1', name: 'כריך', variant_name: null, qty: 1, line_total: 3200, modifiers: ['ללא בצל'], notes: 'לחלק לשניים', course: null, held: false },
+      { id: 'i2', name: 'לימונדה', variant_name: 'קטן', qty: 3, line_total: 3600, modifiers: [], notes: null, course: null, held: false },
     ]
     const t = billToKitchenTicket({ dailyNumber: 17, tableLabel: '5', staffName: 'רות', deviceName: 'קופה 2', lines })
     expect(t.dailyNumber).toBe(17)
@@ -109,5 +109,14 @@ describe('billToKitchenTicket', () => {
       { qty: 1, name: 'כריך', variantName: null, modifiers: ['ללא בצל'], notes: 'לחלק לשניים' },
       { qty: 3, name: 'לימונדה', variantName: 'קטן', modifiers: [], notes: '' },
     ])
+  })
+
+  it('придержанный курс (179) в перепечатку для кухни не попадает', () => {
+    const lines: BillLine[] = [
+      { id: 'i1', name: 'סלט', variant_name: null, qty: 1, line_total: 3000, modifiers: [], notes: null, course: 1, held: false },
+      { id: 'i2', name: 'סטייק', variant_name: null, qty: 1, line_total: 9000, modifiers: [], notes: null, course: 2, held: true },
+    ]
+    const t = billToKitchenTicket({ dailyNumber: 17, tableLabel: '5', staffName: '', deviceName: '', lines })
+    expect(t.lines.map((l) => l.name)).toEqual(['סלט'])
   })
 })

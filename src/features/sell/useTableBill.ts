@@ -2,18 +2,19 @@ import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { appendToOrder, voidTableOrder, fetchOrderLines, voidOrderItem, setOrderDiscount, type BillLine } from '../tables/api'
-import { useCartStore, cartSubtotal, lineUnitPrice, type CartDiscount } from '../../store/cartStore'
+import { appendToOrder, voidTableOrder, fetchOrderLines, voidOrderItem, setOrderDiscount, fireOrderItems, type BillLine } from '../tables/api'
+import { useCartStore, cartSubtotal, lineUnitPrice, type CartDiscount, type CartLine } from '../../store/cartStore'
 import { useAuthStore } from '../../store/authStore'
 import { useLangStore } from '../../store/langStore'
 import { useDeviceStore } from '../../store/deviceStore'
 import { printKitchenTicket } from '../receipt/printService'
-import { OfflineError, withOfflineFallback } from '../../lib/offline/net'
+import { OfflineError, withOfflineFallback, useNetStore } from '../../lib/offline/net'
 import { failedNoCache } from '../../lib/queryState'
-import { enqueueTableAppend, enqueueTableVoid } from '../../lib/offline/enqueue'
+import { enqueueTableAppend, enqueueTableVoid, enqueueTableFire, firedPendingIds } from '../../lib/offline/enqueue'
 import { useOutboxStore } from '../../lib/offline/outboxStore'
 import { t } from '../../lib/i18n'
-import { toTicketLine } from './ticket'
+import { toTicketLine, billLineToTicketLine } from './ticket'
+import { heldLineKeys, normalizeCourse } from './courses'
 import type { PayingOrder } from './usePayFlow'
 
 /**
@@ -38,6 +39,11 @@ export function useTableBill(startPayment: (o: PayingOrder) => void) {
   // серверному счёту). isLocalTable = счёт существует только на кассе.
   const tableEcho = useOutboxStore((s) => (tableCtx ? s.localOrders[tableCtx.orderId] : undefined))
   const isLocalTable = !!tableEcho && tableEcho.serverOrderId === null
+  const online = useNetStore((s) => s.online)
+  // Fire без сети (179): серверные строки, отправленные из очереди, уже не
+  // ждут — оверлей держится, пока операция не доехала (переживает рестарт)
+  const ops = useOutboxStore((s) => s.ops)
+  const firedPending = useMemo(() => firedPendingIds(ops), [ops])
 
   // Уже заказанные позиции открытого счёта стола (read-only, до дозаказа).
   // cart.lines в режиме стола = только НОВЫЕ позиции, поэтому существующие
@@ -52,19 +58,31 @@ export function useTableBill(startPayment: (o: PayingOrder) => void) {
   // пустым — кассир не видит, что уже заказано (P1-7). Ошибку показывает SellPage.
   const billLinesFailed = failedNoCache(linesQ)
   const retryBillLines = () => { void linesQ.refetch() }
-  // Строки счёта: серверные + офлайн-дозаказы из эха
+  // Строки счёта: серверные + офлайн-дозаказы из эха. Эхо дозаказа к
+  // серверному счёту переживает синк; строка с id кассы (179), уже
+  // пришедшая с сервера, второй раз не рисуется.
   const existingLines = useMemo<BillLine[]>(() => {
+    const serverIds = new Set(fetchedLines.map((l) => l.id))
     const echoLines: BillLine[] = (tableEcho?.lines ?? []).map((l) => ({
-      id: l.key,
+      // id кассы (179) — тот же, что получит строка на сервере
+      id: l.lineId ?? l.key,
       name: l.name,
       variant_name: l.variantName,
       qty: l.qty,
       line_total: lineUnitPrice(l) * l.qty,
       modifiers: l.mods.map((m) => m.name),
       notes: l.notes.trim() || null,
-    }))
-    return [...fetchedLines, ...echoLines]
-  }, [fetchedLines, tableEcho])
+      course: normalizeCourse(l.course),
+      held: l.held === true,
+    })).filter((l) => !serverIds.has(l.id))
+    const server = fetchedLines.map((l) => (l.held && firedPending.has(l.id) ? { ...l, held: false } : l))
+    return [...server, ...echoLines]
+  }, [fetchedLines, tableEcho, firedPending])
+  // Строки, которых сервер ещё не знает (офлайн-дозаказ в пути)
+  const unsyncedIds = useMemo(() => {
+    const serverIds = new Set(fetchedLines.map((l) => l.id))
+    return new Set(existingLines.filter((l) => !serverIds.has(l.id)).map((l) => l.id))
+  }, [existingLines, fetchedLines])
   const existingSubtotal = existingLines.reduce((s, l) => s + l.line_total, 0)
 
   // Скидка на счёт стола живёт на ЗАКАЗЕ (не в корзине): ставится RPC
@@ -103,47 +121,61 @@ export function useTableBill(startPayment: (o: PayingOrder) => void) {
     onError: (e) => toast.error(e.message),
   })
 
+  /**
+   * Строки отправки (179): id строки выдаётся ДО первой попытки (повтор
+   * после таймаута несёт тот же id — офлайн-Fire ссылается на него), а
+   * удержание считается тем же правилом, что на сервере.
+   */
+  function prepareLines(lines: CartLine[]): CartLine[] {
+    const held = heldLineKeys(existingLines, lines)
+    return lines.map((l) => ({ ...l, lineId: l.lineId ?? crypto.randomUUID(), held: held.has(l.key) }))
+  }
+
   // Режим столов: сохранить дозаказ в открытый счёт (остаётся open) → назад в зал.
   // Локальный стол → всегда в очередь (FIFO за open); серверный + обрыв сети →
   // в очередь с тем же op_uuid (если вызов долетел, replay не задвоит строки).
   const saveBill = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (): Promise<CartLine[]> => {
       const c = useCartStore.getState()
       const key = tableCtx!.orderId
+      const lines = prepareLines(c.lines)
       if (isLocalTable) {
         enqueueTableAppend({
           orderKey: key,
           orderId: null,
           staffId: staff!.id,
-          lines: c.lines,
+          lines,
           totalAfter: (tableEcho?.total ?? 0) + cartSubtotal(c.lines),
         })
-        return
+        return lines
       }
       const opUuid = crypto.randomUUID()
       try {
-        await withOfflineFallback(() => appendToOrder(key, staff!.id, c.lines, opUuid))
+        await withOfflineFallback(() => appendToOrder(key, staff!.id, lines, opUuid))
       } catch (e) {
         if (e instanceof OfflineError) {
           enqueueTableAppend({
             orderKey: key,
             orderId: key,
             staffId: staff!.id,
-            lines: c.lines,
+            lines,
             totalAfter: tableCtx!.existingTotal + cartSubtotal(c.lines),
             opUuid,
             tableId: tableCtx!.tableId,
             tableLabel: tableCtx!.tableLabel,
           })
-          return
+          return lines
         }
         throw e
       }
+      return lines
     },
-    onSuccess: () => {
+    onSuccess: (lines) => {
       toast.success(t(lang, 'billSaved'))
-      // Тикет на кухню для дозаказа: только новые позиции, без номера
-      if (kitchenTicketOn && cart.lines.length > 0) {
+      // Тикет на кухню для дозаказа: только новые позиции, без номера.
+      // Придержанные курсы кухня не видит — они уйдут тикетом FIRE.
+      const now = lines.filter((l) => !l.held)
+      if (kitchenTicketOn && now.length > 0) {
         void printKitchenTicket(
           {
             dailyNumber: null,
@@ -152,7 +184,7 @@ export function useTableBill(startPayment: (o: PayingOrder) => void) {
             tableLabel: tableCtx!.tableLabel,
             staffName: staff?.name ?? '',
             deviceName,
-            lines: cart.lines.map(toTicketLine),
+            lines: now.map(toTicketLine),
           },
           printMode === 'rawbt'
         )
@@ -172,29 +204,30 @@ export function useTableBill(startPayment: (o: PayingOrder) => void) {
     mutationFn: async (): Promise<{ total: number; offline: boolean }> => {
       const c = useCartStore.getState()
       const key = tableCtx!.orderId
+      const lines = prepareLines(c.lines)
       if (isLocalTable) {
         let totalAfter = tableEcho?.total ?? tableCtx!.existingTotal
-        if (c.lines.length > 0) {
-          totalAfter += cartSubtotal(c.lines)
-          enqueueTableAppend({ orderKey: key, orderId: null, staffId: staff!.id, lines: c.lines, totalAfter })
+        if (lines.length > 0) {
+          totalAfter += cartSubtotal(lines)
+          enqueueTableAppend({ orderKey: key, orderId: null, staffId: staff!.id, lines, totalAfter })
         }
         return { total: totalAfter, offline: true }
       }
       const opUuid = crypto.randomUUID()
       try {
-        if (c.lines.length > 0) {
-          const r = await withOfflineFallback(() => appendToOrder(key, staff!.id, c.lines, opUuid))
+        if (lines.length > 0) {
+          const r = await withOfflineFallback(() => appendToOrder(key, staff!.id, lines, opUuid))
           return { total: r.total, offline: false }
         }
         return { total: tableCtx!.existingTotal, offline: false }
       } catch (e) {
         if (e instanceof OfflineError) {
-          const totalAfter = tableCtx!.existingTotal + cartSubtotal(c.lines)
+          const totalAfter = tableCtx!.existingTotal + cartSubtotal(lines)
           enqueueTableAppend({
             orderKey: key,
             orderId: key,
             staffId: staff!.id,
-            lines: c.lines,
+            lines,
             totalAfter,
             opUuid,
             tableId: tableCtx!.tableId,
@@ -212,9 +245,97 @@ export function useTableBill(startPayment: (o: PayingOrder) => void) {
         total: billTotal,
         intent: 'choose',
         offline,
+        // Оплата отпускает придержанное (179): кухня получит его тикетом
+        // вместе с позициями, добавленными перед оплатой
+        releasedLines: existingLines.filter((l) => l.held).map(billLineToTicketLine),
       })
     },
     onError: (e) => toast.error(e.message),
+  })
+
+  // ── Fire (179): придержанные курсы → кухня ──────────────────
+  // Выделение живёт в рамках захода на стол
+  const [selectedHeld, setSelectedHeld] = useState<Set<string>>(() => new Set())
+  const [prevSelOrderId, setPrevSelOrderId] = useState(tableCtx?.orderId)
+  if (tableCtx?.orderId !== prevSelOrderId) {
+    setPrevSelOrderId(tableCtx?.orderId)
+    setSelectedHeld(new Set())
+  }
+  function toggleHeld(id: string) {
+    setSelectedHeld((cur) => {
+      const next = new Set(cur)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  // Optimistic-first: строки отпускаются и тикет FIRE печатается сразу,
+  // сеть не ждём. Без сети, у локального стола и для строк офлайн-дозаказа —
+  // в очередь (FIFO: их append доедет раньше).
+  const fire = useMutation({
+    mutationFn: async (targets: BillLine[]) => {
+      const key = tableCtx!.orderId
+      const itemIds = targets.map((l) => l.id)
+      // Строки офлайн-дозаказа сервер ещё не знает: Fire по ним едет
+      // очередью за их append (FIFO), а не обгоняет его
+      const touchesEcho = itemIds.some((id) => unsyncedIds.has(id))
+      const enqueue = () => enqueueTableFire({
+        orderKey: key,
+        orderId: isLocalTable ? null : key,
+        itemIds,
+        staffId: staff!.id,
+      })
+      if (isLocalTable || touchesEcho || !online) {
+        enqueue()
+        return
+      }
+      try {
+        await withOfflineFallback(() => fireOrderItems(itemIds, staff!.id))
+      } catch (e) {
+        if (e instanceof OfflineError) {
+          enqueue()
+          return
+        }
+        throw e
+      }
+    },
+    onMutate: async (targets) => {
+      const ids = new Set(targets.map((l) => l.id))
+      const linesKey = ['order_lines', tableCtx!.orderId]
+      await qc.cancelQueries({ queryKey: linesKey })
+      const prev = qc.getQueryData<BillLine[]>(linesKey)
+      qc.setQueryData<BillLine[]>(linesKey, (old) =>
+        old?.map((l) => (ids.has(l.id) ? { ...l, held: false } : l))
+      )
+      setSelectedHeld(new Set())
+      toast.success(t(lang, 'fireSent'))
+      if (kitchenTicketOn) {
+        void printKitchenTicket(
+          {
+            dailyNumber: null,
+            orderType: 'here',
+            customerName: '',
+            tableLabel: tableCtx!.tableLabel,
+            staffName: staff?.name ?? '',
+            deviceName,
+            lines: targets.map(billLineToTicketLine),
+            fire: true,
+          },
+          printMode === 'rawbt'
+        )
+      }
+      return { prev }
+    },
+    onError: (e, _targets, ctx) => {
+      if (ctx?.prev) qc.setQueryData(['order_lines', tableCtx?.orderId], ctx.prev)
+      toast.error(e.message)
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ['order_lines', tableCtx?.orderId] })
+      qc.invalidateQueries({ queryKey: ['open_table_orders'] })
+      qc.invalidateQueries({ queryKey: ['queue'] })
+    },
   })
 
   // Режим столов: отменить пустой/ошибочный счёт.
@@ -269,5 +390,6 @@ export function useTableBill(startPayment: (o: PayingOrder) => void) {
     existingLines, existingSubtotal, billLinesFailed, retryBillLines,
     tableDiscount, orderDiscount, voidItem,
     saveBill, billToPay, voidBill, exitTable,
+    selectedHeld, toggleHeld, fire,
   }
 }

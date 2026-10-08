@@ -312,6 +312,9 @@ export interface MenuItem {
   sku: string | null
   track_inventory: boolean
   stock: number | null
+  /** Курс подачи по умолчанию (179): 1–3; null — без курса, на кухню сразу.
+   *  Необязателен: кэш меню, сохранённый до 179, поля не знает. */
+  course?: number | null
   item_variants?: ItemVariant[]
   menu_item_modifier_groups?: { group_id: string; sort_order: number }[]
   variant_supplies?: VariantSupply[]

@@ -16,6 +16,7 @@ import { useOutboxStore } from '../../lib/offline/outboxStore'
 import { enqueueTableOpen } from '../../lib/offline/enqueue'
 import type { Table, TableStatus } from '../../types'
 import AppSidebar from '../../components/AppSidebar'
+import Icon from '../../components/Icon'
 import LoadErrorState from '../../components/LoadErrorState'
 import { failedNoCache } from '../../lib/queryState'
 import ShiftGate from '../shift/ShiftGate'
@@ -81,6 +82,10 @@ export default function HallPage() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () =>
         qc.invalidateQueries({ queryKey: ['open_table_orders'] })
       )
+      // Fire с соседней кассы меняет только позиции (179) — гасим значок курса
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'order_items' }, () =>
+        qc.invalidateQueries({ queryKey: ['open_table_orders'] })
+      )
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tables' }, () =>
         qc.invalidateQueries({ queryKey: ['tables'] })
       )
@@ -112,6 +117,7 @@ export default function HallPage() {
         opened_at: lo.createdAt,
         staff_name: null,
         item_count: lo.lines.reduce((s, l) => s + l.qty, 0),
+        has_held: lo.lines.some((l) => l.held === true),
       })
     }
     return map
@@ -407,6 +413,17 @@ export default function HallPage() {
                       service.hasNew ? 'bg-red-600' : 'bg-emerald-600'
                     }`}>
                       {service.count}
+                    </span>
+                  )}
+                  {/* Неподанный курс (179): официант не должен забыть про Fire */}
+                  {occ?.has_held && (
+                    <span
+                      role="img"
+                      aria-label={t(lang, 'tableHasHeld')}
+                      title={t(lang, 'tableHasHeld')}
+                      className="absolute bottom-1 start-1.5 text-gray-900"
+                    >
+                      <Icon name="fire" size={16} />
                     </span>
                   )}
                   <span className="text-xl font-black tabular-nums leading-none">{tb.label}</span>

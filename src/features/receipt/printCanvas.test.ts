@@ -233,6 +233,55 @@ describe('renderKitchenTicketCanvas — высота по контенту', () 
   })
 })
 
+describe('renderKitchenTicketCanvas — FIRE (179)', () => {
+  /** Тексты, нарисованные тикетом: стаб с записью fillText */
+  function drawnTexts(data: Parameters<typeof renderKitchenTicketCanvas>[0]): string[] {
+    const texts: string[] = []
+    const rec = new Proxy({ font: '', textAlign: '', fillStyle: '', strokeStyle: '', lineWidth: 0 } as Record<string, unknown>, {
+      get(target, prop) {
+        if (prop === 'fillText') return (s: string) => { texts.push(s) }
+        if (prop === 'measureText') return () => ({ width: 10 })
+        if (typeof prop === 'string' && prop in target) return target[prop]
+        return () => undefined
+      },
+      set(target, prop, value) {
+        if (typeof prop === 'string') target[prop] = value
+        return true
+      },
+    })
+    const orig = HTMLCanvasElement.prototype.getContext
+    HTMLCanvasElement.prototype.getContext = function getContext() { return rec } as never
+    try {
+      renderKitchenTicketCanvas(data)
+    } finally {
+      HTMLCanvasElement.prototype.getContext = orig
+    }
+    return texts
+  }
+
+  const ticket = {
+    dailyNumber: null,
+    orderType: 'here' as const,
+    tableLabel: '5',
+    customerName: '',
+    staffName: 'קיריל',
+    deviceName: 'SUNMI',
+    lines: [{ name: 'סטייק', variantName: null, qty: 2, modifiers: [], notes: '' }],
+  }
+
+  it('отправленный курс помечен FIRE, а не дозаказом', () => {
+    const texts = drawnTexts({ ...ticket, fire: true })
+    expect(texts).toContain('FIRE')
+    expect(texts).not.toContain('תוספת להזמנה')
+  })
+
+  it('обычный дозаказ стола без пометки FIRE', () => {
+    const texts = drawnTexts(ticket)
+    expect(texts).toContain('תוספת להזמנה')
+    expect(texts).not.toContain('FIRE')
+  })
+})
+
 // ── Ширина ленты 58/80 мм ─────────────────────────────────
 
 function baseZ(): ZReportData {

@@ -187,10 +187,29 @@ export async function appendToOrder(
       notes: l.notes,
       custom_name: l.itemId === null ? l.name : null,
       unit_price_override: l.priceOverride,
+      // Курс (179): ключ только когда касса его знает — строки офлайн-очереди
+      // до 179 его не несут, и тогда курс решает каталог на сервере
+      ...(l.course !== undefined ? { course: l.course } : {}),
+      // id строки, выданный кассой: офлайн-Fire ссылается на него до синка
+      ...(l.lineId ? { id: l.lineId } : {}),
     })),
   })
   if (error) throw new Error(error.message)
   return data as { total: number }
+}
+
+/**
+ * Fire (179): придержанные строки открытого счёта уходят на кухню.
+ * Абсолютная установка состояния — повтор из офлайн-очереди no-op.
+ */
+export async function fireOrderItems(itemIds: string[], staffId: string): Promise<{ fired: string[] }> {
+  const { data, error } = await supabase.rpc('fire_order_items', {
+    p_item_ids: itemIds,
+    p_staff_id: staffId,
+    ...(currentStaffToken() ? { p_staff_session: currentStaffToken() } : {}),
+  })
+  if (error) throw new Error(error.message)
+  return data as { fired: string[] }
 }
 
 export async function voidTableOrder(orderId: string, reason?: string): Promise<void> {
@@ -226,17 +245,21 @@ export interface BillLine {
   modifiers: string[]
   /** Заметка позиции — для перепечатки кухонного тикета по открытому счёту */
   notes: string | null
+  /** Курс подачи (179); null — без курса */
+  course: number | null
+  /** Придержана до Fire — кухня её ещё не видит */
+  held: boolean
 }
 
 /** Активные позиции открытого счёта (voided исключены) */
 export async function fetchOrderLines(orderId: string): Promise<BillLine[]> {
   const { data, error } = await supabase
     .from('order_items')
-    .select('id, name, variant_name, qty, line_total, notes, order_item_modifiers(name)')
+    .select('id, name, variant_name, qty, line_total, notes, course, held, order_item_modifiers(name)')
     .eq('order_id', orderId)
     .is('voided_at', null)
   if (error) throw new Error(error.message)
-  return (data as { id: string; name: string; variant_name: string | null; qty: number; line_total: number; notes: string | null; order_item_modifiers: { name: string }[] }[]).map((r) => ({
+  return (data as { id: string; name: string; variant_name: string | null; qty: number; line_total: number; notes: string | null; course: number | null; held: boolean; order_item_modifiers: { name: string }[] }[]).map((r) => ({
     id: r.id,
     name: r.name,
     variant_name: r.variant_name,
@@ -244,6 +267,8 @@ export async function fetchOrderLines(orderId: string): Promise<BillLine[]> {
     line_total: r.line_total,
     modifiers: (r.order_item_modifiers ?? []).map((m) => m.name),
     notes: r.notes,
+    course: r.course ?? null,
+    held: r.held === true,
   }))
 }
 
@@ -287,6 +312,8 @@ export interface TableOccupancy {
   opened_at: string
   staff_name: string | null
   item_count: number   // сумма qty активных позиций
+  /** Есть придержанные до Fire позиции (179) — значок на столе */
+  has_held: boolean
 }
 
 interface OpenOrderRow {
@@ -296,7 +323,7 @@ interface OpenOrderRow {
   daily_number: number
   created_at: string
   staff: { name: string } | null
-  order_items: { qty: number; voided_at: string | null }[]
+  order_items: { qty: number; voided_at: string | null; held: boolean }[]
 }
 
 /** Открытые счета всех столов точки — для раскраски карты зала и инфо на карточке */
@@ -304,7 +331,7 @@ export async function fetchOpenTableOrders(): Promise<TableOccupancy[]> {
   const { data, error } = await supabase
     .from('orders')
     // staff через явный FK: после 025 у orders два FK на staff (staff_id, refunded_by)
-    .select('id, table_id, total, daily_number, created_at, staff:staff!orders_staff_id_fkey(name), order_items(qty, voided_at)')
+    .select('id, table_id, total, daily_number, created_at, staff:staff!orders_staff_id_fkey(name), order_items(qty, voided_at, held)')
     .eq('status', 'open')
     .not('table_id', 'is', null)
   if (error) throw new Error(error.message)
@@ -318,5 +345,6 @@ export async function fetchOpenTableOrders(): Promise<TableOccupancy[]> {
     item_count: (o.order_items ?? [])
       .filter((i) => i.voided_at === null)
       .reduce((s, i) => s + i.qty, 0),
+    has_held: (o.order_items ?? []).some((i) => i.voided_at === null && i.held === true),
   }))
 }

@@ -24,6 +24,16 @@ export interface CartLine {
   // Ручная цена за 1 шт (агороты). Перебивает basePrice+моды. Для свободных
   // позиций обязательна; для каталожных — опциональная коррекция.
   priceOverride: number | null
+  /**
+   * Курс подачи (179): 1–3, null — без курса. По умолчанию из каталога,
+   * официант меняет на счёте стола. Необязателен: строки, сохранённые
+   * в офлайн-очереди до 179, его не знают — тогда курс решает каталог.
+   */
+  course?: number | null
+  /** id строки заказа, выданный кассой при отправке (офлайн-Fire, 179) */
+  lineId?: string
+  /** Строка эха придержана до Fire (считает касса тем же правилом, что сервер) */
+  held?: boolean
 }
 
 export type OrderType = 'here' | 'takeaway' | 'delivery'
@@ -135,6 +145,8 @@ function sameConfig(a: CartLine, b: Omit<CartLine, 'key' | 'qty'>): boolean {
   return (
     a.itemId === b.itemId &&
     a.variantId === b.variantId &&
+    // Строка с курсом, сменённым вручную, не поглощает новую с курсом каталога
+    (a.course ?? null) === (b.course ?? null) &&
     a.notes === '' &&
     b.notes === '' &&
     a.mods.length === b.mods.length &&
@@ -165,7 +177,7 @@ interface CartState {
   tableCtx: TableCtx | null
   addLine: (line: Omit<CartLine, 'key' | 'qty'>) => void
   updateQty: (key: string, qty: number) => void
-  updateLine: (key: string, patch: Partial<Pick<CartLine, 'variantId' | 'variantName' | 'basePrice' | 'mods' | 'notes' | 'priceOverride'>>) => void
+  updateLine: (key: string, patch: Partial<Pick<CartLine, 'variantId' | 'variantName' | 'basePrice' | 'mods' | 'notes' | 'priceOverride' | 'course'>>) => void
   removeLine: (key: string) => void
   setOrderType: (t: OrderType) => void
   setCustomerName: (name: string) => void

@@ -193,6 +193,31 @@ supabase test db
 Платёжные способы: `cash`, `card`, `cibus`, `tenbis`, `bit`. Карта и кошельки
 сейчас являются учётными каналами; Cardcom ещё не проводит транзакцию из кассы.
 
+### Курсы подачи и Fire (179)
+
+- `menu_items.course` — курс по умолчанию (1–3); `NULL` — без курса, позиция
+  уходит на кухню сразу. Задаётся в карточке блюда кабинета через
+  `save_menu_item` (ключ `course`; без ключа курс не меняется).
+- `order_items.course` — снимок курса строки. Касса присылает его ключом
+  `course` в `p_items` (официант мог сменить курс строки); без ключа —
+  каталог. Ключ `id` в `p_items` — id строки, выданный кассой до первой
+  попытки: офлайн-Fire ссылается на строку раньше, чем она доехала.
+- `order_items.held` — строка придержана и не видна кухне. Правило
+  `append_to_order` (только счёт стола): строка курса c ≥ 2 ждёт, если в
+  счёте есть активная строка более раннего курса — уже поданная или из того
+  же дозаказа. Нет закуски — горячее уходит сразу. Касса считает то же
+  правило в `src/features/sell/courses.ts`.
+- `fire_order_items(p_item_ids, p_staff_id, p_staff_session)` — отпускает
+  выбранные строки открытого счёта, пишет `fired_at`/`fired_by`. Абсолютная
+  установка: повтор — no-op, неизвестный id — `item not found`.
+- `mark_order_ready` не трогает придержанное; `split_order` переносит
+  `course`/`held` вместе с частью строки.
+- Триггер `orders_release_held_items`: переход `open → paid/fulfilled`
+  отпускает оставшееся (`fired_by` пуст). Придержанное живёт только в
+  открытом счёте — оплаченное блюдо обязано дойти до кухни.
+
+Инварианты — `supabase/tests/table_courses.test.sql`.
+
 Начиная с `068`, публичный `pay_order` валидирует стандартный израильский лимит
 наличной части и точное равенство суммы payment rows сумме к оплате. Прежняя
 реализация переименована в `pay_order_unchecked`, её `EXECUTE` отозван у
@@ -534,6 +559,7 @@ capability (что технически разрешено), entitlement (что
 
 - `place_order`, `pay_order`;
 - `open_or_get_table_order`, `append_to_order`;
+- `fire_order_items` — Fire придержанных курсов стола (179);
 - `move_table_order`, `merge_table_orders`, `split_order`;
 - `set_order_discount`, `void_order_item`, `void_table_order`;
 - `mark_item_ready`, `mark_order_ready`;

@@ -49,6 +49,18 @@ export interface TableAppendPayload {
   lines: CartLine[]
 }
 
+/**
+ * Fire (179): придержанные строки счёта стола уходят на кухню. itemIds —
+ * серверные id или id, выданные кассой строкам офлайн-дозаказа (lineId):
+ * FIFO гарантирует, что append этих строк доехал раньше. Сервер ставит
+ * состояние абсолютно — повтор после таймаута/рестарта no-op.
+ */
+export interface TableFirePayload {
+  itemIds: string[]
+  /** Кто отправил — фиксируется на момент тапа, не replay */
+  staffId: string
+}
+
 export interface TableVoidPayload {
   reason: string | null
 }
@@ -117,6 +129,7 @@ export type OutboxOp = OpBase &
     | { kind: 'order.pay'; payload: PayPayload }
     | { kind: 'table.open'; payload: TableOpenPayload }
     | { kind: 'table.append'; payload: TableAppendPayload }
+    | { kind: 'table.fire'; payload: TableFirePayload }
     | { kind: 'table.void'; payload: TableVoidPayload }
     | { kind: 'table.discount'; payload: TableDiscountPayload }
     | { kind: 'table.void_item'; payload: VoidItemPayload }

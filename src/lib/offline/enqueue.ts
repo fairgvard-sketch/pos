@@ -240,6 +240,43 @@ export function enqueueTableAppend(args: {
 }
 
 /**
+ * Fire без сети (179) или за неотправленными операциями того же счёта.
+ * Строки эха (офлайн-дозаказ) отпускаются сразу — их видит очередь кухни
+ * на этой кассе; серверные строки отпускает оверлей firedPendingIds.
+ */
+export function enqueueTableFire(args: {
+  orderKey: string
+  orderId: string | null
+  itemIds: string[]
+  staffId: string
+}): void {
+  const ob = useOutboxStore.getState()
+  ob.enqueue({
+    ...opBase(args.orderKey, args.orderId),
+    id: crypto.randomUUID(),
+    kind: 'table.fire',
+    payload: { itemIds: args.itemIds, staffId: args.staffId },
+  })
+  const echo = ob.localOrders[args.orderKey]
+  if (echo) {
+    const fired = new Set(args.itemIds)
+    ob.patchLocalOrder(args.orderKey, {
+      lines: echo.lines.map((l) => (l.lineId && fired.has(l.lineId) ? { ...l, held: false } : l)),
+    })
+  }
+  void kickDrain()
+}
+
+/** id строк, отправленных Fire без сети и ещё не доехавших до сервера */
+export function firedPendingIds(ops: OutboxOp[]): Set<string> {
+  const ids = new Set<string>()
+  for (const op of ops) {
+    if (op.kind === 'table.fire') for (const id of op.payload.itemIds) ids.add(id)
+  }
+  return ids
+}
+
+/**
  * Оплата счёта СТОЛА офлайн. Эхо стола уже существует (открыт офлайн)
  * либо создаётся здесь (серверный счёт, сеть упала на оплате).
  * После установки receipt стол на карте зала освобождается.
@@ -272,6 +309,8 @@ export function enqueueTablePayment(args: {
   const echo = ob.localOrders[args.orderKey]
   if (echo) {
     ob.patchLocalOrder(args.orderKey, {
+      // Оплата отпускает придержанные курсы (179) — эхо кухни видит их сразу
+      lines: echo.lines.map((l) => (l.held ? { ...l, held: false } : l)),
       receipt: args.receipt,
       total: args.total,
       provisionalNumber: echo.provisionalNumber ?? args.provisionalNumber,

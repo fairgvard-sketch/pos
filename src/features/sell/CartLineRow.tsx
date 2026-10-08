@@ -21,6 +21,7 @@ export default function CartLineRow({
   onEditPrice,
   onRemove,
   onQty,
+  onCycleCourse,
 }: {
   line: CartLine
   item: MenuItem | undefined
@@ -30,6 +31,8 @@ export default function CartLineRow({
   onEditPrice: () => void
   onRemove: () => void
   onQty: () => void
+  /** Счёт стола (179): тап по чипу меняет курс подачи строки */
+  onCycleCourse?: () => void
 }) {
   const [removing, setRemoving] = useState(false)
   const { dx, setDx, dragging, handlers } = useRowSwipe({
@@ -106,6 +109,24 @@ export default function CartLineRow({
               </span>
             )}
           </div>
+          {onCycleCourse && (
+            /* Курс подачи: по умолчанию из каталога, тап — следующий.
+               Кнопка 44px, видимая плашка компактнее, чтобы строка не росла */
+            <button
+              type="button"
+              onClick={onCycleCourse}
+              aria-label={t(lang, 'courseChipHint')}
+              className="shrink-0 h-11 -my-2 -mx-1 px-1 flex items-center active:scale-[0.97]"
+            >
+              <span
+                className={`h-7 px-2 rounded-lg text-xs font-bold tabular-nums flex items-center ${
+                  l.course ? 'bg-gray-100 text-gray-900' : 'border border-dashed border-gray-300 text-gray-500'
+                }`}
+              >
+                {l.course ? t(lang, 'courseChip').replace('{n}', String(l.course)) : t(lang, 'courseChipNone')}
+              </span>
+            </button>
+          )}
           <button
             onClick={onEditPrice}
             className={`font-bold text-sm tabular-nums shrink-0 ${
