@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { translations, localeOf, formatTime, LANGS, t } from './i18n'
+import { translations, localeOf, formatTime, formatElapsedHm, LANGS, t } from './i18n'
 import { formatMoney } from './money'
 
 /**
@@ -58,6 +58,13 @@ describe('язык интерфейса', () => {
 
   it('сумма по-английски — точка в дробной части', () => {
     expect(formatMoney(125050, 'en')).toContain('1,250.50')
+  })
+
+  it('время за столом — чч:мм', () => {
+    const now = Date.parse('2026-10-09T12:00:00Z')
+    expect(formatElapsedHm('2026-10-09T11:48:00Z', now)).toBe('00:12')
+    expect(formatElapsedHm('2026-10-09T10:40:00Z', now)).toBe('01:20')
+    expect(formatElapsedHm('2026-10-09T12:05:00Z', now)).toBe('00:00')
   })
 
   it('t отдаёт перевод выбранного языка', () => {

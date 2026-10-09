@@ -5417,6 +5417,15 @@ export function formatTime(date: string | Date, lang: Lang): string {
   })
 }
 
+/** Сколько прошло часами и минутами: «00:12», «01:20» — карточка стола в зале */
+export function formatElapsedHm(iso: string, nowTs: number): string {
+  const mins = Math.max(0, Math.floor((nowTs - new Date(iso).getTime()) / 60000))
+  const h = Math.floor(mins / 60)
+  const m = mins % 60
+  // Без padStart: его нет в WebView Chrome 52 на T2
+  return `${h < 10 ? '0' : ''}${h}:${m < 10 ? '0' : ''}${m}`
+}
+
 /** Компактное «сколько прошло»: «5 мин», «1 ч 20 мин». nowTs — для реактивности. */
 export function formatElapsed(iso: string, nowTs: number, lang: Lang): string {
   const mins = Math.max(0, Math.floor((nowTs - new Date(iso).getTime()) / 60000))

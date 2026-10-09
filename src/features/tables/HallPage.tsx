@@ -9,7 +9,7 @@ import { fetchCurrentShift } from '../shift/api'
 import { useCartStore } from '../../store/cartStore'
 import { useAuthStore } from '../../store/authStore'
 import { useLangStore } from '../../store/langStore'
-import { t, formatElapsed, formatTime } from '../../lib/i18n'
+import { t, formatTime, formatElapsedHm } from '../../lib/i18n'
 import { supabase } from '../../lib/supabase'
 import { OfflineError, withOfflineFallback } from '../../lib/offline/net'
 import { useOutboxStore } from '../../lib/offline/outboxStore'
@@ -427,10 +427,11 @@ export default function HallPage() {
                     </span>
                   )}
                   <span className="text-xl font-black tabular-nums leading-none">{tb.label}</span>
-                  {/* Карточка чистая: только статус, детали — в окне стола (долгий тап) */}
+                  {/* Карточка чистая: «свободен/занят» показывает цвет рамки, словами —
+                      кто взял стол и сколько сидят; детали — в окне стола (долгий тап) */}
                   {busy ? (
-                    <span className={`text-[11px] font-semibold ${overdue ? 'text-red-500' : 'text-amber-600'}`}>
-                      {t(lang, 'tableBusy')} · {formatElapsed(occ!.opened_at, nowTs, lang)}
+                    <span className={`max-w-full truncate text-[11px] font-semibold ${overdue ? 'text-red-500' : 'text-amber-600'}`}>
+                      {occ!.staff_name ? `${occ!.staff_name} · ` : ''}{formatElapsedHm(occ!.opened_at, nowTs)}
                     </span>
                   ) : reserved ? (
                     <span className="text-[11px] font-semibold text-blue-500">
@@ -439,9 +440,7 @@ export default function HallPage() {
                     </span>
                   ) : disabled ? (
                     <span className="text-[11px] text-gray-400">{t(lang, 'tableDisabled')}</span>
-                  ) : (
-                    <span className="text-[11px] text-emerald-600">{t(lang, 'tableFree')}</span>
-                  )}
+                  ) : null}
                 </button>
               )
             })}
