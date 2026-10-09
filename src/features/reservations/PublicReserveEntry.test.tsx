@@ -238,6 +238,15 @@ describe('полоса часов на первом экране', () => {
     expect(strip().textContent).toContain(dayName('2027-03-20'))
     expect(strip().textContent).toContain(t('he', 'rsvDayClosed'))
   })
+
+  it('сегодня закрыто — без плашки-предупреждения, дата сама на ближайшем открытом дне', async () => {
+    // 2027-03-20 — суббота (закрыто), ближайший открытый — воскресенье 21-го
+    vi.setSystemTime(new Date('2027-03-20T08:00:00.000Z'))
+    await openEntry()
+    expect(screen.queryByText('שימו לב, לא ניתן להזמין מקומות להיום')).not.toBeInTheDocument()
+    expect(document.querySelector('.public-reserve-quick-value')?.textContent).toContain('21')
+    expect(screen.getByRole('button', { name: t('he', 'rsvShowTimes') })).toBeEnabled()
+  })
 })
 
 describe('переход к выбору зала и времени', () => {

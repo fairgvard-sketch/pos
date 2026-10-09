@@ -225,7 +225,6 @@ export default function PublicReservePage() {
     () => (d: string) => hasBookableSlot({ schedule, dateStr: d, tz, stepMin, nowMs }),
     [schedule, tz, stepMin, nowMs]
   )
-  const todayHasSlots = useMemo(() => dayOpen(todayStr), [dayOpen, todayStr])
   // Абсолютный момент выбранного слота: именно он уходит на сервер. Собирать
   // время как «дата + метка» нельзя — у ночной смены метка принадлежит
   // следующим суткам, а весной локального 02:00 может не существовать.
@@ -537,7 +536,6 @@ export default function PublicReservePage() {
             info={info}
             days={days}
             todayStr={todayStr}
-            todayHasSlots={todayHasSlots}
             dayOpen={dayOpen}
             date={date}
             guests={guests}
@@ -1039,7 +1037,7 @@ function dayRangeLabel(days: number[], lang: Lang): string {
  * показать время, посчитанное не для того зала.
  */
 function EntryScreen({
-  lang, info, days, todayStr, todayHasSlots, dayOpen, date, guests, maxParty,
+  lang, info, days, todayStr, dayOpen, date, guests, maxParty,
   timeSlots, instant, freeTimes, availabilityError, schedule, nowMs, tz,
   onDate, onGuests, onNext, onWaitlist, onLeave,
 }: {
@@ -1047,7 +1045,6 @@ function EntryScreen({
   info: ReserveInfo
   days: string[]
   todayStr: string
-  todayHasSlots: boolean
   /** Открыт ли день по расписанию (117) — закрытые дни в селекте недоступны */
   dayOpen: (dateStr: string) => boolean
   date: string
@@ -1141,12 +1138,8 @@ function EntryScreen({
           <p className="public-reserve-entry-address">{loc.address}</p>
         )}
 
-        {!todayHasSlots && (
-          <div className="w-full mt-4 rounded-2xl bg-amber-50 text-amber-800 text-sm font-semibold px-4 py-3 text-center">
-            {t(lang, 'rsvNoSlotsToday')}
-          </div>
-        )}
-
+        {/* Плашки «на сегодня бронь недоступна» больше нет (10.10.2026):
+            форма сама встаёт на ближайший открытый день, и он виден в поле */}
         <div className="public-reserve-quick-grid">
           {/* Дата — всегда над компанией: сначала «когда», потом «сколько нас».
               Подписи «дата» нет: строка «вс 16/8» и так читается датой, а
