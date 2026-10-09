@@ -85,7 +85,11 @@ export function setQty(lines: DraftLine[], key: string, qty: number): DraftLine[
 }
 
 export function patchLine(lines: DraftLine[], key: string, patch: Partial<NewLine>): DraftLine[] {
-  return lines.map((l) => (l.key === key ? { ...l, ...patch, course: normalizeCourse(patch.course ?? l.course) } : l))
+  // «Без курса» — это null, а не отсутствие ключа: `??` вернул бы старый
+  // курс, и чип застревал на 3 вместо круга 1 → 2 → 3 → без курса → 1
+  return lines.map((l) => (l.key === key
+    ? { ...l, ...patch, course: normalizeCourse('course' in patch ? patch.course : l.course) }
+    : l))
 }
 
 /** Заморозить черновик к отправке: id строк и ключ операции — до первой попытки */

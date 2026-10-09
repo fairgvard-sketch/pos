@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { addLine, freeze, linesCount, linesTotal, sendItems, setQty, unfreeze, type NewLine } from './draft'
+import { addLine, freeze, linesCount, linesTotal, patchLine, sendItems, setQty, unfreeze, type NewLine } from './draft'
+import { nextCourse } from '../features/sell/courses'
 
 const salad: NewLine = {
   itemId: 'salad', name: 'Salad', variantId: null, variantName: null,
@@ -19,6 +20,21 @@ describe('черновик стола', () => {
     lines = addLine(lines, salad, 'b')
     lines = addLine(lines, { ...salad, course: 2 }, 'c')
     expect(lines.map((l) => [l.key, l.qty, l.course])).toEqual([['a', 2, 1], ['c', 1, 2]])
+  })
+
+  it('курс идёт по кругу 1 → 2 → 3 → без курса → 1, как на кассе', () => {
+    let lines = addLine([], salad, 'a')
+    const seen: (number | null)[] = []
+    for (let i = 0; i < 5; i++) {
+      lines = patchLine(lines, 'a', { course: nextCourse(lines[0].course) })
+      seen.push(lines[0].course)
+    }
+    expect(seen).toEqual([2, 3, null, 1, 2])
+  })
+
+  it('правка модификаторов без ключа course курс не трогает', () => {
+    const lines = patchLine(addLine([], steak, 'a'), 'a', { notes: 'well done' })
+    expect(lines[0].course).toBe(2)
   })
 
   it('итог считает модификаторы, количество обнуляется удалением', () => {
