@@ -118,6 +118,8 @@ export interface HallOpen {
   staff_name: string | null
   item_count: number
   has_held: boolean
+  /** Fire уже нажимали (182); нет у ответа сервера до 182 */
+  has_fired?: boolean
 }
 export interface Hall {
   shift_open: boolean

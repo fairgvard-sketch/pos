@@ -7,7 +7,8 @@
 --     которого он зовёт к телефону (проверка и лимит попыток те же, что
 --     у кассы; лимит считается по телефону, касса им не блокируется);
 --   • перенести на другой стол — без PIN.
--- Fire был с 180, «ещё одна такая же» — обычная отправка.
+-- Fire был с 180, «ещё одна такая же» — обычная отправка. Зал телефона
+-- отдаёт has_fired: красный огонь на столе после Fire.
 --
 -- Телефон работает через обёртки waiter_*: они подставляют точку
 -- телефона (_waiter_act_as), вызывают ровно те же void_bill_line /
@@ -146,6 +147,64 @@ BEGIN
              ORDER BY i.course NULLS FIRST, i.name)
       FROM order_items i
       WHERE i.order_id = v_order.id AND i.voided_at IS NULL
+    ), '[]'::JSON)
+  );
+END $$;
+
+-- ── Зал: красный огонь на столе, где Fire уже нажимали ───────
+-- Решение владельца 10.10.2026: значок означает «Fire был», а не «надо
+-- нажать». has_fired — есть активная строка с fired_at. has_held
+-- оставлен для старых телефонов.
+CREATE OR REPLACE FUNCTION _waiter_hall(p_staff_session UUID)
+RETURNS JSON
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v     JSONB := _waiter_enter(p_staff_session);
+  v_loc UUID  := (v ->> 'location_id')::UUID;
+BEGIN
+  RETURN json_build_object(
+    'shift_open', EXISTS (SELECT 1 FROM shifts WHERE location_id = v_loc AND status = 'open'),
+    -- Есть ли касса, которая напечатает тикет: настройка включена и
+    -- касса недавно была в сети (heartbeat 074 — раз в 5 минут)
+    'printer_ready', EXISTS (
+      SELECT 1 FROM devices d
+      WHERE d.location_id = v_loc
+        AND d.archived_at IS NULL
+        AND COALESCE((d.settings ->> 'printWaiterTickets')::BOOLEAN, FALSE)
+        AND d.last_seen_at > NOW() - INTERVAL '15 minutes'
+    ),
+    'zones', COALESCE((
+      SELECT json_agg(json_build_object('id', z.id, 'name', z.name, 'sort_order', z.sort_order)
+                      ORDER BY z.sort_order, z.name)
+      FROM table_zones z
+      WHERE z.location_id = v_loc AND z.is_active
+    ), '[]'::JSON),
+    'tables', COALESCE((
+      SELECT json_agg(json_build_object(
+               'id', t.id, 'label', t.label, 'zone_id', t.zone_id, 'zone', t.zone,
+               'sort_order', t.sort_order, 'seats', t.seats, 'status', t.status)
+             ORDER BY t.sort_order, t.label)
+      FROM tables t
+      WHERE t.location_id = v_loc AND t.is_active
+    ), '[]'::JSON),
+    'open', COALESCE((
+      SELECT json_agg(json_build_object(
+               'table_id',     o.table_id,
+               'order_id',     o.id,
+               'total',        o.total,
+               'daily_number', o.daily_number,
+               'opened_at',    o.created_at,
+               'staff_name',   s.name,
+               'item_count',   COALESCE((SELECT SUM(i.qty) FROM order_items i
+                                         WHERE i.order_id = o.id AND i.voided_at IS NULL), 0),
+               'has_held',     EXISTS (SELECT 1 FROM order_items i
+                                       WHERE i.order_id = o.id AND i.held AND i.voided_at IS NULL),
+               'has_fired',    EXISTS (SELECT 1 FROM order_items i
+                                       WHERE i.order_id = o.id AND i.fired_at IS NOT NULL
+                                         AND i.voided_at IS NULL)))
+      FROM orders o
+      LEFT JOIN staff s ON s.id = o.staff_id
+      WHERE o.location_id = v_loc AND o.status = 'open' AND o.table_id IS NOT NULL
     ), '[]'::JSON)
   );
 END $$;

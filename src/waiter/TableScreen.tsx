@@ -8,7 +8,7 @@ import { formatMoney } from '../lib/money'
 import Icon from '../components/Icon'
 import ItemPicker from '../features/sell/ItemPicker'
 import BillLineSheet, { type BillLineSheetMode } from '../features/sell/BillLineSheet'
-import { fireTargets, heldLineKeys, nextCourse, nextHeldCourse } from '../features/sell/courses'
+import { fireTargets, heldLineKeys, nextCourse } from '../features/sell/courses'
 import { defaultConfig, linkedGroups, needsPicker } from '../features/sell/itemConfig'
 import type { CartLine } from '../store/cartStore'
 import {
@@ -86,6 +86,9 @@ export default function TableScreen() {
 
   const [menuOpen, setMenuOpen] = useState(false)
   const [picker, setPicker] = useState<{ item: WaiterMenuItem; line: DraftLine | null } | null>(null)
+  // Fire: выбор блюд открывается только значком огня (решение владельца
+  // 10.10.2026) — без постоянных квадратиков и кнопок на каждой строке
+  const [picking, setPicking] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(() => new Set())
   // Окно отправленной позиции (182). opUuid — на всё окно: повтор после
   // таймаута не уберёт и не перенесёт дважды
@@ -154,6 +157,7 @@ export default function TableScreen() {
       const ids = new Set(targets.map((l) => l.id))
       qc.setQueryData<WaiterBill>(key, (b) => b && { ...b, lines: b.lines.map((l) => (ids.has(l.id) ? { ...l, held: false } : l)) })
       setSelected(new Set())
+      setPicking(false)
       return { prev }
     },
     onSuccess: (res) => {
@@ -244,9 +248,15 @@ export default function TableScreen() {
     })
   }
 
-  const fireLabel = selected.size > 0
-    ? t(lang, 'fireSelected').replace('{n}', String(selected.size))
-    : t(lang, 'fireCourse').replace('{n}', String(nextHeldCourse(heldLines) ?? ''))
+  /** Значок огня: режим выбора, ближайший курс уже отмечен — обычно остаётся подтвердить */
+  function startPicking() {
+    setSelected(new Set(fireTargets(lines, new Set()).map((l) => l.id)))
+    setPicking(true)
+  }
+
+  // Придержанное кончилось (Fire с кассы, перенос) — выбирать нечего
+  const firing = picking && heldLines.length > 0
+  const fireIds = heldLines.filter((l) => selected.has(l.id))
   const newCount = linesCount(draft.lines)
   const pending = draft.pending
   const shiftClosed = hallQ.data ? !hallQ.data.shift_open : false
@@ -351,54 +361,51 @@ export default function TableScreen() {
 
         {heldLines.length > 0 && (
           <section className="space-y-2">
-            <div className="flex items-center justify-between gap-3">
-              <h2 className="text-sm font-semibold text-gray-500">{t(lang, 'heldTitle')}</h2>
-              <button
-                className="btn-primary !h-11 gap-2"
-                disabled={fire.isPending}
-                onClick={() => fire.mutate(fireTargets(lines, selected))}
-              >
-                <Icon name="fire" size={16} />
-                {fireLabel}
-              </button>
-            </div>
-            {heldLines.map((l) => (
-              <div
-                key={l.id}
-                className={`card w-full ps-3 pe-2 py-2 flex items-center gap-2 ${selected.has(l.id) ? '!border-gray-900' : ''}`}
-              >
-                {/* Квадратик — отметить для общего Fire (несколько блюд одним тикетом) */}
+            <div className="flex items-center justify-between gap-3 min-h-11">
+              <div className="min-w-0">
+                <h2 className="text-sm font-semibold text-gray-500">{t(lang, 'heldTitle')}</h2>
+                {firing && <p className="text-sm font-semibold text-gray-900">{t(lang, 'wFirePick')}</p>}
+              </div>
+              {!firing && (
                 <button
+                  onClick={startPicking}
+                  disabled={fire.isPending}
+                  aria-label={t(lang, 'fireItem')}
+                  className="shrink-0 w-11 h-11 rounded-xl bg-gray-900 text-white flex items-center justify-center active:scale-[0.95] disabled:opacity-40"
+                >
+                  <Icon name="fire" size={20} />
+                </button>
+              )}
+            </div>
+            {heldLines.map((l) => {
+              const on = selected.has(l.id)
+              return firing ? (
+                // Режим Fire: тап по строке отмечает блюдо
+                <button
+                  key={l.id}
                   onClick={() => toggleHeld(l.id)}
-                  aria-pressed={selected.has(l.id)}
+                  aria-pressed={on}
                   aria-label={`${t(lang, 'fireMark')}: ${l.name}`}
-                  className="shrink-0 w-11 h-11 -ms-2 flex items-center justify-center"
+                  className={`card w-full p-3 min-h-11 flex items-start gap-3 text-start ${on ? '!border-gray-900' : ''}`}
                 >
                   <span
-                    className={`w-5 h-5 rounded-md border-2 ${selected.has(l.id) ? 'bg-gray-900 border-gray-900' : 'border-gray-300'}`}
+                    className={`mt-0.5 w-5 h-5 rounded-md border-2 shrink-0 ${on ? 'bg-gray-900 border-gray-900' : 'border-gray-300'}`}
                     aria-hidden
                   />
+                  <BillLineText lang={lang} line={l} />
                 </button>
-                {/* Тап по строке — окно позиции: количество, перенос, убрать */}
+              ) : (
+                // Обычно — окно позиции: количество, перенос, убрать
                 <button
+                  key={l.id}
                   onClick={() => openLine(l)}
                   aria-label={`${t(lang, 'lineActions')}: ${l.name}`}
-                  className="flex-1 min-w-0 min-h-11 py-1 flex items-start gap-3 text-start"
+                  className="card w-full p-3 min-h-11 flex items-start gap-3 text-start"
                 >
                   <BillLineText lang={lang} line={l} />
                 </button>
-                {/* Fire одного блюда — один тап, без отметок */}
-                <button
-                  onClick={() => fire.mutate([l])}
-                  disabled={fire.isPending}
-                  aria-label={`${t(lang, 'fireItem')} ${l.name}`}
-                  className="shrink-0 h-11 px-3 rounded-xl bg-gray-900 text-white text-sm font-bold flex items-center gap-1.5 active:scale-[0.95] disabled:opacity-40"
-                >
-                  <Icon name="fire" size={16} />
-                  {t(lang, 'fireItem')}
-                </button>
-              </div>
-            ))}
+              )
+            })}
           </section>
         )}
 
@@ -437,6 +444,22 @@ export default function TableScreen() {
             {job.text}
           </p>
         )}
+        {firing ? (
+          <div className="flex gap-3">
+            <button className="btn-secondary !h-14 !text-base" onClick={() => setPicking(false)}>
+              {t(lang, 'cancel')}
+            </button>
+            <button
+              className="btn-primary flex-1 !h-14 !text-lg gap-2"
+              disabled={fire.isPending || fireIds.length === 0}
+              onClick={() => fire.mutate(fireIds)}
+              aria-label={`${t(lang, 'fireItem')} · ${fireIds.length}`}
+            >
+              <Icon name="fire" size={22} />
+              <span className="tabular-nums">{fireIds.length}</span>
+            </button>
+          </div>
+        ) : (
         <div className="flex gap-3">
           <button className="btn-secondary !h-14 !text-base" onClick={() => setMenuOpen(true)} disabled={!menu}>
             {t(lang, 'menu')}
@@ -453,6 +476,7 @@ export default function TableScreen() {
                 : `${t(lang, 'wSend')}${newCount > 0 ? ` · ${newCount}` : ''}`}
           </button>
         </div>
+        )}
       </footer>
 
       {menuOpen && menu && (
@@ -476,7 +500,6 @@ export default function TableScreen() {
             synced
             busy={voidMut.isPending || moveMut.isPending || fire.isPending}
             onAddOne={canAddOne(l) ? () => { addOneMore(l); setLineSheet(null) } : undefined}
-            onFire={l.held ? () => { fire.mutate([l]); setLineSheet(null) } : undefined}
             onVoid={async (qty, reason, pin) => {
               try {
                 const res = await voidMut.mutateAsync({ line: l, qty, reason, pin, opUuid: lineSheet.opUuid })

@@ -985,6 +985,7 @@ ANGLE → Locations → Fiscal export.
 | `waiter_void_line(session, item, qty, reason, manager_pin, op_uuid)` | `void_bill_line` с телефона: только строка счёта стола своей точки; PIN менеджера/владельца, лимит попыток по аккаунту телефона; задание печати `kitchen_void` (без придержанного) в той же транзакции |
 | `waiter_move_lines(session, item_ids, to_table, op_uuid)` | `move_bill_lines` с телефона; задание `kitchen_move` с `tableLabel` (откуда) и `movedTo` (куда) |
 | `waiter_bill` | строки дополнены `menu_item_id`, `variant_id`, `unit_price`, `mods` (с id) — для «ещё одной такой же» |
+| `waiter_hall` | у открытого счёта добавлен `has_fired` — по нему уже нажимали Fire (красный огонь на столе) |
 | `print_jobs.kind` | `kitchen` \| `kitchen_void` \| `kitchen_move` |
 | `claim_print_jobs(device_uuid, kinds)` | новая касса называет виды, которые умеет печатать; прежняя подпись `claim_print_jobs(device_uuid)` отдаёт только `kitchen` — старый бандл не распечатает отмену как новый заказ |
 

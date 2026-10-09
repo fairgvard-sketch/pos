@@ -126,7 +126,11 @@ export default function TablesScreen() {
                 >
                   <div className="flex items-start justify-between gap-2 w-full">
                     <span className="text-2xl font-bold text-gray-900 truncate">{tb.label}</span>
-                    {open?.has_held && <Icon name="fire" size={18} className="text-gray-900 shrink-0" />}
+                    {open?.has_fired && (
+                      <span role="img" aria-label={t(lang, 'tableFired')} className="text-red-600 shrink-0">
+                        <Icon name="fire" size={18} />
+                      </span>
+                    )}
                   </div>
                   {open ? (
                     <div className="w-full">

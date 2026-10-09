@@ -118,6 +118,8 @@ export default function HallPage() {
         staff_name: null,
         item_count: lo.lines.reduce((s, l) => s + l.qty, 0),
         has_held: lo.lines.some((l) => l.held === true),
+        // Fire офлайн-эха виден после синхронизации: у эха нет fired_at
+        has_fired: false,
       })
     }
     return map
@@ -428,13 +430,14 @@ export default function HallPage() {
                       {service.count}
                     </span>
                   )}
-                  {/* Неподанный курс (179): официант не должен забыть про Fire */}
-                  {occ?.has_held && (
+                  {/* Fire уже нажимали (182): красный огонь — «горячее пошло»,
+                      а не напоминание нажать */}
+                  {occ?.has_fired && (
                     <span
                       role="img"
-                      aria-label={t(lang, 'tableHasHeld')}
-                      title={t(lang, 'tableHasHeld')}
-                      className="absolute bottom-1 start-1.5 text-gray-900"
+                      aria-label={t(lang, 'tableFired')}
+                      title={t(lang, 'tableFired')}
+                      className="absolute bottom-1 start-1.5 text-red-600"
                     >
                       <Icon name="fire" size={16} />
                     </span>

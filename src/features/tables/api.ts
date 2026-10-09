@@ -394,8 +394,10 @@ export interface TableOccupancy {
   opened_at: string
   staff_name: string | null
   item_count: number   // сумма qty активных позиций
-  /** Есть придержанные до Fire позиции (179) — значок на столе */
+  /** Есть придержанные до Fire позиции (179) */
   has_held: boolean
+  /** По счёту уже нажимали Fire (182) — красный огонь на столе */
+  has_fired: boolean
 }
 
 interface OpenOrderRow {
@@ -405,7 +407,7 @@ interface OpenOrderRow {
   daily_number: number
   created_at: string
   staff: { name: string } | null
-  order_items: { qty: number; voided_at: string | null; held: boolean }[]
+  order_items: { qty: number; voided_at: string | null; held: boolean; fired_at: string | null }[]
 }
 
 /** Открытые счета всех столов точки — для раскраски карты зала и инфо на карточке */
@@ -413,7 +415,7 @@ export async function fetchOpenTableOrders(): Promise<TableOccupancy[]> {
   const { data, error } = await supabase
     .from('orders')
     // staff через явный FK: после 025 у orders два FK на staff (staff_id, refunded_by)
-    .select('id, table_id, total, daily_number, created_at, staff:staff!orders_staff_id_fkey(name), order_items(qty, voided_at, held)')
+    .select('id, table_id, total, daily_number, created_at, staff:staff!orders_staff_id_fkey(name), order_items(qty, voided_at, held, fired_at)')
     .eq('status', 'open')
     .not('table_id', 'is', null)
   if (error) throw new Error(error.message)
@@ -428,5 +430,6 @@ export async function fetchOpenTableOrders(): Promise<TableOccupancy[]> {
       .filter((i) => i.voided_at === null)
       .reduce((s, i) => s + i.qty, 0),
     has_held: (o.order_items ?? []).some((i) => i.voided_at === null && i.held === true),
+    has_fired: (o.order_items ?? []).some((i) => i.voided_at === null && i.fired_at !== null),
   }))
 }

@@ -6,7 +6,7 @@
 -- приготовила бы отменённое). Придержанное кухне не печатается.
 
 BEGIN;
-SELECT plan(27);
+SELECT plan(30);
 
 INSERT INTO orgs (id, name) VALUES ('e1000000-0000-4000-8000-000000000001', 'pgTAP waiter edits');
 INSERT INTO organization_products (org_id, product) VALUES ('e1000000-0000-4000-8000-000000000001', 'pos');
@@ -83,6 +83,24 @@ SELECT is(
   'e1600000-0000-4000-8000-000000000001/3500/e1710000-0000-4000-8000-000000000001/500',
   'строка счёта несёт товар, цену за штуку и модификаторы с id');
 
+-- ── Зал: огонь на столе только после Fire ───────────────────
+SELECT is(
+  (SELECT (o ->> 'has_fired') FROM json_array_elements(waiter_hall(current_setting('test.s')::UUID) -> 'open') o
+   WHERE o ->> 'table_id' = 'e1400000-0000-4000-8000-000000000001'),
+  'false', 'стейк ждёт Fire — огня на столе ещё нет');
+SELECT lives_ok($$
+  SELECT waiter_send(current_setting('test.s')::UUID, 'e1400000-0000-4000-8000-000000000001',
+    'e1c00000-0000-4000-8000-000000000010',
+    '[{"id":"e1d00000-0000-4000-8000-000000000010","menu_item_id":"e1600000-0000-4000-8000-000000000002","qty":1,"course":2}]');
+  SELECT waiter_fire(current_setting('test.s')::UUID,
+    (waiter_bill(current_setting('test.s')::UUID, 'e1400000-0000-4000-8000-000000000001') -> 'order' ->> 'id')::UUID,
+    ARRAY['e1d00000-0000-4000-8000-000000000010']::UUID[], 'e1c00000-0000-4000-8000-000000000011')
+$$, 'второй стейк отправлен и сразу Fire');
+SELECT is(
+  (SELECT (o ->> 'has_fired') FROM json_array_elements(waiter_hall(current_setting('test.s')::UUID) -> 'open') o
+   WHERE o ->> 'table_id' = 'e1400000-0000-4000-8000-000000000001'),
+  'true', 'после Fire на столе огонь');
+
 -- ── Убрать: только PIN менеджера своей точки ────────────────
 SELECT is(
   (waiter_void_line(current_setting('test.s')::UUID, 'e1d00000-0000-4000-8000-000000000001', 1, 'oops', '1234',
@@ -146,13 +164,13 @@ SELECT is((SELECT qty FROM order_items WHERE id = 'e1d00000-0000-4000-8000-00000
   'повтор не убрал второй салат');
 SELECT is(
   (SELECT total FROM orders WHERE table_id = 'e1400000-0000-4000-8000-000000000001' AND status = 'open'),
-  3500, 'на столе 1 остался один салат с фетой');
+  12500, 'на столе 1 один салат с фетой и стейк после Fire');
 
 -- ── Задания печати ──────────────────────────────────────────
 SELECT is(
   (SELECT string_agg(kind, ',' ORDER BY created_at, kind) FROM print_jobs
    WHERE org_id = 'e1000000-0000-4000-8000-000000000001'),
-  'kitchen,kitchen_move,kitchen_void', 'заказ, отмена и перенос — по заданию, придержанное не печатается');
+  'kitchen,kitchen,kitchen_move,kitchen_void', 'заказ, Fire, отмена и перенос — по заданию, придержанное не печатается');
 SELECT is(
   (SELECT (payload ->> 'tableLabel') || '/' || (payload -> 'lines' -> 0 ->> 'qty') || '/' || (payload -> 'lines' -> 0 ->> 'name')
           || '/' || (payload -> 'lines' -> 0 -> 'modifiers' ->> 0)
@@ -174,7 +192,7 @@ SET LOCAL ROLE authenticated;
 
 SELECT is(
   (SELECT string_agg(j ->> 'kind', ',') FROM json_array_elements(claim_print_jobs('e1b00000-0000-4000-8000-000000000001')) j),
-  'kitchen', 'старая касса забирает только обычный заказ');
+  'kitchen,kitchen', 'старая касса забирает только заказ и Fire');
 SELECT is(
   (SELECT count(*) FROM print_jobs WHERE status = 'pending'),
   2::BIGINT, 'отмена и перенос ждут обновлённую кассу');
