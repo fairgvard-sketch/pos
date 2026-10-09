@@ -103,19 +103,24 @@ export function slots(times: string[], full: string[] = []) {
   }
 }
 
-export function renderReservePage() {
+/** fromApp — гость пришёл со страницы заведения: в истории есть шаг назад */
+export function renderReservePage({ fromApp = false }: { fromApp?: boolean } = {}) {
   // Успешная бронь дописывает в адрес постоянную ссылку `?b=<токен>`
   // (118) через history.replaceState. jsdom держит один window на файл,
   // поэтому без сброса СЛЕДУЮЩИЙ тест открывался бы сразу карточкой
-  // готовой брони вместо формы.
-  window.history.replaceState(null, '', '/')
+  // готовой брони вместо формы. idx — как его пишет роутер браузера.
+  window.history.replaceState(fromApp ? { idx: 1 } : null, '', '/')
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: 0 } },
   })
   return render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={[`/reserve/${LOC}`]}>
+      <MemoryRouter
+        initialEntries={fromApp ? ['/restaurants/bulochka', `/reserve/${LOC}`] : [`/reserve/${LOC}`]}
+        initialIndex={fromApp ? 1 : 0}
+      >
         <Routes>
+          <Route path="/restaurants/:slug" element={<p>venue page</p>} />
           <Route path="/reserve/:locId" element={<PublicReservePage />} />
         </Routes>
       </MemoryRouter>

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { t, type Lang, localeOf } from '../../lib/i18n'
 import { PublicApiError } from '../online/publicApi'
@@ -106,6 +106,13 @@ function localTimeOf(ms: number, tz: string): string {
 
 export default function PublicReservePage() {
   const { locId = '' } = useParams()
+  const navigate = useNavigate()
+  // Стрелка «назад» на входе — только если гость пришёл со страницы этого
+  // приложения (каталог заведений, 10.10.2026). Открытая напрямую бронь
+  // (ссылка, QR, iframe на сайте заведения) вернуться внутрь не может.
+  // Читаем до первого replaceState (writeBookingUrl стирает state роутера).
+  const [canLeave] = useState(() =>
+    typeof window !== 'undefined' && ((window.history.state as { idx?: number } | null)?.idx ?? 0) > 0)
   // Гостевая страница — всегда иврит (бронь he-first), без переключения языка.
   const lang: Lang = 'he'
   useEffect(() => {
@@ -527,7 +534,6 @@ export default function PublicReservePage() {
         {step === 'slot' && (
           <EntryScreen
             lang={lang}
-            locId={locId}
             info={info}
             days={days}
             todayStr={todayStr}
@@ -547,6 +553,7 @@ export default function PublicReservePage() {
             onGuests={setGuests}
             onNext={() => navigateWithTransition('forward', () => setStep('times'))}
             onWaitlist={() => setWaitlistOpen(true)}
+            onLeave={canLeave ? () => navigateWithTransition('back', () => navigate(-1)) : undefined}
           />
         )}
         {step === 'times' && (
@@ -1032,12 +1039,11 @@ function dayRangeLabel(days: number[], lang: Lang): string {
  * показать время, посчитанное не для того зала.
  */
 function EntryScreen({
-  lang, locId, info, days, todayStr, todayHasSlots, dayOpen, date, guests, maxParty,
+  lang, info, days, todayStr, todayHasSlots, dayOpen, date, guests, maxParty,
   timeSlots, instant, freeTimes, availabilityError, schedule, nowMs, tz,
-  onDate, onGuests, onNext, onWaitlist,
+  onDate, onGuests, onNext, onWaitlist, onLeave,
 }: {
   lang: Lang
-  locId: string
   info: ReserveInfo
   days: string[]
   todayStr: string
@@ -1059,6 +1065,8 @@ function EntryScreen({
   onDate: (v: string) => void
   onGuests: (v: number) => void
   onNext: () => void
+  /** Вернуться туда, откуда пришли (страница заведения); нет — стрелки нет */
+  onLeave?: () => void
   /** День занят целиком — гость может встать в лист ожидания (122) */
   onWaitlist: () => void
 }) {
@@ -1105,12 +1113,18 @@ function EntryScreen({
     <div className="public-reserve-entry">
       <div className="public-reserve-entry-hero">
         {loc.header_url && <img src={loc.header_url} alt="" />}
-        {/* Меню того же заведения: гость пришёл бронировать, но почти
-            всегда хочет сначала посмотреть, что здесь готовят. Слаг/UUID
-            берём из адреса — тот же ключ, по которому открыта бронь. */}
-        <a href={`/order/${locId}`} className="public-reserve-menu-pill">
-          {t(lang, 'rsvMenuLink')}
-        </a>
+        {/* Плашка «К меню» убрана (решение владельца 10.10.2026): меню
+            открывается со страницы заведения, а здесь — путь назад туда */}
+        {onLeave && (
+          <button
+            type="button"
+            onClick={onLeave}
+            aria-label={t(lang, 'back')}
+            className="public-reserve-entry-back"
+          >
+            <BackIcon />
+          </button>
+        )}
       </div>
 
       <div className={`public-reserve-entry-sheet${loc.logo_url ? ' has-logo' : ''}`}>

@@ -1760,7 +1760,6 @@ export const translations = {
     rsvPartyMinus: 'Меньше гостей',
     rsvPartyPlus: 'Больше гостей',
     rsvShowTimes: 'Выбрать зал и время',
-    rsvMenuLink: 'Меню',
     // Лист «о заведении»: часы, адрес, навигация, соцсети
     rsvVenueSheetTitle: 'О заведении',
     rsvVenueOpenNow: 'Открыто сейчас',
@@ -3572,7 +3571,6 @@ export const translations = {
     rsvPartyMinus: 'פחות אורחים',
     rsvPartyPlus: 'יותר אורחים',
     rsvShowTimes: 'בחירת אזור ושעה',
-    rsvMenuLink: 'לתפריט',
     // מגירת «על המסעדה»: שעות, כתובת, ניווט, רשתות
     rsvVenueSheetTitle: 'פרטי המסעדה',
     rsvVenueOpenNow: 'פתוח היום',
@@ -5387,7 +5385,6 @@ export const translations = {
     rsvPartyMinus: 'Fewer guests',
     rsvPartyPlus: 'More guests',
     rsvShowTimes: 'Choose an area and time',
-    rsvMenuLink: 'Menu',
     // Лист «о заведении»: часы, адрес, навигация, соцсети
     rsvVenueSheetTitle: 'About the venue',
     rsvVenueOpenNow: 'Open now',

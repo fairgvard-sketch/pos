@@ -2,7 +2,7 @@ import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { screen, fireEvent, waitFor, within } from '@testing-library/react'
 import { t } from '../../lib/i18n'
 import {
-  LOC, makeInfo, renderReservePage, slots,
+  makeInfo, renderReservePage, slots,
 } from './publicReserveHarness'
 
 /**
@@ -87,12 +87,24 @@ describe('первый экран: структура', () => {
     expect(screen.queryByLabelText(t('he', 'rsvTime'))).not.toBeInTheDocument()
   })
 
-  it('логотип лежит на шве фото и листа, кнопка меню ведёт в меню той же точки', async () => {
+  it('логотип лежит на шве фото и листа; плашки «к меню» нет', async () => {
     await openEntry()
     expect(document.querySelector('.public-reserve-entry-logo')).toBeInTheDocument()
     expect(document.querySelector('.public-reserve-entry-sheet.has-logo')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: t('he', 'rsvMenuLink') }))
-      .toHaveAttribute('href', `/order/${LOC}`)
+    expect(screen.queryByRole('link', { name: 'לתפריט' })).not.toBeInTheDocument()
+  })
+
+  it('открыта напрямую (ссылка, QR, сайт) — стрелки назад нет: возвращаться некуда', async () => {
+    await openEntry()
+    expect(screen.queryByRole('button', { name: t('he', 'back') })).not.toBeInTheDocument()
+  })
+
+  it('пришёл со страницы заведения — стрелка возвращает туда', async () => {
+    mocked.fetchReserveInfo.mockResolvedValue(makeInfo())
+    renderReservePage({ fromApp: true })
+    await screen.findByRole('heading', { name: 'Bulochka' })
+    fireEvent.click(screen.getByRole('button', { name: t('he', 'back') }))
+    expect(await screen.findByText('venue page')).toBeInTheDocument()
   })
 
   it('постоянной чёрной плашки соцсетей больше нет', async () => {
