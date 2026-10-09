@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { appendToOrder, voidTableOrder, fetchOrderLines, voidOrderItem, setOrderDiscount, fireOrderItems, type BillLine } from '../tables/api'
+import { appendToOrder, voidTableOrder, fetchOrderLines, voidOrderItem, setOrderDiscount, fireOrderItems, voidBillLine, moveBillLines, type BillLine, type BillTicketLine } from '../tables/api'
 import { useCartStore, cartSubtotal, lineUnitPrice, type CartDiscount, type CartLine } from '../../store/cartStore'
 import { useAuthStore } from '../../store/authStore'
 import { useLangStore } from '../../store/langStore'
@@ -120,6 +120,85 @@ export function useTableBill(startPayment: (o: PayingOrder) => void) {
     },
     onError: (e) => toast.error(e.message),
   })
+
+  // ── Правка отправленных позиций (181) ─────────────────────
+  /** Тикет кухни об отмене или переносе: придержанное кухня не видела */
+  function printEditTicket(lines: BillTicketLine[], kind: 'void' | 'move', tableLabel: string, movedTo?: string) {
+    const visible = lines.filter((l) => !l.held)
+    if (!kitchenTicketOn || visible.length === 0) return
+    void printKitchenTicket(
+      {
+        dailyNumber: null,
+        orderType: 'here',
+        customerName: '',
+        tableLabel,
+        staffName: staff?.name ?? '',
+        deviceName,
+        lines: visible.map((l) => ({ qty: l.qty, name: l.name, variantName: l.variantName, modifiers: l.modifiers, notes: l.notes })),
+        kind,
+        movedTo,
+      },
+      printMode === 'rawbt'
+    )
+  }
+
+  function refreshBill() {
+    qc.invalidateQueries({ queryKey: ['order_lines', tableCtx?.orderId] })
+    qc.invalidateQueries({ queryKey: ['open_table_orders'] })
+    qc.invalidateQueries({ queryKey: ['queue'] })
+  }
+
+  /** Убрать отправленную позицию (целиком или часть) по PIN менеджера */
+  const voidLine = useMutation({
+    mutationFn: (v: { lineId: string; qty: number | null; reason: string; pin: string; opUuid: string }) =>
+      voidBillLine(v.lineId, v.qty, v.reason, v.pin, v.opUuid),
+    onSuccess: (res) => {
+      if (!res.ok) return
+      if (tableCtx) cart.setTableCtx({ ...tableCtx, existingTotal: res.total })
+      toast.success(t(lang, 'lineRemoved'))
+      printEditTicket(res.ticket_lines, 'void', tableCtx?.tableLabel ?? res.table_label ?? '')
+      refreshBill()
+    },
+    onError: (e) => toast.error(e.message),
+  })
+
+  /** Перенести позиции на другой стол; опустевший стол — назад в зал */
+  const moveLines = useMutation({
+    mutationFn: (v: { lineIds: string[]; toTableId: string; opUuid: string }) =>
+      moveBillLines(v.lineIds, v.toTableId, v.opUuid),
+    onSuccess: (res) => {
+      toast.success(t(lang, 'lineMoved').replace('{n}', res.to_label))
+      printEditTicket(res.ticket_lines, 'move', tableCtx?.tableLabel ?? res.from_label ?? '', res.to_label)
+      refreshBill()
+      if (res.source_empty) {
+        cart.clear()
+        navigate('/hall')
+      } else if (tableCtx) {
+        cart.setTableCtx({ ...tableCtx, existingTotal: res.source_total })
+      }
+    },
+    onError: (e) => toast.error(e.message),
+  })
+
+  /** «Ещё одну такую же» — в новые позиции, уходит кнопкой «Отправить» */
+  function addOneMore(l: BillLine) {
+    const mods = (l.mods ?? []).filter((m): m is { id: string; name: string; priceDelta: number } => !!m.id)
+    const modsSum = mods.reduce((s, m) => s + m.priceDelta, 0)
+    const custom = !l.menu_item_id
+    cart.addLine({
+      itemId: l.menu_item_id ?? null,
+      name: l.name,
+      variantId: l.variant_id ?? null,
+      variantName: l.variant_name,
+      basePrice: (l.unit_price ?? 0) - modsSum,
+      mods,
+      notes: l.notes ?? '',
+      // Свободная позиция без каталога — цена только ручная
+      priceOverride: custom ? (l.unit_price ?? 0) : null,
+      course: l.course,
+    })
+    toast.success(t(lang, 'lineAddedToDraft'))
+  }
 
   /**
    * Строки отправки (179): id строки выдаётся ДО первой попытки (повтор
@@ -391,5 +470,6 @@ export function useTableBill(startPayment: (o: PayingOrder) => void) {
     tableDiscount, orderDiscount, voidItem,
     saveBill, billToPay, voidBill, exitTable,
     selectedHeld, toggleHeld, fire,
+    voidLine, moveLines, addOneMore,
   }
 }

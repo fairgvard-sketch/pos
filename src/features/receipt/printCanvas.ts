@@ -962,6 +962,12 @@ export interface KitchenTicketData {
    * заказом и начала готовить сразу.
    */
   fire?: boolean
+  /**
+   * Правка отправленного (181): «ביטול» — кухне не готовить, «הועבר» —
+   * нести на другой стол (movedTo — номер нового стола).
+   */
+  kind?: 'void' | 'move'
+  movedTo?: string
 }
 
 // Тикет, как и чек, печатается только на иврите — независимо от языка кассы
@@ -975,6 +981,9 @@ const TICKET_HE = {
   addon: 'תוספת להזמנה',
   // Кухонная команда «готовить сейчас» — общий термин, а не перевод
   fire: 'FIRE',
+  // Отмена отправленного и перенос на другой стол (181)
+  void: 'ביטול',
+  movedTo: 'הועבר לשולחן',
   here: 'כאן',
   takeaway: 'לקחת',
   delivery: 'משלוח',
@@ -1051,7 +1060,12 @@ export function renderKitchenTicketCanvas(d: KitchenTicketData, tape?: TapeWidth
   }
   subRow(d.tableLabel ? `${TICKET_HE.table} ${d.tableLabel}` : TICKET_HE[d.orderType])
   if (d.customerName) subRow(d.customerName)
-  subRow(d.fire ? TICKET_HE.fire : numText ? `${TICKET_HE.order}: ${numText}` : TICKET_HE.addon)
+  subRow(
+    d.kind === 'void' ? TICKET_HE.void
+      : d.kind === 'move' ? `${TICKET_HE.movedTo} ${d.movedTo ?? ''}`
+        : d.fire ? TICKET_HE.fire
+          : numText ? `${TICKET_HE.order}: ${numText}` : TICKET_HE.addon
+  )
   y += 6
   divider()
 

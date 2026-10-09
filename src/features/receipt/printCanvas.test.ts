@@ -280,6 +280,17 @@ describe('renderKitchenTicketCanvas — FIRE (179)', () => {
     expect(texts).toContain('תוספת להזמנה')
     expect(texts).not.toContain('FIRE')
   })
+  it('отмена отправленного (181): шапка ביטול вместо дозаказа', () => {
+    const texts = drawnTexts({ ...ticket, kind: 'void' })
+    expect(texts).toContain('ביטול')
+    expect(texts).not.toContain('תוספת להזמנה')
+  })
+
+  it('перенос (181): куда нести — הועבר לשולחן и номер нового стола', () => {
+    const texts = drawnTexts({ ...ticket, kind: 'move', movedTo: '7' })
+    expect(texts).toContain('הועבר לשולחן 7')
+    expect(texts).toContain('שולחן 5')
+  })
 })
 
 // ── Ширина ленты 58/80 мм ─────────────────────────────────

@@ -249,17 +249,31 @@ export interface BillLine {
   course: number | null
   /** Придержана до Fire — кухня её ещё не видит */
   held: boolean
+  /**
+   * Для «ещё одну такую же» (181): товар, вариант, цена за штуку с
+   * модификаторами и сами модификаторы. Нет у строк офлайн-эха.
+   */
+  menu_item_id?: string | null
+  variant_id?: string | null
+  unit_price?: number
+  mods?: { id: string | null; name: string; priceDelta: number }[]
 }
 
 /** Активные позиции открытого счёта (voided исключены) */
 export async function fetchOrderLines(orderId: string): Promise<BillLine[]> {
   const { data, error } = await supabase
     .from('order_items')
-    .select('id, name, variant_name, qty, line_total, notes, course, held, order_item_modifiers(name)')
+    .select('id, name, variant_name, qty, line_total, notes, course, held, menu_item_id, variant_id, unit_price, order_item_modifiers(modifier_id, name, price_delta)')
     .eq('order_id', orderId)
     .is('voided_at', null)
   if (error) throw new Error(error.message)
-  return (data as { id: string; name: string; variant_name: string | null; qty: number; line_total: number; notes: string | null; course: number | null; held: boolean; order_item_modifiers: { name: string }[] }[]).map((r) => ({
+  type Row = {
+    id: string; name: string; variant_name: string | null; qty: number; line_total: number
+    notes: string | null; course: number | null; held: boolean
+    menu_item_id: string | null; variant_id: string | null; unit_price: number
+    order_item_modifiers: { modifier_id: string | null; name: string; price_delta: number }[]
+  }
+  return (data as Row[]).map((r) => ({
     id: r.id,
     name: r.name,
     variant_name: r.variant_name,
@@ -269,7 +283,75 @@ export async function fetchOrderLines(orderId: string): Promise<BillLine[]> {
     notes: r.notes,
     course: r.course ?? null,
     held: r.held === true,
+    menu_item_id: r.menu_item_id,
+    variant_id: r.variant_id,
+    unit_price: r.unit_price,
+    mods: (r.order_item_modifiers ?? []).map((m) => ({ id: m.modifier_id, name: m.name, priceDelta: m.price_delta })),
   }))
+}
+
+// ── Правка отправленных позиций (181) ────────────────────
+
+/** Строка тикета кухни, которую сервер собрал из отменённой/перенесённой позиции */
+export interface BillTicketLine {
+  qty: number
+  name: string
+  variantName: string | null
+  modifiers: string[]
+  notes: string
+  held: boolean
+}
+
+export type VoidBillLineResult =
+  | { ok: false; error: 'manager_pin_invalid' }
+  | { ok: true; order_id: string; total: number; subtotal: number; approved_by: string; table_label: string | null; ticket_lines: BillTicketLine[] }
+
+/**
+ * Убрать отправленную позицию (целиком: qty = null, или часть) по PIN
+ * менеджера/владельца. Неверный PIN — ok:false (сервер считает попытку).
+ * opUuid создаётся до первой попытки: повтор вернёт первый результат.
+ */
+export async function voidBillLine(
+  itemId: string,
+  qty: number | null,
+  reason: string,
+  managerPin: string,
+  opUuid: string,
+): Promise<VoidBillLineResult> {
+  const { data, error } = await supabase.rpc('void_bill_line', {
+    p_item_id: itemId,
+    p_qty: qty,
+    p_reason: reason,
+    p_manager_pin: managerPin,
+    p_staff_session: currentStaffToken(),
+    p_op_uuid: opUuid,
+  })
+  if (error) throw new Error(error.message)
+  return data as VoidBillLineResult
+}
+
+export interface MoveBillLinesResult {
+  ok: true
+  source_order_id: string
+  source_total: number
+  source_empty: boolean
+  target_order_id: string
+  target_total: number
+  from_label: string | null
+  to_label: string
+  ticket_lines: BillTicketLine[]
+}
+
+/** Перенести позиции счёта на другой стол (свободный — новый счёт) */
+export async function moveBillLines(itemIds: string[], toTableId: string, opUuid: string): Promise<MoveBillLinesResult> {
+  const { data, error } = await supabase.rpc('move_bill_lines', {
+    p_item_ids: itemIds,
+    p_to_table_id: toTableId,
+    p_staff_session: currentStaffToken(),
+    p_op_uuid: opUuid,
+  })
+  if (error) throw new Error(error.message)
+  return data as MoveBillLinesResult
 }
 
 /** Скидка на существующий открытый счёт (стол). type=null — снять скидку. */

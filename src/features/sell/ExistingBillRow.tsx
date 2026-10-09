@@ -6,9 +6,10 @@ import type { BillLine } from '../tables/api'
 import { useRowSwipe } from './useRowSwipe'
 
 /**
- * Строка уже заказанной позиции (счёт стола) со свайпом на снятие (void).
- * Придержанная до Fire строка (179) выделяется тапом: официант отмечает,
- * что отправить на кухню.
+ * Строка уже отправленной позиции счёта стола. Тап открывает действия с
+ * позицией (181: количество, перенос, удаление по PIN менеджера), свайп
+ * влево — сразу удаление. У придержанной до Fire строки (179) кружок
+ * слева отмечает её для общего Fire.
  */
 export default function ExistingBillRow({
   line: l,
@@ -16,6 +17,7 @@ export default function ExistingBillRow({
   isRtl,
   busy,
   onVoid,
+  onOpen,
   selected = false,
   onToggle,
 }: {
@@ -24,6 +26,8 @@ export default function ExistingBillRow({
   isRtl: boolean
   busy: boolean
   onVoid: () => void
+  /** Тап по строке: окно действий с позицией */
+  onOpen: () => void
   selected?: boolean
   /** Только у придержанной строки: выделить/снять выделение для Fire */
   onToggle?: () => void
@@ -54,17 +58,18 @@ export default function ExistingBillRow({
       </div>
       <div
         {...handlers}
-        role={selectable ? 'checkbox' : undefined}
-        aria-checked={selectable ? selected : undefined}
-        tabIndex={selectable ? 0 : undefined}
+        role="button"
+        tabIndex={0}
+        aria-label={`${t(lang, 'lineActions')}: ${l.name}`}
         onClick={() => {
           if (swiped.current) { swiped.current = false; return }
-          if (selectable) onToggle!()
+          onOpen()
         }}
-        className={`relative flex items-start justify-between gap-2 text-sm touch-pan-y rounded-xl ${
+        onKeyDown={(e) => { if (e.key === 'Enter') onOpen() }}
+        className={`relative flex items-start justify-between gap-2 text-sm touch-pan-y rounded-xl min-h-11 cursor-pointer ${
           selectable
-            ? `min-h-11 py-2 px-2 cursor-pointer ${selected ? 'bg-white ring-2 ring-gray-900' : 'bg-white'}`
-            : 'bg-gray-50 py-1'
+            ? `py-2 px-2 ${selected ? 'bg-white ring-2 ring-gray-900' : 'bg-white'}`
+            : 'bg-gray-50 py-2 px-1'
         }`}
         style={{
           transform: `translateX(${dx}px)`,
@@ -72,18 +77,30 @@ export default function ExistingBillRow({
         }}
       >
         {selectable && (
-          <span
-            aria-hidden
-            className={`mt-0.5 w-5 h-5 shrink-0 rounded-full border-2 flex items-center justify-center ${
-              selected ? 'bg-gray-900 border-gray-900 text-white' : 'border-gray-300'
-            }`}
+          <button
+            type="button"
+            role="checkbox"
+            aria-checked={selected}
+            aria-label={l.name}
+            onClick={(e) => {
+              e.stopPropagation()
+              onToggle!()
+            }}
+            className="-m-2 p-2 shrink-0 self-start"
           >
-            {selected && (
-              <svg viewBox="0 0 16 16" className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2.4">
-                <path d="M3.5 8.5 6.5 11.5 12.5 4.5" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            )}
-          </span>
+            <span
+              aria-hidden
+              className={`mt-0.5 w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                selected ? 'bg-gray-900 border-gray-900 text-white' : 'border-gray-300'
+              }`}
+            >
+              {selected && (
+                <svg viewBox="0 0 16 16" className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2.4">
+                  <path d="M3.5 8.5 6.5 11.5 12.5 4.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              )}
+            </span>
+          </button>
         )}
         <div className="min-w-0 flex-1">
           <span className="font-semibold text-gray-700">

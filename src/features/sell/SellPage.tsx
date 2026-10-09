@@ -36,6 +36,8 @@ import GuestSheet from '../loyalty/GuestSheet'
 import { formatPhone } from '../loyalty/api'
 import CartLineRow from './CartLineRow'
 import ExistingBillRow from './ExistingBillRow'
+import BillLineSheet, { type BillLineSheetMode } from './BillLineSheet'
+import { fetchTables, fetchOpenTableOrders, type BillLine } from '../tables/api'
 import OrderTypeSwitch from './OrderTypeSwitch'
 import AppSidebar from '../../components/AppSidebar'
 import ItemImage from '../../components/ItemImage'
@@ -69,7 +71,6 @@ export default function SellPage() {
   // Права по ролям (настройки точки → Сотрудники → Права доступа)
   const canDiscount = can(staff?.role, 'discount', location?.settings, staff?.role_perms)
   const canPriceEdit = can(staff?.role, 'price_edit', location?.settings, staff?.role_perms)
-  const canVoidOrder = can(staff?.role, 'void_order', location?.settings, staff?.role_perms)
   // Ящик без продажи приравнен к движению наличных (144)
   const canCashMove = can(staff?.role, 'cash_movement', location?.settings, staff?.role_perms)
 
@@ -89,6 +90,10 @@ export default function SellPage() {
     }
     fn()
   }
+  // Столы и занятость — для переноса позиций (181); кэш общий с залом
+  const inTable = useCartStore((s) => !!s.tableCtx)
+  const tablesQ = useQuery({ queryKey: ['tables'], queryFn: fetchTables, enabled: inTable })
+  const openTablesQ = useQuery({ queryKey: ['open_table_orders'], queryFn: fetchOpenTableOrders, enabled: inTable })
   const categoriesQ = useQuery({ queryKey: ['menu_categories'], queryFn: fetchCategories })
   const itemsQ = useQuery({ queryKey: ['menu_items'], queryFn: fetchItems })
   const groupsQ = useQuery({ queryKey: ['modifier_groups'], queryFn: fetchModifierGroups })
@@ -126,6 +131,7 @@ export default function SellPage() {
     existingLines, existingSubtotal, billLinesFailed, retryBillLines,
     tableDiscount, orderDiscount, voidItem,
     saveBill, billToPay, voidBill, exitTable,
+    voidLine, moveLines, addOneMore,
     selectedHeld, toggleHeld, fire,
   } = useTableBill(startPayment)
   // Fire оптимистичен: двойной тап отправил бы сразу и следующий курс
@@ -136,6 +142,11 @@ export default function SellPage() {
   const [activeCat, setActiveCat] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [picker, setPicker] = useState<{ item: MenuItem; line: CartLine | null } | null>(null)
+  // Окно действий с отправленной позицией (181). opUuid — на всё окно:
+  // повтор после таймаута не уберёт и не перенесёт дважды
+  const [lineSheet, setLineSheet] = useState<{ line: BillLine; mode: BillLineSheetMode; qty: number | null; opUuid: string } | null>(null)
+  const openLineSheet = (line: BillLine, mode: BillLineSheetMode, qty: number | null = null) =>
+    setLineSheet({ line, mode, qty, opUuid: crypto.randomUUID() })
   const [showDiscount, setShowDiscount] = useState(false)
   const [showGuest, setShowGuest] = useState(false)
   const [showCustom, setShowCustom] = useState(false)
@@ -832,11 +843,34 @@ export default function SellPage() {
                 {t(lang, 'tableLabel')} {tableCtx.tableLabel}
                 <span className="text-gray-500 font-semibold"> · {t(lang, 'openBill')}</span>
               </h2>
-              {tableCtx.existingTotal > 0 && (
-                <span className="text-sm font-bold text-gray-500 tabular-nums">
-                  {formatMoney(tableCtx.existingTotal, lang)}
-                </span>
-              )}
+              <div className="flex items-center gap-2 shrink-0">
+                {tableCtx.existingTotal > 0 && (
+                  <span className="text-sm font-bold text-gray-500 tabular-nums">
+                    {formatMoney(tableCtx.existingTotal, lang)}
+                  </span>
+                )}
+                {/* Перенос и объединение всего стола — окно стола в зале (181) */}
+                {existingLines.length > 0 && !isLocalTable && (
+                  <button
+                    type="button"
+                    aria-label={t(lang, 'billTableActions')}
+                    title={t(lang, 'billTableActions')}
+                    onClick={() => {
+                      if (cart.lines.length > 0) {
+                        toast(t(lang, 'billSendFirst'))
+                        return
+                      }
+                      // Корзину не чистим здесь: без стола экран продажи сам
+                      // уводит в зал (Navigate replace) и затёр бы state.
+                      // Её чистит зал, закрывая окно стола.
+                      navigate('/hall', { state: { tableActions: tableCtx.tableId } })
+                    }}
+                    className="w-11 h-11 -my-2 rounded-xl text-gray-500 hover:bg-gray-100 active:scale-[0.95] flex items-center justify-center text-xl font-bold"
+                  >
+                    ⋯
+                  </button>
+                )}
+              </div>
             </div>
           ) : (
             <>
@@ -883,16 +917,8 @@ export default function SellPage() {
                 busy={voidItem.isPending}
                 selected={selectedHeld.has(l.id)}
                 onToggle={l.held ? () => toggleHeld(l.id) : undefined}
-                onVoid={() => requirePerm(canVoidOrder, () => {
-                  // Офлайн-строки (эхо) и работа без сети: снятие позиции
-                  // требует сервера — упрощение v1, см. план фазы 7
-                  const isEchoLine = (tableEcho?.lines ?? []).some((el) => (el.lineId ?? el.key) === l.id)
-                  if (isEchoLine || !online) {
-                    toast.error(t(lang, 'offlineBlockedHint'))
-                    return
-                  }
-                  if (confirm(t(lang, 'confirmVoidItem'))) voidItem.mutate(l.id)
-                })}
+                onOpen={() => openLineSheet(l, 'menu')}
+                onVoid={() => openLineSheet(l, 'void')}
               />
             )
             return (
@@ -1185,6 +1211,44 @@ export default function SellPage() {
           onPay={(payments) => pay.mutate({ orderId: payingOrder.orderId, dailyNumber: payingOrder.dailyNumber, payments, tip: payingOrder.tip ?? 0, offline: payingOrder.offline })}
         />
       )}
+
+      {lineSheet && tableCtx && (() => {
+        const l = lineSheet.line
+        const synced = !(tableEcho?.lines ?? []).some((el) => (el.lineId ?? el.key) === l.id)
+        const occupancy = new Map((openTablesQ.data ?? []).map((o) => [o.table_id, o]))
+        return (
+          <BillLineSheet
+            line={l}
+            lang={lang}
+            isRtl={isRtl}
+            initialMode={lineSheet.mode}
+            initialVoidQty={lineSheet.qty}
+            tables={tablesQ.data ?? []}
+            occupancy={occupancy}
+            currentTableId={tableCtx.tableId}
+            online={online}
+            synced={synced}
+            busy={voidLine.isPending || moveLines.isPending || fire.isPending}
+            onAddOne={() => { addOneMore(l); setLineSheet(null) }}
+            onFire={l.held ? () => { fire.mutate([l]); setLineSheet(null) } : undefined}
+            onVoid={async (qty, reason, pin) => {
+              try {
+                const res = await voidLine.mutateAsync({ lineId: l.id, qty, reason, pin, opUuid: lineSheet.opUuid })
+                if (!res.ok) return 'bad_pin'
+                setLineSheet(null)
+                return 'ok'
+              } catch {
+                return 'error'
+              }
+            }}
+            onMove={(toTableId) => moveLines.mutate(
+              { lineIds: [l.id], toTableId, opUuid: lineSheet.opUuid },
+              { onSuccess: () => setLineSheet(null) }
+            )}
+            onClose={() => setLineSheet(null)}
+          />
+        )
+      })()}
 
       {picker && (
         <ItemPicker

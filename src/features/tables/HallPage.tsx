@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { fetchTables, fetchTableZones, fetchOpenTableOrders, openTableOrder, setTableStatus, type TableOccupancy } from './api'
@@ -168,6 +168,19 @@ export default function HallPage() {
 
   // Занятый стол, по которому открыто меню действий (долгий тап)
   const [actionTable, setActionTable] = useState<{ table: Table; occ: TableOccupancy } | null>(null)
+  // Из счёта стола пришли за переносом/объединением (181): открыть окно
+  // этого стола, как по долгому нажатию, — один раз на переход
+  const routeState = useLocation().state as { tableActions?: string } | null
+  const wantActions = routeState?.tableActions ?? null
+  const [handledActions, setHandledActions] = useState<string | null>(null)
+  if (wantActions && wantActions !== handledActions) {
+    const tb = tables.find((x) => x.id === wantActions)
+    const occ = occupancyByTable.get(wantActions)
+    if (tb && occ) {
+      setHandledActions(wantActions)
+      setActionTable({ table: tb, occ })
+    }
+  }
   // Незанятый стол, по которому открыто управление статусом (долгий тап)
   const [statusTable, setStatusTable] = useState<Table | null>(null)
   const isManager = staff?.role === 'owner' || staff?.role === 'manager'
@@ -455,7 +468,14 @@ export default function HallPage() {
           tables={tables}
           occupancy={occupancyByTable}
           onOpenBill={() => { holdFired.current = false; setActionTable(null); openTable(actionTable.table.id, actionTable.table.label) }}
-          onClose={() => setActionTable(null)}
+          onClose={() => {
+            setActionTable(null)
+            if (wantActions) {
+              // Пришли из счёта: выходим из стола и не открываем окно повторно по истории
+              cart.clear()
+              navigate('/hall', { replace: true, state: null })
+            }
+          }}
         />
       )}
 
