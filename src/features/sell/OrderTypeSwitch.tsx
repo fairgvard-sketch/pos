@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import type { OrderType } from '../../store/cartStore'
-import { t } from '../../lib/i18n'
+import { t, type Lang } from '../../lib/i18n'
 
 /**
  * Переключатель типа заказа: одна полоса во всю ширину, показывает ТОЛЬКО
@@ -22,7 +22,7 @@ export default function OrderTypeSwitch({
 }: {
   value: OrderType
   onChange: (t: OrderType) => void
-  lang: 'ru' | 'he'
+  lang: Lang
   isRtl: boolean
 }) {
   const start = useRef<{ x: number; y: number } | null>(null)

@@ -1,4 +1,4 @@
-import type { Lang } from './i18n'
+import { localeOf, type Lang } from './i18n'
 
 /**
  * Все денежные суммы в системе — ЦЕЛЫЕ агороты (1₪ = 100 агорот).
@@ -26,7 +26,7 @@ const PDI = '⁩'
 /** 1250 агорот → "₪ 12.50" */
 export function formatMoney(agorot: Agorot, lang: Lang): string {
   const shekels = agorot / 100
-  const num = shekels.toLocaleString(lang === 'he' ? 'he-IL' : 'ru-RU', {
+  const num = shekels.toLocaleString(localeOf(lang), {
     minimumFractionDigits: agorot % 100 === 0 ? 0 : 2,
     maximumFractionDigits: 2,
   })
@@ -42,7 +42,7 @@ export function formatMoney(agorot: Agorot, lang: Lang): string {
 export function formatMoneyDelta(agorot: Agorot, lang: Lang): string {
   const sign = agorot < 0 ? '−' : '+'
   const shekels = Math.abs(agorot) / 100
-  const num = shekels.toLocaleString(lang === 'he' ? 'he-IL' : 'ru-RU', {
+  const num = shekels.toLocaleString(localeOf(lang), {
     minimumFractionDigits: Math.abs(agorot) % 100 === 0 ? 0 : 2,
     maximumFractionDigits: 2,
   })
@@ -57,7 +57,7 @@ export function formatMoneyDelta(agorot: Agorot, lang: Lang): string {
  */
 export function formatMoneyPlain(agorot: Agorot, lang: Lang): string {
   const shekels = agorot / 100
-  const num = shekels.toLocaleString(lang === 'he' ? 'he-IL' : 'ru-RU', {
+  const num = shekels.toLocaleString(localeOf(lang), {
     minimumFractionDigits: agorot % 100 === 0 ? 0 : 2,
     maximumFractionDigits: 2,
   })
@@ -66,7 +66,7 @@ export function formatMoneyPlain(agorot: Agorot, lang: Lang): string {
 
 /** Список сумм → "₪ 10/12/14" (символ валюты один раз в начале) */
 export function formatMoneyList(agorotList: Agorot[], lang: Lang): string {
-  const locale = lang === 'he' ? 'he-IL' : 'ru-RU'
+  const locale = localeOf(lang)
   const nums = agorotList.map((a) =>
     (a / 100).toLocaleString(locale, {
       minimumFractionDigits: a % 100 === 0 ? 0 : 2,

@@ -6,7 +6,7 @@ import {
   DOCS_PAGE, type Supplier, type SupplyDoc,
 } from './api'
 import { useLangStore } from '../../store/langStore'
-import { t, formatTime } from '../../lib/i18n'
+import { t, formatTime, localeOf } from '../../lib/i18n'
 import { formatMoney } from '../../lib/money'
 import FormSheet from '../../components/ui/FormSheet'
 
@@ -17,7 +17,7 @@ import FormSheet from '../../components/ui/FormSheet'
  */
 export default function SupplyDocsTab({ canManage }: { canManage: boolean }) {
   const lang = useLangStore((s) => s.lang)
-  const locale = lang === 'he' ? 'he-IL' : 'ru-RU'
+  const locale = localeOf(lang)
   const [openDocId, setOpenDocId] = useState<string | null>(null)
   const [showSuppliers, setShowSuppliers] = useState(false)
 

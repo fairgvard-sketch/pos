@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { bootLang } from '../../lib/bootLang'
 
 /**
  * Fallback для <Suspense> на lazy-роутах.
@@ -14,16 +15,6 @@ import { useEffect, useState } from 'react'
  */
 const SHOW_AFTER_MS = 400
 
-function currentLang(): 'ru' | 'he' {
-  try {
-    const raw = localStorage.getItem('kassa-lang')
-    if (raw) {
-      const v = JSON.parse(raw)?.state?.lang
-      if (v === 'he' || v === 'ru') return v
-    }
-  } catch { /* localStorage может быть недоступен */ }
-  return 'he'
-}
 
 export default function SuspenseFallback() {
   const [show, setShow] = useState(false)
@@ -35,8 +26,9 @@ export default function SuspenseFallback() {
 
   if (!show) return null
 
-  const isRtl = currentLang() === 'he'
-  const label = isRtl ? 'טוען…' : 'Загрузка…'
+  const lang = bootLang()
+  const isRtl = lang === 'he'
+  const label = { he: 'טוען…', en: 'Loading…', ru: 'Загрузка…' }[lang]
 
   return (
     <div

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { useLangStore } from '../../store/langStore'
-import { t, formatDate } from '../../lib/i18n'
+import { t, formatDate, type Lang } from '../../lib/i18n'
 import { formatMoney } from '../../lib/money'
 import { fetchCurrentLocation } from '../auth/api'
 import AppSidebar from '../../components/AppSidebar'
@@ -140,7 +140,7 @@ function GuestDetailSheet({
   guest, lang, mode, stampsGoal, onClose,
 }: {
   guest: Guest
-  lang: 'ru' | 'he'
+  lang: Lang
   mode: 'off' | 'stamps' | 'points'
   stampsGoal: number
   onClose: () => void

@@ -5,11 +5,11 @@ import { fetchStaffHours, toDateKey, type StaffHoursEntry } from './api'
 import {
   groupByDay, formatDay, formatTime, formatHm, decimalHours, formatRanges,
   dayBounds, dayBreakSeconds, buildHoursCsv, downloadCsv,
-  monthRange, monthTitle, HEBREW_DOW, RU_DOW,
+  monthRange, monthTitle, HEBREW_DOW, dowLetters,
 } from './hours'
 import { useLangStore } from '../../store/langStore'
 import { useDeviceStore } from '../../store/deviceStore'
-import { t } from '../../lib/i18n'
+import { t, localeOf } from '../../lib/i18n'
 import { printTimesheet } from '../receipt/printService'
 import type { TimesheetPrintData } from '../receipt/printCanvas'
 
@@ -48,7 +48,7 @@ export default function StaffHoursSheet({
 }: Props) {
   const lang = useLangStore((s) => s.lang)
   const isRtl = lang === 'he'
-  const locale = isRtl ? 'he-IL' : 'ru-RU'
+  const locale = localeOf(lang)
   const printMode = useDeviceStore((s) => s.printMode)
 
   const now = new Date()
@@ -144,7 +144,7 @@ export default function StaffHoursSheet({
         decimal: t(lang, 'tsDecimalHours'), ranges: t(lang, 'tsRanges'),
         location: t(lang, 'tsLocation'), note: t(lang, 'tsNote'),
         total: t(lang, 'total'), days: t(lang, 'tsDaysShort'), shifts: t(lang, 'tsShiftsCount'),
-      }, isRtl ? HEBREW_DOW : RU_DOW),
+      }, dowLetters(lang)),
       `hours_${person.name}_${toDateKey(from)}_${toDateKey(to)}.csv`,
     )
   }
@@ -254,7 +254,7 @@ export default function StaffHoursSheet({
                         {formatDay(day.day)}
                       </span>
                       <span className="text-gray-400 w-5 text-center shrink-0">
-                        {isRtl ? HEBREW_DOW[day.dow] : RU_DOW[day.dow]}
+                        {dowLetters(lang)[day.dow]}
                       </span>
                       <span className="tabular-nums text-gray-600 w-14 text-end shrink-0" dir="ltr">
                         {formatTime(bounds.in, TZ)}

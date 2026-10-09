@@ -5,7 +5,7 @@ import { fetchQueue, subscribeQueue, markItemReady, markOrderReady, setOrderUrge
 import { sortQueueOrders, sortItemsByStation } from './sorting'
 import { fetchStations } from '../menu/api'
 import { useLangStore } from '../../store/langStore'
-import { t, orderTypeLabel, formatTime } from '../../lib/i18n'
+import { t, orderTypeLabel, formatTime, type Lang } from '../../lib/i18n'
 import { playNewOrderChime } from '../../lib/sound'
 import { useOutboxStore } from '../../lib/offline/outboxStore'
 import { useNetStore } from '../../lib/offline/net'
@@ -293,7 +293,7 @@ export default function QueuePage() {
             <button
               onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
               className={`w-11 h-11 rounded-xl flex items-center justify-center text-lg transition-all active:scale-[0.9] ${c.chipIdle}`}
-              title={theme === 'dark' ? 'Светлая тема' : 'Тёмная тема'}
+              title={t(lang, theme === 'dark' ? 'themeLight' : 'themeDark')}
             >
               {theme === 'dark' ? '☀' : '☾'}
             </button>
@@ -338,7 +338,7 @@ function OrderCard({
   order, lang, theme, onItemReady, onAllReady, onToggleUrgent,
 }: {
   order: MergedQueueOrder
-  lang: 'ru' | 'he'
+  lang: Lang
   theme: ThemeStyles
   onItemReady: (id: string, ready: boolean) => void
   onAllReady: () => void
@@ -463,7 +463,7 @@ function StationChip({ active, theme, onClick, children }: { active: boolean; th
 }
 
 /** «5 мин назад» / «только что» */
-function elapsed(iso: string, lang: 'ru' | 'he'): string {
+function elapsed(iso: string, lang: Lang): string {
   const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60000)
   if (mins < 1) return t(lang, 'justNow')
   return `${mins} ${t(lang, 'minShort')} ${t(lang, 'ago')}`

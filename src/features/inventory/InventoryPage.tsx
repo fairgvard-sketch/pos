@@ -20,7 +20,7 @@ import SupplierOrderSheet from './SupplierOrderSheet'
 import { useAuthStore } from '../../store/authStore'
 import { useLangStore } from '../../store/langStore'
 import { useNetStore } from '../../lib/offline/net'
-import { t, formatTime, type TranslationKey } from '../../lib/i18n'
+import { t, formatTime, type TranslationKey, localeOf } from '../../lib/i18n'
 import { formatMoney } from '../../lib/money'
 import { can } from '../../lib/perms'
 
@@ -92,7 +92,7 @@ function parseDateInput(s: string): Date {
 export default function InventoryPage() {
   const lang = useLangStore((s) => s.lang)
   const isRtl = lang === 'he'
-  const locale = lang === 'he' ? 'he-IL' : 'ru-RU'
+  const locale = localeOf(lang)
   const staff = useAuthStore((s) => s.staff)
   const online = useNetStore((s) => s.online)
   const qc = useQueryClient()

@@ -20,6 +20,14 @@ export const HEBREW_DOW = ['א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ש'] as const
 /** Дни недели по-русски — для экрана и выгрузки, не для печати */
 export const RU_DOW = ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'] as const
 
+/** Дни недели по-английски — для экрана и выгрузки, не для печати */
+export const EN_DOW = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'] as const
+
+/** Дни недели языка интерфейса (экран и выгрузка; печать — всегда HEBREW_DOW) */
+export function dowLetters(lang: 'he' | 'en' | 'ru'): readonly string[] {
+  return lang === 'he' ? HEBREW_DOW : lang === 'en' ? EN_DOW : RU_DOW
+}
+
 export interface HoursDay {
   /** YYYY-MM-DD */
   day: string

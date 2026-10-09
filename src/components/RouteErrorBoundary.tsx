@@ -1,4 +1,5 @@
 import { Component, type ReactNode } from 'react'
+import { bootLang } from '../lib/bootLang'
 
 /**
  * Ловит краши lazy-роутов (и любой runtime-краш внутри страницы), чтобы
@@ -25,16 +26,6 @@ function isChunkError(err: Error): boolean {
   )
 }
 
-function currentLang(): 'ru' | 'he' {
-  try {
-    const raw = localStorage.getItem('kassa-lang')
-    if (raw) {
-      const v = JSON.parse(raw)?.state?.lang
-      if (v === 'he' || v === 'ru') return v
-    }
-  } catch { /* localStorage может быть недоступен */ }
-  return 'he'
-}
 
 export default class RouteErrorBoundary extends Component<Props, State> {
   state: State = { error: null }
@@ -57,15 +48,26 @@ export default class RouteErrorBoundary extends Component<Props, State> {
     const { error } = this.state
     if (!error) return this.props.children
 
-    const isRtl = currentLang() === 'he'
+    const lang = bootLang()
+    const isRtl = lang === 'he'
     const chunk = isChunkError(error)
-    const title = chunk
-      ? (isRtl ? 'עדכון זמין' : 'Доступно обновление')
-      : (isRtl ? 'משהו השתבש' : 'Что-то пошло не так')
-    const hint = chunk
-      ? (isRtl ? 'טוענים גרסה חדשה של הקופה' : 'Загружаем новую версию кассы')
-      : (isRtl ? 'נסו לרענן את הדף' : 'Попробуйте обновить страницу')
-    const btn = isRtl ? 'רענון' : 'Обновить'
+    const T = {
+      he: {
+        update: 'עדכון זמין', failed: 'משהו השתבש',
+        loading: 'טוענים גרסה חדשה של הקופה', retry: 'נסו לרענן את הדף', btn: 'רענון',
+      },
+      en: {
+        update: 'An update is available', failed: 'Something went wrong',
+        loading: 'Loading the new version of the register', retry: 'Try refreshing the page', btn: 'Refresh',
+      },
+      ru: {
+        update: 'Доступно обновление', failed: 'Что-то пошло не так',
+        loading: 'Загружаем новую версию кассы', retry: 'Попробуйте обновить страницу', btn: 'Обновить',
+      },
+    }[lang]
+    const title = chunk ? T.update : T.failed
+    const hint = chunk ? T.loading : T.retry
+    const btn = T.btn
 
     return (
       <div

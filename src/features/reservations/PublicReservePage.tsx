@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { t, type Lang } from '../../lib/i18n'
+import { t, type Lang, localeOf } from '../../lib/i18n'
 import { PublicApiError } from '../online/publicApi'
 import { navigateWithTransition } from '../online/viewTransition'
 import {
@@ -959,7 +959,7 @@ function SheetOverlay({ label, onClose, children }: {
 function dayOptionLabel(dateStr: string, todayStr: string, lang: Lang): string {
   if (dateStr === todayStr) return t(lang, 'today')
   const d = new Date(`${dateStr}T12:00:00`)
-  const wd = d.toLocaleDateString(lang === 'he' ? 'he-IL' : 'ru-RU', { weekday: 'short' })
+  const wd = d.toLocaleDateString(localeOf(lang), { weekday: 'short' })
   return `${wd} ${d.getDate()}/${d.getMonth() + 1}`
 }
 
@@ -1014,7 +1014,7 @@ function ReserveProgress({ lang, step, total = 3 }: {
 
 /** «вс–чт» из группы дней; имена берём у Intl, отдельных ключей не заводим */
 function dayRangeLabel(days: number[], lang: Lang): string {
-  const locale = lang === 'he' ? 'he-IL' : 'ru-RU'
+  const locale = localeOf(lang)
   // 2024-01-07 — воскресенье; сдвигом получаем любой день недели
   const name = (dow: number) => new Date(Date.UTC(2024, 0, 7 + dow))
     .toLocaleDateString(locale, { weekday: 'short', timeZone: 'UTC' })
@@ -2172,7 +2172,7 @@ function DetailsScreen({
 /** Минорные единицы → «₪100» в валюте точки */
 function formatMinor(amountMinor: number, currency: string, lang: Lang): string {
   try {
-    return new Intl.NumberFormat(lang === 'he' ? 'he-IL' : 'ru-RU', {
+    return new Intl.NumberFormat(localeOf(lang), {
       style: 'currency', currency, maximumFractionDigits: 0,
     }).format(amountMinor / 100)
   } catch {
@@ -2540,7 +2540,7 @@ function BookingScreen({ lang, locId, info, bookingKey, tz, onNew }: {
         <div>
           <small>{t(lang, 'rsvTicketDate')}</small>
           <strong>
-            {visitDate.toLocaleDateString(lang === 'he' ? 'he-IL' : 'ru-RU', {
+            {visitDate.toLocaleDateString(localeOf(lang), {
               day: 'numeric', month: 'short', timeZone: tz,
             })}
           </strong>

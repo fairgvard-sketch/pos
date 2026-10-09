@@ -13,7 +13,7 @@ import { fetchServiceRequests, subscribeServiceRequests } from '../features/serv
 import { useOutboxStore } from '../lib/offline/outboxStore'
 import { enqueueTableVoid } from '../lib/offline/enqueue'
 import { playNewOrderChime, playReservationChime, playServiceRequestChime } from '../lib/sound'
-import { t } from '../lib/i18n'
+import { t, localeOf, type Lang } from '../lib/i18n'
 import { can } from '../lib/perms'
 import Icon from './Icon'
 import type { IconName } from './Icon'
@@ -285,13 +285,13 @@ function SideLink({ label, iconName, active, badge = 0, onClick }: { label: stri
   )
 }
 
-function Clock({ lang }: { lang: 'ru' | 'he' }) {
+function Clock({ lang }: { lang: Lang }) {
   const [now, setNow] = useState(new Date())
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 30_000)
     return () => clearInterval(id)
   }, [])
-  const locale = lang === 'he' ? 'he-IL' : 'ru-RU'
+  const locale = localeOf(lang)
   return (
     <div className="text-center px-1">
       <div className="text-lg font-black text-gray-900 tabular-nums">

@@ -1,8 +1,8 @@
-import { t, type TranslationKey } from '../../lib/i18n'
+import { t, type TranslationKey, type Lang } from '../../lib/i18n'
 import type { DrawerReason } from './api'
 
 /** Подпись причины открытия ящика (журнал смены, будущие отчёты) */
-export function drawerReasonLabel(lang: 'ru' | 'he', reason: DrawerReason): string {
+export function drawerReasonLabel(lang: Lang, reason: DrawerReason): string {
   const key: Record<DrawerReason, TranslationKey> = {
     sale: 'drawerReasonSale',
     refund: 'drawerReasonRefund',

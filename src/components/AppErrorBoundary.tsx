@@ -1,4 +1,5 @@
 import { Component, type ReactNode } from 'react'
+import { bootLang } from '../lib/bootLang'
 
 /**
  * Корневой ErrorBoundary — оборачивает ВСЁ дерево в main.tsx, включая
@@ -20,16 +21,6 @@ type State = { error: Error | null }
  *  kassa-outbox (неотправленные финансовые операции) и сессию устройства. */
 const SAFE_TO_CLEAR = ['kassa-query-cache']
 
-function currentLang(): 'ru' | 'he' {
-  try {
-    const raw = localStorage.getItem('kassa-lang')
-    if (raw) {
-      const v = JSON.parse(raw)?.state?.lang
-      if (v === 'he' || v === 'ru') return v
-    }
-  } catch { /* localStorage может быть недоступен */ }
-  return 'he'
-}
 
 export default class AppErrorBoundary extends Component<Props, State> {
   state: State = { error: null }
@@ -59,12 +50,25 @@ export default class AppErrorBoundary extends Component<Props, State> {
     const { error } = this.state
     if (!error) return this.props.children
 
-    const isRtl = currentLang() === 'he'
-    const title = isRtl ? 'הקופה נתקלה בתקלה' : 'Касса столкнулась со сбоем'
-    const hint = isRtl
-      ? 'איפוס טוען מחדש את הקופה. הזמנות שלא נשלחו נשמרות.'
-      : 'Сброс перезагрузит кассу. Неотправленные заказы сохранятся.'
-    const btn = isRtl ? 'איפוס וטעינה מחדש' : 'Сбросить и перезагрузить'
+    const lang = bootLang()
+    const isRtl = lang === 'he'
+    const { title, hint, btn } = {
+      he: {
+        title: 'הקופה נתקלה בתקלה',
+        hint: 'איפוס טוען מחדש את הקופה. הזמנות שלא נשלחו נשמרות.',
+        btn: 'איפוס וטעינה מחדש',
+      },
+      en: {
+        title: 'The register ran into a problem',
+        hint: 'A reset reloads the register. Unsent orders are kept.',
+        btn: 'Reset and reload',
+      },
+      ru: {
+        title: 'Касса столкнулась со сбоем',
+        hint: 'Сброс перезагрузит кассу. Неотправленные заказы сохранятся.',
+        btn: 'Сбросить и перезагрузить',
+      },
+    }[lang]
 
     return (
       <div

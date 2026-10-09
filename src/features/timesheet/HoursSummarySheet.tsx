@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { fetchStaffHours, toDateKey } from './api'
-import { formatDay, formatHm, decimalHours, buildHoursCsv, downloadCsv, HEBREW_DOW, RU_DOW } from './hours'
+import { formatDay, formatHm, decimalHours, buildHoursCsv, downloadCsv, dowLetters } from './hours'
 import { useLangStore } from '../../store/langStore'
 import { useDeviceStore } from '../../store/deviceStore'
 import { t } from '../../lib/i18n'
@@ -71,7 +71,7 @@ export default function HoursSummarySheet({ from, to, onClose, onOpenStaff }: Pr
         decimal: t(lang, 'tsDecimalHours'), ranges: t(lang, 'tsRanges'),
         location: t(lang, 'tsLocation'), note: t(lang, 'tsNote'),
         total: t(lang, 'total'), days: t(lang, 'tsDaysShort'), shifts: t(lang, 'tsShiftsCount'),
-      }, isRtl ? HEBREW_DOW : RU_DOW),
+      }, dowLetters(lang)),
       `hours_${toDateKey(from)}_${toDateKey(to)}.csv`,
     )
   }

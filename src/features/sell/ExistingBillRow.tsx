@@ -1,5 +1,5 @@
 import { useRef } from 'react'
-import { t } from '../../lib/i18n'
+import { t, type Lang } from '../../lib/i18n'
 import { formatMoney } from '../../lib/money'
 import Icon from '../../components/Icon'
 import type { BillLine } from '../tables/api'
@@ -20,7 +20,7 @@ export default function ExistingBillRow({
   onToggle,
 }: {
   line: BillLine
-  lang: 'ru' | 'he'
+  lang: Lang
   isRtl: boolean
   busy: boolean
   onVoid: () => void

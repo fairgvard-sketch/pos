@@ -98,7 +98,7 @@ export default function DeviceSetupPage() {
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       if (msg === 'confirm-email') {
-        toast('Подтвердите email по ссылке из письма, затем войдите', { duration: 6000 })
+        toast(t(lang, 'confirmEmailToast'), { duration: 6000 })
         setMode('signin')
       } else {
         toast.error(msg)

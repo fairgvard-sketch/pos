@@ -4,7 +4,7 @@ import toast from 'react-hot-toast'
 import { useLangStore } from '../../store/langStore'
 import { useAuthStore } from '../../store/authStore'
 import { useDeviceStore } from '../../store/deviceStore'
-import { t, formatDate, formatTime, formatElapsed, type TranslationKey } from '../../lib/i18n'
+import { t, formatDate, formatTime, formatElapsed, type TranslationKey, type Lang } from '../../lib/i18n'
 import { formatMoney } from '../../lib/money'
 import { can } from '../../lib/perms'
 import { playPaymentChime } from '../../lib/sound'
@@ -437,7 +437,7 @@ export default function OnlineOrdersPage() {
 function HistoryPanel({
   lang, period, onPeriod, search, onSearch, loading, rows,
 }: {
-  lang: 'ru' | 'he'
+  lang: Lang
   period: HistoryPeriod
   onPeriod: (p: HistoryPeriod) => void
   search: string
@@ -517,13 +517,13 @@ function Section({ title, count, tone = 'neutral', children }: {
 }
 
 /** «5 мин назад»; «только что» — без хвоста «назад» */
-function agoText(iso: string, nowTs: number, lang: 'ru' | 'he'): string {
+function agoText(iso: string, nowTs: number, lang: Lang): string {
   const s = formatElapsed(iso, nowTs, lang)
   return s === t(lang, 'justNow') ? s : `${s} ${t(lang, 'ago')}`
 }
 
 /** Шапка карточки: имя, телефон, когда пришла, когда забрать */
-function OrderHead({ o, lang, nowTs, number }: { o: OnlineOrder; lang: 'ru' | 'he'; nowTs: number; number?: number }) {
+function OrderHead({ o, lang, nowTs, number }: { o: OnlineOrder; lang: Lang; nowTs: number; number?: number }) {
   const primaryLabel = o.customer_name?.trim()
     || (o.table_label ? `${t(lang, 'onlineTable')} ${o.table_label}` : t(lang, 'onlineGuestOrder'))
   return (
@@ -563,7 +563,7 @@ function OrderHead({ o, lang, nowTs, number }: { o: OnlineOrder; lang: 'ru' | 'h
 }
 
 /** Позиции заявки (снапшот с ценами на момент заявки) */
-function Items({ o, lang }: { o: OnlineOrder; lang: 'ru' | 'he' }) {
+function Items({ o, lang }: { o: OnlineOrder; lang: Lang }) {
   return (
     <div className="mt-3 space-y-1">
       {o.items.map((l, i) => (
@@ -603,7 +603,7 @@ const PREP_PRESETS = [10, 15, 20, 30, 45, 60]
  */
 function OnlineStateSheet({ mode, lang, enabled, pausedUntil, prepMin, prepMax, canPause, busy, onPause, onResume, onPrep, onClose }: {
   mode: 'pause' | 'prep'
-  lang: 'ru' | 'he'
+  lang: Lang
   enabled: boolean
   pausedUntil: string | null
   prepMin: number
@@ -767,7 +767,7 @@ function ClockIcon() {
   )
 }
 
-function DoneBadge({ o, lang }: { o: OnlineOrder; lang: 'ru' | 'he' }) {
+function DoneBadge({ o, lang }: { o: OnlineOrder; lang: Lang }) {
   if (o.status === 'rejected') return <span className="badge-red">{t(lang, 'onlineRejected')}</span>
   const st = o.order?.status
   if (st === 'voided') return <span className="badge-gray">{t(lang, 'onlineCancelled')}</span>

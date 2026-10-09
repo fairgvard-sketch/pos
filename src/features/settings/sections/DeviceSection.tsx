@@ -5,7 +5,7 @@ import toast from 'react-hot-toast'
 import { safeUnlinkDevice, pendingOutboxCount } from '../../auth/unlink'
 import { updateDevicePassword } from '../../auth/api'
 import { supabase } from '../../../lib/supabase'
-import { useLangStore, RUSSIAN_UI_ENABLED } from '../../../store/langStore'
+import { useLangStore } from '../../../store/langStore'
 import { useDeviceStore } from '../../../store/deviceStore'
 import { renderTestPrintCanvas } from '../../receipt/printCanvas'
 import { hasSilentPrintPath } from '../../../lib/escpos'
@@ -18,7 +18,7 @@ import { syncDeviceNow, useDeviceSyncStore } from '../../../lib/deviceSync'
 import { checkForUpdate } from '../../../lib/swUpdate'
 import { hardReload, updateDiagnosticsText } from '../../../lib/appUpdate'
 import { useUpdateStore } from '../../../store/updateStore'
-import { t } from '../../../lib/i18n'
+import { t, type Lang } from '../../../lib/i18n'
 import { Group, InputRow, NavRow, SegmentRow, ToggleRow } from '../ui'
 import LangToggle from '../../../components/ui/LangToggle'
 import type { Location } from '../../../types'
@@ -32,7 +32,7 @@ import type { Location } from '../../../types'
 /** Варианты автоблокировки (сек); 0 = выключена */
 const AUTOLOCK_OPTIONS = [0, 30, 60, 300, 900]
 
-function lockLabel(sec: number, lang: 'ru' | 'he'): string {
+function lockLabel(sec: number, lang: Lang): string {
   if (sec === 0) return t(lang, 'autoLockOff')
   if (sec < 60) return `${sec} ${t(lang, 'secShort')}`
   return `${sec / 60} ${t(lang, 'minShort')}`
@@ -60,7 +60,7 @@ const WEBVIEW_FRESH_MAJOR = 80
  * скрипта, время последней проверки, UA) уходит в буфер обмена целиком:
  * её отправляют в поддержку, а не читают с экрана.
  */
-function UpdateRows({ lang }: { lang: 'ru' | 'he' }) {
+function UpdateRows({ lang }: { lang: Lang }) {
   const ready = useUpdateStore((s) => s.ready)
   const behindSchema = useUpdateStore((s) => s.behindSchema)
   const [checking, setChecking] = useState(false)
@@ -260,11 +260,9 @@ export default function DeviceSection({ location }: { location: Location | undef
             onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
           />
         </InputRow>
-        {RUSSIAN_UI_ENABLED && (
-          <InputRow label={t(lang, 'interfaceLanguage')} device>
-            <LangToggle />
-          </InputRow>
-        )}
+        <InputRow label={t(lang, 'interfaceLanguage')} device>
+          <LangToggle />
+        </InputRow>
         <InputRow
           label={t(lang, 'deviceSyncStatus')}
           hint={deviceSyncError ?? undefined}

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { t, formatTime, type Lang, type TranslationKey } from '../../lib/i18n'
+import { t, formatTime, type Lang, type TranslationKey, localeOf } from '../../lib/i18n'
 import { partsInZone, zonedToUtc } from './schedule'
 import {
   PAGE_SIZE, VIA_KEYS, VISIT_STATES, createdVia, filterReservations, groupByDay,
@@ -372,7 +372,7 @@ function dayTitle(key: string, lang: Lang): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(key)
   if (!m) return key
   return new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])).toLocaleDateString(
-    lang === 'he' ? 'he-IL' : 'ru-RU',
+    localeOf(lang),
     { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' },
   )
 }

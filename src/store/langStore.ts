@@ -1,19 +1,25 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { Lang } from '../lib/i18n'
+import { LANGS, type Lang } from '../lib/i18n'
 
 /**
- * Коммерческий прод — иврит-only (P3-14): русский интерфейс — внутренний
- * инструмент и существует только в сборке с VITE_ENABLE_INTERNAL_RUSSIAN=true
- * (dev / внутренние стенды). Без флага переключатель скрыт (LangToggle),
- * дефолт и принудительный язык — he, persisted 'ru' от старых сборок
- * приводится к 'he' при гидрации.
+ * Язык интерфейса кассы: иврит (по умолчанию), английский или русский —
+ * выбор на экране PIN и в настройках устройства. Печатные чеки и тикеты
+ * всегда на иврите независимо от выбора.
+ *
+ * VITE_ENABLE_INTERNAL_RUSSIAN=true меняет только язык по умолчанию на
+ * русский (dev и внутренние стенды); выбор доступен в любой сборке.
  */
-export const RUSSIAN_UI_ENABLED = import.meta.env.VITE_ENABLE_INTERNAL_RUSSIAN === 'true'
+export const DEFAULT_LANG: Lang =
+  import.meta.env.VITE_ENABLE_INTERNAL_RUSSIAN === 'true' ? 'ru' : 'he'
 
 interface LangState {
   lang: Lang
   setLang: (lang: Lang) => void
+}
+
+function isLang(v: unknown): v is Lang {
+  return typeof v === 'string' && (LANGS as readonly string[]).includes(v)
 }
 
 /**
@@ -30,9 +36,9 @@ function applyDocLang(lang: Lang) {
 export const useLangStore = create<LangState>()(
   persist(
     (set) => ({
-      lang: RUSSIAN_UI_ENABLED ? 'ru' : 'he',
+      lang: DEFAULT_LANG,
       setLang: (lang) => {
-        if (!RUSSIAN_UI_ENABLED && lang !== 'he') return
+        if (!isLang(lang)) return
         applyDocLang(lang)
         set({ lang })
       },
@@ -41,10 +47,9 @@ export const useLangStore = create<LangState>()(
       name: 'kassa-lang',
       onRehydrateStorage: () => (state) => {
         if (!state) return
-        if (!RUSSIAN_UI_ENABLED && state.lang !== 'he') {
-          // Устаревший persisted 'ru': setLang('he') проходит guard и
-          // перезаписывает storage, чтобы приведение не повторялось
-          state.setLang('he')
+        // Повреждённое значение в storage — язык по умолчанию
+        if (!isLang(state.lang)) {
+          state.setLang(DEFAULT_LANG)
           return
         }
         applyDocLang(state.lang)

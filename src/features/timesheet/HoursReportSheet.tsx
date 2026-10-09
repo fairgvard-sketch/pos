@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { toDateKey } from './api'
 import { monthRange, monthTitle } from './hours'
 import { useLangStore } from '../../store/langStore'
-import { t } from '../../lib/i18n'
+import { t, localeOf } from '../../lib/i18n'
 
 export interface HoursReportRequest {
   staffId: string | null
@@ -39,7 +39,7 @@ function parseDate(s: string): Date {
 export default function HoursReportSheet({ mode, staff, onCancel, onSubmit }: Props) {
   const lang = useLangStore((s) => s.lang)
   const isRtl = lang === 'he'
-  const locale = isRtl ? 'he-IL' : 'ru-RU'
+  const locale = localeOf(lang)
 
   const now = new Date()
   const [staffId, setStaffId] = useState<string | null>(null)

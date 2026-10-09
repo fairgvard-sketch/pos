@@ -7,7 +7,7 @@ import { fetchStaffList } from '../staff/api'
 import { fetchCurrentLocation } from '../auth/api'
 import { useAuthStore } from '../../store/authStore'
 import { useLangStore } from '../../store/langStore'
-import { t, type Lang } from '../../lib/i18n'
+import { t, type Lang, localeOf } from '../../lib/i18n'
 import { useNetStore } from '../../lib/offline/net'
 import AppSidebar from '../../components/AppSidebar'
 import EntryEditSheet, { type EditableEntry } from './EntryEditSheet'
@@ -65,7 +65,7 @@ function fmtDuration(seconds: number): string {
 export default function TimesheetPage() {
   const lang = useLangStore((s) => s.lang)
   const isRtl = lang === 'he'
-  const locale = lang === 'he' ? 'he-IL' : 'ru-RU'
+  const locale = localeOf(lang)
   const qc = useQueryClient()
   const me = useAuthStore((s) => s.staff)
   const isManager = me?.role === 'owner' || me?.role === 'manager'
@@ -489,7 +489,7 @@ function exportCsv(
   to: Date,
   lang: Lang
 ) {
-  const locale = lang === 'he' ? 'he-IL' : 'ru-RU'
+  const locale = localeOf(lang)
   const esc = (v: string) => (/[";\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v)
   const dec = (seconds: number) => (seconds / 3600).toFixed(2).replace('.', ',')
   const row = (cells: string[]) => cells.map(esc).join(';')

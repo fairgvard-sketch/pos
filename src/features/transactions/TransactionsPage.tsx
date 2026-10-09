@@ -29,7 +29,7 @@ import LoadErrorState from '../../components/LoadErrorState'
 import Icon from '../../components/Icon'
 import { useAuthStore } from '../../store/authStore'
 import { useLangStore } from '../../store/langStore'
-import { t, orderTypeLabel } from '../../lib/i18n'
+import { t, orderTypeLabel, localeOf } from '../../lib/i18n'
 import { payMethodIcon, payMethodLabel, type PayMethodId } from '../../lib/payMethods'
 import { can } from '../../lib/perms'
 import { formatMoney } from '../../lib/money'
@@ -169,7 +169,7 @@ export default function TransactionsPage() {
     const map = new Map<string, Transaction[]>()
     for (const tx of txs) {
       const day = new Date(tx.paid_at ?? tx.created_at).toLocaleDateString(
-        lang === 'he' ? 'he-IL' : 'ru-RU',
+        localeOf(lang),
         { weekday: 'short', day: 'numeric', month: 'long' }
       )
       if (!map.has(day)) map.set(day, [])
@@ -360,7 +360,7 @@ export default function TransactionsPage() {
                     </div>
                   </div>
                   <span className="text-xs text-gray-400 tabular-nums shrink-0">
-                    {new Date(lo.createdAt).toLocaleTimeString(lang === 'he' ? 'he-IL' : 'ru-RU', { hour: '2-digit', minute: '2-digit' })}
+                    {new Date(lo.createdAt).toLocaleTimeString(localeOf(lang), { hour: '2-digit', minute: '2-digit' })}
                   </span>
                 </button>
               ))}
@@ -384,7 +384,7 @@ export default function TransactionsPage() {
                 <div className="px-3 pt-4 pb-1.5 text-xs font-bold text-gray-400 uppercase tracking-wide">{day}</div>
                 {list.map((tx) => {
                   const time = new Date(tx.paid_at ?? tx.created_at).toLocaleTimeString(
-                    lang === 'he' ? 'he-IL' : 'ru-RU', { hour: '2-digit', minute: '2-digit' })
+                    localeOf(lang), { hour: '2-digit', minute: '2-digit' })
                   const method = tx.payments.filter((p) => p.amount > 0).map((p) => p.method)
                   const partial = tx.status !== 'refunded' && refundedTotal(tx) > 0
                   return (
@@ -504,7 +504,7 @@ export default function TransactionsPage() {
               <h2 className="text-lg font-bold text-gray-900">{t(lang, 'paymentSection')}</h2>
               <span className="text-sm text-gray-500 tabular-nums">
                 {new Date(selected.paid_at ?? selected.created_at).toLocaleString(
-                  lang === 'he' ? 'he-IL' : 'ru-RU',
+                  localeOf(lang),
                   { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}
               </span>
             </div>

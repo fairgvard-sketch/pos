@@ -1,4 +1,4 @@
-import { t, type TranslationKey } from '../lib/i18n'
+import { t, type TranslationKey, type Lang } from '../lib/i18n'
 import type { HistoryPeriod } from '../features/online/api'
 
 /**
@@ -49,7 +49,7 @@ const PERIODS: { v: HistoryPeriod; label: TranslationKey }[] = [
 export function HistoryFilters({
   lang, period, onPeriod, search, onSearch,
 }: {
-  lang: 'ru' | 'he'
+  lang: Lang
   period: HistoryPeriod
   onPeriod: (p: HistoryPeriod) => void
   search: string

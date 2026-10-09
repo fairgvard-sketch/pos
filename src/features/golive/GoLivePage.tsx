@@ -14,7 +14,7 @@ import { printCanvasWithRetry } from '../receipt/printFailure'
 import { useAuthStore } from '../../store/authStore'
 import { useDeviceStore } from '../../store/deviceStore'
 import { useLangStore } from '../../store/langStore'
-import { t } from '../../lib/i18n'
+import { t, localeOf } from '../../lib/i18n'
 import { payMethodLabel } from '../../lib/payMethods'
 import AppSidebar from '../../components/AppSidebar'
 import BackButton from '../../components/BackButton'
@@ -157,7 +157,7 @@ export default function GoLivePage() {
               <p className="text-sm font-bold text-emerald-700">
                 {t(lang, 'goLiveConfirmedBanner')}
                 {' · '}
-                {new Date(goLive!.confirmed_at!).toLocaleDateString(lang === 'he' ? 'he-IL' : 'ru-RU')}
+                {new Date(goLive!.confirmed_at!).toLocaleDateString(localeOf(lang))}
                 {goLive?.source === 'grandfather'
                   ? ` · ${t(lang, 'goLiveGrandfather')}`
                   : goLive?.confirmed_by ? ` · ${goLive.confirmed_by}` : ''}

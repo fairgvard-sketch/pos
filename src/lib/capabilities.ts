@@ -1,3 +1,4 @@
+import { bootLang } from './bootLang'
 /**
  * Ранняя проверка возможностей движка ДО основного UI (P2).
  *
@@ -71,18 +72,14 @@ export function checkCapabilities(): CapabilityReport {
 
 /**
  * Отрисовать диагностический экран (голый DOM, без React — React мог и не
- * подняться на этом движке). he/ru читаем из того же persist-ключа языка.
+ * подняться на этом движке). Язык — из того же persist-ключа (bootLang).
  */
 export function renderCapabilityScreen(root: HTMLElement, report: CapabilityReport): void {
-  let lang: 'ru' | 'he' = 'he'
-  try {
-    const raw = localStorage.getItem('kassa-lang')
-    const v = raw ? JSON.parse(raw)?.state?.lang : null
-    if (v === 'ru' || v === 'he') lang = v
-  } catch { /* ignore */ }
+  const lang = bootLang()
   const isRtl = lang === 'he'
 
-  const version = report.chromeMajor ? `Chrome ${report.chromeMajor}` : 'неизвестно'
+  const unknown = { he: 'לא ידוע', en: 'unknown', ru: 'неизвестно' }[lang]
+  const version = report.chromeMajor ? `Chrome ${report.chromeMajor}` : unknown
   const T = {
     ru: {
       title: 'Браузер устарел',
@@ -97,6 +94,13 @@ export function renderCapabilityScreen(root: HTMLElement, report: CapabilityRepo
       engine: 'מנוע',
       missing: 'חסר',
       how: 'איך לעדכן: Play Store → «Android System WebView» ו-«Chrome» → עדכון. לאחר מכן הפעילו מחדש את הקופה.',
+    },
+    en: {
+      title: 'The browser is outdated',
+      body: "This device's built-in engine is too old for the register. Update the system WebView (Chrome) or use a newer device.",
+      engine: 'Engine',
+      missing: 'Missing',
+      how: 'How to update: Play Store → “Android System WebView” and “Chrome” → Update. Then restart the register.',
     },
   }[lang]
 

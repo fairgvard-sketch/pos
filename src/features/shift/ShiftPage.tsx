@@ -14,7 +14,7 @@ import { printCanvasWithRetry } from '../receipt/printFailure'
 import { useAuthStore } from '../../store/authStore'
 import { useLangStore } from '../../store/langStore'
 import { useDeviceStore } from '../../store/deviceStore'
-import { t, formatTime } from '../../lib/i18n'
+import { t, formatTime, localeOf, type Lang } from '../../lib/i18n'
 import { payMethodLabel, receiptMethodLabel, type PayMethodId } from '../../lib/payMethods'
 import { can } from '../../lib/perms'
 import { useOutboxStore, pendingOpsCount } from '../../lib/offline/outboxStore'
@@ -299,7 +299,7 @@ export default function ShiftPage() {
         <h1 className="text-2xl font-black text-gray-900 mb-1">{t(lang, 'shift')}</h1>
         {shift && (
           <p className="text-sm text-gray-500 mb-5">
-            {t(lang, 'openedAt')}: {new Date(shift.opened_at).toLocaleString(lang === 'he' ? 'he-IL' : 'ru-RU')}
+            {t(lang, 'openedAt')}: {new Date(shift.opened_at).toLocaleString(localeOf(lang))}
           </p>
         )}
 
@@ -562,7 +562,7 @@ export default function ShiftPage() {
 function CashMovementDialog({
   lang, type, busy, onCancel, onConfirm,
 }: {
-  lang: 'ru' | 'he'
+  lang: Lang
   type: 'in' | 'out'
   busy: boolean
   onCancel: () => void
@@ -635,7 +635,7 @@ function CloseShiftDialog({
   onCancel,
   onConfirm,
 }: {
-  lang: 'ru' | 'he'
+  lang: Lang
   isRtl: boolean
   busy: boolean
   onCancel: () => void
@@ -655,7 +655,7 @@ function CloseShiftDialog({
     }
   }, [onShift])
 
-  const locale = lang === 'he' ? 'he-IL' : 'ru-RU'
+  const locale = localeOf(lang)
   const hasStaff = (onShift?.length ?? 0) > 0
 
   function toggle(id: string) {

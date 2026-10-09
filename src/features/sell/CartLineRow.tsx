@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { lineUnitPrice, type CartLine } from '../../store/cartStore'
-import { t } from '../../lib/i18n'
+import { t, type Lang } from '../../lib/i18n'
 import { formatMoney } from '../../lib/money'
 import type { MenuItem } from '../../types'
 import ItemImage from '../../components/ItemImage'
@@ -25,7 +25,7 @@ export default function CartLineRow({
 }: {
   line: CartLine
   item: MenuItem | undefined
-  lang: 'ru' | 'he'
+  lang: Lang
   isRtl: boolean
   onOpen: () => void
   onEditPrice: () => void

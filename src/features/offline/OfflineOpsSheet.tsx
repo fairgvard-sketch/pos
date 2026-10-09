@@ -6,7 +6,7 @@ import { useOutboxStore } from '../../lib/offline/outboxStore'
 import { kickDrain } from '../../lib/offline/drain'
 import type { OutboxOp } from '../../lib/offline/types'
 import { useNetStore } from '../../lib/offline/net'
-import { t, type TranslationKey } from '../../lib/i18n'
+import { t, type TranslationKey, localeOf } from '../../lib/i18n'
 import { can } from '../../lib/perms'
 import { formatMoney } from '../../lib/money'
 import toast from 'react-hot-toast'
@@ -132,7 +132,7 @@ export default function OfflineOpsSheet({ onClose }: { onClose: () => void }) {
                       {opNumber(op) && <span className="text-gray-500 font-medium"> · {opNumber(op)}</span>}
                     </div>
                     <div className="text-xs text-gray-500 mt-0.5">
-                      {new Date(op.createdAt).toLocaleTimeString(isRtl ? 'he-IL' : 'ru-RU', { hour: '2-digit', minute: '2-digit' })}
+                      {new Date(op.createdAt).toLocaleTimeString(localeOf(lang), { hour: '2-digit', minute: '2-digit' })}
                       {' · '}
                       <span className={waitingPin ? 'text-blue-700 font-medium' : undefined}>{statusLabel}</span>
                       {failed && op.lastError && <span className="text-red-600"> — {op.lastError}</span>}
@@ -183,7 +183,7 @@ export default function OfflineOpsSheet({ onClose }: { onClose: () => void }) {
                     </div>
                     <div className="text-xs text-gray-400 mt-0.5">
                       {o.syncedAt &&
-                        new Date(o.syncedAt).toLocaleTimeString(isRtl ? 'he-IL' : 'ru-RU', { hour: '2-digit', minute: '2-digit' })}
+                        new Date(o.syncedAt).toLocaleTimeString(localeOf(lang), { hour: '2-digit', minute: '2-digit' })}
                     </div>
                   </div>
                   <span className="text-sm font-bold text-gray-500 tabular-nums shrink-0">{formatMoney(o.total, lang)}</span>
