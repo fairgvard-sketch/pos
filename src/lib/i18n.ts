@@ -1193,6 +1193,7 @@ export const translations = {
     heldHint: 'Кухня их ещё не видит. Отметьте позиции или отправьте ближайший курс.',
     fireCourse: 'Fire · курс {n}',
     fireSelected: 'Fire · {n} поз.',
+    fireItem: 'Fire',
     fireSent: 'Отправлено на кухню',
     tableHasHeld: 'Есть неподанный курс',
     // Телефон официанта (180)
@@ -2984,6 +2985,7 @@ export const translations = {
     heldHint: 'המטבח עדיין לא רואה אותם. סמנו פריטים או שלחו את הסבב הבא.',
     fireCourse: 'FIRE · סבב {n}',
     fireSelected: 'FIRE · {n} פריטים',
+    fireItem: 'FIRE',
     fireSent: 'נשלח למטבח',
     tableHasHeld: 'יש סבב שעוד לא יצא',
     // Телефон официанта (180)
@@ -4772,6 +4774,7 @@ export const translations = {
     heldHint: "The kitchen can't see them yet. Mark items or send the next course.",
     fireCourse: 'Fire · course {n}',
     fireSelected: 'Fire · {n} items',
+    fireItem: 'Fire',
     fireSent: 'Sent to the kitchen',
     tableHasHeld: 'A course is still waiting',
     // Телефон официанта (180)

@@ -279,17 +279,33 @@ export default function TableScreen() {
               </button>
             </div>
             {heldLines.map((l) => (
-              <button
+              <div
                 key={l.id}
-                onClick={() => toggleHeld(l.id)}
-                className={`card w-full p-3 flex items-start gap-3 text-start ${selected.has(l.id) ? '!border-gray-900' : ''}`}
+                className={`card w-full ps-3 pe-2 py-2 flex items-center gap-2 ${selected.has(l.id) ? '!border-gray-900' : ''}`}
               >
-                <span
-                  className={`mt-0.5 w-5 h-5 rounded-md border-2 shrink-0 ${selected.has(l.id) ? 'bg-gray-900 border-gray-900' : 'border-gray-300'}`}
-                  aria-hidden
-                />
-                <BillLineText lang={lang} line={l} />
-              </button>
+                {/* Тап по строке — отметить для общего Fire (несколько блюд одним тикетом) */}
+                <button
+                  onClick={() => toggleHeld(l.id)}
+                  aria-pressed={selected.has(l.id)}
+                  className="flex-1 min-w-0 min-h-11 py-1 flex items-start gap-3 text-start"
+                >
+                  <span
+                    className={`mt-0.5 w-5 h-5 rounded-md border-2 shrink-0 ${selected.has(l.id) ? 'bg-gray-900 border-gray-900' : 'border-gray-300'}`}
+                    aria-hidden
+                  />
+                  <BillLineText lang={lang} line={l} />
+                </button>
+                {/* Fire одного блюда — один тап, без отметок */}
+                <button
+                  onClick={() => fire.mutate([l])}
+                  disabled={fire.isPending}
+                  aria-label={`${t(lang, 'fireItem')} ${l.name}`}
+                  className="shrink-0 h-11 px-3 rounded-xl bg-gray-900 text-white text-sm font-bold flex items-center gap-1.5 active:scale-[0.95] disabled:opacity-40"
+                >
+                  <Icon name="fire" size={16} />
+                  {t(lang, 'fireItem')}
+                </button>
+              </div>
             ))}
           </section>
         )}
