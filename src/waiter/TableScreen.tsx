@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
@@ -7,11 +7,12 @@ import { t, type Lang, type TranslationKey } from '../lib/i18n'
 import { formatMoney } from '../lib/money'
 import Icon from '../components/Icon'
 import ItemPicker from '../features/sell/ItemPicker'
+import BillLineSheet, { type BillLineSheetMode } from '../features/sell/BillLineSheet'
 import { fireTargets, heldLineKeys, nextCourse, nextHeldCourse } from '../features/sell/courses'
 import { defaultConfig, linkedGroups, needsPicker } from '../features/sell/itemConfig'
 import type { CartLine } from '../store/cartStore'
 import {
-  classify, fetchBill, fetchHall, fetchMenu, fireItems, sendOrder,
+  classify, fetchBill, fetchHall, fetchMenu, fireItems, moveLines, sendOrder, voidLine,
   type WaiterBill, type WaiterBillLine, type WaiterErrorKind, type WaiterMenuItem,
 } from './api'
 import { EMPTY_DRAFT, linesCount, unitPrice, type DraftLine, type NewLine } from './draft'
@@ -35,6 +36,22 @@ function errorText(lang: Lang, e: unknown): string {
   return t(lang, ERROR_TEXT[classify(e)])
 }
 
+/** Сеть браузера: без неё убрать и перенести нельзя — PIN менеджера проверяет сервер */
+function useBrowserOnline(): boolean {
+  const [online, setOnline] = useState(() => (typeof navigator === 'undefined' ? true : navigator.onLine))
+  useEffect(() => {
+    const on = () => setOnline(true)
+    const off = () => setOnline(false)
+    window.addEventListener('online', on)
+    window.addEventListener('offline', off)
+    return () => {
+      window.removeEventListener('online', on)
+      window.removeEventListener('offline', off)
+    }
+  }, [])
+  return online
+}
+
 function courseLabel(lang: Lang, course: number | null): string {
   return course ? t(lang, 'courseChip').replace('{n}', String(course)) : t(lang, 'courseChipNone')
 }
@@ -46,6 +63,7 @@ export default function TableScreen() {
   const navigate = useNavigate()
   const qc = useQueryClient()
   const now = useTicketTracking()
+  const online = useBrowserOnline()
 
   const draft = useWaiterDrafts((s) => s.tables[tableId]) ?? EMPTY_DRAFT
   const tableJobs = useWaiterDrafts((s) => s.jobs).filter((j) => j.tableId === tableId)
@@ -69,6 +87,11 @@ export default function TableScreen() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [picker, setPicker] = useState<{ item: WaiterMenuItem; line: DraftLine | null } | null>(null)
   const [selected, setSelected] = useState<Set<string>>(() => new Set())
+  // Окно отправленной позиции (182). opUuid — на всё окно: повтор после
+  // таймаута не уберёт и не перенесёт дважды
+  const [lineSheet, setLineSheet] = useState<{ line: WaiterBillLine; mode: BillLineSheetMode; opUuid: string } | null>(null)
+  const openLine = (line: WaiterBillLine, mode: BillLineSheetMode = 'menu') =>
+    setLineSheet({ line, mode, opUuid: crypto.randomUUID() })
 
   // Какие новые блюда кухня получит не сразу, а по Fire (то же правило, что сервер)
   const heldPreview = heldLineKeys(lines, draft.lines)
@@ -150,6 +173,67 @@ export default function TableScreen() {
       void qc.invalidateQueries({ queryKey: ['w_hall'] })
     },
   })
+
+  function trackJob(jobId: string | null) {
+    if (!jobId) return
+    drafts().track({ id: jobId, tableId, tableLabel: table?.label ?? '', createdAt: new Date().toISOString() })
+  }
+
+  function refresh() {
+    void qc.invalidateQueries({ queryKey: ['w_bill'] })
+    void qc.invalidateQueries({ queryKey: ['w_hall'] })
+  }
+
+  /** Убрать отправленное по PIN менеджера; кухне — тикет «ביטול» с кассы */
+  const voidMut = useMutation({
+    mutationFn: (v: { line: WaiterBillLine; qty: number | null; reason: string; pin: string; opUuid: string }) =>
+      voidLine(session.token, v.line.id, v.qty, v.reason, v.pin, v.opUuid),
+    onSuccess: (res) => {
+      if (!res.ok) return
+      trackJob(res.job_id)
+      toast.success(t(lang, 'lineRemoved'))
+      refresh()
+    },
+    onError: (e) => toast.error(errorText(lang, e)),
+  })
+
+  /** Перенести на другой стол; опустевший стол — назад в зал */
+  const moveMut = useMutation({
+    mutationFn: (v: { line: WaiterBillLine; toTableId: string; opUuid: string }) =>
+      moveLines(session.token, [v.line.id], v.toTableId, v.opUuid),
+    onSuccess: (res) => {
+      trackJob(res.job_id)
+      toast.success(t(lang, 'lineMoved').replace('{n}', res.to_label))
+      setLineSheet(null)
+      refresh()
+      if (res.source_empty) navigate('/waiter')
+    },
+    onError: (e) => toast.error(errorText(lang, e)),
+  })
+
+  /** «Ещё одну такую же» — в «Новое», уходит кнопкой «Отправить» */
+  function addOneMore(l: WaiterBillLine) {
+    const item = menu?.items.find((i) => i.id === l.menu_item_id)
+    if (!item) return
+    const mods = (l.mods ?? []).filter((m): m is { id: string; name: string; priceDelta: number } => !!m.id)
+    drafts().add(tableId, {
+      itemId: item.id,
+      name: l.name,
+      variantId: l.variant_id ?? null,
+      variantName: l.variant_name,
+      basePrice: (l.unit_price ?? 0) - mods.reduce((s, m) => s + m.priceDelta, 0),
+      mods,
+      notes: l.notes ?? '',
+      course: l.course,
+    })
+    toast.success(t(lang, 'lineAddedToDraft'))
+  }
+
+  /** «+» только для блюда из каталога, которое сейчас можно заказать */
+  function canAddOne(l: WaiterBillLine): boolean {
+    const item = l.menu_item_id ? menu?.items.find((i) => i.id === l.menu_item_id) : undefined
+    return !!item && item.is_available
+  }
 
   function toggleHeld(id: string) {
     setSelected((cur) => {
@@ -283,16 +367,24 @@ export default function TableScreen() {
                 key={l.id}
                 className={`card w-full ps-3 pe-2 py-2 flex items-center gap-2 ${selected.has(l.id) ? '!border-gray-900' : ''}`}
               >
-                {/* Тап по строке — отметить для общего Fire (несколько блюд одним тикетом) */}
+                {/* Квадратик — отметить для общего Fire (несколько блюд одним тикетом) */}
                 <button
                   onClick={() => toggleHeld(l.id)}
                   aria-pressed={selected.has(l.id)}
-                  className="flex-1 min-w-0 min-h-11 py-1 flex items-start gap-3 text-start"
+                  aria-label={`${t(lang, 'fireMark')}: ${l.name}`}
+                  className="shrink-0 w-11 h-11 -ms-2 flex items-center justify-center"
                 >
                   <span
-                    className={`mt-0.5 w-5 h-5 rounded-md border-2 shrink-0 ${selected.has(l.id) ? 'bg-gray-900 border-gray-900' : 'border-gray-300'}`}
+                    className={`w-5 h-5 rounded-md border-2 ${selected.has(l.id) ? 'bg-gray-900 border-gray-900' : 'border-gray-300'}`}
                     aria-hidden
                   />
+                </button>
+                {/* Тап по строке — окно позиции: количество, перенос, убрать */}
+                <button
+                  onClick={() => openLine(l)}
+                  aria-label={`${t(lang, 'lineActions')}: ${l.name}`}
+                  className="flex-1 min-w-0 min-h-11 py-1 flex items-start gap-3 text-start"
+                >
                   <BillLineText lang={lang} line={l} />
                 </button>
                 {/* Fire одного блюда — один тап, без отметок */}
@@ -315,9 +407,14 @@ export default function TableScreen() {
             <h2 className="text-sm font-semibold text-gray-500">{t(lang, 'wOnTable')}</h2>
             <div className="card divide-y divide-gray-100">
               {servedLines.map((l) => (
-                <div key={l.id} className="p-3 flex items-start gap-3">
+                <button
+                  key={l.id}
+                  onClick={() => openLine(l)}
+                  aria-label={`${t(lang, 'lineActions')}: ${l.name}`}
+                  className="w-full p-3 min-h-11 flex items-start gap-3 text-start active:bg-gray-50"
+                >
                   <BillLineText lang={lang} line={l} />
-                </div>
+                </button>
               ))}
             </div>
           </section>
@@ -361,6 +458,40 @@ export default function TableScreen() {
       {menuOpen && menu && (
         <MenuSheet menu={menu} counts={counts} total={newCount} onPick={addItem} onDecrement={removeOne} onClose={() => setMenuOpen(false)} />
       )}
+
+      {lineSheet && (() => {
+        const l = lineSheet.line
+        const occupancy = new Map((hallQ.data?.open ?? []).map((o) => [o.table_id, o]))
+        return (
+          <BillLineSheet
+            line={l}
+            lang={lang}
+            isRtl={lang === 'he'}
+            initialMode={lineSheet.mode}
+            initialVoidQty={null}
+            tables={hallQ.data?.tables ?? []}
+            occupancy={occupancy}
+            currentTableId={tableId}
+            online={online}
+            synced
+            busy={voidMut.isPending || moveMut.isPending || fire.isPending}
+            onAddOne={canAddOne(l) ? () => { addOneMore(l); setLineSheet(null) } : undefined}
+            onFire={l.held ? () => { fire.mutate([l]); setLineSheet(null) } : undefined}
+            onVoid={async (qty, reason, pin) => {
+              try {
+                const res = await voidMut.mutateAsync({ line: l, qty, reason, pin, opUuid: lineSheet.opUuid })
+                if (!res.ok) return 'bad_pin'
+                setLineSheet(null)
+                return 'ok'
+              } catch {
+                return 'error'
+              }
+            }}
+            onMove={(toTableId) => moveMut.mutate({ line: l, toTableId, opUuid: lineSheet.opUuid })}
+            onClose={() => setLineSheet(null)}
+          />
+        )
+      })()}
 
       {picker && (
         <ItemPicker

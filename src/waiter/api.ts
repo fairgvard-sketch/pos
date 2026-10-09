@@ -158,6 +158,11 @@ export interface WaiterBillLine {
   notes: string | null
   course: number | null
   held: boolean
+  /** Для «ещё одной такой же» (182); нет у ответа сервера до 182 */
+  menu_item_id?: string | null
+  variant_id?: string | null
+  unit_price?: number
+  mods?: { id: string | null; name: string; priceDelta: number }[]
 }
 export interface WaiterBill {
   order: { id: string; daily_number: number; total: number; opened_at: string } | null
@@ -187,6 +192,43 @@ export function sendOrder(session: string, tableId: string, p: PendingSend): Pro
 
 export function fireItems(session: string, orderId: string, itemIds: string[], opUuid: string): Promise<{ fired: string[]; job_id: string | null }> {
   return call('waiter_fire', { p_staff_session: session, p_order_id: orderId, p_item_ids: itemIds, p_op_uuid: opUuid })
+}
+
+// ── Правка отправленного (182) ──────────────────────────────
+export type VoidLineResult =
+  | { ok: true; total: number; approved_by: string; job_id: string | null }
+  | { ok: false; error: 'manager_pin_invalid' }
+
+/** Убрать позицию: p_qty null — всю строку. Подтверждает PIN менеджера. */
+export function voidLine(
+  session: string, itemId: string, qty: number | null, reason: string, managerPin: string, opUuid: string,
+): Promise<VoidLineResult> {
+  return call('waiter_void_line', {
+    p_staff_session: session,
+    p_item_id: itemId,
+    p_qty: qty,
+    p_reason: reason,
+    p_manager_pin: managerPin,
+    p_op_uuid: opUuid,
+  })
+}
+
+export interface MoveLinesResult {
+  ok: true
+  source_total: number
+  source_empty: boolean
+  target_total: number
+  to_label: string
+  job_id: string | null
+}
+
+export function moveLines(session: string, itemIds: string[], toTableId: string, opUuid: string): Promise<MoveLinesResult> {
+  return call('waiter_move_lines', {
+    p_staff_session: session,
+    p_item_ids: itemIds,
+    p_to_table_id: toTableId,
+    p_op_uuid: opUuid,
+  })
 }
 
 // ── Тикеты ──────────────────────────────────────────────────

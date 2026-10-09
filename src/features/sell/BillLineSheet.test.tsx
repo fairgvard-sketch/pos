@@ -42,6 +42,20 @@ describe('BillLineSheet: правка отправленной позиции', 
     await waitFor(() => expect(p.onVoid).toHaveBeenCalledWith(1, t('ru', 'voidReasonGuest'), '8888'))
   })
 
+  it('до PIN видно, сколько убираем; две порции — одним PIN, все — целой строкой', async () => {
+    const p = setup({ initialMode: 'void', initialVoidQty: 1 })
+    expect(screen.getByTestId('void-qty')).toHaveTextContent('1')
+    expect(screen.getByText(t('ru', 'voidQtyOf').replace('{n}', '3'))).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: `+ ${t('ru', 'voidQtyLabel')}` }))
+    typePin('8888')
+    await waitFor(() => expect(p.onVoid).toHaveBeenCalledWith(2, t('ru', 'voidReasonMistake'), '8888'))
+
+    fireEvent.click(screen.getByRole('button', { name: `+ ${t('ru', 'voidQtyLabel')}` }))
+    expect(screen.getByRole('button', { name: `+ ${t('ru', 'voidQtyLabel')}` })).toBeDisabled()
+    typePin('8888')
+    await waitFor(() => expect(p.onVoid).toHaveBeenLastCalledWith(null, t('ru', 'voidReasonMistake'), '8888'))
+  })
+
   it('«Убрать позицию» убирает строку целиком', async () => {
     const p = setup()
     fireEvent.click(screen.getByRole('button', { name: t('ru', 'lineRemove') }))

@@ -30,6 +30,14 @@ describe('jobTicket', () => {
     expect(t.lines).toEqual([{ qty: 2, name: 'Steak', variantName: null, modifiers: ['Medium'], notes: '' }])
     expect(jobTicket(null, '').lines).toEqual([])
   })
+
+  it('отмена и перенос с телефона (182) печатаются с плашкой, а не как новый заказ', () => {
+    const v = jobTicket({ tableLabel: '5', lines: [{ qty: 1, name: 'Salad' }] }, '', 'kitchen_void')
+    expect(v.kind).toBe('void')
+    const m = jobTicket({ tableLabel: '5', movedTo: '7', lines: [{ qty: 1, name: 'Salad' }] }, '', 'kitchen_move')
+    expect(m).toMatchObject({ kind: 'move', movedTo: '7', tableLabel: '5' })
+    expect(jobTicket(job('a').payload, '', 'kitchen').kind).toBeUndefined()
+  })
 })
 
 describe('createRelay', () => {
@@ -39,6 +47,12 @@ describe('createRelay', () => {
     expect(d.print).toHaveBeenCalledTimes(2)
     expect(d.finish).toHaveBeenCalledWith('a', true, null)
     expect(d.finish).toHaveBeenCalledWith('b', true, null)
+  })
+
+  it('вид задания доходит до тикета', async () => {
+    const d = deps({ claim: vi.fn().mockResolvedValueOnce([{ ...job('a'), kind: 'kitchen_void' }]).mockResolvedValue([]) })
+    await createRelay(d).drain()
+    expect(d.print).toHaveBeenCalledWith(expect.objectContaining({ kind: 'void' }))
   })
 
   it('ошибка принтера: сервер узнаёт причину, кассир получает «повторить»', async () => {

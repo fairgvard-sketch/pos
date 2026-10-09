@@ -3,9 +3,12 @@ import { t, type Lang, type TranslationKey } from '../../lib/i18n'
 import { formatMoney } from '../../lib/money'
 import Icon from '../../components/Icon'
 import type { Table } from '../../types'
-import type { BillLine, TableOccupancy } from '../tables/api'
+import type { BillLine } from '../tables/api'
 
 export type BillLineSheetMode = 'menu' | 'void' | 'move'
+
+/** Стол-приёмник переноса: касса даёт Table, телефон официанта — стол зала (182) */
+export type MoveTable = Pick<Table, 'id' | 'label' | 'status'> & { is_active?: boolean }
 
 interface Props {
   line: BillLine
@@ -14,14 +17,15 @@ interface Props {
   initialMode: BillLineSheetMode
   /** Сколько убрать в режиме void: null — всю строку */
   initialVoidQty: number | null
-  tables: Table[]
-  occupancy: Map<string, TableOccupancy>
+  tables: MoveTable[]
+  occupancy: Map<string, { staff_name: string | null }>
   currentTableId: string
   online: boolean
   /** Строка офлайн-эха ещё не на сервере — править нельзя до синхронизации */
   synced: boolean
   busy: boolean
-  onAddOne: () => void
+  /** Нет — «+» недоступен (позиция без каталога на телефоне) */
+  onAddOne?: () => void
   onFire?: () => void
   /** Вернуть 'bad_pin', если сервер не принял PIN менеджера */
   onVoid: (qty: number | null, reason: string, pin: string) => Promise<'ok' | 'bad_pin' | 'error'>
@@ -49,6 +53,7 @@ export default function BillLineSheet({
   const [badPin, setBadPin] = useState(false)
   const [checking, setChecking] = useState(false)
 
+  const removing = voidQty ?? line.qty
   const editable = online && synced
   const blockedHint = !synced ? t(lang, 'lineSyncPending') : !online ? t(lang, 'offlineBlockedHint') : null
 
@@ -67,7 +72,8 @@ export default function BillLineSheet({
     if (next.length < PIN_LENGTH) return
     setChecking(true)
     try {
-      const res = await onVoid(voidQty, t(lang, reason), next)
+      // Вся строка — null: сервер уберёт её целиком, без отменённой копии
+      const res = await onVoid(removing >= line.qty ? null : removing, t(lang, reason), next)
       if (res === 'bad_pin') setBadPin(true)
       // Ошибку сети/сервера показал тост — PIN вводят заново
       if (res !== 'ok') setPin('')
@@ -76,7 +82,7 @@ export default function BillLineSheet({
     }
   }
 
-  const moveTargets = tables.filter((tb) => tb.id !== currentTableId && tb.is_active && tb.status !== 'disabled')
+  const moveTargets = tables.filter((tb) => tb.id !== currentTableId && tb.is_active !== false && tb.status !== 'disabled')
 
   return (
     <div
@@ -114,7 +120,7 @@ export default function BillLineSheet({
                 <span className="w-10 text-center text-lg font-bold text-gray-900 tabular-nums">{line.qty}</span>
                 <button
                   onClick={onAddOne}
-                  disabled={busy || line.menu_item_id === undefined}
+                  disabled={busy || !onAddOne || line.menu_item_id === undefined}
                   aria-label={`+ ${line.name}`}
                   className="w-12 h-12 rounded-xl bg-gray-900 text-white text-xl font-bold active:scale-[0.95] disabled:opacity-40"
                 >
@@ -151,6 +157,35 @@ export default function BillLineSheet({
 
         {mode === 'void' && (
           <div className="px-6 py-4 space-y-4 overflow-y-auto">
+            {/* Сколько убираем — видно до PIN; менеджер подтверждает именно это */}
+            {line.qty > 1 && (
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-sm font-semibold text-gray-700">{t(lang, 'voidQtyLabel')}</span>
+                <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-1" dir="ltr">
+                    <button
+                      onClick={() => setVoidQty(Math.max(1, removing - 1))}
+                      disabled={checking || removing <= 1}
+                      aria-label={`− ${t(lang, 'voidQtyLabel')}`}
+                      className="w-11 h-11 rounded-xl border border-gray-200 bg-white text-xl font-bold text-gray-900 active:scale-[0.95] disabled:opacity-40"
+                    >
+                      −
+                    </button>
+                    <span className="w-9 text-center text-lg font-bold text-gray-900 tabular-nums" data-testid="void-qty">{removing}</span>
+                    <button
+                      onClick={() => setVoidQty(Math.min(line.qty, removing + 1))}
+                      disabled={checking || removing >= line.qty}
+                      aria-label={`+ ${t(lang, 'voidQtyLabel')}`}
+                      className="w-11 h-11 rounded-xl border border-gray-200 bg-white text-xl font-bold text-gray-900 active:scale-[0.95] disabled:opacity-40"
+                    >
+                      +
+                    </button>
+                  </div>
+                  <span className="text-sm text-gray-500 tabular-nums">{t(lang, 'voidQtyOf').replace('{n}', String(line.qty))}</span>
+                </div>
+              </div>
+            )}
+
             <div>
               <div className="text-sm font-semibold text-gray-700 mb-2">{t(lang, 'voidReasonLabel')}</div>
               <div className="flex flex-wrap gap-2">

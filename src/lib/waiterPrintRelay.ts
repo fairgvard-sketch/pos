@@ -27,6 +27,13 @@ import { notifyPrintFailure } from '../features/receipt/printFailure'
 const POLL_MS = 15_000
 const CLAIM_BATCH = 10
 
+/**
+ * Виды заданий, которые эта сборка умеет печатать (182). Сервер отдаёт
+ * только их: старая касса без этого списка получает лишь обычные заказы,
+ * иначе распечатала бы отмену как новый заказ и кухня бы его приготовила.
+ */
+export const PRINT_KINDS = ['kitchen', 'kitchen_void', 'kitchen_move'] as const
+
 export interface WaiterPrintJob {
   id: string
   kind: string
@@ -53,9 +60,11 @@ function toLine(v: unknown): KitchenTicketLine | null {
 }
 
 /** Снимок print_jobs.payload → тикет кухни; битый payload не роняет печать */
-export function jobTicket(payload: unknown, deviceName: string): KitchenTicketData {
+export function jobTicket(payload: unknown, deviceName: string, kind = 'kitchen'): KitchenTicketData {
   const p = (payload && typeof payload === 'object' ? payload : {}) as Record<string, unknown>
   const lines = Array.isArray(p.lines) ? p.lines : []
+  // Отмена и перенос с телефона (182) — те же плашки «ביטול»/«הועבר», что у кассы
+  const edit = kind === 'kitchen_void' ? 'void' : kind === 'kitchen_move' ? 'move' : undefined
   return {
     // Как у дозаказа стола на кассе: без номера, с пометкой стола
     dailyNumber: null,
@@ -66,6 +75,8 @@ export function jobTicket(payload: unknown, deviceName: string): KitchenTicketDa
     deviceName,
     lines: lines.map(toLine).filter((l): l is KitchenTicketLine => l !== null),
     fire: p.fire === true,
+    ...(edit ? { kind: edit } : {}),
+    ...(edit === 'move' ? { movedTo: str(p.movedTo) } : {}),
   }
 }
 
@@ -126,7 +137,7 @@ export function createRelay(deps: RelayDeps) {
         again = false
         for (const [id, r] of [...unsent]) await report(id, r.ok, r.error)
         const jobs = await deps.claim()
-        for (const job of jobs) await printTicket(job.id, jobTicket(job.payload, deps.deviceName()))
+        for (const job of jobs) await printTicket(job.id, jobTicket(job.payload, deps.deviceName(), job.kind))
         // Полная пачка — за ней может ждать ещё
         if (jobs.length >= CLAIM_BATCH) again = true
       } while (again)
@@ -142,7 +153,7 @@ export function createRelay(deps: RelayDeps) {
 
 const relay = createRelay({
   claim: async () => {
-    const { data, error } = await supabase.rpc('claim_print_jobs', { p_device_uuid: deviceUuid() })
+    const { data, error } = await supabase.rpc('claim_print_jobs', { p_device_uuid: deviceUuid(), p_kinds: [...PRINT_KINDS] })
     if (error) throw new Error(error.message)
     return (data ?? []) as WaiterPrintJob[]
   },
