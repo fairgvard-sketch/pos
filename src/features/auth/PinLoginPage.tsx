@@ -8,7 +8,6 @@ import { landingRoute } from './landing'
 import { useAuthStore } from '../../store/authStore'
 import { useLangStore } from '../../store/langStore'
 import { t } from '../../lib/i18n'
-import LangToggle from '../../components/ui/LangToggle'
 import BrandWordmark from '../../components/ui/BrandWordmark'
 
 const PIN_LENGTH = 4
@@ -98,10 +97,6 @@ export default function PinLoginPage() {
 
   return (
     <div dir={isRtl ? 'rtl' : 'ltr'} className="min-h-screen bg-[#f8f9fb] flex flex-col items-center justify-center p-6">
-      <div className="absolute top-4 end-4">
-        <LangToggle />
-      </div>
-
       <h1 className="mb-2">
         <BrandWordmark className="text-2xl" />
       </h1>
