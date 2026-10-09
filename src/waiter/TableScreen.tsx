@@ -80,6 +80,12 @@ export default function TableScreen() {
     return m
   }, [draft.lines])
 
+  /** «−» в меню: последняя добавленная строка этого блюда теряет порцию */
+  function removeOne(item: WaiterMenuItem) {
+    const last = [...draft.lines].reverse().find((l) => l.itemId === item.id)
+    if (last) drafts().setQty(tableId, last.key, last.qty - 1)
+  }
+
   function addItem(item: WaiterMenuItem) {
     const g = linkedGroups(item, groups)
     if (needsPicker(item, g)) {
@@ -337,7 +343,7 @@ export default function TableScreen() {
       </footer>
 
       {menuOpen && menu && (
-        <MenuSheet menu={menu} counts={counts} total={newCount} onPick={addItem} onClose={() => setMenuOpen(false)} />
+        <MenuSheet menu={menu} counts={counts} total={newCount} onPick={addItem} onDecrement={removeOne} onClose={() => setMenuOpen(false)} />
       )}
 
       {picker && (
