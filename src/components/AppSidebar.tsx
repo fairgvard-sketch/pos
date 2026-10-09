@@ -14,7 +14,6 @@ import { useOutboxStore } from '../lib/offline/outboxStore'
 import { enqueueTableVoid } from '../lib/offline/enqueue'
 import { playNewOrderChime, playReservationChime, playServiceRequestChime } from '../lib/sound'
 import { t, localeOf, type Lang } from '../lib/i18n'
-import { can } from '../lib/perms'
 import Icon from './Icon'
 import type { IconName } from './Icon'
 import OfflineBadge from './OfflineBadge'
@@ -211,12 +210,10 @@ export default function AppSidebar({ active }: { active: SidebarPage }) {
         )}
         <SideLink active={active === 'transactions'} label={t(lang, 'transactions')} iconName="transactions" onClick={() => navigate('/transactions')} />
         <SideLink active={active === 'shift'} label={t(lang, 'shift')} iconName="workShift" onClick={() => navigate('/shift')} />
-        {/* Склад (055): виден тем, кому доступен приход (право точки),
-            и только если учёт остатков не выключен тумблером точки */}
-        {location?.settings?.interface?.inventory_enabled !== false &&
-          can(staff.role, 'stock_receive', location?.settings, staff.role_perms) && (
-          <SideLink active={active === 'inventory'} label={t(lang, 'inventory')} iconName="inventory" onClick={() => navigate('/inventory')} />
-        )}
+        {/* Табель — на месте склада (решение владельца 10.10.2026: склад не
+            готов, из меню убран; страница /inventory осталась на будущее).
+            Отметка прихода/ухода — «Команда» на экране PIN */}
+        <SideLink active={active === 'timesheet'} label={t(lang, 'timesheet')} iconName="timesheet" onClick={() => navigate('/timesheet')} />
         {/* Менеджерский блок отделён. Витрина правится на экране продажи
             (стоп-лист/порядок); админка меню, отчёты и настройки точки —
             в веб-кабинете ANGLE. На терминале — только настройки кассы. */}

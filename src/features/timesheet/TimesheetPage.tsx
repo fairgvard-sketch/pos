@@ -1,14 +1,12 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import toast from 'react-hot-toast'
-import { fetchTimesheetReport, punchByPin, type TimeEntryRow, type TimesheetReport } from './api'
+import { useState, useEffect, useMemo } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { fetchTimesheetReport, type TimeEntryRow, type TimesheetReport } from './api'
 import { idleStaff } from './hours'
 import { fetchStaffList } from '../staff/api'
 import { fetchCurrentLocation } from '../auth/api'
 import { useAuthStore } from '../../store/authStore'
 import { useLangStore } from '../../store/langStore'
 import { t, type Lang, localeOf } from '../../lib/i18n'
-import { useNetStore } from '../../lib/offline/net'
 import AppSidebar from '../../components/AppSidebar'
 import EntryEditSheet, { type EditableEntry } from './EntryEditSheet'
 import StaffHoursSheet from './StaffHoursSheet'
@@ -16,7 +14,6 @@ import HoursReportSheet, { type HoursReportRequest } from './HoursReportSheet'
 import HoursSummarySheet from './HoursSummarySheet'
 
 type Period = 'today' | 'week' | 'month' | 'custom'
-const PIN_LENGTH = 4
 
 const PERIODS: { key: Period; label: 'today' | 'thisWeek' | 'thisMonth' | 'periodCustom' }[] = [
   { key: 'today', label: 'today' },
@@ -57,16 +54,13 @@ function fmtDuration(seconds: number): string {
 }
 
 /**
- * Табель = терминал отметки: сотрудник вводит свой PIN, сервер сам его
- * определяет и переключает clock-in ⇄ clock-out. Отметить чужой день нельзя.
- * Рядом — статистика отработанного за период (день/неделя/месяц/даты)
+ * Табель: кто сейчас на смене и статистика отработанного за период (день/неделя/месяц/даты)
  * с детализацией смен по каждому сотруднику.
  */
 export default function TimesheetPage() {
   const lang = useLangStore((s) => s.lang)
   const isRtl = lang === 'he'
   const locale = localeOf(lang)
-  const qc = useQueryClient()
   const me = useAuthStore((s) => s.staff)
   const isManager = me?.role === 'owner' || me?.role === 'manager'
 
@@ -108,54 +102,6 @@ export default function TimesheetPage() {
     const id = setInterval(() => setTick((n) => n + 1), 30_000)
     return () => clearInterval(id)
   }, [])
-
-  // ── PIN-пад отметки ──
-  const [pin, setPin] = useState('')
-  const [checking, setChecking] = useState(false)
-  const [shake, setShake] = useState(false)
-  const submitting = useRef(false)
-
-  const submit = useCallback(
-    async (fullPin: string) => {
-      if (submitting.current) return
-      // Отметка времени требует сети: PIN сверяет сервер (bcrypt в БД)
-      if (!useNetStore.getState().online) {
-        toast.error(t(lang, 'offlineBlockedHint'))
-        setPin('')
-        return
-      }
-      submitting.current = true
-      setChecking(true)
-      try {
-        const res = await punchByPin(fullPin)
-        const msg = res.action === 'in'
-          ? `${res.staff_name} — ${t(lang, 'workdayStarted')}`
-          : `${res.staff_name} — ${t(lang, 'workdayEnded')}${res.seconds != null ? ` · ${fmtDuration(res.seconds)}` : ''}`
-        toast.success(msg)
-        setPin('')
-        qc.invalidateQueries({ queryKey: ['timesheet'] })
-      } catch {
-        setShake(true)
-        setTimeout(() => setShake(false), 400)
-        setPin('')
-      } finally {
-        setChecking(false)
-        submitting.current = false
-      }
-    },
-    [lang, qc]
-  )
-
-  const press = useCallback(
-    (digit: string) => {
-      if (checking) return
-      const next = (pin + digit).slice(0, PIN_LENGTH)
-      setPin(next)
-      if (next.length === PIN_LENGTH) submit(next)
-    },
-    [pin, checking, submit]
-  )
-  const backspace = useCallback(() => { if (!checking) setPin((p) => p.slice(0, -1)) }, [checking])
 
   // Стабильная ссылка: `?? []` иначе даёт новый массив каждый рендер и рушит
   // мемоизацию byStaff ниже
@@ -231,38 +177,12 @@ export default function TimesheetPage() {
     <div dir={isRtl ? 'rtl' : 'ltr'} className="h-screen bg-[#eceef1] flex gap-3 p-3 overflow-hidden">
       <AppSidebar active="timesheet" />
 
-      {/* Две панели, как на продаже: слева PIN-терминал (по центру), справа статистика */}
+      {/* Отметка прихода/ухода переехала на экран PIN («Команда», 10.10.2026);
+          здесь — кто на смене, статистика и отчёты */}
       <div className="flex-1 min-w-0 flex gap-3">
-          {/* ── PIN-терминал отметки ── */}
-          <section className="w-[clamp(300px,26vw,380px)] shrink-0 bg-white rounded-3xl
-                              flex flex-col items-center justify-center p-6 text-center">
-            <h1 className="text-2xl font-black text-gray-900 mb-1">{t(lang, 'timesheet')}</h1>
-            <p className="text-sm text-gray-500 mb-6">{t(lang, 'enterPin')}</p>
-
-            <div className={`flex gap-3 mb-6 justify-center ${shake ? 'animate-[shake_0.4s_ease-in-out]' : ''}`}>
-              {Array.from({ length: PIN_LENGTH }).map((_, i) => (
-                <div key={i} className={`w-3.5 h-3.5 rounded-full transition-all ${i < pin.length ? 'bg-gray-900 scale-110' : 'bg-gray-200'}`} />
-              ))}
-            </div>
-
-            <div className="grid grid-cols-3 gap-2 w-full max-w-[260px] mx-auto">
-              {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((d) => (
-                <button key={d} onClick={() => press(d)} disabled={checking}
-                  className="card-hover h-14 text-xl font-bold text-gray-900 active:scale-[0.95]">
-                  {d}
-                </button>
-              ))}
-              <div />
-              <button onClick={() => press('0')} disabled={checking}
-                className="card-hover h-14 text-xl font-bold text-gray-900 active:scale-[0.95]">
-                0
-              </button>
-              <button onClick={backspace} disabled={checking} className="btn-ghost h-14 text-lg" aria-label="backspace">⌫</button>
-            </div>
-          </section>
-
           {/* ── Статусы и статистика ── */}
           <main className="flex-1 min-w-0 bg-white rounded-3xl overflow-y-auto p-6">
+            <h1 className="text-2xl font-black text-gray-900 mb-6">{t(lang, 'timesheet')}</h1>
             <section className="mb-8">
               <h2 className="text-base font-bold text-gray-900 mb-3 h-9 flex items-center">{t(lang, 'onShiftNow')}</h2>
               {openEntries.length === 0 ? (

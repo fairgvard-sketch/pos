@@ -982,6 +982,8 @@ export const translations = {
 
     // Табель рабочего времени
     timesheet: 'Табель',
+    teamPunch: 'Команда',
+    teamPunchHint: 'Введите PIN — отметим приход или уход',
     startWorkday: 'Начать рабочий день',
     endWorkday: 'Завершить день',
     onShiftNow: 'Сейчас на смене',
@@ -1196,7 +1198,9 @@ export const translations = {
     fireItem: 'Fire',
     fireMark: 'Отметить для Fire',
     wFirePick: 'Отметьте, что отправить на кухню',
+    wTableSearch: 'Найти стол',
     fireSent: 'Отправлено на кухню',
+    tableHasHeld: 'Блюда ждут Fire',
     tableFired: 'Fire уже отправлен',
     lineActions: 'Действия с позицией',
     lineRemove: 'Убрать позицию',
@@ -2793,6 +2797,8 @@ export const translations = {
 
     // Табель рабочего времени
     timesheet: 'שעון נוכחות',
+    teamPunch: 'צוות',
+    teamPunchHint: 'הקלידו קוד — נרשום כניסה או יציאה',
     startWorkday: 'התחלת יום עבודה',
     endWorkday: 'סיום יום',
     onShiftNow: 'כרגע במשמרת',
@@ -3007,7 +3013,9 @@ export const translations = {
     fireItem: 'FIRE',
     fireMark: 'סימון ל-FIRE',
     wFirePick: 'סמנו מה לשלוח למטבח',
+    wTableSearch: 'חיפוש שולחן',
     fireSent: 'נשלח למטבח',
+    tableHasHeld: 'מנות ממתינות ל-FIRE',
     tableFired: 'FIRE כבר נשלח',
     lineActions: 'פעולות לפריט',
     lineRemove: 'הסרת פריט',
@@ -4601,6 +4609,8 @@ export const translations = {
 
     // Табель рабочего времени
     timesheet: 'Timesheet',
+    teamPunch: 'Team',
+    teamPunchHint: 'Enter your PIN to clock in or out',
     startWorkday: 'Start workday',
     endWorkday: 'End workday',
     onShiftNow: 'On shift now',
@@ -4815,7 +4825,9 @@ export const translations = {
     fireItem: 'Fire',
     fireMark: 'Mark for Fire',
     wFirePick: 'Pick what to send to the kitchen',
+    wTableSearch: 'Find a table',
     fireSent: 'Sent to the kitchen',
+    tableHasHeld: 'Dishes waiting for Fire',
     tableFired: 'Fire already sent',
     lineActions: 'Item actions',
     lineRemove: 'Remove item',

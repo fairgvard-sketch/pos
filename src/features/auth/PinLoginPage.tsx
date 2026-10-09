@@ -9,6 +9,8 @@ import { useAuthStore } from '../../store/authStore'
 import { useLangStore } from '../../store/langStore'
 import { t } from '../../lib/i18n'
 import BrandWordmark from '../../components/ui/BrandWordmark'
+import Icon from '../../components/Icon'
+import TeamPunchSheet from '../timesheet/TeamPunchSheet'
 
 const PIN_LENGTH = 4
 
@@ -30,6 +32,8 @@ export default function PinLoginPage() {
   // видел бы обычную тряску и не понимал, почему верный PIN не пускает.
   const [lockedOut, setLockedOut] = useState(false)
   const submitting = useRef(false)
+  // «Команда»: отметка прихода/ухода без входа в кассу (10.10.2026)
+  const [teamOpen, setTeamOpen] = useState(false)
 
   // Греем кэш рабочего экрана, пока кассир вводит PIN: сессия устройства
   // уже есть (RLS пропустит), и после 4-й цифры каталог рисуется мгновенно.
@@ -88,12 +92,13 @@ export default function PinLoginPage() {
   // Физическая клавиатура — кассир может работать без тача
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
+      if (teamOpen) return // цифры принадлежат окну «Команда»
       if (/^\d$/.test(e.key)) press(e.key)
       if (e.key === 'Backspace') backspace()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [press, backspace])
+  }, [press, backspace, teamOpen])
 
   return (
     <div dir={isRtl ? 'rtl' : 'ltr'} className="min-h-screen bg-[#f8f9fb] flex flex-col items-center justify-center p-6">
@@ -152,6 +157,17 @@ export default function PinLoginPage() {
           ⌫
         </button>
       </div>
+
+      <button
+        onClick={() => setTeamOpen(true)}
+        disabled={checking}
+        className="btn-secondary mt-8 !h-12 !px-6 gap-2"
+      >
+        <Icon name="timesheet" size={18} />
+        {t(lang, 'teamPunch')}
+      </button>
+
+      {teamOpen && <TeamPunchSheet lang={lang} isRtl={isRtl} onClose={() => setTeamOpen(false)} />}
     </div>
   )
 }

@@ -430,14 +430,14 @@ export default function HallPage() {
                       {service.count}
                     </span>
                   )}
-                  {/* Fire уже нажимали (182): красный огонь — «горячее пошло»,
-                      а не напоминание нажать */}
-                  {occ?.has_fired && (
+                  {/* Огонь (182): чёрный — блюда ждут Fire, красный — Fire
+                      отправлен; пока что-то ждёт, значок чёрный */}
+                  {(occ?.has_held || occ?.has_fired) && (
                     <span
                       role="img"
-                      aria-label={t(lang, 'tableFired')}
-                      title={t(lang, 'tableFired')}
-                      className="absolute bottom-1 start-1.5 text-red-600"
+                      aria-label={t(lang, occ.has_held ? 'tableHasHeld' : 'tableFired')}
+                      title={t(lang, occ.has_held ? 'tableHasHeld' : 'tableFired')}
+                      className={`absolute bottom-1 start-1.5 ${occ.has_held ? 'text-gray-900' : 'text-red-600'}`}
                     >
                       <Icon name="fire" size={16} />
                     </span>

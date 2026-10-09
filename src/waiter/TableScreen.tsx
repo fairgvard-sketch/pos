@@ -287,9 +287,9 @@ export default function TableScreen() {
         )}
 
         {pending && (
-          <section className="card p-4 space-y-3" role="alert">
+          <section className="card !bg-white !border-2 !border-red-500 p-4 space-y-3" role="alert">
             <div>
-              <div className="font-bold text-gray-900">{t(lang, 'wNotSent')}</div>
+              <div className="font-bold text-red-600">{t(lang, 'wNotSent')}</div>
               <p className="text-sm text-gray-500 mt-1">{t(lang, 'wNotSentHint')}</p>
             </div>
             <ul className="text-sm text-gray-900 space-y-1">
