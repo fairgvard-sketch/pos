@@ -33,6 +33,7 @@ const menu: PublicMenu = {
   location: {
     id: LOC, name: 'Wide Cafe', currency: 'ILS', is_open: true, accepting: true,
     modules: { online_orders: true },
+    links: { instagram: 'https://instagram.com/widecafe', facebook: null, google_review: null },
   },
   categories: [
     { id: 'drinks', name: 'Drinks', items: [COFFEE] },
@@ -100,6 +101,8 @@ describe('guest menu on a landscape tablet', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'להזמין' }))
 
     const rail = await screen.findByRole('navigation', { name: t('he', 'categories') })
+    // Ссылки на соцсети и отзыв — только на телефоне.
+    expect(document.querySelector('a[href="https://instagram.com/widecafe"]')).not.toBeInTheDocument()
     // Пустая корзина — капсулы нет.
     expect(screen.queryByRole('button', { name: capsuleName })).not.toBeInTheDocument()
 

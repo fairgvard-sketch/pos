@@ -812,8 +812,10 @@ export default function PublicOrderPage() {
                 <p className="angle-live-table-search-empty">{t(lang, 'guestNoDishes')}</p>
               )}
             </div>
-            {!tableContext && (
-              <SocialFooter links={menu.location.links} lang={lang} padForCart={cartCount > 0 && !wide} />
+            {/* На планшете ссылок на соцсети и отзыв нет: экран заказа в
+                заведении, а не визитка — гость уже здесь. */}
+            {!tableContext && !wide && (
+              <SocialFooter links={menu.location.links} lang={lang} padForCart={cartCount > 0} />
             )}
           </div>
         )
@@ -829,13 +831,9 @@ export default function PublicOrderPage() {
                   onSelect={selectCategory}
                   liveTable={!!tableContext}
                 />
-                {/* Капсула корзины — в потоке колонки товаров и прилипает
-                    к низу экрана: центрируется над плитками, а не над всем
-                    экраном вместе с колонкой категорий. */}
                 <div className="public-menu-wide-main">
                   {search}
                   {categoryContent}
-                  {cartBar}
                 </div>
               </div>
             </div>
@@ -858,7 +856,7 @@ export default function PublicOrderPage() {
         )
       })()}
 
-      {!wide && cartBar}
+      {cartBar}
 
       {showCheckout && (
         <CheckoutScreen
@@ -1362,9 +1360,9 @@ function CartBar({ lang, count, total, bumping, capsule = false, onOpen }: {
   total: number
   bumping: boolean
   /**
-   * Широкая раскладка: капсула по центру колонки товаров вместо белой
-   * полосы во всю ширину. Полоса на экране 1180px выглядела бы панелью
-   * оплаты, а нужна лишь кнопка «перейти к заказу» с суммой.
+   * Широкая раскладка: капсула в нижнем углу у края экрана вместо белой
+   * полосы во всю ширину — там же, где пилюля оплаты на экране корзины,
+   * чтобы главная кнопка не прыгала между экранами.
    */
   capsule?: boolean
   onOpen: () => void

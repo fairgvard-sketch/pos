@@ -3033,11 +3033,12 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   }
 
   /* Категории у начала строки, товары — остальная ширина. В RTL grid
-     сам ставит первую колонку справа. */
+     сам ставит первую колонку справа. Колонка категорий — около пятой
+     части экрана: при 12rem на 1440px она терялась рядом с плитками. */
   .public-menu-wide {
     --public-menu-wide-top: calc(3.5rem + env(safe-area-inset-top));
     display: grid;
-    grid-template-columns: 12rem minmax(0, 1fr);
+    grid-template-columns: clamp(15rem, 22vw, 20rem) minmax(0, 1fr);
     align-items: start;
   }
 
@@ -3045,14 +3046,9 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     --public-menu-wide-top: calc(7rem + env(safe-area-inset-top));
   }
 
-  /* Колонка товаров не короче экрана: капсула корзины в её конце липнет
-     к низу экрана и у короткой категории не повисает посреди. */
   .public-menu-wide-main {
-    display: flex;
     min-width: 0;
-    min-height: calc(100vh - var(--public-menu-wide-top));
-    min-height: calc(100dvh - var(--public-menu-wide-top));
-    flex-direction: column;
+    padding-bottom: 1.5rem;
   }
 
   .public-menu-wide-main .public-menu-products-section {
@@ -3132,7 +3128,7 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     max-width: 24rem;
     flex-direction: column;
     align-items: flex-start;
-    inset-inline-start: max(2rem, calc((100vw - 90rem) / 2 + 2rem));
+    inset-inline-start: max(1rem, calc((100vw - 90rem) / 2 + 1rem));
     inset-inline-end: auto;
     margin: 0;
     padding: 0 0 calc(1.5rem + env(safe-area-inset-bottom));
@@ -3179,10 +3175,12 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     height: calc(100vh - var(--public-menu-wide-top));
     height: calc(100dvh - var(--public-menu-wide-top));
     flex-direction: column;
-    gap: .25rem;
+    gap: .375rem;
     overflow-y: auto;
     overscroll-behavior: contain;
-    padding: 1rem .75rem;
+    /* Снизу запас под капсулу корзины в том же углу: последняя
+       категория прокручивается выше неё. */
+    padding: 1.25rem 1rem 7rem;
     border-inline-end: 1px solid rgb(17 24 39 / 6%);
     background: rgb(255 255 255 / 95%);
     scrollbar-width: none;
@@ -3198,15 +3196,15 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   .public-menu-category-rail-item {
     display: flex;
     width: 100%;
-    min-height: 3rem;
+    min-height: 3.5rem;
     flex-shrink: 0;
     align-items: center;
-    padding: .625rem 1rem;
+    padding: .75rem 1.25rem;
     border: 0;
-    border-radius: .875rem;
+    border-radius: 1rem;
     background: transparent;
     color: #4b5563;
-    font-size: .9375rem;
+    font-size: 1.125rem;
     font-weight: 650;
     line-height: 1.25;
     text-align: start;
@@ -3231,17 +3229,14 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   }
 
   /* Капсула корзины: появляется с первой позицией и ведёт на экран
-     корзины. Обёртка прозрачна для касаний — плитки под ней остаются
-     нажимаемыми по краям. */
+     корзины. Стоит в нижнем углу у края экрана — там же, где пилюля
+     оплаты на экране корзины. Обёртка прозрачна для касаний. */
   .public-menu-cart-capsule-bar {
-    position: sticky;
+    position: fixed;
     bottom: 0;
-    z-index: 20;
-    display: flex;
-    justify-content: center;
-    margin-top: auto;
-    padding-block: 1rem calc(1.5rem + env(safe-area-inset-bottom));
-    padding-inline: 1.5rem;
+    z-index: 30;
+    inset-inline-start: max(1rem, calc((100vw - 90rem) / 2 + 1rem));
+    padding-bottom: calc(1.5rem + env(safe-area-inset-bottom));
     pointer-events: none;
   }
 
