@@ -28,6 +28,9 @@ RLS-tenant; добавление продукта не требует копир
   просрочка оценивается в момент запроса, крона нет);
 - **Операционная настройка** — тумблеры владельца в `locations.settings`;
   они НИКОГДА не заменяют entitlement (`module_disabled` ≠ `disabled`).
+  Пример — режим «Только меню» (`online_orders.menu_only`, 183): заказ
+  куплен, но владелец показывает гостям витрину; сервер отказывает
+  `disabled`, не `module_disabled` ([online-orders](online-orders.md)).
 
 Серверные гейты — `org_has_capability`/`require_org_capability` (105),
 стабильный код отказа `module_disabled`. Отключение продукта блокирует

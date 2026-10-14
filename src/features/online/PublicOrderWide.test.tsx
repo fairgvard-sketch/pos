@@ -168,6 +168,53 @@ describe('guest menu on a landscape tablet', () => {
   })
 })
 
+describe('menu only mode', () => {
+  it('invites to the menu, shows no cart and no Add button on the dish card', async () => {
+    // public-menu отдаёт modules.online_orders = false и для режима
+    // «Только меню» (183), и для точки без купленного заказа.
+    vi.mocked(fetchPublicMenu).mockResolvedValue({
+      ...menu,
+      location: { ...menu.location, modules: { online_orders: false } },
+    })
+    renderAt(`/order/${LOC}`)
+
+    expect(screen.queryByRole('button', { name: 'להזמין' })).not.toBeInTheDocument()
+    fireEvent.click(await screen.findByRole('button', { name: t('he', 'pubViewMenu') }))
+
+    fireEvent.click(await screen.findByRole('button', { name: new RegExp(COFFEE.name) }))
+    expect(await screen.findByRole('heading', { name: COFFEE.name, level: 3 })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: new RegExp(t('he', 'pubAdd')) })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: capsuleName })).not.toBeInTheDocument()
+  })
+})
+
+describe('cart pill photos on a landscape tablet', () => {
+  it('shows up to three item photos instead of the count, newest first', async () => {
+    const photo = (id: string): PublicItem => ({
+      ...COFFEE, id, name: `Dish ${id}`, image_url: `https://cdn.test/${id}.webp`,
+    })
+    const dishes = ['a', 'b', 'c', 'd'].map(photo)
+    vi.mocked(fetchPublicMenu).mockResolvedValue({
+      ...menu,
+      categories: [{ id: 'drinks', name: 'Drinks', items: dishes }],
+    })
+    renderAt(`/order/${LOC}?view=menu`)
+
+    for (const dish of dishes) await addFromSheet(dish.name)
+
+    const capsule = await screen.findByRole('button', { name: capsuleName })
+    const thumbs = [...capsule.querySelectorAll('.public-menu-cart-thumbs img')].map((img) => img.getAttribute('src'))
+    expect(thumbs).toEqual(['https://cdn.test/d.webp', 'https://cdn.test/c.webp', 'https://cdn.test/b.webp'])
+    expect(capsule.querySelector('.public-menu-checkout-submit-count')).not.toBeInTheDocument()
+    // Количество не пропало: оно в доступном имени кнопки.
+    expect(capsule).toHaveAccessibleName(new RegExp(`: 4, `))
+
+    fireEvent.click(capsule)
+    const pill = await screen.findByRole('button', { name: new RegExp(t('he', 'pubContinueToPayment')) })
+    expect(pill.querySelectorAll('.public-menu-cart-thumbs img')).toHaveLength(3)
+  })
+})
+
 describe('guest menu on a phone', () => {
   it('shows plain tiles and keeps the category and cart titles for screen readers only', async () => {
     vi.mocked(window.matchMedia).mockRestore()

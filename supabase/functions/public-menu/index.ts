@@ -153,6 +153,8 @@ Deno.serve(async (req) => {
   const onlineSettings = (locRes.data as {
     online_settings?: {
       enabled?: boolean
+      /** Режим «Только меню» из кабинета (183): витрина без заказа. */
+      menu_only?: boolean
       table_ordering_enabled?: boolean
       paused_until?: string | null
       prep_minutes?: number | null
@@ -279,9 +281,11 @@ Deno.serve(async (req) => {
         preorder: preorderOpen,
         // Модули организации (100): online_orders=false — витрина без заказа
         // (меню видно всегда, независимо от смены POS). Старые клиенты поле
-        // игнорируют — поведение не меняется.
+        // игнорируют — поведение не меняется. Режим «Только меню» (183) —
+        // тот же ответ по выбору владельца: заказ куплен, но выключен.
+        // Отказ при отправке обеспечивает submit_online_order.
         modules: {
-          online_orders: orderingModuleOn,
+          online_orders: orderingModuleOn && onlineSettings?.menu_only !== true,
           // Запрос нельзя оставить «в пустоту»: показываем его только для
           // живого стола POS-точки с открытой сменой.
           table_service:

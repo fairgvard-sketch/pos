@@ -1315,6 +1315,7 @@ export const translations = {
     pubPaymentHint: 'Выберите способ получения и подтвердите заказ.',
     pubOrderSummary: 'Сводка заказа',
     pubShowItems: 'Перейти к заказу',
+    pubViewMenu: 'Смотреть меню',
     pubSearch: 'Найти в меню',
     pubSearchResults: 'Результаты поиска',
     pubSearchEmpty: 'Ничего не найдено — попробуйте другое название',
@@ -1435,6 +1436,7 @@ export const translations = {
     // Пауза приёма и время приготовления (054, Square-стиль)
     onlineStateOn: 'Приём включён',
     onlineStateOff: 'Приём выключен',
+    onlineStateMenuOnly: 'Только меню',
     onlineAcceptTitle: 'Приём заказов',
     onlinePausedUntil: 'Пауза до',
     onlinePauseTitle: 'Приостановить приём',
@@ -1450,6 +1452,7 @@ export const translations = {
     onlinePrepFrom: 'От (мин)',
     onlinePrepTo: 'До (мин)',
     onlineOffHint: 'Онлайн-заказы выключены. Включить: Настройки → Обслуживание → Онлайн-заказы.',
+    onlineMenuOnlyHint: 'Включён режим «Только меню»: гости видят меню, но не могут заказать. Включить заказы: кабинет ANGLE → QR Menu.',
     // Типы заказа гостя (058)
     onlineTypesTitle: 'Типы заказа',
     onlineTypesHint: 'Что гость выбирает при оформлении. Если включён один — вопрос не показывается.',
@@ -3128,6 +3131,7 @@ export const translations = {
     pubPaymentHint: 'בחרו אופן קבלה ואשרו את ההזמנה.',
     pubOrderSummary: 'סיכום הזמנה',
     pubShowItems: 'המשך להזמנה',
+    pubViewMenu: 'לתפריט',
     pubSearch: 'חיפוש בתפריט',
     pubSearchResults: 'תוצאות חיפוש',
     pubSearchEmpty: 'לא נמצאו פריטים — נסו שם אחר',
@@ -3248,6 +3252,7 @@ export const translations = {
     // השהיית קבלה וזמן הכנה (054)
     onlineStateOn: 'קבלת הזמנות פעילה',
     onlineStateOff: 'קבלת הזמנות כבויה',
+    onlineStateMenuOnly: 'תפריט בלבד',
     onlineAcceptTitle: 'קבלת הזמנות',
     onlinePausedUntil: 'בהשהיה עד',
     onlinePauseTitle: 'השהיית קבלת הזמנות',
@@ -3263,6 +3268,7 @@ export const translations = {
     onlinePrepTo: 'עד (דק׳)',
     onlinePrepOff: 'לא להציג',
     onlineOffHint: 'הזמנות אונליין כבויות. הפעלה: הגדרות ← שירות ← הזמנות אונליין.',
+    onlineMenuOnlyHint: 'מצב "תפריט בלבד" פעיל: האורחים רואים את התפריט אך לא יכולים להזמין. להפעלת הזמנות: ממשק ANGLE ← QR Menu.',
     // סוגי הזמנה (058)
     onlineTypesTitle: 'סוגי הזמנה',
     onlineTypesHint: 'מה הלקוח בוחר בהזמנה. אם מופעל רק אחד — השאלה לא מוצגת.',
@@ -4938,6 +4944,7 @@ export const translations = {
     pubPaymentHint: 'Choose how to get your order and confirm it.',
     pubOrderSummary: 'Order summary',
     pubShowItems: 'Go to order',
+    pubViewMenu: 'View menu',
     pubSearch: 'Search the menu',
     pubSearchResults: 'Search results',
     pubSearchEmpty: 'Nothing found — try another name',
@@ -5058,6 +5065,7 @@ export const translations = {
     // Пауза приёма и время приготовления (054, Square-стиль)
     onlineStateOn: 'Accepting orders',
     onlineStateOff: 'Not accepting orders',
+    onlineStateMenuOnly: 'Menu only',
     onlineAcceptTitle: 'Order intake',
     onlinePausedUntil: 'Paused until',
     onlinePauseTitle: 'Pause orders',
@@ -5073,6 +5081,7 @@ export const translations = {
     onlinePrepFrom: 'From (min)',
     onlinePrepTo: 'To (min)',
     onlineOffHint: 'Online orders are off. To turn them on: Settings → Service → Online orders.',
+    onlineMenuOnlyHint: 'Menu only mode is on: guests see the menu but cannot order. To take orders: ANGLE back office → QR Menu.',
     // Типы заказа гостя (058)
     onlineTypesTitle: 'Order types',
     onlineTypesHint: "What the guest chooses at checkout. If only one is on, the question isn't shown.",

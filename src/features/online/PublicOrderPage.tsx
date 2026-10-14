@@ -25,6 +25,8 @@ import {
 } from './menuBackgrounds'
 import { resolvePublicHeroVideo } from './heroVideo'
 import TableServiceSheet from './TableServiceSheet'
+import MenuPhoto from './MenuPhoto'
+import { rememberPhotoRatio } from './photoFit'
 
 /**
  * Публичная страница «закажи и забери» (050): меню → корзина → заявка →
@@ -285,7 +287,10 @@ export default function PublicOrderPage() {
         if (!item.image_url) continue
         const image = new Image()
         image.decoding = 'async'
-        image.onload = () => decodedPublicMenuImages.add(item.image_url!)
+        image.onload = () => {
+          decodedPublicMenuImages.add(item.image_url!)
+          rememberPhotoRatio(item.image_url, image)
+        }
         image.src = item.image_url
         void image.decode?.()
           .then(() => decodedPublicMenuImages.add(item.image_url!))
@@ -465,6 +470,20 @@ export default function PublicOrderPage() {
     ),
     [menu]
   )
+  // Пилюля корзины на планшете показывает до трёх фото вместо счётчика:
+  // последние добавленные позиции первыми, одно фото на товар.
+  const cartThumbs = useMemo(() => {
+    const seen = new Set<string>()
+    const thumbs: string[] = []
+    for (const line of [...cart].reverse()) {
+      const image = itemImages[line.itemId]
+      if (!image || seen.has(image)) continue
+      seen.add(image)
+      thumbs.push(image)
+      if (thumbs.length === 3) break
+    }
+    return thumbs
+  }, [cart, itemImages])
 
   /** Начальный выбор для карточки, открытой правкой строки корзины */
   const editingLine = useMemo(() => {
@@ -721,6 +740,7 @@ export default function PublicOrderPage() {
       total={cartTotal}
       bumping={bumping}
       capsule={wide}
+      thumbs={cartThumbs}
       onOpen={() => {
         navigateWithTransition('forward', () => {
           setCheckoutStage('cart')
@@ -740,6 +760,7 @@ export default function PublicOrderPage() {
       headerImg={menu.location.header_url}
       heroVideo={resolvePublicHeroVideo(menu.location.id, menu.location.hero_video_url)}
       bgImg={tableContext ? undefined : menuBackground}
+      heroLabel={viewOnly ? t(lang, 'pubViewMenu') : undefined}
       routeKey={routeKey}
       liveTableHeader={liveTableHeader}
       onHeroStart={() => {
@@ -860,6 +881,7 @@ export default function PublicOrderPage() {
         <CheckoutScreen
           lang={lang}
           locId={locId}
+          cartThumbs={wide ? cartThumbs : []}
           openNow={menu.location.is_open && menu.location.accepting !== false}
           // Предзаказ (116): закрыто сейчас — не значит «закрыто вообще».
           // Пауза и выключенный приём запрещают и предзаказ: это ручное
@@ -1163,10 +1185,12 @@ function LiveTableEmptyOrder({ lang, onMenu }: { lang: Lang; onMenu: () => void 
  * второго изображения или цветовой плёнки.
  */
 function Shell({
-  isRtl, wide = false, title, logo, hero, headerImg, heroVideo, bgImg, onHeroStart, onBack, backLabel,
-  routeKey, headerAction, liveTableHeader, children,
+  isRtl, wide = false, title, logo, hero, headerImg, heroVideo, bgImg, onHeroStart, heroLabel = 'להזמין',
+  onBack, backLabel, routeKey, headerAction, liveTableHeader, children,
 }: {
   isRtl: boolean
+  /** Подпись кнопки hero: витрина без заказа зовёт в меню, а не «заказать». */
+  heroLabel?: string
   /** Альбомный планшет/десктоп: колонка меню и hero на всю ширину экрана. */
   wide?: boolean
   title?: string
@@ -1272,9 +1296,9 @@ function Shell({
                 type="button"
                 className="public-menu-hero-scroll public-menu-route-focus"
                 onClick={onHeroStart}
-                aria-label="להזמין"
+                aria-label={heroLabel}
               >
-                <span>להזמין</span>
+                <span>{heroLabel}</span>
               </button>
             </header>
           </div>
@@ -1352,11 +1376,26 @@ function MenuSkeleton({ lang }: { lang: Lang }) {
   )
 }
 
-function CartBar({ lang, count, total, bumping, capsule = false, onOpen }: {
+/**
+ * До трёх фото позиций в кружках внахлёст — на пилюле корзины планшета
+ * вместо цифры: гость видит, что именно выбрал. Количество остаётся в
+ * доступном имени кнопки.
+ */
+function CartThumbs({ srcs }: { srcs: string[] }) {
+  return (
+    <span className="public-menu-cart-thumbs" aria-hidden>
+      {srcs.map((src) => <img key={src} src={src} alt="" />)}
+    </span>
+  )
+}
+
+function CartBar({ lang, count, total, bumping, capsule = false, thumbs = [], onOpen }: {
   lang: Lang
   count: number
   total: number
   bumping: boolean
+  /** Фото последних позиций для капсулы; без фото — счётчик. */
+  thumbs?: string[]
   /**
    * Широкая раскладка: капсула в нижнем углу у края экрана вместо белой
    * полосы во всю ширину — там же, где пилюля оплаты на экране корзины,
@@ -1374,9 +1413,13 @@ function CartBar({ lang, count, total, bumping, capsule = false, onOpen }: {
           aria-label={`${t(lang, 'pubShowItems')}: ${count}, ${formatMoney(total, lang)}`}
           className={`public-menu-cart-capsule ${bumping ? 'cart-bump' : ''}`}
         >
-          <span className="public-menu-checkout-submit-count" aria-live="polite">
-            {count}
-          </span>
+          {thumbs.length > 0 ? (
+            <CartThumbs srcs={thumbs} />
+          ) : (
+            <span className="public-menu-checkout-submit-count" aria-live="polite">
+              {count}
+            </span>
+          )}
           <span>{t(lang, 'pubShowItems')}</span>
           <strong dir="ltr">{formatMoney(total, lang)}</strong>
         </button>
@@ -1566,13 +1609,13 @@ function ItemRow({ item, lang, onTap, layout = 'row', priority = false }: {
     >
       <span className="public-menu-item-media" data-image-state={imageState}>
         {item.image_url && imageState !== 'error' ? (
-          <img
+          <MenuPhoto
+            key={item.image_url}
             src={item.image_url}
-            alt=""
             loading={priority ? 'eager' : 'lazy'}
             fetchPriority={priority ? 'high' : 'auto'}
             decoding="async"
-            onLoad={(event) => revealImage(event.currentTarget)}
+            onLoad={revealImage}
             onError={() => setImageState('error')}
           />
         ) : (
@@ -1750,7 +1793,7 @@ function ItemConfigSheet({
 
         <div className="public-menu-item-detail-hero">
           {item.image_url ? (
-            <img src={item.image_url} alt="" className="public-menu-item-detail-image" />
+            <MenuPhoto key={item.image_url} src={item.image_url} className="public-menu-item-detail-image" />
           ) : (
             <span className="public-menu-item-detail-placeholder" aria-hidden>
               {item.name.slice(0, 1)}
@@ -1888,12 +1931,14 @@ function ItemConfigSheet({
 function CartStage({
   lang, cart, total, itemImages, recommendations,
   onQty, onEditLine, onRecommend, onAddItems, onContinue,
-  actionLabel, actionDisabled = false, actionAlert,
+  actionLabel, actionDisabled = false, actionAlert, thumbs = [],
 }: {
   lang: Lang
   cart: CartLine[]
   total: number
   itemImages: Record<string, string | null>
+  /** Широкая раскладка: фото позиций на пилюле вместо счётчика. */
+  thumbs?: string[]
   recommendations: PublicItem[]
   onQty: (key: string, qty: number) => void
   /** Тап по строке — правка состава (вариант, модификаторы) */
@@ -1944,7 +1989,7 @@ function CartStage({
                 >
                   <div className="public-menu-cart-media">
                     {itemImages[line.itemId] ? (
-                      <img src={itemImages[line.itemId] ?? undefined} alt="" />
+                      <MenuPhoto key={itemImages[line.itemId]} src={itemImages[line.itemId]!} />
                     ) : (
                       <span aria-hidden>{line.name.slice(0, 1)}</span>
                     )}
@@ -1988,7 +2033,7 @@ function CartStage({
               {recommendations.map((item) => (
                 <button key={item.id} type="button" onClick={() => onRecommend(item)}>
                   <span className="public-menu-checkout-recommendation-media">
-                    {item.image_url ? <img src={item.image_url} alt="" /> : <span />}
+                    {item.image_url ? <MenuPhoto key={item.image_url} src={item.image_url} /> : <span />}
                     <span className="public-menu-checkout-recommendation-add" aria-hidden>+</span>
                   </span>
                   <span className="public-menu-checkout-recommendation-copy">
@@ -2014,7 +2059,14 @@ function CartStage({
           disabled={actionDisabled}
           className="public-menu-checkout-submit"
         >
-          <span className="public-menu-checkout-submit-count">{cartCount}</span>
+          {thumbs.length > 0 ? (
+            <>
+              <CartThumbs srcs={thumbs} />
+              <span className="sr-only">{cartCount}</span>
+            </>
+          ) : (
+            <span className="public-menu-checkout-submit-count">{cartCount}</span>
+          )}
           <span>{actionLabel ?? t(lang, 'pubContinueToPayment')}</span>
           <strong dir="ltr">{formatMoney(total, lang)}</strong>
         </button>
@@ -2027,7 +2079,7 @@ function CartStage({
 function CheckoutScreen({
   lang, locId, openNow, canPreorder, prepMin, prepMax, hours, timezone, orderTypes, initialOrderType,
   tableContext, tableToken, orderChannel, recommendations, itemImages, cart, total,
-  availabilityMessage, contextMessage, stage,
+  availabilityMessage, contextMessage, stage, cartThumbs = [],
   onAddItems, onContinue, onQty, onEditLine, onRecommend, onSubmitted,
 }: {
   lang: Lang
@@ -2055,6 +2107,8 @@ function CheckoutScreen({
   availabilityMessage: string | null
   contextMessage: string | null
   stage: 'cart' | 'payment'
+  /** Широкая раскладка: фото позиций для пилюли оплаты (пусто на телефоне). */
+  cartThumbs?: string[]
   onAddItems: () => void
   onContinue: () => void
   onQty: (key: string, qty: number) => void
@@ -2191,6 +2245,7 @@ function CheckoutScreen({
         total={total}
         itemImages={itemImages}
         recommendations={recommendations}
+        thumbs={cartThumbs}
         onQty={onQty}
         onEditLine={onEditLine}
         onRecommend={onRecommend}
@@ -2715,7 +2770,7 @@ function TableOrderSummary({ lang, status, items, historyItems, itemImages }: {
             <article key={line.key} className="angle-live-order-line">
               <span className="angle-live-order-media" aria-hidden>
                 {itemImages[line.itemId] ? (
-                  <img src={itemImages[line.itemId] ?? undefined} alt="" />
+                  <MenuPhoto key={itemImages[line.itemId]} src={itemImages[line.itemId]!} />
                 ) : (
                   <span>{line.name.slice(0, 1)}</span>
                 )}

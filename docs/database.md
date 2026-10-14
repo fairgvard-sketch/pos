@@ -520,7 +520,8 @@ capability (что технически разрешено), entitlement (что
   Только service-only подтверждение платежа активирует/продлевает продукт.
   Режим по умолчанию disabled; локальный тестовый путь — в [биллинге](billing.md);
 - гейты (105): `submit_online_order`/`get_online_order_status` —
-  `online_orders`; `submit_reservation`/`reservation_availability`/
+  `online_orders`; режим «Только меню» (183, `online_orders.menu_only`)
+  — отказ `disabled` в `submit_online_order`; `submit_reservation`/`reservation_availability`/
   `get_reservation_status` — `public_reservations`;
   `set_online_order_status_web` — `orders_desk`;
   `set_reservation_status_web` — `reservations_desk`; план зала из

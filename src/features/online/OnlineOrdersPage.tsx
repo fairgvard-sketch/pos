@@ -157,7 +157,9 @@ export default function OnlineOrdersPage() {
   // Каждая пилюля открывает свой шит: 'pause' — приём, 'prep' — время
   const [stateSheet, setStateSheet] = useState<'pause' | 'prep' | null>(null)
   const oo = location?.settings?.online_orders
-  const enabled = oo?.enabled !== false
+  // «Только меню» (183) — заявки не принимаются, хотя тумблер приёма включён
+  const menuOnly = oo?.menu_only === true
+  const enabled = oo?.enabled !== false && !menuOnly
   // Истёкшая пауза снимается сама — тик nowTs раз в 30с гасит пилюлю
   const pausedUntil = oo?.paused_until && Date.parse(oo.paused_until) > nowTs ? oo.paused_until : null
   const canPause = can(staff?.role, 'online_pause', location?.settings, staff?.role_perms)
@@ -236,7 +238,7 @@ export default function OnlineOrdersPage() {
                 }`} />
                 <span className="text-sm font-semibold text-gray-900">
                   {!enabled
-                    ? t(lang, 'onlineStateOff')
+                    ? t(lang, menuOnly ? 'onlineStateMenuOnly' : 'onlineStateOff')
                     : pausedUntil
                       ? `${t(lang, 'onlinePausedUntil')} ${formatTime(pausedUntil, lang)}`
                       : t(lang, 'onlineStateOn')}
@@ -401,6 +403,7 @@ export default function OnlineOrdersPage() {
           mode={stateSheet}
           lang={lang}
           enabled={enabled}
+          menuOnly={menuOnly}
           pausedUntil={pausedUntil}
           prepMin={prepMin}
           prepMax={prepMax}
@@ -601,10 +604,12 @@ const PREP_PRESETS = [10, 15, 20, 30, 45, 60]
  * применяются сразу — шит не закрывается, статус в пилюлях обновляется
  * optimistic-патчем кеша current_location.
  */
-function OnlineStateSheet({ mode, lang, enabled, pausedUntil, prepMin, prepMax, canPause, busy, onPause, onResume, onPrep, onClose }: {
+function OnlineStateSheet({ mode, lang, enabled, menuOnly, pausedUntil, prepMin, prepMax, canPause, busy, onPause, onResume, onPrep, onClose }: {
   mode: 'pause' | 'prep'
   lang: Lang
   enabled: boolean
+  /** Заказы выключены режимом «Только меню» в кабинете, а не тумблером */
+  menuOnly: boolean
   pausedUntil: string | null
   prepMin: number
   prepMax: number
@@ -634,8 +639,8 @@ function OnlineStateSheet({ mode, lang, enabled, pausedUntil, prepMin, prepMax, 
 
         {mode === 'pause' && (
           !enabled ? (
-            // Выключено тумблером в настройках — пауза не имеет смысла
-            <p className="text-sm text-gray-500 mt-4">{t(lang, 'onlineOffHint')}</p>
+            // Выключено тумблером или режимом «Только меню» — пауза не имеет смысла
+            <p className="text-sm text-gray-500 mt-4">{t(lang, menuOnly ? 'onlineMenuOnlyHint' : 'onlineOffHint')}</p>
           ) : pausedUntil ? (
             <div className="mt-4">
               <div className="rounded-2xl bg-amber-50 text-amber-800 text-sm font-semibold px-4 py-3">
