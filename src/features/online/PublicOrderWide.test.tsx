@@ -104,7 +104,9 @@ describe('guest menu on a landscape tablet', () => {
     expect(screen.queryByRole('button', { name: capsuleName })).not.toBeInTheDocument()
 
     fireEvent.click(within(rail).getByRole('button', { name: 'Food' }))
-    expect(await screen.findByRole('heading', { name: 'Food', level: 2 })).toBeInTheDocument()
+    // Категорию показывает колонка; заголовок над плитками только для скринридера.
+    const heading = await screen.findByRole('heading', { name: 'Food', level: 2 })
+    expect(heading.parentElement).toHaveClass('sr-only')
     expect(within(rail).getByRole('button', { name: 'Food' })).toHaveAttribute('aria-current', 'true')
 
     await addFromSheet(CAKE.name)

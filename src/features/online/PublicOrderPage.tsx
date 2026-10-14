@@ -786,7 +786,10 @@ export default function PublicOrderPage() {
             }}
           >
             <div className="public-menu-products-section px-4 pb-4">
-              <div className="public-menu-section-heading">
+              {/* В широкой раскладке категорию уже показывает колонка сбоку —
+                  заголовок остаётся только для скринридера и фокуса. Результаты
+                  поиска подписаны видимо: колонка их не обозначает. */}
+              <div className={`public-menu-section-heading ${wide && !searchedTableItems ? 'sr-only' : ''}`}>
                 <h2 className="public-menu-section-title public-menu-route-focus public-menu-route-heading" tabIndex={-1}>
                   {searchedTableItems ? t(lang, 'guestSearchResults') : cat.name}
                 </h2>

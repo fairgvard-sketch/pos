@@ -3070,6 +3070,104 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     height: 13rem;
   }
 
+  /* Плитка открывается тапом целиком — кружок «+»/«···» на крупной
+     плитке лишний и только шумит рядом с ценой. */
+  .public-menu-shell.is-wide .public-menu-item-card.is-grid .public-menu-item-action {
+    display: none;
+  }
+
+  /* На обложке остаются логотип и «Заказать»: название уже есть в
+     логотипе, а крупная подпись в углу широкого экрана читалась как
+     водяной знак. Заголовок h1 остаётся для скринридера. */
+  .public-menu-shell.is-wide .public-menu-hero-copy {
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  /* Корзина на планшете: заказ у начала строки, «Добавить к заказу» —
+     второй колонкой. Одной колонкой 42rem экран 1180px оставался пустым
+     по бокам, а добавки уезжали под заказ. */
+  .public-menu-shell.is-wide .public-menu-cart-stage .public-menu-checkout-content {
+    display: grid;
+    max-width: none;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    column-gap: 3rem;
+    align-items: start;
+    padding: 2rem 2rem 0;
+  }
+
+  .public-menu-shell.is-wide .public-menu-cart-stage .public-menu-checkout-content:not(:has(.public-menu-checkout-recommendations)) {
+    grid-template-columns: minmax(0, 42rem);
+  }
+
+  .public-menu-shell.is-wide .public-menu-cart-stage .public-menu-checkout-intro {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .public-menu-shell.is-wide .public-menu-cart-stage .public-menu-cart-card {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .public-menu-shell.is-wide .public-menu-cart-stage .public-menu-checkout-recommendations {
+    grid-column: 2;
+    grid-row: 2;
+    margin-top: 0;
+  }
+
+  .public-menu-shell.is-wide .public-menu-cart-stage .public-menu-checkout-spacer {
+    grid-column: 1 / -1;
+  }
+
+  /* Вместо полосы во всю ширину — небольшая пилюля внизу у края экрана
+     со стороны колонки заказа. Обёртка прозрачна для касаний: добавки
+     рядом остаются нажимаемыми. */
+  .public-menu-shell.is-wide .public-menu-cart-stage .public-menu-checkout-submitbar {
+    display: flex;
+    width: auto;
+    max-width: 24rem;
+    flex-direction: column;
+    align-items: flex-start;
+    inset-inline-start: max(2rem, calc((100vw - 90rem) / 2 + 2rem));
+    inset-inline-end: auto;
+    margin: 0;
+    padding: 0 0 calc(1.5rem + env(safe-area-inset-bottom));
+    background: transparent;
+    pointer-events: none;
+  }
+
+  .public-menu-shell.is-wide .public-menu-cart-stage .public-menu-checkout-submitbar::before {
+    display: none;
+  }
+
+  .public-menu-shell.is-wide .public-menu-cart-stage .public-menu-checkout-alert {
+    margin-bottom: .5rem;
+    pointer-events: auto;
+  }
+
+  .public-menu-shell.is-wide .public-menu-cart-stage .public-menu-checkout-submit {
+    width: auto;
+    min-height: 3.25rem;
+    gap: .875rem;
+    padding-block: .375rem;
+    padding-inline: .375rem 1.25rem;
+    border-radius: 999px;
+    font-size: .95rem;
+    pointer-events: auto;
+  }
+
+  .public-menu-shell.is-wide .public-menu-cart-stage .public-menu-checkout-submit-count {
+    border-radius: 999px;
+  }
+
+  .public-menu-shell.is-wide .public-menu-cart-stage .public-menu-checkout-submit strong {
+    margin-inline-end: 0;
+  }
+
   /* Колонка категорий прилипает под шапкой и прокручивается сама:
      длинное меню не уводит категории из вида. */
   .public-menu-category-rail {
