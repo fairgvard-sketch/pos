@@ -77,6 +77,8 @@ async function addFromSheet(name: string) {
   fireEvent.click(await screen.findByRole('button', { name: new RegExp(t('he', 'pubAdd')) }))
 }
 
+const capsuleName = new RegExp(t('he', 'pubShowItems'))
+
 beforeEach(() => {
   localStorage.clear()
   client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } })
@@ -91,17 +93,15 @@ afterEach(() => {
 })
 
 describe('guest menu on a landscape tablet', () => {
-  it('shows categories as a column and the order as a panel that goes straight to payment', async () => {
+  it('keeps categories in a side column and opens the cart from a capsule with the total', async () => {
     vi.mocked(fetchPublicMenu).mockResolvedValue(menu)
     renderAt(`/order/${LOC}`)
 
     fireEvent.click(await screen.findByRole('button', { name: 'להזמין' }))
 
     const rail = await screen.findByRole('navigation', { name: t('he', 'categories') })
-    const panel = screen.getByRole('complementary', { name: t('he', 'pubYourOrder') })
-    expect(within(panel).getByText(t('he', 'pubPanelEmpty'))).toBeInTheDocument()
-    // Нижней кнопки корзины нет: её роль у панели.
-    expect(screen.queryByRole('button', { name: new RegExp(t('he', 'pubShowItems')) })).not.toBeInTheDocument()
+    // Пустая корзина — капсулы нет.
+    expect(screen.queryByRole('button', { name: capsuleName })).not.toBeInTheDocument()
 
     fireEvent.click(within(rail).getByRole('button', { name: 'Food' }))
     expect(await screen.findByRole('heading', { name: 'Food', level: 2 })).toBeInTheDocument()
@@ -109,29 +109,31 @@ describe('guest menu on a landscape tablet', () => {
 
     await addFromSheet(CAKE.name)
 
-    expect(await within(panel).findByRole('button', { name: `${t('he', 'edit')}: ${CAKE.name}` })).toBeInTheDocument()
-    expect(within(panel).getAllByText(formatMoney(CAKE.price, 'he')).length).toBeGreaterThan(0)
+    const capsule = await screen.findByRole('button', { name: capsuleName })
+    expect(capsule).toHaveClass('public-menu-cart-capsule')
+    expect(capsule).toHaveTextContent(formatMoney(CAKE.price, 'he'))
 
-    fireEvent.click(within(panel).getByRole('button', { name: t('he', 'pubContinueToPayment') }))
+    fireEvent.click(capsule)
+    expect(await screen.findByRole('heading', { name: t('he', 'pubYourOrder'), level: 1 })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: `${t('he', 'edit')}: ${CAKE.name}` })).toBeInTheDocument()
 
-    // Шаг корзины пропущен: она уже была на экране в панели.
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(t('he', 'pubContinueToPayment')) }))
     expect(await screen.findByRole('heading', { name: t('he', 'pubPaymentTitle'), level: 1 })).toBeInTheDocument()
-    expect(screen.queryByRole('heading', { name: t('he', 'pubYourOrder'), level: 1 })).not.toBeInTheDocument()
 
+    // С оплаты «Назад» — снова корзина, как на телефоне.
     fireEvent.click(screen.getByRole('button', { name: t('he', 'back') }))
-    const panelAgain = await screen.findByRole('complementary', { name: t('he', 'pubYourOrder') })
-    expect(within(panelAgain).getByRole('button', { name: `${t('he', 'edit')}: ${CAKE.name}` })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: t('he', 'pubYourOrder'), level: 1 })).toBeInTheDocument()
   })
 
-  it('has no order panel on a view-only menu', async () => {
+  it('shows no capsule on a view-only menu', async () => {
     vi.mocked(fetchPublicMenu).mockResolvedValue(menu)
     renderAt(`/order/${LOC}?browse=1`)
 
     expect(await screen.findByRole('navigation', { name: t('he', 'categories') })).toBeInTheDocument()
-    expect(screen.queryByRole('complementary', { name: t('he', 'pubYourOrder') })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: capsuleName })).not.toBeInTheDocument()
   })
 
-  it('sends a table order from the panel and gives the next order a new client_uuid', async () => {
+  it('opens the table confirmation from the capsule and sends the order', async () => {
     vi.mocked(fetchPublicMenu).mockResolvedValue(tableMenu)
     vi.mocked(submitPublicOrder).mockResolvedValue({ online_id: 'order-1', total: COFFEE.price, duplicate: false })
     vi.mocked(fetchPublicStatus).mockResolvedValue({
@@ -145,29 +147,18 @@ describe('guest menu on a landscape tablet', () => {
     })
     renderAt(`/order/${LOC}?table=${TABLE}&source=table_qr`)
 
+    expect(await screen.findByRole('navigation', { name: t('he', 'categories') })).toBeInTheDocument()
     await addFromSheet(COFFEE.name)
-    const panel = await screen.findByRole('complementary', { name: t('he', 'pubYourOrder') })
-    fireEvent.click(within(panel).getByRole('button', { name: t('he', 'pubConfirmTableOrder') }))
+    fireEvent.click(await screen.findByRole('button', { name: capsuleName }))
 
-    await waitFor(() => expect(submitPublicOrder).toHaveBeenCalledTimes(1))
-    const first = vi.mocked(submitPublicOrder).mock.calls[0][0]
-    expect(first).toMatchObject({
+    fireEvent.click(await screen.findByRole('button', { name: new RegExp(t('he', 'pubConfirmTableOrder')) }))
+
+    await waitFor(() => expect(submitPublicOrder).toHaveBeenCalledWith(expect.objectContaining({
       loc: LOC,
       table_token: TABLE,
       order_channel: 'table_qr',
       items: [expect.objectContaining({ menu_item_id: COFFEE.id, qty: 1 })],
-    })
+    })))
     expect(await screen.findByTestId('table-live-order-summary')).toBeInTheDocument()
-
-    // Дозаказ: панель собрана заново, поэтому UUID новый — иначе сервер
-    // по идемпотентности вернул бы первую заявку вместо второй.
-    fireEvent.click(screen.getByRole('tab', { name: t('he', 'guestMenuTab') }))
-    await addFromSheet(COFFEE.name)
-    const panelAgain = await screen.findByRole('complementary', { name: t('he', 'pubYourOrder') })
-    fireEvent.click(within(panelAgain).getByRole('button', { name: t('he', 'pubConfirmTableOrder') }))
-
-    await waitFor(() => expect(submitPublicOrder).toHaveBeenCalledTimes(2))
-    const second = vi.mocked(submitPublicOrder).mock.calls[1][0]
-    expect(second.client_uuid).not.toBe(first.client_uuid)
   })
 })

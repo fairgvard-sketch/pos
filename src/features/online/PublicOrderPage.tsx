@@ -188,8 +188,8 @@ export default function PublicOrderPage() {
   const [categoryMotion, setCategoryMotion] = useState(false)
   const [cartNotice, setCartNotice] = useState<string | null>(null)
   const reducedMotion = usePrefersReducedMotion()
-  // Альбомный планшет и десктоп: категории колонкой, заказ постоянной
-  // панелью вместо нижней кнопки корзины (см. wideLayout.ts).
+  // Альбомный планшет и десктоп: категории колонкой, плитки на всю ширину,
+  // корзина — капсулой внизу (см. wideLayout.ts).
   const wide = useWideLayout()
   const itemCloseTimer = useRef<number | undefined>(undefined)
   const itemTrigger = useRef<HTMLElement | null>(null)
@@ -713,77 +713,23 @@ export default function PublicOrderPage() {
       }}
     />
   ) : undefined
-  // Одни и те же данные оформления у страницы корзины/оплаты и у панели
-  // заказа широкой раскладки: панель — та же корзина, только постоянная.
-  const checkoutProps: React.ComponentProps<typeof CheckoutScreen> = {
-    lang,
-    locId,
-    openNow: menu.location.is_open && menu.location.accepting !== false,
-    // Предзаказ (116): закрыто сейчас — не значит «закрыто вообще».
-    // Пауза и выключенный приём запрещают и предзаказ: это ручное
-    // «мы не принимаем», а не расписание. Старая edge function поля
-    // не отдаёт — тогда поведение прежнее, по is_open.
-    canPreorder:
-      menu.location.accepting !== false
-      && (menu.location.preorder ?? menu.location.is_open),
-    prepMin: menu.location.prep_min ?? 0,
-    prepMax: menu.location.prep_max ?? 0,
-    hours: menu.location.hours ?? null,
-    timezone: menu.location.timezone ?? null,
-    orderTypes: tableContext ? ['here'] : orderTypes,
-    initialOrderType,
-    tableContext,
-    tableToken: tableContext ? queryContext.tableToken : null,
-    orderChannel: queryContext.channel,
-    recommendations,
-    itemImages,
-    cart,
-    total: cartTotal,
-    stage: checkoutStage,
-    availabilityMessage:
-      menu.location.accepting === false
-        ? menu.location.paused_until
-          ? `${t(lang, 'pubPausedUntil')} ${formatTime(menu.location.paused_until, lang)}`
-          : t(lang, 'pubPaused')
-        : !menu.location.is_open
-          // Закрыто сейчас, но предзаказ открыт (116): предупреждение
-          // объясняет, что делать («выберите время»), а не сообщает
-          // об отказе — оформление в этом состоянии доступно.
-          ? t(lang, (menu.location.preorder ?? false)
-            ? 'pubClosedPreorder'
-            : 'pubClosed')
-          : null,
-    contextMessage:
-      menu.context_error
-        ? t(lang, menu.context_error === 'table_ordering_disabled'
-          ? 'pubTableOrderingDisabled'
-          : 'pubTableQrExpired')
-        : null,
-    onAddItems: () => navigateWithTransition('back', () => {
-      setView('menu')
-      if (tableContext) setLiveTableTab('menu')
-    }),
-    onContinue: () => navigateWithTransition('forward', () => setCheckoutStage('payment')),
-    onQty: updateQty,
-    onEditLine: editCartLine,
-    onRecommend: openItem,
-    onSubmitted: (clientUuid) => {
-      window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
-      const historyItems = mergeOrderLines(activeHistoryItems, activeItems)
-      localStorage.setItem(ACTIVE_KEY, JSON.stringify({
-        clientUuid,
-        locId,
-        items: cart,
-        historyItems,
-      }))
-      setActiveUuid(clientUuid)
-      setActiveHistoryItems(historyItems)
-      setActiveItems(cart)
-      setCart([])
-      setView('menu')
-      if (tableContext) setLiveTableTab('order')
-    },
-  }
+  const cartBar = !viewOnly && showMenu && hasStarted && cartCount > 0 ? (
+    <CartBar
+      key={bumpSeq}
+      lang={lang}
+      count={cartCount}
+      total={cartTotal}
+      bumping={bumping}
+      capsule={wide}
+      onOpen={() => {
+        navigateWithTransition('forward', () => {
+          setCheckoutStage('cart')
+          setView('checkout')
+          if (tableContext) setLiveTableTab('order')
+        })
+      }}
+    />
+  ) : null
   return (
     <Shell
       isRtl={isRtl}
@@ -807,11 +753,9 @@ export default function PublicOrderPage() {
       // из меню → на заставку и к новому заказу с пустой корзиной. Раньше
       // на экране меню кнопки не было, и гость, вошедший через «Заказать»,
       // не мог вернуться назад.
-      // В широкой раскладке шага корзины нет — она живёт в панели меню,
-      // поэтому из оплаты возвращаемся прямо в меню.
       onBack={
         view === 'checkout'
-          ? checkoutStage === 'payment' && !wide
+          ? checkoutStage === 'payment'
             ? () => navigateWithTransition('back', () => setCheckoutStage('cart'))
             : () => navigateWithTransition('back', () => setView('menu'))
           : hasStarted && !tableContext
@@ -874,7 +818,7 @@ export default function PublicOrderPage() {
         if (wide) {
           return (
             <div className="public-menu-route-motion">
-              <div className={`public-menu-wide${viewOnly ? ' is-view-only' : ''}`}>
+              <div className="public-menu-wide">
                 <CategoryRail
                   lang={lang}
                   categories={menu.categories}
@@ -882,25 +826,14 @@ export default function PublicOrderPage() {
                   onSelect={selectCategory}
                   liveTable={!!tableContext}
                 />
+                {/* Капсула корзины — в потоке колонки товаров и прилипает
+                    к низу экрана: центрируется над плитками, а не над всем
+                    экраном вместе с колонкой категорий. */}
                 <div className="public-menu-wide-main">
                   {search}
                   {categoryContent}
+                  {cartBar}
                 </div>
-                {/* Ключ по заявке: client_uuid живёт, пока смонтирован
-                    экран оформления. После отправки панель обязана
-                    собраться заново, иначе следующий заказ стола ушёл бы
-                    с прежним UUID и сервер вернул бы первую заявку. */}
-                {!viewOnly && (
-                  <CheckoutScreen
-                    key={activeUuid ?? 'draft'}
-                    {...checkoutProps}
-                    variant="panel"
-                    onContinue={() => navigateWithTransition('forward', () => {
-                      setCheckoutStage('payment')
-                      setView('checkout')
-                    })}
-                  />
-                )}
               </div>
             </div>
           )
@@ -922,24 +855,82 @@ export default function PublicOrderPage() {
         )
       })()}
 
-      {!viewOnly && !wide && showMenu && hasStarted && cartCount > 0 && (
-        <CartBar
-          key={bumpSeq}
+      {!wide && cartBar}
+
+      {showCheckout && (
+        <CheckoutScreen
           lang={lang}
-          count={cartCount}
+          locId={locId}
+          openNow={menu.location.is_open && menu.location.accepting !== false}
+          // Предзаказ (116): закрыто сейчас — не значит «закрыто вообще».
+          // Пауза и выключенный приём запрещают и предзаказ: это ручное
+          // «мы не принимаем», а не расписание. Старая edge function поля
+          // не отдаёт — тогда поведение прежнее, по is_open.
+          canPreorder={
+            menu.location.accepting !== false
+            && (menu.location.preorder ?? menu.location.is_open)
+          }
+          prepMin={menu.location.prep_min ?? 0}
+          prepMax={menu.location.prep_max ?? 0}
+          hours={menu.location.hours ?? null}
+          timezone={menu.location.timezone ?? null}
+          orderTypes={tableContext ? ['here'] : orderTypes}
+          initialOrderType={initialOrderType}
+          tableContext={tableContext}
+          tableToken={tableContext ? queryContext.tableToken : null}
+          orderChannel={queryContext.channel}
+          recommendations={recommendations}
+          itemImages={itemImages}
+          cart={cart}
           total={cartTotal}
-          bumping={bumping}
-          onOpen={() => {
-            navigateWithTransition('forward', () => {
-              setCheckoutStage('cart')
-              setView('checkout')
-              if (tableContext) setLiveTableTab('order')
-            })
+          stage={checkoutStage}
+          availabilityMessage={
+            menu.location.accepting === false
+              ? menu.location.paused_until
+                ? `${t(lang, 'pubPausedUntil')} ${formatTime(menu.location.paused_until, lang)}`
+                : t(lang, 'pubPaused')
+              : !menu.location.is_open
+                // Закрыто сейчас, но предзаказ открыт (116): предупреждение
+                // объясняет, что делать («выберите время»), а не сообщает
+                // об отказе — оформление в этом состоянии доступно.
+                ? t(lang, (menu.location.preorder ?? false)
+                  ? 'pubClosedPreorder'
+                  : 'pubClosed')
+                : null
+          }
+          contextMessage={
+            menu.context_error
+              ? t(lang, menu.context_error === 'table_ordering_disabled'
+                ? 'pubTableOrderingDisabled'
+                : 'pubTableQrExpired')
+              : null
+          }
+          onAddItems={() => navigateWithTransition('back', () => {
+            setView('menu')
+            if (tableContext) setLiveTableTab('menu')
+          })}
+          onContinue={() => navigateWithTransition('forward', () => setCheckoutStage('payment'))}
+          onQty={updateQty}
+          onEditLine={editCartLine}
+          onRecommend={openItem}
+          onSubmitted={(clientUuid) => {
+            window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+            const historyItems = mergeOrderLines(activeHistoryItems, activeItems)
+            localStorage.setItem(ACTIVE_KEY, JSON.stringify({
+              clientUuid,
+              locId,
+              items: cart,
+              historyItems,
+            }))
+            setActiveUuid(clientUuid)
+            setActiveHistoryItems(historyItems)
+            setActiveItems(cart)
+            setCart([])
+            setView('menu')
+            if (tableContext) setLiveTableTab('order')
           }}
         />
       )}
-
-      {showCheckout && <CheckoutScreen {...checkoutProps} />}
 
       {tableContext && liveTableTab === 'order' && activeUuid && !showCheckout && (
         <div className="angle-live-table-panel">
@@ -1362,13 +1353,38 @@ function MenuSkeleton({ lang }: { lang: Lang }) {
   )
 }
 
-function CartBar({ lang, count, total, bumping, onOpen }: {
+function CartBar({ lang, count, total, bumping, capsule = false, onOpen }: {
   lang: Lang
   count: number
   total: number
   bumping: boolean
+  /**
+   * Широкая раскладка: капсула по центру колонки товаров вместо белой
+   * полосы во всю ширину. Полоса на экране 1180px выглядела бы панелью
+   * оплаты, а нужна лишь кнопка «перейти к заказу» с суммой.
+   */
+  capsule?: boolean
   onOpen: () => void
 }) {
+  if (capsule) {
+    return (
+      <div className="public-menu-cart-capsule-bar">
+        <button
+          type="button"
+          onClick={onOpen}
+          aria-label={`${t(lang, 'pubShowItems')}: ${count}, ${formatMoney(total, lang)}`}
+          className={`public-menu-cart-capsule ${bumping ? 'cart-bump' : ''}`}
+        >
+          <span className="public-menu-checkout-submit-count" aria-live="polite">
+            {count}
+          </span>
+          <span>{t(lang, 'pubShowItems')}</span>
+          <strong dir="ltr">{formatMoney(total, lang)}</strong>
+        </button>
+      </div>
+    )
+  }
+
   return (
     // Панель та же, что на чекауте: сплошная белая полоса, а не плавающая
     // кнопка на градиенте. Плитки меню не должны просвечивать под оплатой —
@@ -1991,14 +2007,47 @@ function CartStage({
           </div>
           <div className="public-menu-cart-lines">
             {cart.map((line) => (
-              <CartLineRow
-                key={line.key}
-                lang={lang}
-                line={line}
-                image={itemImages[line.itemId] ?? null}
-                onQty={onQty}
-                onEditLine={onEditLine}
-              />
+              <div key={line.key} className="public-menu-cart-line">
+                {/* Фото и название — кнопка правки состава: гость, выбравший
+                    не тот размер или модификатор, чинит позицию на месте,
+                    а не удаляет и собирает заново. Степпер снаружи, иначе
+                    тап по «+/−» открывал бы карточку. */}
+                <button
+                  type="button"
+                  className="public-menu-cart-edit"
+                  onClick={() => onEditLine(line)}
+                  aria-label={`${t(lang, 'edit')}: ${line.name}`}
+                >
+                  <div className="public-menu-cart-media">
+                    {itemImages[line.itemId] ? (
+                      <img src={itemImages[line.itemId] ?? undefined} alt="" />
+                    ) : (
+                      <span aria-hidden>{line.name.slice(0, 1)}</span>
+                    )}
+                  </div>
+                  <div className="public-menu-cart-copy">
+                    <div className="public-menu-cart-name">{line.name}</div>
+                    {(line.variantName || line.modNames.length > 0) && (
+                      <div className="public-menu-cart-meta">
+                        {[line.variantName, ...line.modNames].filter(Boolean).join(' · ')}
+                      </div>
+                    )}
+                  </div>
+                </button>
+                {/* Сумма над степпером одной колонкой: раньше она стояла
+                    под названием, а количество — отдельно справа, и строка
+                    читалась разрозненно. */}
+                <div className="public-menu-cart-controls">
+                  <span className="public-menu-cart-price">
+                    {formatMoney(line.unitPrice * line.qty, lang)}
+                  </span>
+                  <div className="public-menu-cart-stepper">
+                    <Stepper onClick={() => onQty(line.key, line.qty - 1)}>−</Stepper>
+                    <span>{line.qty}</span>
+                    <Stepper onClick={() => onQty(line.key, line.qty + 1)}>+</Stepper>
+                  </div>
+                </div>
+              </div>
             ))}
           </div>
 
@@ -2050,182 +2099,15 @@ function CartStage({
   )
 }
 
-/** Строка корзины — общая для экрана корзины и панели заказа. */
-function CartLineRow({ lang, line, image, onQty, onEditLine }: {
-  lang: Lang
-  line: CartLine
-  image: string | null
-  onQty: (key: string, qty: number) => void
-  onEditLine: (line: CartLine) => void
-}) {
-  return (
-    <div className="public-menu-cart-line">
-      {/* Фото и название — кнопка правки состава: гость, выбравший
-          не тот размер или модификатор, чинит позицию на месте,
-          а не удаляет и собирает заново. Степпер снаружи, иначе
-          тап по «+/−» открывал бы карточку. */}
-      <button
-        type="button"
-        className="public-menu-cart-edit"
-        onClick={() => onEditLine(line)}
-        aria-label={`${t(lang, 'edit')}: ${line.name}`}
-      >
-        <div className="public-menu-cart-media">
-          {image ? (
-            <img src={image} alt="" />
-          ) : (
-            <span aria-hidden>{line.name.slice(0, 1)}</span>
-          )}
-        </div>
-        <div className="public-menu-cart-copy">
-          <div className="public-menu-cart-name">{line.name}</div>
-          {(line.variantName || line.modNames.length > 0) && (
-            <div className="public-menu-cart-meta">
-              {[line.variantName, ...line.modNames].filter(Boolean).join(' · ')}
-            </div>
-          )}
-        </div>
-      </button>
-      {/* Сумма над степпером одной колонкой: раньше она стояла
-          под названием, а количество — отдельно справа, и строка
-          читалась разрозненно. */}
-      <div className="public-menu-cart-controls">
-        <span className="public-menu-cart-price">
-          {formatMoney(line.unitPrice * line.qty, lang)}
-        </span>
-        <div className="public-menu-cart-stepper">
-          <Stepper onClick={() => onQty(line.key, line.qty - 1)}>−</Stepper>
-          <span>{line.qty}</span>
-          <Stepper onClick={() => onQty(line.key, line.qty + 1)}>+</Stepper>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-/**
- * Постоянная панель заказа широкой раскладки. Заменяет нижнюю кнопку
- * корзины и отдельный экран корзины: гость видит выбранное, пока листает
- * меню, и одной кнопкой уходит к оплате (за столом — отправляет заказ).
- * «Добавить к заказу» здесь короче, чем на экране корзины: три строки,
- * а не плитки — панель узкая, и плитки вытеснили бы сам заказ.
- */
-function OrderPanel({
-  lang, cart, total, itemImages, recommendations,
-  onQty, onEditLine, onRecommend, onContinue,
-  actionLabel, actionDisabled = false, actionAlert,
-}: {
-  lang: Lang
-  cart: CartLine[]
-  total: number
-  itemImages: Record<string, string | null>
-  recommendations: PublicItem[]
-  onQty: (key: string, qty: number) => void
-  onEditLine: (line: CartLine) => void
-  onRecommend: (item: PublicItem) => void
-  onContinue: () => void
-  actionLabel?: string
-  actionDisabled?: boolean
-  actionAlert?: string | null
-}) {
-  const cartCount = cart.reduce((sum, line) => sum + line.qty, 0)
-
-  return (
-    <aside className="public-menu-order-panel" aria-label={t(lang, 'pubYourOrder')}>
-      <div className="public-menu-order-panel-head">
-        <h2>{t(lang, 'pubYourOrder')}</h2>
-        {cartCount > 0 && (
-          <span className="public-menu-order-panel-count" aria-live="polite">{cartCount}</span>
-        )}
-      </div>
-
-      {cart.length === 0 ? (
-        <div className="public-menu-order-panel-empty">
-          <span className="public-menu-order-panel-empty-icon" aria-hidden>
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M5 7h14l-1 13H6L5 7Z" /><path d="M9 10V6a3 3 0 0 1 6 0v4" />
-            </svg>
-          </span>
-          <strong>{t(lang, 'pubPanelEmpty')}</strong>
-          <p>{t(lang, 'pubPanelEmptyHint')}</p>
-        </div>
-      ) : (
-        <>
-          <div className="public-menu-order-panel-body">
-            <div className="public-menu-cart-lines">
-              {cart.map((line) => (
-                <CartLineRow
-                  key={line.key}
-                  lang={lang}
-                  line={line}
-                  image={itemImages[line.itemId] ?? null}
-                  onQty={onQty}
-                  onEditLine={onEditLine}
-                />
-              ))}
-            </div>
-
-            {recommendations.length > 0 && (
-              <section className="public-menu-order-panel-recs">
-                <h3>{t(lang, 'pubAlsoTry')}</h3>
-                {recommendations.slice(0, 3).map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    className="public-menu-order-panel-rec"
-                    onClick={() => onRecommend(item)}
-                  >
-                    <span className="public-menu-order-panel-rec-media">
-                      {item.image_url ? <img src={item.image_url} alt="" /> : null}
-                    </span>
-                    <span className="public-menu-order-panel-rec-copy">
-                      <strong>{item.name}</strong>
-                      <small dir="ltr">{formatMoney(item.price, lang)}</small>
-                    </span>
-                    <span className="public-menu-order-panel-rec-add" aria-hidden>+</span>
-                  </button>
-                ))}
-              </section>
-            )}
-          </div>
-
-          <div className="public-menu-order-panel-foot">
-            {actionAlert && (
-              <div className="public-menu-checkout-alert is-error" role="alert">{actionAlert}</div>
-            )}
-            <div className="public-menu-cart-total">
-              <span>{t(lang, 'pubTotal')}</span>
-              <strong dir="ltr">{formatMoney(total, lang)}</strong>
-            </div>
-            <button
-              type="button"
-              onClick={onContinue}
-              disabled={actionDisabled}
-              className="public-menu-checkout-submit is-final"
-            >
-              {actionLabel ?? t(lang, 'pubContinueToPayment')}
-            </button>
-          </div>
-        </>
-      )}
-    </aside>
-  )
-}
-
 /** Способ получения + контакты + подтверждение заявки */
 function CheckoutScreen({
   lang, locId, openNow, canPreorder, prepMin, prepMax, hours, timezone, orderTypes, initialOrderType,
   tableContext, tableToken, orderChannel, recommendations, itemImages, cart, total,
-  availabilityMessage, contextMessage, stage, variant = 'page',
+  availabilityMessage, contextMessage, stage,
   onAddItems, onContinue, onQty, onEditLine, onRecommend, onSubmitted,
 }: {
   lang: Lang
   locId: string
-  /**
-   * panel — постоянная панель заказа широкой раскладки: всегда шаг корзины.
-   * Отправка заказа стола идёт отсюда же, с тем же client_uuid и проверками.
-   */
-  variant?: 'page' | 'panel'
   /** Открыто прямо сейчас: только при этом доступен заказ «как можно скорее» */
   openNow: boolean
   /** Приём заявок «ко времени» на будущее окно возможен (116) */
@@ -2377,30 +2259,30 @@ function CheckoutScreen({
     }
   }
 
-  if (stage === 'cart' || variant === 'panel') {
-    const cartStageProps = {
-      lang,
-      cart,
-      total,
-      itemImages,
-      recommendations,
-      onQty,
-      onEditLine,
-      onRecommend,
-      onContinue: isTableOrder ? () => void submit() : onContinue,
-      actionLabel: isTableOrder
-        ? t(lang, busy ? 'pubSubmitting' : 'pubConfirmTableOrder')
-        : undefined,
-      actionDisabled: isTableOrder && (busy || !canSubmit || !valid),
-      actionAlert: isTableOrder
-        // Предзаказ за столом невозможен: если зал сейчас не принимает,
-        // не обещаем гостю выбор другого времени.
-        ? error || contextMessage || (!openNow ? t(lang, 'pubClosed') : availabilityMessage)
-        : null,
-    }
-    return variant === 'panel'
-      ? <OrderPanel {...cartStageProps} />
-      : <CartStage {...cartStageProps} onAddItems={onAddItems} />
+  if (stage === 'cart') {
+    return (
+      <CartStage
+        lang={lang}
+        cart={cart}
+        total={total}
+        itemImages={itemImages}
+        recommendations={recommendations}
+        onQty={onQty}
+        onEditLine={onEditLine}
+        onRecommend={onRecommend}
+        onAddItems={onAddItems}
+        onContinue={isTableOrder ? () => void submit() : onContinue}
+        actionLabel={isTableOrder
+          ? t(lang, busy ? 'pubSubmitting' : 'pubConfirmTableOrder')
+          : undefined}
+        actionDisabled={isTableOrder && (busy || !canSubmit || !valid)}
+        actionAlert={isTableOrder
+          // Предзаказ за столом невозможен: если зал сейчас не принимает,
+          // не обещаем гостю выбор другого времени.
+          ? error || contextMessage || (!openNow ? t(lang, 'pubClosed') : availabilityMessage)
+          : null}
+      />
+    )
   }
 
   return (
