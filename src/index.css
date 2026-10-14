@@ -634,20 +634,6 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     font-variant-numeric: tabular-nums;
   }
 
-  .public-menu-item-action {
-    display: grid;
-    width: 2rem;
-    height: 2rem;
-    flex-shrink: 0;
-    place-items: center;
-    border-radius: 999px;
-    background: #111827;
-    color: #fff;
-    font-size: 1.1rem;
-    font-weight: 600;
-    line-height: 1;
-  }
-
   .public-menu-item-card.is-row {
     display: flex;
     align-items: center;
@@ -663,10 +649,6 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
 
   .public-menu-item-card.is-row .public-menu-item-body {
     padding: .25rem .15rem;
-  }
-
-  .public-menu-item-card.is-row .public-menu-item-action {
-    display: none;
   }
 
   /* ANGLE Live Table — единая продуктовая оболочка для QR конкретного
@@ -2911,11 +2893,6 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
       radial-gradient(circle at 50% 35%, #fff 0 30%, rgb(238 238 238) 72%, rgb(220 220 220));
   }
 
-  html.public-menu-dark .public-menu-item-action {
-    background: #fff;
-    color: #111827;
-  }
-
   html.public-menu-dark .public-menu-checkout {
     background:
       radial-gradient(circle at 100% 0%, rgb(255 255 255 / 7%) 0 9rem, transparent 23rem),
@@ -3066,12 +3043,6 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     height: 13rem;
   }
 
-  /* Плитка открывается тапом целиком — кружок «+»/«···» на крупной
-     плитке лишний и только шумит рядом с ценой. */
-  .public-menu-shell.is-wide .public-menu-item-card.is-grid .public-menu-item-action {
-    display: none;
-  }
-
   /* На обложке остаются логотип и «Заказать»: название уже есть в
      логотипе, а крупная подпись в углу широкого экрана читалась как
      водяной знак. Заголовок h1 остаётся для скринридера. */
@@ -3099,19 +3070,14 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     grid-template-columns: minmax(0, 42rem);
   }
 
-  .public-menu-shell.is-wide .public-menu-cart-stage .public-menu-checkout-intro {
+  .public-menu-shell.is-wide .public-menu-cart-stage .public-menu-cart-card {
     grid-column: 1;
     grid-row: 1;
   }
 
-  .public-menu-shell.is-wide .public-menu-cart-stage .public-menu-cart-card {
-    grid-column: 1;
-    grid-row: 2;
-  }
-
   .public-menu-shell.is-wide .public-menu-cart-stage .public-menu-checkout-recommendations {
     grid-column: 2;
-    grid-row: 2;
+    grid-row: 1;
     margin-top: 0;
   }
 

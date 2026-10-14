@@ -786,10 +786,10 @@ export default function PublicOrderPage() {
             }}
           >
             <div className="public-menu-products-section px-4 pb-4">
-              {/* В широкой раскладке категорию уже показывает колонка сбоку —
+              {/* Категорию уже показывает выбранный чип или колонка сбоку —
                   заголовок остаётся только для скринридера и фокуса. Результаты
-                  поиска подписаны видимо: колонка их не обозначает. */}
-              <div className={`public-menu-section-heading ${wide && !searchedTableItems ? 'sr-only' : ''}`}>
+                  поиска подписаны видимо: навигация их не обозначает. */}
+              <div className={`public-menu-section-heading ${searchedTableItems ? '' : 'sr-only'}`}>
                 <h2 className="public-menu-section-title public-menu-route-focus public-menu-route-heading" tabIndex={-1}>
                   {searchedTableItems ? t(lang, 'guestSearchResults') : cat.name}
                 </h2>
@@ -803,7 +803,6 @@ export default function PublicOrderPage() {
                       lang={lang}
                       layout={tableContext ? 'row' : 'grid'}
                       priority={index < 6}
-                      viewOnly={viewOnly}
                       onTap={() => openItem(item)}
                     />
                   ))}
@@ -812,11 +811,10 @@ export default function PublicOrderPage() {
                 <p className="angle-live-table-search-empty">{t(lang, 'guestNoDishes')}</p>
               )}
             </div>
-            {/* На планшете ссылок на соцсети и отзыв нет: экран заказа в
-                заведении, а не визитка — гость уже здесь. */}
-            {!tableContext && !wide && (
-              <SocialFooter links={menu.location.links} lang={lang} padForCart={cartCount > 0} />
-            )}
+            {/* Ссылок на соцсети и отзыв в Google в меню нет: это экран
+                заказа, а не визитка. Остаётся только просвет, чтобы нижняя
+                полоса корзины телефона не закрывала последний ряд плиток. */}
+            {!tableContext && !wide && cartCount > 0 && <div className="pb-24" aria-hidden />}
           </div>
         )
 
@@ -1412,16 +1410,6 @@ function CartBar({ lang, count, total, bumping, capsule = false, onOpen }: {
 }
 
 /**
- * Подвал главного экрана: Instagram / Facebook / отзыв в Google.
- * Ссылки настраиваются в кассе (Настройки → Обслуживание → Онлайн-заказы);
- * пустая ссылка = кнопки нет. padForCart — просвет под фиксированной
- * кнопкой корзины.
- *
- * Действия стоят прямо на общем фоне без отдельной полосы. Контраст даёт
- * собственная подложка каждой кнопки. После них идёт прозрачная safe-зона:
- * нижняя панель Safari перекрывает фон, а не ссылки и кнопку отзыва.
- */
-/**
  * Обложка плитки категории. Горизонтальные фото заполняют карточку
  * (object-cover, стиль Wolt); вертикальные (стакан, бутылка) в cover-кропе
  * теряют верх и низ — такие показываем целиком на белом фоне: фото меню
@@ -1529,78 +1517,16 @@ function CategoryRail({ lang, categories, activeCat, onSelect, liveTable = false
   )
 }
 
-function SocialFooter({ links, lang, padForCart }: {
-  links?: PublicMenu['location']['links']
-  lang: Lang
-  padForCart: boolean
-}) {
-  // Сплошной near-black, а не bg-black/75: полупрозрачность задумывалась
-  // под фоновое фото, но у точки без фона подвал лежит на белом — и кнопки
-  // выцветали в серый (~#404040), читаясь как выключенные рядом с чёрными
-  // «+» на карточках. Сплошной цвет одинаково работает и на фото, и на белом.
-  const iconBtn =
-    'w-12 h-12 shrink-0 rounded-full bg-gray-900 ring-1 ring-white/15 text-white shadow-lg shadow-black/25 flex items-center justify-center active:scale-[0.94] transition-all'
-  const hasAny = !!(links?.instagram || links?.facebook || links?.google_review)
-  if (!hasAny) return padForCart ? <div className="pb-24" /> : null
-  return (
-    <>
-      <footer className="mt-6 px-4 py-4">
-        <div className="mx-auto flex max-w-md flex-wrap items-center justify-center gap-2.5">
-          {(links?.instagram || links?.facebook) && (
-            <div className="flex items-center gap-2">
-              {links?.instagram && (
-                <a href={links.instagram} target="_blank" rel="noopener noreferrer" aria-label="Instagram" className={iconBtn}>
-                  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
-                    <rect x="3" y="3" width="18" height="18" rx="5" />
-                    <circle cx="12" cy="12" r="4" />
-                    <circle cx="17.2" cy="6.8" r="1.2" fill="currentColor" stroke="none" />
-                  </svg>
-                </a>
-              )}
-              {links?.facebook && (
-                <a href={links.facebook} target="_blank" rel="noopener noreferrer" aria-label="Facebook" className={iconBtn}>
-                  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" aria-hidden>
-                    <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z" />
-                  </svg>
-                </a>
-              )}
-            </div>
-          )}
-          {links?.google_review && (
-            <a
-              href={links.google_review}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="h-12 max-w-full px-5 rounded-full bg-gray-900 ring-1 ring-white/15 text-sm font-semibold text-white shadow-lg shadow-black/25 flex items-center justify-center gap-2 active:scale-[0.96] transition-all"
-            >
-              <svg className="shrink-0" width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z" />
-              </svg>
-              <span className="truncate">{t(lang, 'pubReviewGoogle')}</span>
-            </a>
-          )}
-        </div>
-      </footer>
-      <div
-        aria-hidden
-        className={padForCart ? 'h-28 shrink-0' : 'h-[calc(env(safe-area-inset-bottom)+3rem)] shrink-0'}
-      />
-    </>
-  )
-}
-
 /**
  * Карточка товара — классический вид меню доставки: фото, название,
  * цена. Без фото — плейсхолдер с первой буквой названия,
  * чтобы список не «прыгал» по выравниванию.
  */
-function ItemRow({ item, lang, onTap, layout = 'row', priority = false, viewOnly = false }: {
+function ItemRow({ item, lang, onTap, layout = 'row', priority = false }: {
   item: PublicItem
   lang: Lang
   onTap: () => void
   layout?: 'row' | 'grid'
-  /** В каталоге из карточки ресторана нет визуальной affordance добавления. */
-  viewOnly?: boolean
   /** Первые видимые карточки загружаются сразу; остальной каталог — lazy. */
   priority?: boolean
 }) {
@@ -1665,11 +1591,6 @@ function ItemRow({ item, lang, onTap, layout = 'row', priority = false, viewOnly
             {/* dir=ltr: цена не пляшет в bidi-контексте ивритских названий */}
             <span dir="ltr">{formatMoney(minPrice, lang)}</span>
           </span>
-          {!viewOnly && layout === 'grid' && (
-            <span className="public-menu-item-action" aria-hidden>
-              {item.variants.length > 0 || item.modifier_groups.length > 0 ? '⋯' : '+'}
-            </span>
-          )}
         </span>
       </span>
     </button>
@@ -1990,7 +1911,9 @@ function CartStage({
   return (
     <div className="public-menu-checkout public-menu-cart-stage">
       <div className="public-menu-checkout-content public-menu-route-motion">
-        <div className="public-menu-checkout-intro">
+        {/* Крупный заголовок дублировал строку «Ваш заказ» над позициями —
+            остаётся только для скринридера и фокуса после перехода. */}
+        <div className="public-menu-checkout-intro sr-only">
           <div>
             <h1 className="font-display text-gray-900 public-menu-route-focus public-menu-route-heading" tabIndex={-1}>
               {t(lang, 'pubYourOrder')}

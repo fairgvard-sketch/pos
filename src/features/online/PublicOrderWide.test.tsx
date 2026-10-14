@@ -49,9 +49,9 @@ const tableMenu: PublicMenu = {
 let client: QueryClient
 
 /** Экран альбомного планшета: matchMedia отвечает «да» только широкой раскладке. */
-function landscapeTablet() {
+function landscapeTablet(wide = true) {
   vi.spyOn(window, 'matchMedia').mockImplementation((query: string) => ({
-    matches: query === PUBLIC_MENU_WIDE_QUERY,
+    matches: wide && query === PUBLIC_MENU_WIDE_QUERY,
     media: query,
     onchange: null,
     addListener: () => {},
@@ -101,7 +101,7 @@ describe('guest menu on a landscape tablet', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'להזמין' }))
 
     const rail = await screen.findByRole('navigation', { name: t('he', 'categories') })
-    // Ссылки на соцсети и отзыв — только на телефоне.
+    // Ссылок на соцсети и отзыв в меню нет.
     expect(document.querySelector('a[href="https://instagram.com/widecafe"]')).not.toBeInTheDocument()
     // Пустая корзина — капсулы нет.
     expect(screen.queryByRole('button', { name: capsuleName })).not.toBeInTheDocument()
@@ -165,5 +165,31 @@ describe('guest menu on a landscape tablet', () => {
       items: [expect.objectContaining({ menu_item_id: COFFEE.id, qty: 1 })],
     })))
     expect(await screen.findByTestId('table-live-order-summary')).toBeInTheDocument()
+  })
+})
+
+describe('guest menu on a phone', () => {
+  it('shows plain tiles and keeps the category and cart titles for screen readers only', async () => {
+    vi.mocked(window.matchMedia).mockRestore()
+    landscapeTablet(false)
+    vi.mocked(fetchPublicMenu).mockResolvedValue(menu)
+    renderAt(`/order/${LOC}?view=menu`)
+
+    // Категорию показывает активный чип; крупный заголовок не рисуется.
+    const heading = await screen.findByRole('heading', { name: 'Drinks', level: 2 })
+    expect(heading.parentElement).toHaveClass('sr-only')
+    expect(screen.queryByRole('navigation', { name: t('he', 'categories') })).not.toBeInTheDocument()
+    expect(document.querySelector('a[href="https://instagram.com/widecafe"]')).not.toBeInTheDocument()
+
+    // Плитка открывается тапом целиком — без кружка «+»/«···».
+    const tile = screen.getByRole('button', { name: new RegExp(COFFEE.name) })
+    expect(tile).not.toHaveTextContent('+')
+    expect(tile).not.toHaveTextContent('⋯')
+
+    await addFromSheet(COFFEE.name)
+    fireEvent.click(await screen.findByRole('button', { name: capsuleName }))
+
+    const cartTitle = await screen.findByRole('heading', { name: t('he', 'pubYourOrder'), level: 1 })
+    expect(cartTitle.closest('.public-menu-checkout-intro')).toHaveClass('sr-only')
   })
 })
