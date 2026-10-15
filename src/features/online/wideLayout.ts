@@ -12,19 +12,26 @@ import { useEffect, useState } from 'react'
  */
 export const PUBLIC_MENU_WIDE_QUERY = '(min-width: 46rem) and (min-height: 30rem)'
 
-function matchesWide(): boolean {
+/** Портретная ориентация: в широкой раскладке категории — квадратные плитки с фото. */
+export const PUBLIC_MENU_PORTRAIT_QUERY = '(orientation: portrait)'
+
+function matches(query: string): boolean {
   return typeof window !== 'undefined'
     && typeof window.matchMedia === 'function'
-    && window.matchMedia(PUBLIC_MENU_WIDE_QUERY).matches
+    && window.matchMedia(query).matches
 }
 
 /** Раскладка следует за поворотом экрана без перезагрузки страницы. */
 export function useWideLayout(): boolean {
-  const [wide, setWide] = useState(matchesWide)
+  return useMediaQuery(PUBLIC_MENU_WIDE_QUERY)
+}
+
+export function useMediaQuery(query: string): boolean {
+  const [wide, setWide] = useState(() => matches(query))
 
   useEffect(() => {
     if (typeof window.matchMedia !== 'function') return
-    const media = window.matchMedia(PUBLIC_MENU_WIDE_QUERY)
+    const media = window.matchMedia(query)
     const onChange = () => setWide(media.matches)
     onChange()
     // Киоском часто служит старый iPad: addEventListener у MediaQueryList
@@ -35,7 +42,7 @@ export function useWideLayout(): boolean {
     }
     media.addListener(onChange)
     return () => media.removeListener(onChange)
-  }, [])
+  }, [query])
 
   return wide
 }

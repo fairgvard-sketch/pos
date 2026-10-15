@@ -19,10 +19,15 @@ const MIN_COVER = 0.95
 /** Насколько фото может быть шире рамки: срез по бокам ≤ ~11.5% с каждой стороны. */
 const MAX_COVER = 1.3
 
-export function photoFit(photoRatio: number, frameRatio: number): PhotoFit {
+/**
+ * cropSides — для декоративных рамок (плитка категории): фото шире рамки
+ * обрезается по бокам на любую величину, предмет в центре кадра остаётся
+ * целым. Верх и низ по-прежнему не срезаются: вертикальное фото — целиком.
+ */
+export function photoFit(photoRatio: number, frameRatio: number, cropSides = false): PhotoFit {
   if (!(photoRatio > 0) || !(frameRatio > 0)) return 'cover'
   const relative = photoRatio / frameRatio
-  return relative >= MIN_COVER && relative <= MAX_COVER ? 'cover' : 'contain'
+  return relative >= MIN_COVER && (cropSides || relative <= MAX_COVER) ? 'cover' : 'contain'
 }
 
 /**

@@ -11,9 +11,11 @@ import { photoFit, photoRatios, rememberPhotoRatio } from './photoFit'
  * ResizeObserver: карточка товара меняет пропорции при повороте экрана.
  */
 export default function MenuPhoto({
-  src, className, loading, fetchPriority, decoding, onLoad, onError,
+  src, className, loading, fetchPriority, decoding, cropSides = false, onLoad, onError,
 }: {
   src: string
+  /** Декоративная рамка (плитка категории): широкое фото обрезается по бокам. */
+  cropSides?: boolean
   /** Класс самого <img>: прежние правила поверхности (прозрачность до загрузки и т. п.). */
   className?: string
   loading?: 'eager' | 'lazy'
@@ -51,7 +53,7 @@ export default function MenuPhoto({
     }
   }, [])
 
-  const fit = photoRatio && frameRatio ? photoFit(photoRatio, frameRatio) : null
+  const fit = photoRatio && frameRatio ? photoFit(photoRatio, frameRatio, cropSides) : null
   // Целиком: рамка <img> повторяет само фото, а не всю рамку, — тогда
   // растушёвка краёв (CSS по data-band) ложится на кромку снимка и стык с
   // размытой подложкой не читается резкой линией.

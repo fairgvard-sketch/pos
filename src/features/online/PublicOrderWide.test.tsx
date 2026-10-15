@@ -12,7 +12,7 @@ import {
   type PublicItem,
   type PublicMenu,
 } from './publicApi'
-import { PUBLIC_MENU_WIDE_QUERY } from './wideLayout'
+import { PUBLIC_MENU_PORTRAIT_QUERY, PUBLIC_MENU_WIDE_QUERY } from './wideLayout'
 
 // Настоящие страница, корзина и React Query; синтетические только API и экран.
 vi.mock('./publicApi', async (importOriginal) => ({
@@ -165,6 +165,64 @@ describe('guest menu on a landscape tablet', () => {
       items: [expect.objectContaining({ menu_item_id: COFFEE.id, qty: 1 })],
     })))
     expect(await screen.findByTestId('table-live-order-summary')).toBeInTheDocument()
+  })
+})
+
+describe('portrait tablet', () => {
+  it('shows categories as square tiles with a photo from the category', async () => {
+    vi.mocked(window.matchMedia).mockRestore()
+    vi.spyOn(window, 'matchMedia').mockImplementation((query: string) => ({
+      matches: query === PUBLIC_MENU_WIDE_QUERY || query === PUBLIC_MENU_PORTRAIT_QUERY,
+      media: query,
+      onchange: null,
+      addListener: () => {},
+      removeListener: () => {},
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      dispatchEvent: () => false,
+    }))
+    vi.mocked(fetchPublicMenu).mockResolvedValue({
+      ...menu,
+      categories: [
+        // Своя обложка важнее фото товара
+        { id: 'drinks', name: 'Drinks', cover_url: 'https://cdn.test/drinks-cover.webp',
+          items: [{ ...COFFEE, image_url: 'https://cdn.test/coffee.webp' }] },
+        // Без обложки — первое фото товара, у которого оно есть
+        { id: 'food', name: 'Food', items: [CAKE, { ...CAKE, id: 'pie', name: 'Pie', image_url: 'https://cdn.test/pie.webp' }] },
+        // Без фото вовсе — плитка с буквой
+        { id: 'misc', name: 'Misc', items: [{ ...COFFEE, id: 'water', name: 'Water' }] },
+      ],
+    })
+    renderAt(`/order/${LOC}?view=menu`)
+
+    const rail = await screen.findByRole('navigation', { name: t('he', 'categories') })
+    const tile = (name: string) => within(rail).getByRole('button', { name })
+    expect(tile('Drinks')).toHaveClass('is-tile')
+    expect(tile('Drinks').querySelector('img')).toHaveAttribute('src', 'https://cdn.test/drinks-cover.webp')
+    expect(tile('Food').querySelector('img')).toHaveAttribute('src', 'https://cdn.test/pie.webp')
+    expect(tile('Misc').querySelector('img')).not.toBeInTheDocument()
+  })
+
+  it('keeps a text column in landscape', async () => {
+    vi.mocked(fetchPublicMenu).mockResolvedValue(menu)
+    renderAt(`/order/${LOC}?view=menu`)
+
+    const rail = await screen.findByRole('navigation', { name: t('he', 'categories') })
+    expect(within(rail).getByRole('button', { name: 'Drinks' })).not.toHaveClass('is-tile')
+    expect(rail.querySelector('img')).not.toBeInTheDocument()
+  })
+})
+
+describe('Powered by ANGLE', () => {
+  it('signs the cover with plain text, not a link out of the menu', async () => {
+    vi.mocked(fetchPublicMenu).mockResolvedValue(menu)
+    renderAt(`/order/${LOC}`)
+
+    await screen.findByRole('button', { name: 'להזמין' })
+    const strip = document.querySelector('.public-menu-hero-powered')
+    expect(strip).toHaveTextContent('Powered by')
+    expect(strip).toHaveTextContent('ANGLE')
+    expect(strip?.querySelector('a')).not.toBeInTheDocument()
   })
 })
 

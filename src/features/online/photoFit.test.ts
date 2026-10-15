@@ -38,6 +38,13 @@ describe('photoFit', () => {
     expect(photoFit(SQUARE, TABLET_DETAIL)).toBe('cover')
   })
 
+  it('category tiles may trim any width at the sides, never top and bottom', () => {
+    expect(photoFit(LANDSCAPE, THUMB, true)).toBe('cover')
+    expect(photoFit(WIDE, THUMB, true)).toBe('cover')
+    expect(photoFit(SQUARE, THUMB, true)).toBe('cover')
+    expect(photoFit(PORTRAIT, THUMB, true)).toBe('contain')
+  })
+
   it('falls back to cover while a size is unknown', () => {
     expect(photoFit(0, TILE)).toBe('cover')
     expect(photoFit(LANDSCAPE, Number.NaN)).toBe('cover')

@@ -11,7 +11,7 @@ import {
 import { parsePublicOrderQuery } from './orderContext'
 import { navigateWithTransition } from './viewTransition'
 import { useIdleReset } from './useIdleReset'
-import { useWideLayout } from './wideLayout'
+import { PUBLIC_MENU_PORTRAIT_QUERY, useMediaQuery, useWideLayout } from './wideLayout'
 import StillHereDialog from './StillHereDialog'
 import { reconcileCart } from './reconcileCart'
 import { buildPickupSlots, type Hours } from './pickupSlots'
@@ -26,6 +26,7 @@ import {
 import { resolvePublicHeroVideo } from './heroVideo'
 import TableServiceSheet from './TableServiceSheet'
 import MenuPhoto from './MenuPhoto'
+import BrandWordmark from '../../components/ui/BrandWordmark'
 import { rememberPhotoRatio } from './photoFit'
 
 /**
@@ -193,6 +194,8 @@ export default function PublicOrderPage() {
   // Альбомный планшет и десктоп: категории колонкой, плитки на всю ширину,
   // корзина — капсулой внизу (см. wideLayout.ts).
   const wide = useWideLayout()
+  // Портретный планшет: категории в колонке — квадратные плитки с фото
+  const portrait = useMediaQuery(PUBLIC_MENU_PORTRAIT_QUERY)
   const itemCloseTimer = useRef<number | undefined>(undefined)
   const itemTrigger = useRef<HTMLElement | null>(null)
 
@@ -849,6 +852,7 @@ export default function PublicOrderPage() {
                   activeCat={visibleCategoryId}
                   onSelect={selectCategory}
                   liveTable={!!tableContext}
+                  tiles={portrait}
                 />
                 <div className="public-menu-wide-main">
                   {search}
@@ -1300,6 +1304,12 @@ function Shell({
               >
                 <span>{heroLabel}</span>
               </button>
+              {/* Подпись платформы, как у киосков Beecomm/Tabit. Не ссылка:
+                  на общем планшете гость не должен уйти с меню на сайт. */}
+              <div className="public-menu-hero-powered" dir="ltr">
+                <span>Powered by</span>
+                <BrandWordmark className="public-menu-hero-powered-mark" />
+              </div>
             </header>
           </div>
         )}
@@ -1530,34 +1540,64 @@ function CategoryChips({ categories, activeCat, onSelect, liveTable = false }: {
  * горизонтальной прокрутки. Кнопки несут классы чипа, поэтому тёмная тема
  * и оформление Live Table применяются без отдельных правил.
  */
-function CategoryRail({ lang, categories, activeCat, onSelect, liveTable = false }: {
+function CategoryRail({ lang, categories, activeCat, onSelect, liveTable = false, tiles = false }: {
   lang: Lang
   categories: PublicMenu['categories']
   activeCat: string
   onSelect: (id: string) => void
   liveTable?: boolean
+  /**
+   * Портретный планшет: категории — квадратные плитки с фото. Колонка там
+   * узкая и высокая, и плитка с фото узнаётся быстрее слова.
+   */
+  tiles?: boolean
 }) {
   return (
     <nav
       aria-label={t(lang, 'categories')}
-      className={`public-menu-category-rail ${liveTable ? 'angle-live-table-category-nav' : ''}`}
+      className={`public-menu-category-rail ${tiles ? 'is-tiles' : ''} ${liveTable ? 'angle-live-table-category-nav' : ''}`}
     >
-      {categories.map((c) => (
-        <button
-          key={c.id}
-          type="button"
-          data-active={c.id === activeCat || undefined}
-          aria-current={c.id === activeCat ? 'true' : undefined}
-          onClick={() => onSelect(c.id)}
-          className={`public-menu-category-chip public-menu-category-rail-item ${
-            c.id === activeCat ? 'public-menu-category-chip-active' : ''
-          }`}
-        >
-          {c.name}
-        </button>
-      ))}
+      {categories.map((c) => {
+        const cover = tiles ? categoryCover(c) : null
+        return (
+          <button
+            key={c.id}
+            type="button"
+            data-active={c.id === activeCat || undefined}
+            aria-current={c.id === activeCat ? 'true' : undefined}
+            onClick={() => onSelect(c.id)}
+            className={`public-menu-category-chip public-menu-category-rail-item ${
+              c.id === activeCat ? 'public-menu-category-chip-active' : ''
+            } ${tiles ? 'is-tile' : ''}`}
+          >
+            {tiles ? (
+              <>
+                {cover ? (
+                  <MenuPhoto key={cover} src={cover} loading="lazy" decoding="async" cropSides />
+                ) : (
+                  <span className="public-menu-category-rail-placeholder" aria-hidden>
+                    {c.name.slice(0, 1)}
+                  </span>
+                )}
+                {cover && <span className="public-menu-category-rail-shade" aria-hidden />}
+                <span className={`public-menu-category-rail-name ${cover ? '' : 'is-plain'}`}>{c.name}</span>
+              </>
+            ) : (
+              c.name
+            )}
+          </button>
+        )
+      })}
     </nav>
   )
+}
+
+/**
+ * Обложка категории — как у плиток категорий (080): своя обложка, иначе
+ * фото первого товара категории, у которого оно есть.
+ */
+function categoryCover(category: PublicMenu['categories'][number]): string | null {
+  return category.cover_url ?? category.items.find((item) => item.image_url)?.image_url ?? null
 }
 
 /**
