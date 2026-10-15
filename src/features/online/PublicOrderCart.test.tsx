@@ -56,6 +56,7 @@ async function openCart(current = item, lines = [stored]) {
     </QueryClientProvider>,
   )
   fireEvent.click(await screen.findByRole('button', { name: 'להזמין' }))
+  fireEvent.click(await screen.findByRole('button', { name: t('he', 'pubTypeTakeaway') }))
   fireEvent.click(await screen.findByRole('button', { name: new RegExp(t('he', 'pubShowItems')) }))
   await screen.findByRole('heading', { name: t('he', 'pubYourOrder'), level: 1 })
   return { ...view, client }
@@ -116,6 +117,8 @@ describe('открытая гостевая корзина после обнов
     await waitFor(() => expect(readPublicCart(LOC)).toEqual([]))
 
     fireEvent.click(screen.getByRole('button', { name: 'להזמין' }))
+    // Новый заказ снова спрашивает «здесь или с собой»: выбор сброшен вместе с корзиной.
+    fireEvent.click(await screen.findByRole('button', { name: t('he', 'pubTypeTakeaway') }))
     await screen.findByRole('heading', { name: 'Drinks', level: 2 })
     expect(screen.queryByRole('button', { name: new RegExp(t('he', 'pubShowItems')) }))
       .not.toBeInTheDocument()

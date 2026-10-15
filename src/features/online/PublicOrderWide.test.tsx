@@ -100,6 +100,7 @@ describe('guest menu on a landscape tablet', () => {
     renderAt(`/order/${LOC}`)
 
     fireEvent.click(await screen.findByRole('button', { name: 'להזמין' }))
+    fireEvent.click(await screen.findByRole('button', { name: t('he', 'pubTypeHere') }))
 
     const rail = await screen.findByRole('navigation', { name: t('he', 'categories') })
     // Ссылок на соцсети и отзыв в меню нет.
@@ -166,6 +167,69 @@ describe('guest menu on a landscape tablet', () => {
       items: [expect.objectContaining({ menu_item_id: COFFEE.id, qty: 1 })],
     })))
     expect(await screen.findByTestId('table-live-order-summary')).toBeInTheDocument()
+  })
+})
+
+describe('eat in or take away step', () => {
+  // Узкий экран: шаг общий для телефона и планшета.
+  beforeEach(() => {
+    vi.mocked(window.matchMedia).mockRestore()
+    landscapeTablet(false)
+  })
+
+  it('asks after the cover and carries the choice into checkout', async () => {
+    vi.mocked(fetchPublicMenu).mockResolvedValue(menu)
+    renderAt(`/order/${LOC}`)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'להזמין' }))
+    expect(await screen.findByRole('heading', { name: t('he', 'pubHowToEat'), level: 1 })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: t('he', 'pubTypeHere') })).toBeInTheDocument()
+    // Доставка не включена — третьей карточки нет.
+    expect(screen.queryByRole('button', { name: t('he', 'pubTypeDelivery') })).not.toBeInTheDocument()
+    // До выбора меню и корзины на экране нет.
+    expect(screen.queryByRole('button', { name: new RegExp(COFFEE.name) })).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: t('he', 'pubTypeTakeaway') }))
+    await addFromSheet(COFFEE.name)
+    fireEvent.click(await screen.findByRole('button', { name: capsuleName }))
+    fireEvent.click(await screen.findByRole('button', { name: new RegExp(t('he', 'pubContinueToPayment')) }))
+
+    await screen.findByRole('heading', { name: t('he', 'pubPaymentTitle'), level: 1 })
+    // В оформлении выбран тот же тип; поменять его там можно.
+    expect(screen.getByRole('button', { name: t('he', 'pubTypeTakeaway') })).toHaveClass('public-menu-chip-active')
+    expect(screen.getByRole('button', { name: t('he', 'pubTypeHere') })).not.toHaveClass('public-menu-chip-active')
+  })
+
+  it('shows delivery as a third card when it is enabled', async () => {
+    vi.mocked(fetchPublicMenu).mockResolvedValue({
+      ...menu,
+      location: { ...menu.location, order_types: ['here', 'takeaway', 'delivery'] },
+    })
+    renderAt(`/order/${LOC}`)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'להזמין' }))
+    expect(await screen.findByRole('button', { name: t('he', 'pubTypeDelivery') })).toBeInTheDocument()
+  })
+
+  it('skips the question when there is nothing to choose', async () => {
+    // Один тип заказа — сразу меню.
+    vi.mocked(fetchPublicMenu).mockResolvedValue({
+      ...menu,
+      location: { ...menu.location, order_types: ['takeaway'] },
+    })
+    const view = renderAt(`/order/${LOC}`)
+    fireEvent.click(await screen.findByRole('button', { name: 'להזמין' }))
+    expect(await screen.findByRole('heading', { name: 'Drinks', level: 2 })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: t('he', 'pubHowToEat') })).not.toBeInTheDocument()
+    view.unmount()
+    client.clear()
+
+    // Ссылка уже назвала тип (?mode=here) — тоже сразу меню.
+    vi.mocked(fetchPublicMenu).mockResolvedValue(menu)
+    renderAt(`/order/${LOC}?mode=here`)
+    fireEvent.click(await screen.findByRole('button', { name: 'להזמין' }))
+    expect(await screen.findByRole('heading', { name: 'Drinks', level: 2 })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: t('he', 'pubHowToEat') })).not.toBeInTheDocument()
   })
 })
 

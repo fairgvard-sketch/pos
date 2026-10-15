@@ -337,6 +337,120 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     }
   }
 
+  /* ── «איך תרצו לאכול?» — шаг между обложкой и меню ────────── */
+  .public-menu-type-choice {
+    display: flex;
+    min-height: calc(100vh - 3.5rem - env(safe-area-inset-top));
+    min-height: calc(100svh - 3.5rem - env(safe-area-inset-top));
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem 1rem calc(4rem + env(safe-area-inset-bottom));
+    text-align: center;
+  }
+
+  .public-menu-type-choice h1 {
+    margin: 0;
+    color: #111827;
+    font-size: 1.75rem;
+    font-weight: 800;
+    letter-spacing: -.02em;
+    line-height: 1.15;
+  }
+
+  .public-menu-type-choice > p {
+    margin: .5rem 0 2rem;
+    color: #6b7280;
+    font-size: .9375rem;
+  }
+
+  /* Перенос с центрированием, а не сетка: при трёх карточках на телефоне
+     третья встаёт по центру второго ряда, а не прилипает к краю. */
+  .public-menu-type-choice-grid {
+    display: flex;
+    width: 100%;
+    max-width: 34rem;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 1rem;
+  }
+
+  .public-menu-type-card {
+    display: flex;
+    min-height: 11rem;
+    flex: 1 1 9.5rem;
+    max-width: 11rem;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    padding: 1.5rem 1rem;
+    border: 1px solid rgb(17 24 39 / 8%);
+    border-radius: 1.5rem;
+    background: #fff;
+    box-shadow: 0 10px 28px rgb(20 23 29 / 8%);
+    color: #111827;
+    font-size: 1.25rem;
+    font-weight: 800;
+    transition: transform 150ms ease, box-shadow 150ms ease;
+  }
+
+  @supports (aspect-ratio: 1 / 1) {
+    .public-menu-type-card {
+      min-height: 0;
+      aspect-ratio: 1 / 1;
+    }
+  }
+
+  .public-menu-type-card:active {
+    transform: scale(.97);
+    box-shadow: 0 5px 14px rgb(20 23 29 / 8%);
+  }
+
+  .public-menu-type-card-icon {
+    display: grid;
+    width: 5.5rem;
+    height: 5.5rem;
+    place-items: center;
+    border-radius: 999px;
+    background: #f3f4f6;
+    color: #111827;
+  }
+
+  /* Планшет: карточки крупнее, как у киоска; заголовок — тоже. */
+  .public-menu-shell.is-wide .public-menu-type-choice h1 {
+    font-size: 2.25rem;
+  }
+
+  .public-menu-shell.is-wide .public-menu-type-choice-grid {
+    max-width: 48rem;
+    gap: 1.5rem;
+  }
+
+  .public-menu-shell.is-wide .public-menu-type-card {
+    flex-basis: 12rem;
+    max-width: 14rem;
+    font-size: 1.5rem;
+  }
+
+  .public-menu-shell.is-wide .public-menu-type-card-icon {
+    width: 7rem;
+    height: 7rem;
+  }
+
+  .public-menu-shell.is-wide .public-menu-type-card-icon svg {
+    width: 3.75rem;
+    height: 3.75rem;
+  }
+
+  html.public-menu-dark .public-menu-type-choice h1 {
+    color: #fff;
+  }
+
+  html.public-menu-dark .public-menu-type-choice > p {
+    color: rgb(255 255 255 / 72%);
+  }
+
   /* «Powered by ANGLE» — тонкая белая полоса у нижнего края обложки.
      Кнопка «Заказать» стоит выше (6rem от низа), полоса её не задевает. */
   .public-menu-hero-powered {

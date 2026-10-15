@@ -182,6 +182,10 @@ export default function PublicOrderPage() {
   const [configClosing, setConfigClosing] = useState(false)
   /** Правится строка корзины (её key), а не добавляется новая позиция */
   const [editingKey, setEditingKey] = useState<string | null>(null)
+  // Экран «איך תרצו לאכול?» между обложкой и меню (как у киосков) и
+  // выбор гостя — он становится типом заказа в оформлении.
+  const [pickingType, setPickingType] = useState(false)
+  const [chosenType, setChosenType] = useState<PublicOrderType | null>(null)
   // null = hero; id = экран позиций категории
   const [activeCat, setActiveCat] = useState<string | null>(null)
   const [menuSearch, setMenuSearch] = useState('')
@@ -256,6 +260,8 @@ export default function PublicOrderPage() {
     setCheckoutStage('cart')
     setView('menu')
     setHasStarted(!!queryContext.tableToken)
+    setPickingType(false)
+    setChosenType(null)
   }
   /**
    * Автосброс включается только явным ?kiosk=1. Обычный QR открывается на
@@ -586,6 +592,8 @@ export default function PublicOrderPage() {
     setView('menu')
     setLiveTableTab('menu')
     setHasStarted(!!queryContext.tableToken)
+    setPickingType(false)
+    setChosenType(null)
     setActiveCat(null)
     setCategoryMotion(false)
   }
@@ -685,9 +693,18 @@ export default function PublicOrderPage() {
   const initialOrderType: PublicOrderType =
     tableContext
       ? 'here'
+      : chosenType && orderTypes.includes(chosenType)
+      ? chosenType
       : requestedType && orderTypes.includes(requestedType)
       ? requestedType
       : orderTypes[0] ?? 'takeaway'
+  // Спрашиваем «здесь или с собой», только когда выбирать есть из чего:
+  // стол всегда «здесь», витрина без заказа ничего не оформляет, а ссылка
+  // с ?mode= уже назвала тип. Выбор можно поменять в оформлении.
+  const needsTypeChoice = !tableContext
+    && !viewOnly
+    && !(requestedType && orderTypes.includes(requestedType))
+    && orderTypes.length > 1
   // Hero — обложка над уже готовым каталогом, а не отдельный route.
   // Благодаря стабильному ключу каталог не перемонтируется и не мигает
   // при открытии или возврате на заставку.
@@ -695,7 +712,7 @@ export default function PublicOrderPage() {
     ? view === 'checkout'
       ? `table-checkout-${checkoutStage}`
       : `${liveTableTab}-root`
-    : view === 'checkout' ? checkoutStage : 'menu'
+    : view === 'checkout' ? checkoutStage : pickingType ? 'order-type' : 'menu'
   const visibleCategoryId = activeCat ?? menu.categories[0]?.id ?? null
   const normalizedMenuSearch = menuSearch.trim().toLocaleLowerCase()
   const searchedTableItems = normalizedMenuSearch
@@ -735,7 +752,7 @@ export default function PublicOrderPage() {
       }}
     />
   ) : undefined
-  const cartBar = !viewOnly && showMenu && hasStarted && cartCount > 0 ? (
+  const cartBar = !viewOnly && showMenu && hasStarted && !pickingType && cartCount > 0 ? (
     <CartBar
       key={bumpSeq}
       lang={lang}
@@ -770,6 +787,7 @@ export default function PublicOrderPage() {
         navigateWithTransition('forward', () => {
           setCategoryMotion(false)
           setHasStarted(true)
+          setPickingType(needsTypeChoice)
           setActiveCat(menu.categories[0]?.id ?? null)
         })
       }}
@@ -793,7 +811,18 @@ export default function PublicOrderPage() {
       {/* Каталог не существует, пока показан hero: раньше он лежал под
           обложкой ради слоя-клона в анимации, и на iOS просвечивал в
           зоне под плавающим тулбаром. Снапшот «до» браузер снимает сам. */}
-      {showMenu && hasStarted && visibleCategoryId && (() => {
+      {view === 'menu' && hasStarted && pickingType && (
+        <OrderTypeChoice
+          lang={lang}
+          types={orderTypes}
+          onChoose={(type) => navigateWithTransition('forward', () => {
+            setChosenType(type)
+            setPickingType(false)
+          })}
+        />
+      )}
+
+      {showMenu && hasStarted && !pickingType && visibleCategoryId && (() => {
         const cat = menu.categories.find((c) => c.id === visibleCategoryId)
         if (!cat) return null
         const visibleItems = searchedTableItems ?? cat.items
@@ -1042,6 +1071,71 @@ export default function PublicOrderPage() {
         />
       )}
     </Shell>
+  )
+}
+
+/**
+ * «איך תרצו לאכול?» — шаг между обложкой и меню, как у киосков
+ * McDonald's/Beecomm: крупные карточки «לשבת» / «לקחת» (и «משלוח», если
+ * доставка включена). Выбор становится типом заказа в оформлении, где
+ * его можно поменять. Без иллюстраций — линейные иконки в стиле страницы.
+ */
+function OrderTypeChoice({ lang, types, onChoose }: {
+  lang: Lang
+  types: PublicOrderType[]
+  onChoose: (type: PublicOrderType) => void
+}) {
+  return (
+    <section className="public-menu-type-choice public-menu-route-motion">
+      <h1 className="font-display public-menu-route-focus public-menu-route-heading" tabIndex={-1}>
+        {t(lang, 'pubHowToEat')}
+      </h1>
+      <p>{t(lang, 'pubHowToEatHint')}</p>
+      <div className="public-menu-type-choice-grid">
+        {types.map((type) => (
+          <button
+            key={type}
+            type="button"
+            className="public-menu-type-card"
+            onClick={() => onChoose(type)}
+          >
+            <span className="public-menu-type-card-icon" aria-hidden>
+              <OrderTypeIcon type={type} />
+            </span>
+            <span>
+              {t(lang, type === 'here' ? 'pubTypeHere' : type === 'delivery' ? 'pubTypeDelivery' : 'pubTypeTakeaway')}
+            </span>
+          </button>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function OrderTypeIcon({ type }: { type: PublicOrderType }) {
+  return (
+    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      {type === 'here' ? (
+        <>
+          {/* вилка и нож — «поесть на месте» */}
+          <path d="M4 3v6a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2V3M7 3v18" />
+          <path d="M20 15V3a4 4 0 0 0-4 4v6a2 2 0 0 0 2 2h2Zm0 0v6" />
+        </>
+      ) : type === 'delivery' ? (
+        <>
+          {/* скутер */}
+          <circle cx="6.5" cy="17" r="2.5" />
+          <circle cx="17.5" cy="17" r="2.5" />
+          <path d="M9 17h6l2-6h-3M4 11h6v3M17 11l-1-4h-2" />
+        </>
+      ) : (
+        <>
+          {/* пакет с собой */}
+          <path d="M6 8h12l-1 12H7L6 8Z" />
+          <path d="M9 8V6.5a3 3 0 0 1 6 0V8" />
+        </>
+      )}
+    </svg>
   )
 }
 
