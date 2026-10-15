@@ -1,3 +1,4 @@
+import type { Lang } from '../../lib/i18n'
 import type { PublicOrderType } from './publicApi'
 
 export type PublicOrderChannel =
@@ -17,6 +18,12 @@ export interface PublicOrderQueryContext {
   browseOnly: boolean
   /** Автовозврат на hero нужен только общему киоск-устройству, не телефону гостя. */
   kiosk: boolean
+  /**
+   * Язык из ссылки (184): QR «English menu» у входа или отдельная наклейка.
+   * Сильнее памяти браузера, но меню включённых владельцем языков не
+   * расширяет — неизвестный точке язык страница заменит ивритом.
+   */
+  lang: Lang | null
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -77,6 +84,8 @@ export function parsePublicOrderQuery(search: string): PublicOrderQueryContext {
   // не должен лишать гостя возможности сделать заказ за своим столом.
   const browseOnly = !tableToken && (rawBrowse === '1' || rawBrowse === 'true')
   const startInMenu = browseOnly || params.get('view')?.trim().toLowerCase() === 'menu'
+  const rawLang = params.get('lang')?.trim().toLowerCase()
+  const lang: Lang | null = rawLang === 'he' || rawLang === 'en' || rawLang === 'ru' ? rawLang : null
 
   return {
     tableToken,
@@ -85,6 +94,7 @@ export function parsePublicOrderQuery(search: string): PublicOrderQueryContext {
     startInMenu,
     browseOnly,
     kiosk,
+    lang,
   }
 }
 

@@ -12,8 +12,8 @@ const labels: Record<PublicServiceRequestKind, Parameters<typeof t>[1]> = {
   cutlery: 'serviceCutlery',
   napkins: 'serviceNapkins',
   bread: 'serviceBread',
-  next_course: 'serviceNextCourse',
-  hold_course: 'serviceHoldCourse',
+  next_course: 'guestNextCourse',
+  hold_course: 'guestHoldCourse',
   problem: 'serviceProblem',
   bill: 'serviceBill',
 }

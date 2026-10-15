@@ -38,6 +38,7 @@ export function formatMoney(agorot: Agorot, lang: Lang): string {
  * Вся группа внутри изоляции: иначе нейтральный «+» в ивритском
  * окружении отрывается от суммы и уходит к названию модификатора.
  * Пробел неразрывный: обычный на границе направлений схлопывается.
+ * По-английски и по-русски знак привычно стоит впереди: "+₪ 2".
  */
 export function formatMoneyDelta(agorot: Agorot, lang: Lang): string {
   const sign = agorot < 0 ? '−' : '+'
@@ -46,6 +47,7 @@ export function formatMoneyDelta(agorot: Agorot, lang: Lang): string {
     minimumFractionDigits: Math.abs(agorot) % 100 === 0 ? 0 : 2,
     maximumFractionDigits: 2,
   })
+  if (lang !== 'he') return `${LRI}${sign}₪ ${num}${PDI}`
   return `${LRI}₪ ${num}\u00a0${sign}${PDI}`
 }
 

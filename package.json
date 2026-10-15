@@ -21,7 +21,7 @@
     "test": "vitest",
     "test:run": "vitest run",
     "test:bundle": "node --test --test-timeout=120000 scripts/check-bundle-size.test.mjs",
-    "test:ops": "node --test --test-timeout=120000 scripts/db-dump.test.mjs",
+    "test:ops": "node --test --test-timeout=120000 scripts/db-dump.test.mjs scripts/menu-translations/plan.test.mjs",
     "test:all": "npm run test:run && npm run test:bundle && npm run test:ops",
     "preview": "vite preview",
     "check:ref": "node scripts/check-project-ref.mjs",

@@ -1,0 +1,568 @@
+{
+  "about": "Переводы QR-меню Bulochka (Kassa 184). Ключ — базовое ивритское название в каталоге кассы. source — ивритское описание, с которого сделан перевод: если в каталоге оно уже другое, скрипт переводит только название. Основа — ручные переводы сайта bulweb2, вычищенные и сверенные с ивритским текстом кассы; недостающее переведено заново.",
+  "location_id": "fe2eebf0-65e3-45b4-a81f-331359d71955",
+  "categories": {
+    "משקאות חמים": { "en": "Hot Drinks", "ru": "Горячие напитки" },
+    "משקאות קרים": { "en": "Cold Drinks", "ru": "Холодные напитки" },
+    "כריכים": { "en": "Sandwiches", "ru": "Сэндвичи" },
+    "סלטים": { "en": "Salads", "ru": "Салаты" },
+    "מאפים": { "en": "Pastries", "ru": "Выпечка" },
+    "ממולאים": { "en": "Filled Croissants", "ru": "Круассаны с начинкой" },
+    "טארטלטים": { "en": "Tartlets", "ru": "Тарталетки" },
+    "עוגות וקינוחים": { "en": "Cakes & Desserts", "ru": "Торты и десерты" },
+    "גלידה": { "en": "Ice Cream", "ru": "Мороженое" },
+    "אלכוהול": { "en": "Alcohol", "ru": "Алкоголь" },
+    "אפיית יום שישי": { "en": "Friday Bakes", "ru": "Пятничная выпечка" }
+  },
+  "items": {
+    "אספרסו": {
+      "source": "קצר/ארוך. יחיד/כפול.",
+      "en": { "name": "Espresso", "description": "Short or long. Single or double." },
+      "ru": { "name": "Эспрессо", "description": "Короткий или длинный. Одинарный или двойной." }
+    },
+    "מקיאטו": {
+      "source": "אספרסו עם נגיעה או באהבה של קרמת חלב. קצר/ארוך. יחיד/כפול.",
+      "en": { "name": "Macchiato", "description": "Espresso with a touch of milk foam — or a generous one, “with love”. Short or long. Single or double." },
+      "ru": { "name": "Макиато", "description": "Эспрессо с каплей молочной пены — или щедро, «с любовью». Короткий или длинный. Одинарный или двойной." }
+    },
+    "אמריקנו": {
+      "source": "קטן/גדול. על בסיס סויה/שיבולת - ₪2. תוספות סירופ - קרמל/אגוזי לוז/וניל/אייריש קרים - ₪5.",
+      "en": { "name": "Americano", "description": "Small or large. Soy or oat milk +₪2. Syrup — caramel, hazelnut, vanilla or Irish cream +₪5." },
+      "ru": { "name": "Американо", "description": "Маленький или большой. На соевом или овсяном молоке +₪2. Сироп — карамель, лесной орех, ваниль или айриш крим +₪5." }
+    },
+    "קפוצ'ינו": {
+      "source": "הפוך בישראלי.",
+      "en": { "name": "Cappuccino", "description": "The Israeli “hafuch”." },
+      "ru": { "name": "Капучино", "description": "Израильский «афух»." }
+    },
+    "לאטה": {
+      "source": "כוס גדולה עם חלב מוקצף היטב ואספרסו מעל.",
+      "en": { "name": "Latte", "description": "A large cup of well-frothed milk with espresso on top." },
+      "ru": { "name": "Латте", "description": "Большая чашка хорошо взбитого молока с эспрессо сверху." }
+    },
+    "ראף": {
+      "source": "משקה חם על בסיס שמנת, וניל ואספרסו.",
+      "en": { "name": "Raf", "description": "A hot drink of cream, vanilla and espresso." },
+      "ru": { "name": "Раф", "description": "Горячий напиток на основе сливок, ванили и эспрессо." }
+    },
+    "שוקו חם": {
+      "source": "שוקו חם על בסיס חלב, עם מרשמלו מעל.",
+      "en": { "name": "Hot Cocoa", "description": "Hot cocoa made with milk, topped with marshmallows." },
+      "ru": { "name": "Горячее какао", "description": "Какао на молоке с маршмеллоу сверху." }
+    },
+    "תה חם": {
+      "source": "ארל גריי לבנדר ברגמוט / ג'ינג'ר אפרסק / ירוק יסמין / לימונית לואיזה / תפוח קינמון / נענע / פ.יער / קמומיל.",
+      "en": { "name": "Hot Tea", "description": "Earl Grey with lavender and bergamot / ginger and peach / green jasmine / lemon verbena / apple and cinnamon / mint / forest berries / chamomile." },
+      "ru": { "name": "Горячий чай", "description": "Эрл грей с лавандой и бергамотом / имбирь и персик / зелёный с жасмином / лимонная вербена / яблоко и корица / мята / лесные ягоды / ромашка." }
+    },
+    "אפוגטו": {
+      "source": "כדור גלידת וניל ואספרסו כפול ארוך.",
+      "en": { "name": "Affogato", "description": "A scoop of vanilla ice cream with a long double espresso." },
+      "ru": { "name": "Аффогато", "description": "Шарик ванильного мороженого и длинный двойной эспрессо." }
+    },
+    "מאצ'ה לאטה": {
+      "source": "משקה על בסיס תה יפני אורגני.",
+      "en": { "name": "Matcha Latte", "description": "Made with organic Japanese matcha tea." },
+      "ru": { "name": "Матча латте", "description": "Напиток на основе органического японского чая матча." }
+    },
+    "פלאט וואיט": {
+      "source": "קפוצ'ינו חזק: שליש אספרסו, שליש חלב, שליש קרמת חלב.",
+      "en": { "name": "Flat White", "description": "A strong cappuccino: one third espresso, one third milk, one third milk foam." },
+      "ru": { "name": "Флэт уайт", "description": "Крепкий капучино: треть эспрессо, треть молока, треть молочной пены." }
+    },
+    "קפה שחור": {
+      "source": "\"בוץ\" יעני",
+      "en": { "name": "Black Coffee", "description": "Israeli “botz” — finely ground coffee brewed right in the cup." },
+      "ru": { "name": "Чёрный кофе", "description": "Израильский «боц» — молотый кофе, заваренный прямо в чашке." }
+    },
+    "שוקולטה חמה": {
+      "source": "משקה שוקולדי סמיך.",
+      "en": { "name": "Hot Chocolate", "description": "A thick chocolate drink." },
+      "ru": { "name": "Горячий шоколад", "description": "Густой шоколадный напиток." }
+    },
+    "סחלב חם": {
+      "source": "משקה סחלב חם עם אגוזים, קוקוס, פירורים וקינמון.",
+      "en": { "name": "Hot Sahlab", "description": "A thick, creamy warm milk drink topped with nuts, coconut, crumble and cinnamon." },
+      "ru": { "name": "Горячий сахлаб", "description": "Густой тёплый молочный напиток с орехами, кокосовой стружкой, крошкой и корицей." }
+    },
+    "קפה קר": {
+      "source": "על בסיס סויה/שיבולת - ₪2. תוספות סירופ - ₪5. תוספת ביילים - ₪10.",
+      "en": { "name": "Iced Coffee", "description": "Soy or oat milk +₪2. Syrup +₪5. A shot of Baileys +₪10." },
+      "ru": { "name": "Холодный кофе", "description": "На соевом или овсяном молоке +₪2. Сироп +₪5. Бейлис +₪10." }
+    },
+    "תה קר ביתי": {
+      "source": "תמצית תה שחור, אפרסק, לימון, נענע.",
+      "en": { "name": "House Iced Tea", "description": "Black tea extract, peach, lemon, mint." },
+      "ru": { "name": "Домашний холодный чай", "description": "Экстракт чёрного чая, персик, лимон, мята." }
+    },
+    "שוקו קר": {
+      "source": "על בסיס סויה/ שיבולת - ₪2.",
+      "en": { "name": "Iced Cocoa", "description": "Soy or oat milk +₪2." },
+      "ru": { "name": "Холодное какао", "description": "На соевом или овсяном молоке +₪2." }
+    },
+    "פרישייק": {
+      "source": "תות, בננה, מנגו, תמר, אפרסק, פירות יער. על בסיס סויה/ שיבולת/ מיץ תפוזים - ₪3.",
+      "en": { "name": "Fruit Shake", "description": "Strawberry, banana, mango, date, peach, forest berries. With soy or oat milk or orange juice +₪3." },
+      "ru": { "name": "Фруктовый шейк", "description": "Клубника, банан, манго, финик, персик, лесные ягоды. На соевом или овсяном молоке или апельсиновом соке +₪3." }
+    },
+    "באמבל בי": {
+      "source": "מיץ תפוזים על קרח ואספרסו!",
+      "en": { "name": "Bumble Bee", "description": "Orange juice over ice with espresso!" },
+      "ru": { "name": "Бамбл би", "description": "Апельсиновый сок со льдом и эспрессо!" }
+    },
+    "בלאק לארה": {
+      "source": "מי טוניק על קרח ואספרסו.",
+      "en": { "name": "Black Lara", "description": "Tonic water over ice with espresso." },
+      "ru": { "name": "Блэк Лара", "description": "Тоник со льдом и эспрессо." }
+    },
+    "מאצ'ה קרה": {
+      "source": "משקה על בסיס תה יפני אורגני.",
+      "en": { "name": "Iced Matcha", "description": "Made with organic Japanese matcha tea." },
+      "ru": { "name": "Холодная матча", "description": "Напиток на основе органического японского чая матча." }
+    },
+    "מיץ ריאל": {
+      "source": "ללא חומר משמר. תפוזים / ג'ינג'ר-תפוח עץ.",
+      "en": { "name": "Real Juice", "description": "No preservatives. Orange / ginger and apple." },
+      "ru": { "name": "Сок Real", "description": "Без консервантов. Апельсин / имбирь и яблоко." }
+    },
+    "מי קוקוס בטעמים": {
+      "source": "מיוצר מאגוזי קוקוס טריים, ללא חומר משמר. מנגו / גויאבה ורודה / ליצ'י.",
+      "en": { "name": "Flavoured Coconut Water", "description": "Made from fresh coconuts, no preservatives. Mango / pink guava / lychee." },
+      "ru": { "name": "Кокосовая вода со вкусом", "description": "Из свежих кокосов, без консервантов. Манго / розовая гуава / личи." }
+    },
+    "מיץ מיקס פירות וירקות - צהוב": {
+      "source": "תפוז, תפוח, מנגו, דלעת, גזר, אגס.",
+      "en": { "name": "Fruit & Vegetable Juice — Yellow", "description": "Orange, apple, mango, pumpkin, carrot, pear." },
+      "ru": { "name": "Фруктово-овощной сок — жёлтый", "description": "Апельсин, яблоко, манго, тыква, морковь, груша." }
+    },
+    "מיץ מיקס פירות וירקות - ורוד": {
+      "source": "דובדבן קורנליה, רימון, תפוח, תות שדה, אגס, גזר שחור.",
+      "en": { "name": "Fruit & Vegetable Juice — Pink", "description": "Cornelian cherry, pomegranate, apple, strawberry, pear, black carrot." },
+      "ru": { "name": "Фруктово-овощной сок — розовый", "description": "Кизил, гранат, яблоко, клубника, груша, чёрная морковь." }
+    },
+    "מיץ מיקס פירות וירקות - אדום": {
+      "source": "רימון, סלק, אגס, תפוח, גזר שחור.",
+      "en": { "name": "Fruit & Vegetable Juice — Red", "description": "Pomegranate, beetroot, pear, apple, black carrot." },
+      "ru": { "name": "Фруктово-овощной сок — красный", "description": "Гранат, свёкла, груша, яблоко, чёрная морковь." }
+    },
+    "מיץ רימון אורגני": {
+      "source": "ללא תוספת סוכר, ללא חומרים משמרים. COLD PRESSED.",
+      "en": { "name": "Organic Pomegranate Juice", "description": "No added sugar, no preservatives. Cold-pressed." },
+      "ru": { "name": "Органический гранатовый сок", "description": "Без добавленного сахара и консервантов. Холодного отжима." }
+    },
+    "מיץ משמש אורגני": {
+      "source": "ללא תוספת סוכר, ללא חומרים משמרים. COLD PRESSED.",
+      "en": { "name": "Organic Apricot Juice", "description": "No added sugar, no preservatives. Cold-pressed." },
+      "ru": { "name": "Органический абрикосовый сок", "description": "Без добавленного сахара и консервантов. Холодного отжима." }
+    },
+    "מיץ אגס אורגני": {
+      "source": "ללא תוספת סוכר, ללא חומרים משמרים. COLD PRESSED.",
+      "en": { "name": "Organic Pear Juice", "description": "No added sugar, no preservatives. Cold-pressed." },
+      "ru": { "name": "Органический грушевый сок", "description": "Без добавленного сахара и консервантов. Холодного отжима." }
+    },
+    "מיץ תפוח עץ אורגני": {
+      "source": "ללא תוספת סוכר, ללא חומרים משמרים. COLD PRESSED.",
+      "en": { "name": "Organic Apple Juice", "description": "No added sugar, no preservatives. Cold-pressed." },
+      "ru": { "name": "Органический яблочный сок", "description": "Без добавленного сахара и консервантов. Холодного отжима." }
+    },
+    "מיץ תות עץ אורגני": {
+      "source": "ללא תוספת סוכר, ללא חומרים משמרים. COLD PRESSED.",
+      "en": { "name": "Organic Mulberry Juice", "description": "No added sugar, no preservatives. Cold-pressed." },
+      "ru": { "name": "Органический сок шелковицы", "description": "Без добавленного сахара и консервантов. Холодного отжима." }
+    },
+    "מנגו-פסיפלורה": {
+      "source": "שילוב מנגו ופסיפלורה. ויטמין A וויטמין C.",
+      "en": { "name": "Mango & Passion Fruit", "description": "Mango and passion fruit. Vitamins A and C." },
+      "ru": { "name": "Манго и маракуйя", "description": "Манго и маракуйя. Витамины A и C." }
+    },
+    "אסרולה-ג'ינג'ר": {
+      "source": "אסרולה — אחת מהמקורות העשירים ביותר בטבע לוויטמין C.",
+      "en": { "name": "Acerola & Ginger", "description": "Acerola — one of nature's richest sources of vitamin C." },
+      "ru": { "name": "Ацерола и имбирь", "description": "Ацерола — один из самых богатых природных источников витамина C." }
+    },
+    "ורדים": {
+      "source": "פרי הורד (Rosa canina) — מקור עשיר של ויטמין C.",
+      "en": { "name": "Rose Hip", "description": "Rose hips (Rosa canina) — a rich source of vitamin C." },
+      "ru": { "name": "Шиповник", "description": "Плоды шиповника (Rosa canina) — богатый источник витамина C." }
+    },
+    "מאטה-קופאין": {
+      "source": "המאטה — סמל חברתי ותרבותי. אנרגיה מתמשכת.",
+      "en": { "name": "Maté & Caffeine", "description": "Maté — a social and cultural icon. Long-lasting energy." },
+      "ru": { "name": "Мате с кофеином", "description": "Мате — социальный и культурный символ. Энергия надолго." }
+    },
+    "מלפפון כוסברה": {
+      "source": "שילוב מלפפון וכוסברה. ערך גליקמי נמוך, עשיר בקוורצטין.",
+      "en": { "name": "Cucumber & Coriander", "description": "Cucumber and coriander. Low glycaemic index, rich in quercetin." },
+      "ru": { "name": "Огурец и кинза", "description": "Огурец и кинза. Низкий гликемический индекс, много кверцетина." }
+    },
+    "כריך סלמון מעושן": {
+      "source": "גבינת שמנת, בצל סגול, סלמון מעושן, מיץ לימון טרי, מלפפון, חסה קיסר.",
+      "en": { "name": "Smoked Salmon Sandwich", "description": "Cream cheese, red onion, smoked salmon, fresh lemon juice, cucumber, romaine lettuce." },
+      "ru": { "name": "Сэндвич с копчёным лососем", "description": "Сливочный сыр, красный лук, копчёный лосось, свежий лимонный сок, огурец, салат романо." }
+    },
+    "כריך טונה": {
+      "source": "מיונז, ביצה קשה, טונה, עגבניה, מלפפון, חסה קיסר.",
+      "en": { "name": "Tuna Sandwich", "description": "Mayonnaise, hard-boiled egg, tuna, tomato, cucumber, romaine lettuce." },
+      "ru": { "name": "Сэндвич с тунцом", "description": "Майонез, яйцо вкрутую, тунец, помидор, огурец, салат романо." }
+    },
+    "כריך אבוקדו": {
+      "source": "גבינת שמנת, ביצה קשה, פרוסות אבוקדו, מלח, פלפל שחור, מיץ לימון.",
+      "en": { "name": "Avocado Sandwich", "description": "Cream cheese, hard-boiled egg, sliced avocado, salt, black pepper, lemon juice." },
+      "ru": { "name": "Сэндвич с авокадо", "description": "Сливочный сыр, яйцо вкрутую, ломтики авокадо, соль, чёрный перец, лимонный сок." }
+    },
+    "קרואסון סלמון מעושן": {
+      "source": "גבינת שמנת, בצל סגול, סלמון מעושן, מיץ לימון טרי, מלפפון, חסה קיסר.",
+      "en": { "name": "Smoked Salmon Croissant", "description": "Cream cheese, red onion, smoked salmon, fresh lemon juice, cucumber, romaine lettuce." },
+      "ru": { "name": "Круассан с копчёным лососем", "description": "Сливочный сыр, красный лук, копчёный лосось, свежий лимонный сок, огурец, салат романо." }
+    },
+    "קרואסון טונה": {
+      "source": "מיונז, ביצה קשה, טונה, עגבניה, מלפפון, חסה קיסר.",
+      "en": { "name": "Tuna Croissant", "description": "Mayonnaise, hard-boiled egg, tuna, tomato, cucumber, romaine lettuce." },
+      "ru": { "name": "Круассан с тунцом", "description": "Майонез, яйцо вкрутую, тунец, помидор, огурец, салат романо." }
+    },
+    "קרואסון אבוקדו": {
+      "source": "גבינת שמנת, ביצה קשה, פרוסות אבוקדו, מלח, פלפל שחור, מיץ לימון.",
+      "en": { "name": "Avocado Croissant", "description": "Cream cheese, hard-boiled egg, sliced avocado, salt, black pepper, lemon juice." },
+      "ru": { "name": "Круассан с авокадо", "description": "Сливочный сыр, яйцо вкрутую, ломтики авокадо, соль, чёрный перец, лимонный сок." }
+    },
+    "רוסטיק אבוקדו VEGAN": {
+      "source": "פסטו צנוברים, פרוסות אבוקדו, מלח, פלפל שחור, מיץ לימון.",
+      "en": { "name": "Rustic Avocado Sandwich (Vegan)", "description": "Pine nut pesto, sliced avocado, salt, black pepper, lemon juice." },
+      "ru": { "name": "Деревенский сэндвич с авокадо (веган)", "description": "Песто с кедровыми орешками, ломтики авокадо, соль, чёрный перец, лимонный сок." }
+    },
+    "קרואסון אנטיפסטי": {
+      "source": "ממרח צ'אטני מנגו, ירקות אפויים (בטטה, זוקיני, גמבה), בולגרית מעודנת.",
+      "en": { "name": "Antipasti Croissant", "description": "Mango chutney, roasted vegetables (sweet potato, zucchini, bell pepper), mild Bulgarian cheese." },
+      "ru": { "name": "Круассан антипасти", "description": "Манговый чатни, запечённые овощи (батат, цукини, болгарский перец), мягкий болгарский сыр." }
+    },
+    "קרואסון פסטו": {
+      "source": "גבינת שמנת, פסטו צנוברים, בולגרית מעודנת, מלפפון, חסה קיסר.",
+      "en": { "name": "Pesto Croissant", "description": "Cream cheese, pine nut pesto, mild Bulgarian cheese, cucumber, romaine lettuce." },
+      "ru": { "name": "Круассан с песто", "description": "Сливочный сыр, песто с кедровыми орешками, мягкий болгарский сыр, огурец, салат романо." }
+    },
+    "טוסט חמש גבינות": {
+      "source": "גבינת שמנת, צ'דר, מוצרלה, גאודה, סקנדינבית. לחם קסטן לבן ₪46 / דגנים ₪48.",
+      "en": { "name": "Five-Cheese Toast", "description": "Cream cheese, cheddar, mozzarella, gouda, Scandinavian cheese. White loaf ₪46 / multigrain ₪48." },
+      "ru": { "name": "Тост с пятью сырами", "description": "Сливочный сыр, чеддер, моцарелла, гауда, скандинавский сыр. Белый хлеб ₪46 / злаковый ₪48." }
+    },
+    "מוזלי": {
+      "source": "יוגורט בקר, פירות העונה, גרנולה.",
+      "en": { "name": "Muesli", "description": "Yoghurt, seasonal fruit, granola." },
+      "ru": { "name": "Мюсли", "description": "Йогурт, сезонные фрукты, гранола." }
+    },
+    "קיש פיטריות עם סלט אישי": {
+      "source": "פטריות שמפיניון ופורטובלו, בצל לבן, רוטב אלפרדו, מיקס ארבע גבינות.",
+      "en": { "name": "Mushroom Quiche with a Side Salad", "description": "Button and portobello mushrooms, white onion, Alfredo sauce, four-cheese blend." },
+      "ru": { "name": "Киш с грибами и салатом", "description": "Шампиньоны и портобелло, белый лук, соус альфредо, смесь четырёх сыров." }
+    },
+    "קיש אנטיפסטי עם סלט אישי": {
+      "source": "ירקות אפויים (בטטה, זוקיני, גמבה), רוטב רוזה, מיקס ארבע גבינות.",
+      "en": { "name": "Antipasti Quiche with a Side Salad", "description": "Roasted vegetables (sweet potato, zucchini, bell pepper), rosé sauce, four-cheese blend." },
+      "ru": { "name": "Киш антипасти с салатом", "description": "Запечённые овощи (батат, цукини, болгарский перец), соус «роза», смесь четырёх сыров." }
+    },
+    "סלט טונה": {
+      "source": "מלפפון, עגבניה, חסה קיסר, טונה, זיתי קלמטה, ביצה קשה, בצל סגול.",
+      "en": { "name": "Tuna Salad", "description": "Cucumber, tomato, romaine lettuce, tuna, Kalamata olives, hard-boiled egg, red onion." },
+      "ru": { "name": "Салат с тунцом", "description": "Огурец, помидор, салат романо, тунец, оливки каламата, яйцо вкрутую, красный лук." }
+    },
+    "סלט בולגרית": {
+      "source": "עגבניה, מלפפון, חסה קיסר, בולגרית מעודנת, בצל סגול, ביצה קשה, תירס.",
+      "en": { "name": "Bulgarian Cheese Salad", "description": "Tomato, cucumber, romaine lettuce, mild Bulgarian cheese, red onion, hard-boiled egg, corn." },
+      "ru": { "name": "Салат с болгарским сыром", "description": "Помидор, огурец, салат романо, мягкий болгарский сыр, красный лук, яйцо вкрутую, кукуруза." }
+    },
+    "סלט ירקות דק": {
+      "source": "מלפפון, עגבניה, בצל סגול, חסה קיסר, נענע, שמן זית, מיץ לימון.",
+      "en": { "name": "Israeli Chopped Salad", "description": "Cucumber, tomato, red onion, romaine lettuce, mint, olive oil, lemon juice." },
+      "ru": { "name": "Израильский овощной салат", "description": "Огурец, помидор, красный лук, салат романо, мята, оливковое масло, лимонный сок." }
+    },
+    "קרואסון צרפתי קלאסי": {
+      "source": "בצק חמאה צרפתי.",
+      "en": { "name": "Classic French Croissant", "description": "French butter pastry." },
+      "ru": { "name": "Классический французский круассан", "description": "Французское слоёное тесто на сливочном масле." }
+    },
+    "קרואסון צרפתי קטן": {
+      "source": "נכנס ביד אחת.",
+      "en": { "name": "Small French Croissant", "description": "Fits in one hand." },
+      "ru": { "name": "Маленький французский круассан", "description": "Помещается в ладони." }
+    },
+    "קרואסון שוקולד": {
+      "source": "מקל שוקולד אחד, בגודל כיס.",
+      "en": { "name": "Chocolate Croissant", "description": "One stick of chocolate, pocket-sized." },
+      "ru": { "name": "Круассан с шоколадом", "description": "Одна шоколадная палочка, карманный размер." }
+    },
+    "קרואסון שוקולד גדול": {
+      "source": "שוקולד בתוך מאפה מרובד פריך.",
+      "en": { "name": "Pain au Chocolat", "description": "Chocolate inside crisp laminated pastry." },
+      "ru": { "name": "Большой круассан с шоколадом", "description": "Шоколад внутри хрустящего слоёного теста." }
+    },
+    "רול קינמון": {
+      "source": "גלגול הדוק עם קינמון.",
+      "en": { "name": "Cinnamon Roll", "description": "Tightly rolled with cinnamon." },
+      "ru": { "name": "Булочка с корицей", "description": "Плотно скрученная, с корицей." }
+    },
+    "רול וניל צימוקים": {
+      "source": "קרם וניל, צימוקים שמנמנים, בצק אפוי רך.",
+      "en": { "name": "Vanilla Raisin Roll", "description": "Vanilla cream, plump raisins, soft baked dough." },
+      "ru": { "name": "Булочка с ванильным кремом и изюмом", "description": "Ванильный крем, сочный изюм, мягкое тесто." }
+    },
+    "שוסון תפוח עץ": {
+      "source": "תפוח מקורמל במאפה חמאתי פריך.",
+      "en": { "name": "Apple Turnover", "description": "Caramelised apple in flaky butter pastry." },
+      "ru": { "name": "Шоссон с яблоком", "description": "Карамелизованное яблоко в хрустящем слоёном тесте на сливочном масле." }
+    },
+    "קיש אנטיפסטי": {
+      "source": "ירקות אפויים (בטטה, זוקיני, גמבה), רוטב רוזה, מיקס ארבע גבינות.",
+      "en": { "name": "Antipasti Quiche", "description": "Roasted vegetables (sweet potato, zucchini, bell pepper), rosé sauce, four-cheese blend." },
+      "ru": { "name": "Киш антипасти", "description": "Запечённые овощи (батат, цукини, болгарский перец), соус «роза», смесь четырёх сыров." }
+    },
+    "קיש פטריות": {
+      "source": "פטריות שמפיניון ופורטובלו, בצל לבן, רוטב אלפרדו, מיקס ארבע גבינות.",
+      "en": { "name": "Mushroom Quiche", "description": "Button and portobello mushrooms, white onion, Alfredo sauce, four-cheese blend." },
+      "ru": { "name": "Киш с грибами", "description": "Шампиньоны и портобелло, белый лук, соус альфредо, смесь четырёх сыров." }
+    },
+    "אצבעות פילו": {
+      "source": "בולגרית-תרד / פיטריות-תפוח אדמה / בולגרית-קשקבל / תפוח עץ-אגוזים-צימוקים.",
+      "en": { "name": "Phyllo Fingers", "description": "Bulgarian cheese and spinach / mushroom and potato / Bulgarian cheese and kashkaval / apple, walnut and raisin." },
+      "ru": { "name": "Пальчики из фило", "description": "Болгарский сыр и шпинат / грибы и картофель / болгарский сыр и кашкавал / яблоко, орехи и изюм." }
+    },
+    "קרואסון קרם לימון-פטל אדום": {
+      "source": "קרד לימון חמצמץ, פטל אדום טרי.",
+      "en": { "name": "Lemon Curd & Raspberry Croissant", "description": "Tangy lemon curd, fresh raspberries." },
+      "ru": { "name": "Круассан с лимонным кремом и малиной", "description": "Кисловатый лимонный курд, свежая малина." }
+    },
+    "קרואסון תפוח עץ-קרם לימון": {
+      "source": "תפוח מקורמל, קרם פטיסייר לימון בהיר.",
+      "en": { "name": "Apple & Lemon Cream Croissant", "description": "Caramelised apple, light lemon pastry cream." },
+      "ru": { "name": "Круассан с яблоком и лимонным кремом", "description": "Карамелизованное яблоко, лёгкий лимонный заварной крем." }
+    },
+    "קרואסון קרם בייגל-קרמל מלוח": {
+      "source": "קרם שומשום קלוי עם קרמל מלוח.",
+      "en": { "name": "Bagel Cream & Salted Caramel Croissant", "description": "Toasted sesame cream with salted caramel." },
+      "ru": { "name": "Круассан с кремом «бейгл» и солёной карамелью", "description": "Крем из обжаренного кунжута с солёной карамелью." }
+    },
+    "קרואסון קרם חלבה-קרם פיסטוק": {
+      "source": "קרם חלבה שומשום פוגש מחית פיסטוק.",
+      "en": { "name": "Halva & Pistachio Cream Croissant", "description": "Sesame halva cream meets pistachio paste." },
+      "ru": { "name": "Круассан с кремом из халвы и фисташковым кремом", "description": "Кунжутный крем из халвы и фисташковая паста." }
+    },
+    "קרואסון קרם פיסטוק-אגוזי פיסטוק": {
+      "source": "מכה פיסטוק כפולה: קרם פיסטוק ואגוזים קלויים.",
+      "en": { "name": "Pistachio Cream & Pistachio Croissant", "description": "A double pistachio hit: pistachio cream and toasted nuts." },
+      "ru": { "name": "Круассан с фисташковым кремом и фисташками", "description": "Двойная доза фисташки: фисташковый крем и обжаренные орехи." }
+    },
+    "קרואסון נוטלה-בננה-שקדים": {
+      "source": "ממרח שוקולד אגוזי לוז, בננה טרייה, שקדים קלויים.",
+      "en": { "name": "Nutella, Banana & Almond Croissant", "description": "Chocolate hazelnut spread, fresh banana, toasted almonds." },
+      "ru": { "name": "Круассан с нутеллой, бананом и миндалём", "description": "Шоколадно-ореховая паста, свежий банан, обжаренный миндаль." }
+    },
+    "קרואסון קרם וניל-פירות יער": {
+      "source": "קרם וניל, פירות יער.",
+      "en": { "name": "Vanilla Cream & Forest Berry Croissant", "description": "Vanilla cream, forest berries." },
+      "ru": { "name": "Круассан с ванильным кремом и лесными ягодами", "description": "Ванильный крем, лесные ягоды." }
+    },
+    "טארטלט מסקרפונה - מנגו": {
+      "source": "קרם מסקרפונה, מנגו טרי, בסיס פריך וחמאתי.",
+      "en": { "name": "Mascarpone & Mango Tartlet", "description": "Mascarpone cream, fresh mango, crisp buttery base." },
+      "ru": { "name": "Тарталетка с маскарпоне и манго", "description": "Крем маскарпоне, свежее манго, хрустящая песочная основа на сливочном масле." }
+    },
+    "טארטלט מסקרפונה - קרם וניל - פירות יער": {
+      "source": "קרם מסקרפונה, וניל, פירות יער.",
+      "en": { "name": "Mascarpone, Vanilla Cream & Forest Berry Tartlet", "description": "Mascarpone cream, vanilla, forest berries." },
+      "ru": { "name": "Тарталетка с маскарпоне, ванильным кремом и лесными ягодами", "description": "Крем маскарпоне, ваниль, лесные ягоды." }
+    },
+    "קרם ברולה": {
+      "source": "קסטרד וניל קלאסי, קרום סוכר מקורמל.",
+      "en": { "name": "Crème Brûlée", "description": "Classic vanilla custard with a caramelised sugar crust." },
+      "ru": { "name": "Крем-брюле", "description": "Классический ванильный крем с карамелизованной сахарной корочкой." }
+    },
+    "טארטלט מסקרפונה - תות שדה": {
+      "source": "קרם מסקרפונה, תות שדה בשל, בסיס פריך וחמאתי.",
+      "en": { "name": "Mascarpone & Strawberry Tartlet", "description": "Mascarpone cream, ripe strawberries, crisp buttery base." },
+      "ru": { "name": "Тарталетка с маскарпоне и клубникой", "description": "Крем маскарпоне, спелая клубника, хрустящая песочная основа на сливочном масле." }
+    },
+    "טארטלט מסקרפונה - קרם פיסטוק-פטל": {
+      "source": "קרם מסקרפונה, מחית פיסטוק, פטל.",
+      "en": { "name": "Mascarpone, Pistachio Cream & Raspberry Tartlet", "description": "Mascarpone cream, pistachio paste, raspberries." },
+      "ru": { "name": "Тарталетка с маскарпоне, фисташковым кремом и малиной", "description": "Крем маскарпоне, фисташковая паста, малина." }
+    },
+    "בראוניז, שוקולד חלב וקרמל אגוזי לוז": {
+      "source": "בראוניז עשיר, קרם שוקולד חלב, קרמל מלוח, אגוזי לוז.",
+      "en": { "name": "Brownie, Milk Chocolate & Hazelnut Caramel", "description": "Rich brownie, milk chocolate cream, salted caramel, hazelnuts." },
+      "ru": { "name": "Брауни с молочным шоколадом и карамелью с фундуком", "description": "Насыщенный брауни, крем из молочного шоколада, солёная карамель, фундук." }
+    },
+    "לימון מרנג ופרנג'יפן שקדים": {
+      "source": "בסיס פרנג'יפן שקדים, קרם לימון חמצמץ, מרנג שרוף.",
+      "en": { "name": "Lemon Meringue & Almond Frangipane", "description": "Almond frangipane base, tangy lemon cream, torched meringue." },
+      "ru": { "name": "Лимонная меренга с миндальным франжипаном", "description": "Основа из миндального франжипана, кисловатый лимонный крем, обожжённая меренга." }
+    },
+    "עוגת גבינה אפויה": {
+      "source": "יציבה ועשירה בדיוק כמו שעוגת גבינה צריכה להיות. משתלבת מצוין עם קפה — רק אל תגידו ליין שאמרנו את זה.",
+      "en": { "name": "Baked Cheesecake", "description": "Firm and rich, exactly as a cheesecake should be. Pairs beautifully with coffee — just don't tell the wine we said so." },
+      "ru": { "name": "Запечённый чизкейк", "description": "Плотный и насыщенный — ровно такой, каким должен быть чизкейк. Отлично идёт с кофе — только не говорите вину, что мы так сказали." }
+    },
+    "טירמיסו": {
+      "source": "שכבות ספוגות אספרסו, קרם מסקרפונה, מפוזר עם קקאו.",
+      "en": { "name": "Tiramisu", "description": "Espresso-soaked layers, mascarpone cream, a dusting of cocoa." },
+      "ru": { "name": "Тирамису", "description": "Пропитанные эспрессо коржи, крем маскарпоне, посыпка из какао." }
+    },
+    "עוגת הבית (משתנה)": {
+      "source": "משתנה מדי יום. שאלו בדלפק מה יש היום.",
+      "en": { "name": "Cake of the Day", "description": "Changes daily — ask at the counter what we have today." },
+      "ru": { "name": "Торт дня", "description": "Меняется каждый день — спросите у стойки, что сегодня." }
+    },
+    "גלידה קלאסית": {
+      "source": "שוקולד בלגי, וניל מקלות, וניל עוגיות.",
+      "en": { "name": "Classic Ice Cream", "description": "Belgian chocolate, vanilla bean, vanilla cookie." },
+      "ru": { "name": "Классическое мороженое", "description": "Бельгийский шоколад, ваниль из стручков, ваниль с печеньем." }
+    },
+    "גלידת טרופית": {
+      "source": "סורבה מנגו, סורבה פסיפלורה, סורבה קוקוס.",
+      "en": { "name": "Tropical Ice Cream", "description": "Mango sorbet, passion fruit sorbet, coconut sorbet." },
+      "ru": { "name": "Тропическое мороженое", "description": "Сорбеты: манго, маракуйя, кокос." }
+    },
+    "רוזה פריין — \"לה ויה פארם\", עמק הרון, צרפת": {
+      "source": "יבש, בלנד סנסו-גרנאש-סירה, קליל ורדרד. 375 מל.",
+      "en": { "name": "Rosé, Perrin — “La Vieille Ferme”, Rhône Valley, France", "description": "Dry Cinsault–Grenache–Syrah blend, light and pink. 375 ml." },
+      "ru": { "name": "Розе, Перрен — «Ля Вьей Ферм», долина Роны, Франция", "description": "Сухое, купаж сенсо, гренаша и сиры, лёгкое и розовое. 375 мл." }
+    },
+    "עראק עלית": {
+      "source": "מנה / צ'ייסר.",
+      "en": { "name": "Arak Elite", "description": "Serving / chaser." },
+      "ru": { "name": "Арак Элит", "description": "Порция / чейсер." }
+    },
+    "בייליס": {
+      "source": "מנה / צ'ייסר.",
+      "en": { "name": "Baileys", "description": "Serving / chaser." },
+      "ru": { "name": "Бейлис", "description": "Порция / чейсер." }
+    },
+    "גולדסטאר": {
+      "source": "לאגר כהה המוביל בישראל. 330 מל.",
+      "en": { "name": "Goldstar", "description": "Israel's leading dark lager. 330 ml." },
+      "ru": { "name": "Голдстар", "description": "Главный тёмный лагер Израиля. 330 мл." }
+    },
+    "הופ גורו – IPA": {
+      "source": "ארומה של פירות טרופים והדרים.",
+      "en": { "name": "Hop Guru – IPA", "description": "Aromas of tropical fruit and citrus." },
+      "ru": { "name": "Хоп Гуру – IPA", "description": "Аромат тропических фруктов и цитрусовых." }
+    },
+    "ואלפוליצ'לה — \"טומאסי\", ונטו, איטליה": {
+      "source": "בלנד אדום קליל, פירותי. 375 מל.",
+      "en": { "name": "Valpolicella — “Tommasi”, Veneto, Italy", "description": "Light, fruity red blend. 375 ml." },
+      "ru": { "name": "Вальполичелла — «Томази», Венето, Италия", "description": "Лёгкий фруктовый красный купаж. 375 мл." }
+    },
+    "בלנד אדום פריין — \"לה ויה פארם\", עמק הרון, צרפת": {
+      "source": "יבש, פטל שחור, דובדבנים ותבלינים חמים.",
+      "en": { "name": "Red Blend, Perrin — “La Vieille Ferme”, Rhône Valley, France", "description": "Dry, with blackberry, cherry and warm spice." },
+      "ru": { "name": "Красный купаж, Перрен — «Ля Вьей Ферм», долина Роны, Франция", "description": "Сухое, с нотами ежевики, вишни и тёплых специй." }
+    },
+    "שרדונה — \"לה קוטי\", דומיין רו, צרפת": {
+      "source": "יבש, אלגנטי, עם רמזים של פרי בשל.",
+      "en": { "name": "Chardonnay — “La Côte”, Domaine Roux, France", "description": "Dry and elegant, with hints of ripe fruit." },
+      "ru": { "name": "Шардоне — «Ля Кот», Домен Ру, Франция", "description": "Сухое, элегантное, с нотками спелых фруктов." }
+    },
+    "רד קנייט – אייל אירי": {
+      "source": "אדמונית בעלת טעם מתקתק של לחת קלוי.",
+      "en": { "name": "Red Knight – Irish Ale", "description": "A reddish ale with a sweetish roasted-malt taste." },
+      "ru": { "name": "Ред Найт – ирландский эль", "description": "Рыжеватый эль со сладковатым вкусом обжаренного солода." }
+    },
+    "גורצטרמינר — \"ולה וולף\", פפאלץ, גרמניה": {
+      "source": "חצי מתוק, ארומטי, שופע טעמים של פירות סרופים.",
+      "en": { "name": "Gewürztraminer — “Villa Wolf”, Pfalz, Germany", "description": "Semi-sweet and aromatic, full of tropical fruit flavours." },
+      "ru": { "name": "Гевюрцтраминер — «Вилла Вольф», Пфальц, Германия", "description": "Полусладкое, ароматное, с яркими вкусами тропических фруктов." }
+    },
+    "ויסקי ג'ימסון": {
+      "source": "מנה / צ'ייסר.",
+      "en": { "name": "Jameson Whiskey", "description": "Serving / chaser." },
+      "ru": { "name": "Виски Джеймсон", "description": "Порция / чейсер." }
+    },
+    "ג'ין בומביי סמפייר": {
+      "source": "תוספת מי טוניק - 6 ₪.",
+      "en": { "name": "Bombay Sapphire Gin", "description": "Add tonic water +₪6." },
+      "ru": { "name": "Джин Бомбей Сапфир", "description": "С тоником +₪6." }
+    },
+    "סוצ'ניק": {
+      "source": "פריך ורימוך במילוי גבינת סבורוג. מעדן נוסטלגי.",
+      "en": { "name": "Sochnik", "description": "Crisp and tender, filled with tvorog (farmer's cheese). A nostalgic treat." },
+      "ru": { "name": "Сочник", "description": "Хрустящий и нежный, с творожной начинкой. Ностальгическое лакомство." }
+    },
+    "בולוצ'קה": {
+      "source": "בצק שמרים רך ממולא בפירות משתנים.",
+      "en": { "name": "Bulochka", "description": "Soft yeast dough filled with seasonal fruit." },
+      "ru": { "name": "Булочка", "description": "Мягкое дрожжевое тесто с сезонными фруктами." }
+    },
+    "קרמבון": {
+      "source": "שבלול של מאפה שמרים במילוי נדיב של קרם (משתנה לפי המצב רוח). מתוק, מושחת וחסר רחמים — בדיוק כמו שתכננו.",
+      "en": { "name": "Creambon", "description": "A yeast-dough swirl generously filled with cream (the flavour depends on our mood). Sweet, decadent and merciless — exactly as planned." },
+      "ru": { "name": "Крембон", "description": "Улитка из дрожжевого теста с щедрой кремовой начинкой (вкус — по настроению). Сладкая, порочная и беспощадная — именно так, как мы задумали." }
+    },
+    "ואטרושקה": {
+      "source": "מאפה שמרים פתוח במילוי גבינת סבורוג עשיר.",
+      "en": { "name": "Vatrushka", "description": "An open yeast pastry with a rich tvorog (farmer's cheese) filling." },
+      "ru": { "name": "Ватрушка", "description": "Открытая дрожжевая выпечка с щедрой творожной начинкой." }
+    },
+    "סינבון": {
+      "source": "שבלול שמרים רך הנאפה עם שכבות נדיבות של חמאה, סוכר חום וקינמון, מצופה בקרם גבינה עשיר. מסורת אירופאית עם אישור רשמי מהדיאטנית.",
+      "en": { "name": "Cinnabon", "description": "A soft yeast swirl baked with generous layers of butter, brown sugar and cinnamon, topped with rich cream cheese frosting. A European tradition, officially approved by your dietitian." },
+      "ru": { "name": "Синнабон", "description": "Мягкая дрожжевая улитка с щедрыми слоями масла, коричневого сахара и корицы, покрытая сливочно-сырным кремом. Европейская традиция с официальным одобрением диетолога." }
+    },
+    "פליושקה": {
+      "source": "מאפה שמרים מסורתי. בצק עגניים רך שזור בשכבות של חמאה וסוכר. מעוצב בצורת לב.",
+      "en": { "name": "Plyushka", "description": "A traditional yeast pastry: soft dough layered with butter and sugar, shaped like a heart." },
+      "ru": { "name": "Плюшка", "description": "Традиционная дрожжевая выпечка: мягкое тесто со слоями масла и сахара, в форме сердца." }
+    },
+    "קארינוצ'קה": {
+      "source": "בצק פריך ופירות. אפס מקום לטעויות.",
+      "en": { "name": "Korzinochka", "description": "Shortcrust pastry and fruit. Zero room for mistakes." },
+      "ru": { "name": "Корзиночка", "description": "Песочное тесто и фрукты. Без права на ошибку." }
+    }
+  },
+  "variants": {
+    "קטן": { "en": "Small", "ru": "Маленький" },
+    "גדול": { "en": "Large", "ru": "Большой" },
+    "יחיד": { "en": "Single", "ru": "Одинарный" },
+    "כפול": { "en": "Double", "ru": "Двойной" }
+  },
+  "groups": {
+    "אורך": { "en": "Length", "ru": "Объём" },
+    "בסיס חלב": { "en": "Milk", "ru": "Молоко" },
+    "חוזק": { "en": "Strength", "ru": "Крепость" },
+    "טמפרטורה": { "en": "Temperature", "ru": "Температура" },
+    "סירופ": { "en": "Syrup", "ru": "Сироп" },
+    "קצף": { "en": "Foam", "ru": "Пенка" },
+    "תוספות": { "en": "Extras", "ru": "Добавки" },
+    "לחם": { "en": "Bread", "ru": "Хлеб" },
+    "גודל": { "en": "Size", "ru": "Размер" }
+  },
+  "modifiers": {
+    "קצר": { "en": "Short", "ru": "Короткий" },
+    "ארוך": { "en": "Long", "ru": "Длинный" },
+    "סויה": { "en": "Soy milk", "ru": "Соевое" },
+    "שיבולת שועל": { "en": "Oat milk", "ru": "Овсяное" },
+    "חלש": { "en": "Mild", "ru": "Послабее" },
+    "חזק": { "en": "Strong", "ru": "Покрепче" },
+    "פושר": { "en": "Warm", "ru": "Тёплый" },
+    "חם": { "en": "Hot", "ru": "Горячий" },
+    "רותח": { "en": "Extra hot", "ru": "Очень горячий" },
+    "וניל": { "en": "Vanilla", "ru": "Ваниль" },
+    "קרמל": { "en": "Caramel", "ru": "Карамель" },
+    "אגוז לוז": { "en": "Hazelnut", "ru": "Лесной орех" },
+    "אייריש קרים": { "en": "Irish cream", "ru": "Айриш крим" },
+    "ללא קצף": { "en": "No foam", "ru": "Без пенки" },
+    "מעט קצף": { "en": "Light foam", "ru": "Немного пенки" },
+    "הרבה קצף": { "en": "Extra foam", "ru": "Много пенки" },
+    "אבוקדו": { "en": "Avocado", "ru": "Авокадо" },
+    "ביצה קשה": { "en": "Hard-boiled egg", "ru": "Яйцо вкрутую" },
+    "בצה קשה": { "en": "Hard-boiled egg", "ru": "Яйцо вкрутую" },
+    "עגבנייה": { "en": "Tomato", "ru": "Помидор" },
+    "גבינה בולגרית": { "en": "Bulgarian cheese", "ru": "Болгарский сыр" },
+    "בצל סגול": { "en": "Red onion", "ru": "Красный лук" },
+    "זיתי קלמטה": { "en": "Kalamata olives", "ru": "Оливки каламата" },
+    "תירס": { "en": "Corn", "ru": "Кукуруза" },
+    "טונה": { "en": "Tuna", "ru": "Тунец" },
+    "לחם רוסטיק": { "en": "Rustic bread", "ru": "Деревенский хлеб" },
+    "קטן": { "en": "Small", "ru": "Маленький" },
+    "גדול": { "en": "Large", "ru": "Большой" },
+    "יחיד": { "en": "Single", "ru": "Одинарный" },
+    "כפול": { "en": "Double", "ru": "Двойной" }
+  }
+}

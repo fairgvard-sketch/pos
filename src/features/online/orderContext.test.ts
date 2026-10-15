@@ -17,6 +17,7 @@ describe('parsePublicOrderQuery', () => {
       startInMenu: false,
       browseOnly: false,
       kiosk: false,
+      lang: null,
     })
   })
 
@@ -28,6 +29,7 @@ describe('parsePublicOrderQuery', () => {
       startInMenu: false,
       browseOnly: false,
       kiosk: false,
+      lang: null,
     })
   })
 
@@ -39,6 +41,7 @@ describe('parsePublicOrderQuery', () => {
       startInMenu: false,
       browseOnly: false,
       kiosk: false,
+      lang: null,
     })
   })
 
@@ -48,6 +51,12 @@ describe('parsePublicOrderQuery', () => {
       kiosk: true,
     })
     expect(parsePublicOrderQuery('?source=counter_qr')).toMatchObject({ kiosk: false })
+  })
+
+  it('reads a known menu language from the link and ignores the rest', () => {
+    expect(parsePublicOrderQuery('?lang=EN')).toMatchObject({ lang: 'en' })
+    expect(parsePublicOrderQuery('?lang=ru&kiosk=1')).toMatchObject({ lang: 'ru', kiosk: true })
+    expect(parsePublicOrderQuery('?lang=fr')).toMatchObject({ lang: null })
   })
 
   it('recognizes an explicit direct entry into the menu catalogue', () => {

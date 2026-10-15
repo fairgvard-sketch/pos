@@ -29,11 +29,26 @@ import MenuPhoto from './MenuPhoto'
 import OrderTypeArt from './OrderTypeArt'
 import BrandWordmark from '../../components/ui/BrandWordmark'
 import { rememberPhotoRatio } from './photoFit'
+import {
+  localizeMenu,
+  localizeMenuName,
+  menuLanguages,
+  menuNames,
+  preferredMenuLang,
+  readStoredMenuLang,
+  relabelLine,
+  resolveMenuLang,
+  storeMenuLang,
+  type MenuLangChoice,
+  type MenuNames,
+} from './menuLocale'
+import { HeaderLanguageMenu, HeroLanguageSwitch } from './MenuLanguageSwitch'
 
 /**
  * Публичная страница «закажи и забери» (050): меню → корзина → заявка →
  * ожидание подтверждения кассой. Оплата на кассе при получении.
- * Мобильная, he по умолчанию (гости кофейни), язык переключается.
+ * Мобильная, he по умолчанию; английский и русский — если владелец их
+ * включил (184), см. menuLocale.ts.
  * Никакого Supabase-клиента: только Edge Functions с anon-ключом.
  */
 
@@ -149,13 +164,14 @@ export default function PublicOrderPage() {
   const { locId = '' } = useParams()
   const navigate = useNavigate()
   const queryContext = useMemo(() => parsePublicOrderQuery(window.location.search), [])
-  // Гостевая страница — всегда иврит (заказ he-first), без переключения языка.
-  const lang: Lang = 'he'
-  useEffect(() => {
-    // <html lang> решает RTL в проде: start/end скомпилированы через :lang(he)
-    document.documentElement.lang = lang
-  }, [])
-  const isRtl = true
+  // Язык, который выбрал бы гость (184). Окончательный — после загрузки
+  // меню: точка могла не включить этот язык (см. resolveMenuLang ниже).
+  const [langChoice, setLangChoice] = useState<MenuLangChoice>(() => preferredMenuLang({
+    query: queryContext.lang,
+    kiosk: queryContext.kiosk,
+    stored: readStoredMenuLang(),
+    browser: navigator.languages?.length ? navigator.languages : [navigator.language ?? ''],
+  }))
 
   // Незавершённая заявка переживает перезагрузку страницы
   const [activeUuid, setActiveUuid] = useState<string | null>(
@@ -270,14 +286,40 @@ export default function PublicOrderPage() {
    */
   const { countdown, stayActive } = useIdleReset(
     queryContext.kiosk && !activeUuid && hasStarted,
-    resetToStart,
+    () => {
+      resetToStart()
+      // Следующий гость киоска начинает с языка ссылки (или иврита)
+      setLangChoice({ lang: queryContext.lang, explicit: !!queryContext.lang })
+    },
   )
 
-  const { data: menu, isLoading, isError } = useQuery({
+  const { data: rawMenu, isLoading, isError } = useQuery({
     queryKey: ['public_menu', locId, queryContext.tableToken],
     queryFn: () => fetchPublicMenu(locId, queryContext.tableToken),
     staleTime: 30_000,
   })
+  const languages = useMemo(() => (rawMenu ? menuLanguages(rawMenu.location) : null), [rawMenu])
+  const lang = resolveMenuLang(langChoice, languages)
+  const isRtl = lang === 'he'
+  // Меню переводится один раз: ниже всё работает с обычными name/description,
+  // а сверка корзины сама переименует её строки при смене языка.
+  const menu = useMemo(() => (rawMenu ? localizeMenu(rawMenu, lang) : undefined), [rawMenu, lang])
+  const names = useMemo(() => menuNames(menu), [menu])
+  useEffect(() => {
+    // <html lang> решает RTL в проде: start/end скомпилированы через
+    // :lang(he); dir нужен переходам между экранами (html[dir='rtl'])
+    const root = document.documentElement
+    root.lang = lang
+    root.dir = isRtl ? 'rtl' : 'ltr'
+  }, [lang, isRtl])
+  const changeLang = useCallback((next: Lang) => {
+    setLangChoice({ lang: next, explicit: true })
+    // Киоск — общее устройство: выбор гостя не должен пережить его визит
+    if (!queryContext.kiosk) storeMenuLang(next)
+  }, [queryContext.kiosk])
+  const languageMenu = languages && languages.length > 1
+    ? <HeaderLanguageMenu lang={lang} languages={languages} onChange={changeLang} />
+    : undefined
   useEffect(() => {
     if (!menu?.categories.length) return
 
@@ -597,6 +639,7 @@ export default function PublicOrderPage() {
     setChosenType(null)
     setActiveCat(null)
     setCategoryMotion(false)
+    if (queryContext.kiosk) setLangChoice({ lang: queryContext.lang, explicit: !!queryContext.lang })
   }
 
   // Карточка товара — часть витрины: любой товар сначала раскрывается
@@ -649,6 +692,7 @@ export default function PublicOrderPage() {
         title={menu?.location.business_name || menu?.location.name}
         logo={menu?.location.logo_url}
         bgImg={menuBackground}
+        headerAction={languageMenu}
       >
         <StatusScreen lang={lang} clientUuid={activeUuid} onNewOrder={startNewOrder} />
       </Shell>
@@ -741,6 +785,9 @@ export default function PublicOrderPage() {
       restaurantName={menu.location.business_name || menu.location.name}
       restaurantLogo={menu.location.logo_url}
       tableLabel={tableContext.label}
+      languageMenu={languages && languages.length > 1 ? (
+        <HeaderLanguageMenu lang={lang} languages={languages} onChange={changeLang} side="end" />
+      ) : undefined}
       activeTab={liveTableTab}
       // Бейдж «Ваш заказ» относится только к уже отправленной заявке.
       // Неотправленные блюда остаются частью меню и нижней корзины.
@@ -787,7 +834,11 @@ export default function PublicOrderPage() {
       headerImg={menu.location.header_url}
       heroVideo={resolvePublicHeroVideo(menu.location.id, menu.location.hero_video_url)}
       bgImg={tableContext ? undefined : menuBackground}
-      heroLabel={viewOnly ? t(lang, 'pubViewMenu') : undefined}
+      heroLabel={t(lang, viewOnly ? 'pubViewMenu' : 'pubOrderNow')}
+      heroLanguages={languages && languages.length > 1 ? (
+        <HeroLanguageSwitch lang={lang} languages={languages} onChange={changeLang} />
+      ) : undefined}
+      headerAction={languageMenu}
       routeKey={routeKey}
       liveTableHeader={liveTableHeader}
       onHeroStart={() => {
@@ -974,6 +1025,7 @@ export default function PublicOrderPage() {
           onQty={updateQty}
           onEditLine={editCartLine}
           onRecommend={openItem}
+          localizeName={(name) => localizeMenuName(rawMenu, lang, name)}
           onSubmitted={(clientUuid) => {
             window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
             const historyItems = mergeOrderLines(activeHistoryItems, activeItems)
@@ -1004,6 +1056,7 @@ export default function PublicOrderPage() {
             items={activeItems}
             historyItems={activeHistoryItems}
             itemImages={itemImages}
+            names={names}
           />
         </div>
       )}
@@ -1124,6 +1177,7 @@ function LiveTableHeader({
   restaurantName,
   restaurantLogo,
   tableLabel,
+  languageMenu,
   activeTab,
   orderCount,
   onTab,
@@ -1132,6 +1186,8 @@ function LiveTableHeader({
   restaurantName: string
   restaurantLogo?: string | null
   tableLabel: string
+  /** Выбор языка (184) вместо декоративного значка гостей стола */
+  languageMenu?: React.ReactNode
   activeTab: LiveTableTab
   orderCount: number
   onTab: (tab: LiveTableTab) => void
@@ -1150,12 +1206,14 @@ function LiveTableHeader({
           <strong>{t(lang, 'pubTable')} {tableLabel}</strong>
           <span>{restaurantName}</span>
         </div>
-        <span className="angle-live-table-session" aria-hidden>
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM16 10a2.5 2.5 0 1 0 0-5" />
-            <path d="M3 19v-1.5A4.5 4.5 0 0 1 7.5 13h1A4.5 4.5 0 0 1 13 17.5V19M15 13.5h1.5A4.5 4.5 0 0 1 21 18v1" />
-          </svg>
-        </span>
+        {languageMenu ?? (
+          <span className="angle-live-table-session" aria-hidden>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM16 10a2.5 2.5 0 1 0 0-5" />
+              <path d="M3 19v-1.5A4.5 4.5 0 0 1 7.5 13h1A4.5 4.5 0 0 1 13 17.5V19M15 13.5h1.5A4.5 4.5 0 0 1 21 18v1" />
+            </svg>
+          </span>
+        )}
       </div>
       <nav className="angle-live-table-tabs" role="tablist" aria-label={t(lang, 'guestTableNavigation')}>
         {tabs.map((tab) => (
@@ -1263,12 +1321,14 @@ function LiveTableEmptyOrder({ lang, onMenu }: { lang: Lang; onMenu: () => void 
  * второго изображения или цветовой плёнки.
  */
 function Shell({
-  isRtl, wide = false, title, logo, hero, headerImg, heroVideo, bgImg, onHeroStart, heroLabel = 'להזמין',
-  onBack, backLabel, routeKey, headerAction, liveTableHeader, children,
+  isRtl, wide = false, title, logo, hero, headerImg, heroVideo, bgImg, onHeroStart, heroLabel = '',
+  heroLanguages, onBack, backLabel, routeKey, headerAction, liveTableHeader, children,
 }: {
   isRtl: boolean
   /** Подпись кнопки hero: витрина без заказа зовёт в меню, а не «заказать». */
   heroLabel?: string
+  /** Выбор языка в верхнем углу обложки (184), напротив логотипа */
+  heroLanguages?: React.ReactNode
   /** Альбомный планшет/десктоп: колонка меню и hero на всю ширину экрана. */
   wide?: boolean
   title?: string
@@ -1367,6 +1427,7 @@ function Shell({
                   </span>
                 )}
               </div>
+              {heroLanguages}
               <div className="public-menu-hero-copy">
                 <h1 className="font-display">{title ?? ''}</h1>
               </div>
@@ -1391,14 +1452,17 @@ function Shell({
         {showCompactHeader && !liveTableHeader && (
           <header
             key="compact"
-            className="public-menu-compact-header sticky top-0 z-10 bg-white border-b border-gray-100 px-4 flex items-center justify-center relative"
+            className="public-menu-compact-header sticky top-0 z-20 bg-white border-b border-gray-100 px-4 flex items-center justify-center relative"
             style={{
               height: 'calc(3.5rem + env(safe-area-inset-top))',
               paddingTop: 'env(safe-area-inset-top)',
             }}
           >
-            {/* Возврат слева, логотип у начала строки — они на разных краях
-                и показываются вместе: кнопка не должна стирать брендинг. */}
+            {/* z-20, а не z-10: шапка — свой слой, и лента категорий того же
+                уровня рисовалась поверх открытого списка языков. */}
+            {/* Возврат слева, логотип справа — оба физически, на разных краях
+                и при иврите, и при английском: кнопка не должна стирать
+                брендинг. Логическое start в LTR ставило логотип на возврат. */}
             {onBack && (
               <button
                 onClick={onBack}
@@ -1412,7 +1476,7 @@ function Shell({
                 <span>{backLabel}</span>
               </button>
             )}
-            {logo && !headerAction && <img src={logo} alt="" className="absolute start-4 w-9 h-9 rounded-full object-cover" />}
+            {logo && !headerAction && <img src={logo} alt="" className="absolute right-4 w-9 h-9 rounded-full object-cover" />}
             {headerAction && <div className="absolute right-2">{headerAction}</div>}
             <span className={`public-menu-header-title font-display text-center font-bold text-xl text-gray-900 truncate ${
               headerAction ? 'px-24' : 'px-14'
@@ -2193,7 +2257,7 @@ function CartStage({
 function CheckoutScreen({
   lang, locId, openNow, canPreorder, prepMin, prepMax, hours, timezone, orderTypes, initialOrderType,
   tableContext, tableToken, orderChannel, recommendations, itemImages, cart, total,
-  availabilityMessage, contextMessage, stage, cartThumbs = [],
+  availabilityMessage, contextMessage, stage, cartThumbs = [], localizeName,
   onAddItems, onContinue, onQty, onEditLine, onRecommend, onSubmitted,
 }: {
   lang: Lang
@@ -2223,6 +2287,8 @@ function CheckoutScreen({
   stage: 'cart' | 'payment'
   /** Широкая раскладка: фото позиций для пилюли оплаты (пусто на телефоне). */
   cartThumbs?: string[]
+  /** Сервер называет позицию в ошибке базовым именем — переводим его (184) */
+  localizeName?: (name: string | undefined) => string | undefined
   onAddItems: () => void
   onContinue: () => void
   onQty: (key: string, qty: number) => void
@@ -2346,7 +2412,7 @@ function CheckoutScreen({
     } catch (e) {
       const code = e instanceof PublicApiError ? e.code : 'unknown'
       const detail = e instanceof PublicApiError ? e.detail : undefined
-      setError(publicErrorText(lang, code, detail))
+      setError(publicErrorText(lang, code, localizeName ? localizeName(detail) : detail))
       setBusy(false)
     }
   }
@@ -2654,7 +2720,7 @@ function CheckoutScreen({
 
 /** Статус заявки: поллинг каждые 5 секунд, пока не решена и не выдана */
 function StatusScreen({
-  lang, clientUuid, onNewOrder, readOnly = false, items = [], historyItems = [], itemImages = {},
+  lang, clientUuid, onNewOrder, readOnly = false, items = [], historyItems = [], itemImages = {}, names,
 }: {
   lang: Lang
   clientUuid: string
@@ -2666,6 +2732,8 @@ function StatusScreen({
   /** Ранее отправленные партии текущего гостя, сохранённые этим браузером. */
   historyItems?: CartLine[]
   itemImages?: Record<string, string | null>
+  /** Названия текущего меню по id: отправленное показываем на языке гостя */
+  names?: MenuNames
 }) {
   const [status, setStatus] = useState<PublicStatus | null>(null)
   const [lost, setLost] = useState(false)
@@ -2755,6 +2823,7 @@ function StatusScreen({
         items={items}
         historyItems={historyItems}
         itemImages={itemImages}
+        names={names}
       />
     )
   }
@@ -2833,12 +2902,13 @@ function StatusScreen({
   )
 }
 
-function TableOrderSummary({ lang, status, items, historyItems, itemImages }: {
+function TableOrderSummary({ lang, status, items, historyItems, itemImages, names }: {
   lang: Lang
   status: PublicStatus
   items: CartLine[]
   historyItems: CartLine[]
   itemImages: Record<string, string | null>
+  names?: MenuNames
 }) {
   const cancelled = status.status === 'rejected'
     || status.status === 'cancelled'
@@ -2853,12 +2923,15 @@ function TableOrderSummary({ lang, status, items, historyItems, itemImages }: {
     variantId: line.variant_id,
     variantName: line.variant_name,
     modIds: line.modifier_ids,
-    modNames: line.mods.map((mod) => mod.name),
+    // Подписи по id, а не по позиции: сервер хранит их снимком на языке
+    // заведения, ниже их переводит relabelLine
+    modNames: line.modifier_ids.map((id) => line.mods.find((mod) => mod.id === id)?.name ?? ''),
     unitPrice: line.unit_price,
     qty: line.qty,
   }))
   const latestItems = serverItems.length > 0 ? serverItems : items
-  const displayItems = mergeOrderLines(historyItems, latestItems)
+  const merged = mergeOrderLines(historyItems, latestItems)
+  const displayItems = names ? merged.map((line) => relabelLine(line, names)) : merged
   const displayTotal = displayItems.length > 0
     ? displayItems.reduce((sum, line) => sum + line.unitPrice * line.qty, 0)
     : status.total

@@ -104,8 +104,8 @@ describe('ANGLE Guest table service', () => {
     expect(screen.getByText(`${t('he', 'pubTable')} 12`)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: t('he', 'serviceBread') })).not.toBeInTheDocument()
     expect(document.querySelectorAll('.angle-table-service-quick')).toHaveLength(3)
-    expect(screen.getByRole('button', { name: t('he', 'serviceNextCourse') })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: t('he', 'serviceHoldCourse') })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: t('he', 'guestNextCourse') })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: t('he', 'guestHoldCourse') })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: t('he', 'serviceBill') })).toBeInTheDocument()
     expect(Array.from(document.querySelectorAll('[data-service-icon]')).map((icon) => (
       icon.getAttribute('data-service-icon')

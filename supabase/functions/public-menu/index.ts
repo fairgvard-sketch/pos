@@ -14,6 +14,7 @@
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { guestLanguages, publicTranslations } from '../_shared/menu-translations.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -72,15 +73,15 @@ Deno.serve(async (req) => {
     supabase
       .from('menu_categories')
       .select(`
-        id, name, sort_order, cover_url,
+        id, name, sort_order, cover_url, translations,
         menu_items (
-          id, name, price, description, image_url, sort_order, is_available,
-          item_variants ( id, name, price, is_default, sort_order ),
+          id, name, price, description, image_url, sort_order, is_available, translations,
+          item_variants ( id, name, price, is_default, sort_order, translations ),
           menu_item_modifier_groups (
             sort_order,
             modifier_groups (
-              id, name, min_select, max_select, sort_order,
-              modifiers ( id, name, price_delta, is_default, is_available, sort_order )
+              id, name, min_select, max_select, sort_order, translations,
+              modifiers ( id, name, price_delta, is_default, is_available, sort_order, translations )
             )
           )
         )
@@ -117,6 +118,8 @@ Deno.serve(async (req) => {
     .map((c) => ({
       id: c.id,
       name: c.name,
+      // Переводы для гостя (184): только непустые, иначе ключа нет вовсе
+      translations: publicTranslations(c.translations),
       // Обложка плитки категории (080): своя картинка или null (гость возьмёт фото первого товара)
       cover_url: (c as { cover_url?: string | null }).cover_url ?? null,
       items: (c.menu_items ?? [])
@@ -127,9 +130,11 @@ Deno.serve(async (req) => {
           name: i.name,
           price: i.price,
           description: i.description,
+          translations: publicTranslations(i.translations, true),
           image_url: i.image_url,
           variants: (i.item_variants ?? []).sort(bySort).map((v) => ({
             id: v.id, name: v.name, price: v.price, is_default: v.is_default,
+            translations: publicTranslations(v.translations),
           })),
           modifier_groups: (i.menu_item_modifier_groups ?? [])
             .sort(bySort)
@@ -138,12 +143,16 @@ Deno.serve(async (req) => {
             .map((g) => ({
               id: g.id,
               name: g.name,
+              translations: publicTranslations(g.translations),
               min_select: g.min_select,
               max_select: g.max_select,
               modifiers: (g.modifiers ?? [])
                 .filter((m) => m.is_available)
                 .sort(bySort)
-                .map((m) => ({ id: m.id, name: m.name, price_delta: m.price_delta, is_default: m.is_default })),
+                .map((m) => ({
+                  id: m.id, name: m.name, price_delta: m.price_delta, is_default: m.is_default,
+                  translations: publicTranslations(m.translations),
+                })),
             }))
             .filter((g) => g.modifiers.length > 0),
         })),
@@ -168,6 +177,8 @@ Deno.serve(async (req) => {
       background_url?: string | null
       display_name?: string | null
       order_types?: string[]
+      /** Языки меню для гостя (184): ["en","ru"], иврит включён всегда */
+      languages?: string[]
       hours?: Record<string, [string, string][]> | null
     }
   }).online_settings
@@ -308,6 +319,9 @@ Deno.serve(async (req) => {
         timezone: locTimezone || null,
         // Типы заказа для гостя (058): здесь / с собой / доставка
         order_types: enabledTypes,
+        // Языки меню (184): иврит первым, затем включённые владельцем.
+        // Старые клиенты поле игнорируют и остаются на иврите.
+        languages: guestLanguages(onlineSettings?.languages),
         // Оформление главного экрана: баннер-шапка и фон (Настройки → Онлайн-заказы)
         header_url: onlineSettings?.header_url || null,
         hero_video_url: onlineSettings?.hero_video_url || null,

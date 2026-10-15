@@ -52,6 +52,11 @@ describe('formatMoney: символ валюты слева', () => {
     // Знак ВНУТРИ группы, иначе иврит уведёт его к названию модификатора
     expect(formatMoneyDelta(200, 'he')).toBe('⁦₪ 2\u00a0+⁩')
   })
+
+  it('по-английски и по-русски знак надбавки стоит впереди', () => {
+    expect(bare(formatMoneyDelta(200, 'en'))).toBe('+₪ 2')
+    expect(bare(formatMoneyDelta(-150, 'ru'))).toBe('−₪ 1,50')
+  })
 })
 
 describe('parseMoney', () => {

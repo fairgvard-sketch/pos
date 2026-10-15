@@ -4,6 +4,8 @@
  * прямого доступа к таблицам у гостя нет, всё решает сервер.
  */
 
+import type { Lang } from '../../lib/i18n'
+
 const FN_BASE = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`
 const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
 
@@ -43,11 +45,18 @@ async function fetchWithTimeout(
   }
 }
 
+/**
+ * Переводы записи каталога для гостя (184). Базовые name/description —
+ * язык заведения; ключа нет, если перевода нет (или старая edge function).
+ */
+export type PublicTranslations = Partial<Record<Lang, { name?: string; description?: string }>>
+
 export interface PublicVariant {
   id: string
   name: string
   price: number
   is_default: boolean
+  translations?: PublicTranslations
 }
 
 export interface PublicModifier {
@@ -55,6 +64,7 @@ export interface PublicModifier {
   name: string
   price_delta: number
   is_default: boolean
+  translations?: PublicTranslations
 }
 
 export interface PublicModifierGroup {
@@ -63,6 +73,7 @@ export interface PublicModifierGroup {
   min_select: number
   max_select: number // 0 = без ограничения
   modifiers: PublicModifier[]
+  translations?: PublicTranslations
 }
 
 export interface PublicItem {
@@ -70,6 +81,7 @@ export interface PublicItem {
   name: string
   price: number
   description: string | null
+  translations?: PublicTranslations
   image_url: string | null
   variants: PublicVariant[]
   modifier_groups: PublicModifierGroup[]
@@ -115,6 +127,11 @@ export interface PublicMenu {
     timezone?: string | null
     /** Типы заказа для гостя (058): здесь/с собой/доставка. Дефолт — here+takeaway */
     order_types?: ('here' | 'takeaway' | 'delivery')[]
+    /**
+     * Языки меню (184): иврит первым, затем включённые владельцем.
+     * Отсутствие поля (старая edge function) = только иврит.
+     */
+    languages?: Lang[]
     /** Баннер-шапка главного экрана; логотип и название — поверх */
     header_url?: string | null
     /** Декоративное видео hero: autoplay + muted + loop, poster = header_url. */
@@ -136,7 +153,15 @@ export interface PublicMenu {
   } | null
   /** Просроченный/неверный table-token: меню доступно, но заказ не привязан к столу. */
   context_error?: 'invalid_table' | 'table_ordering_disabled' | null
-  categories: { id: string; name: string; cover_url?: string | null; items: PublicItem[] }[]
+  categories: PublicCategory[]
+}
+
+export interface PublicCategory {
+  id: string
+  name: string
+  cover_url?: string | null
+  translations?: PublicTranslations
+  items: PublicItem[]
 }
 
 export interface PublicRestaurant {
