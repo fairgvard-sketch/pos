@@ -48,7 +48,7 @@ const tableMenu: PublicMenu = {
 
 let client: QueryClient
 
-/** Экран альбомного планшета: matchMedia отвечает «да» только широкой раскладке. */
+/** Экран планшета: matchMedia отвечает «да» только широкой раскладке. */
 function landscapeTablet(wide = true) {
   vi.spyOn(window, 'matchMedia').mockImplementation((query: string) => ({
     matches: wide && query === PUBLIC_MENU_WIDE_QUERY,
@@ -165,6 +165,15 @@ describe('guest menu on a landscape tablet', () => {
       items: [expect.objectContaining({ menu_item_id: COFFEE.id, qty: 1 })],
     })))
     expect(await screen.findByTestId('table-live-order-summary')).toBeInTheDocument()
+  })
+})
+
+describe('wide layout query', () => {
+  it('covers tablets in both orientations but not a phone on its side', () => {
+    // Условие проверяем по смыслу: ширина портретного iPad mini и высота,
+    // которой нет у телефона, повёрнутого боком.
+    expect(PUBLIC_MENU_WIDE_QUERY).toBe('(min-width: 46rem) and (min-height: 30rem)')
+    expect(PUBLIC_MENU_WIDE_QUERY).not.toMatch(/orientation/)
   })
 })
 

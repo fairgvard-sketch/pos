@@ -3072,11 +3072,13 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
 
   /* Категории у начала строки, товары — остальная ширина. В RTL grid
      сам ставит первую колонку справа. Колонка категорий — около пятой
-     части экрана: при 12rem на 1440px она терялась рядом с плитками. */
+     части экрана: при 12rem на 1440px она терялась рядом с плитками.
+     На портретном планшете — 13rem (208px): длинное «עוגות וקינוחים»
+     помещается, товарам остаётся ~600px. */
   .public-menu-wide {
     --public-menu-wide-top: calc(3.5rem + env(safe-area-inset-top));
     display: grid;
-    grid-template-columns: clamp(15rem, 22vw, 20rem) minmax(0, 1fr);
+    grid-template-columns: clamp(13rem, 22vw, 20rem) minmax(0, 1fr);
     align-items: start;
   }
 
@@ -3100,6 +3102,14 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     gap: 1rem;
   }
 
+  /* Портретный планшет: рядом с колонкой категорий три плитки вышли бы
+     по ~150–165px — мельче телефонных. Две — около 250px. */
+  @media (orientation: portrait) {
+    .public-menu-shell.is-wide .public-menu-product-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
   /* На обложке остаются логотип и «Заказать»: название уже есть в
      логотипе, а крупная подпись в углу широкого экрана читалась как
      водяной знак. Заголовок h1 остаётся для скринридера. */
@@ -3111,35 +3121,39 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     white-space: nowrap;
   }
 
-  /* Корзина на планшете: заказ у начала строки, «Добавить к заказу» —
-     второй колонкой. Одной колонкой 42rem экран 1180px оставался пустым
-     по бокам, а добавки уезжали под заказ. */
-  .public-menu-shell.is-wide .public-menu-cart-stage .public-menu-checkout-content {
-    display: grid;
-    max-width: none;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    column-gap: 3rem;
-    align-items: start;
-    padding: 2rem 2rem 0;
-  }
+  /* Корзина на альбомном планшете: заказ у начала строки, «Добавить к
+     заказу» — второй колонкой. Одной колонкой 42rem экран 1180px оставался
+     пустым по бокам, а добавки уезжали под заказ. На портретном планшете
+     корзина — одна колонка 42rem, как на телефоне: в двух колонках по
+     ~350px плитки добавок сжимались до ~110px. */
+  @media (orientation: landscape) {
+    .public-menu-shell.is-wide .public-menu-cart-stage .public-menu-checkout-content {
+      display: grid;
+      max-width: none;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      column-gap: 3rem;
+      align-items: start;
+      padding: 2rem 2rem 0;
+    }
 
-  .public-menu-shell.is-wide .public-menu-cart-stage .public-menu-checkout-content:not(:has(.public-menu-checkout-recommendations)) {
-    grid-template-columns: minmax(0, 42rem);
-  }
+    .public-menu-shell.is-wide .public-menu-cart-stage .public-menu-checkout-content:not(:has(.public-menu-checkout-recommendations)) {
+      grid-template-columns: minmax(0, 42rem);
+    }
 
-  .public-menu-shell.is-wide .public-menu-cart-stage .public-menu-cart-card {
-    grid-column: 1;
-    grid-row: 1;
-  }
+    .public-menu-shell.is-wide .public-menu-cart-stage .public-menu-cart-card {
+      grid-column: 1;
+      grid-row: 1;
+    }
 
-  .public-menu-shell.is-wide .public-menu-cart-stage .public-menu-checkout-recommendations {
-    grid-column: 2;
-    grid-row: 1;
-    margin-top: 0;
-  }
+    .public-menu-shell.is-wide .public-menu-cart-stage .public-menu-checkout-recommendations {
+      grid-column: 2;
+      grid-row: 1;
+      margin-top: 0;
+    }
 
-  .public-menu-shell.is-wide .public-menu-cart-stage .public-menu-checkout-spacer {
-    grid-column: 1 / -1;
+    .public-menu-shell.is-wide .public-menu-cart-stage .public-menu-checkout-spacer {
+      grid-column: 1 / -1;
+    }
   }
 
   /* Вместо полосы во всю ширину — небольшая пилюля внизу у края экрана
