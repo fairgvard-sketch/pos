@@ -211,6 +211,26 @@ describe('eat in or take away step', () => {
     expect(await screen.findByRole('button', { name: t('he', 'pubTypeDelivery') })).toBeInTheDocument()
   })
 
+  it('leaves delivery out on a kiosk, in the question and at checkout', async () => {
+    vi.mocked(fetchPublicMenu).mockResolvedValue({
+      ...menu,
+      location: { ...menu.location, order_types: ['here', 'takeaway', 'delivery'] },
+    })
+    renderAt(`/order/${LOC}?kiosk=1`)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'להזמין' }))
+    expect(await screen.findByRole('button', { name: t('he', 'pubTypeHere') })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: t('he', 'pubTypeDelivery') })).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: t('he', 'pubTypeHere') }))
+    await addFromSheet(COFFEE.name)
+    fireEvent.click(await screen.findByRole('button', { name: capsuleName }))
+    fireEvent.click(await screen.findByRole('button', { name: new RegExp(t('he', 'pubContinueToPayment')) }))
+    await screen.findByRole('heading', { name: t('he', 'pubPaymentTitle'), level: 1 })
+    expect(screen.getByRole('button', { name: t('he', 'pubTypeHere') })).toHaveClass('public-menu-chip-active')
+    expect(screen.queryByRole('button', { name: t('he', 'pubTypeDelivery') })).not.toBeInTheDocument()
+  })
+
   it('skips the question when there is nothing to choose', async () => {
     // Один тип заказа — сразу меню.
     vi.mocked(fetchPublicMenu).mockResolvedValue({

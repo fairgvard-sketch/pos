@@ -687,7 +687,13 @@ export default function PublicOrderPage() {
   // всегда — без корзины, чекаута и баннеров «закрыто/пауза» (смены у
   // menu-only организации не бывает, вечное «закрыто» — ложь для гостя).
   const viewOnly = queryContext.browseOnly || isViewOnlyMenu(menu.location)
-  const orderTypes = menu.location.order_types ?? ['here', 'takeaway']
+  const allOrderTypes = menu.location.order_types ?? ['here', 'takeaway']
+  // Киоск стоит в заведении: доставку с него не заказывают, поэтому её нет
+  // ни на шаге «איך תרצו לאכול?», ни в оформлении. Если у точки включена
+  // только доставка, оставляем как есть — иначе киоску нечего предложить.
+  const orderTypes = queryContext.kiosk && allOrderTypes.some((type) => type !== 'delivery')
+    ? allOrderTypes.filter((type) => type !== 'delivery')
+    : allOrderTypes
   const tableContext = serviceTableContext
   const requestedType = queryContext.requestedType
   const initialOrderType: PublicOrderType =
