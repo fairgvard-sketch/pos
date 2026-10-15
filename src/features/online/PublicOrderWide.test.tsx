@@ -13,6 +13,7 @@ import {
   type PublicMenu,
 } from './publicApi'
 import { PUBLIC_MENU_PORTRAIT_QUERY, PUBLIC_MENU_WIDE_QUERY } from './wideLayout'
+import { writePublicCart } from './publicCart'
 
 // Настоящие страница, корзина и React Query; синтетические только API и экран.
 vi.mock('./publicApi', async (importOriginal) => ({
@@ -265,9 +266,13 @@ describe('cart pill photos on a landscape tablet', () => {
       ...menu,
       categories: [{ id: 'drinks', name: 'Drinks', items: dishes }],
     })
+    // Корзина уже собрана (порядок добавления = порядок строк): добавление
+    // через карточку четыре раза подряд упиралось в таймаут под нагрузкой.
+    writePublicCart(LOC, dishes.map((dish) => ({
+      key: dish.id, itemId: dish.id, name: dish.name, variantId: null, variantName: null,
+      modIds: [], modNames: [], unitPrice: dish.price, qty: 1,
+    })))
     renderAt(`/order/${LOC}?view=menu`)
-
-    for (const dish of dishes) await addFromSheet(dish.name)
 
     const capsule = await screen.findByRole('button', { name: capsuleName })
     const thumbs = [...capsule.querySelectorAll('.public-menu-cart-thumbs img')].map((img) => img.getAttribute('src'))

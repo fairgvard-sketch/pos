@@ -325,7 +325,7 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     /* Компенсация панелей больше не нужна: hero сам равен видимой
        области, поэтому его низ и есть нижняя граница экрана. */
     .public-menu-hero-scroll {
-      bottom: calc(4.5rem + env(safe-area-inset-bottom));
+      bottom: calc(6rem + env(safe-area-inset-bottom));
     }
 
     .public-menu-hero-powered {
@@ -333,12 +333,12 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     }
 
     .public-menu-hero.has-media .public-menu-hero-copy {
-      bottom: calc(8.7rem + env(safe-area-inset-bottom));
+      bottom: calc(10.2rem + env(safe-area-inset-bottom));
     }
   }
 
   /* «Powered by ANGLE» — тонкая белая полоса у нижнего края обложки.
-     Кнопка «Заказать» стоит выше (4.5rem от низа), полоса её не задевает. */
+     Кнопка «Заказать» стоит выше (6rem от низа), полоса её не задевает. */
   .public-menu-hero-powered {
     position: absolute;
     inset-inline: 0;
@@ -442,7 +442,7 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
   .public-menu-hero.has-media .public-menu-hero-copy {
     top: auto;
     bottom: calc(
-      8.7rem
+      10.2rem
       + env(safe-area-inset-bottom)
       + var(--public-menu-visual-bottom-inset, 0px)
     );
@@ -461,7 +461,7 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     z-index: 2;
     left: 50%;
     bottom: calc(
-      4.5rem
+      6rem
       + env(safe-area-inset-bottom)
       + var(--public-menu-visual-bottom-inset, 0px)
     );
