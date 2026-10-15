@@ -26,6 +26,7 @@ import {
 import { resolvePublicHeroVideo } from './heroVideo'
 import TableServiceSheet from './TableServiceSheet'
 import MenuPhoto from './MenuPhoto'
+import OrderTypeArt from './OrderTypeArt'
 import BrandWordmark from '../../components/ui/BrandWordmark'
 import { rememberPhotoRatio } from './photoFit'
 
@@ -1084,7 +1085,7 @@ export default function PublicOrderPage() {
  * «איך תרצו לאכול?» — шаг между обложкой и меню, как у киосков
  * McDonald's/Beecomm: крупные карточки «לשבת» / «לקחת» (и «משלוח», если
  * доставка включена). Выбор становится типом заказа в оформлении, где
- * его можно поменять. Без иллюстраций — линейные иконки в стиле страницы.
+ * его можно поменять. Иллюстрации — нейтральный вектор (OrderTypeArt.tsx).
  */
 function OrderTypeChoice({ lang, types, onChoose }: {
   lang: Lang
@@ -1105,8 +1106,8 @@ function OrderTypeChoice({ lang, types, onChoose }: {
             className="public-menu-type-card"
             onClick={() => onChoose(type)}
           >
-            <span className="public-menu-type-card-icon" aria-hidden>
-              <OrderTypeIcon type={type} />
+            <span className="public-menu-type-card-art" aria-hidden>
+              <OrderTypeArt type={type} />
             </span>
             <span>
               {t(lang, type === 'here' ? 'pubTypeHere' : type === 'delivery' ? 'pubTypeDelivery' : 'pubTypeTakeaway')}
@@ -1115,33 +1116,6 @@ function OrderTypeChoice({ lang, types, onChoose }: {
         ))}
       </div>
     </section>
-  )
-}
-
-function OrderTypeIcon({ type }: { type: PublicOrderType }) {
-  return (
-    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      {type === 'here' ? (
-        <>
-          {/* вилка и нож — «поесть на месте» */}
-          <path d="M4 3v6a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2V3M7 3v18" />
-          <path d="M20 15V3a4 4 0 0 0-4 4v6a2 2 0 0 0 2 2h2Zm0 0v6" />
-        </>
-      ) : type === 'delivery' ? (
-        <>
-          {/* скутер */}
-          <circle cx="6.5" cy="17" r="2.5" />
-          <circle cx="17.5" cy="17" r="2.5" />
-          <path d="M9 17h6l2-6h-3M4 11h6v3M17 11l-1-4h-2" />
-        </>
-      ) : (
-        <>
-          {/* пакет с собой */}
-          <path d="M6 8h12l-1 12H7L6 8Z" />
-          <path d="M9 8V6.5a3 3 0 0 1 6 0V8" />
-        </>
-      )}
-    </svg>
   )
 }
 

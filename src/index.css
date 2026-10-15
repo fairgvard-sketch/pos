@@ -383,8 +383,8 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 1rem;
-    padding: 1.5rem 1rem;
+    gap: .75rem;
+    padding: 1rem;
     border: 1px solid rgb(17 24 39 / 8%);
     border-radius: 1.5rem;
     background: #fff;
@@ -395,9 +395,11 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     transition: transform 150ms ease, box-shadow 150ms ease;
   }
 
+  /* Квадрат, но содержимое не обрезается: min-height auto даёт карточке
+     вырасти, если иллюстрация с подписью не помещаются в узкий квадрат. */
   @supports (aspect-ratio: 1 / 1) {
     .public-menu-type-card {
-      min-height: 0;
+      min-height: auto;
       aspect-ratio: 1 / 1;
     }
   }
@@ -407,14 +409,11 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     box-shadow: 0 5px 14px rgb(20 23 29 / 8%);
   }
 
-  .public-menu-type-card-icon {
-    display: grid;
-    width: 5.5rem;
-    height: 5.5rem;
-    place-items: center;
-    border-radius: 999px;
-    background: #f3f4f6;
-    color: #111827;
+  .public-menu-type-card-art {
+    display: block;
+    width: 6.5rem;
+    height: 6.5rem;
+    flex-shrink: 0;
   }
 
   /* Планшет: карточки крупнее, как у киоска; заголовок — тоже. */
@@ -433,14 +432,9 @@ html.no-flex-gap [dir='rtl'] .flex.rtl\:flex-row-reverse[class*='gap-'] > :not([
     font-size: 1.5rem;
   }
 
-  .public-menu-shell.is-wide .public-menu-type-card-icon {
-    width: 7rem;
-    height: 7rem;
-  }
-
-  .public-menu-shell.is-wide .public-menu-type-card-icon svg {
-    width: 3.75rem;
-    height: 3.75rem;
+  .public-menu-shell.is-wide .public-menu-type-card-art {
+    width: 9rem;
+    height: 9rem;
   }
 
   html.public-menu-dark .public-menu-type-choice h1 {
