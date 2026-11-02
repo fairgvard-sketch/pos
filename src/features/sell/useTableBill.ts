@@ -210,6 +210,27 @@ export function useTableBill(startPayment: (o: PayingOrder) => void) {
     return lines.map((l) => ({ ...l, lineId: l.lineId ?? crypto.randomUUID(), held: held.has(l.key) }))
   }
 
+  /**
+   * Тикет на кухню для дозаказа: только новые позиции, без номера.
+   * Придержанные курсы кухня не видит — они уйдут тикетом FIRE.
+   */
+  function printAppendTicket(lines: CartLine[]) {
+    const now = lines.filter((l) => !l.held)
+    if (!kitchenTicketOn || now.length === 0) return
+    void printKitchenTicket(
+      {
+        dailyNumber: null,
+        orderType: 'here',
+        customerName: cart.customerName,
+        tableLabel: tableCtx!.tableLabel,
+        staffName: staff?.name ?? '',
+        deviceName,
+        lines: now.map(toTicketLine),
+      },
+      printMode === 'rawbt'
+    )
+  }
+
   // Режим столов: сохранить дозаказ в открытый счёт (остаётся open) → назад в зал.
   // Локальный стол → всегда в очередь (FIFO за open); серверный + обрыв сети →
   // в очередь с тем же op_uuid (если вызов долетел, replay не задвоит строки).
@@ -251,23 +272,7 @@ export function useTableBill(startPayment: (o: PayingOrder) => void) {
     },
     onSuccess: (lines) => {
       toast.success(t(lang, 'billSaved'))
-      // Тикет на кухню для дозаказа: только новые позиции, без номера.
-      // Придержанные курсы кухня не видит — они уйдут тикетом FIRE.
-      const now = lines.filter((l) => !l.held)
-      if (kitchenTicketOn && now.length > 0) {
-        void printKitchenTicket(
-          {
-            dailyNumber: null,
-            orderType: 'here',
-            customerName: cart.customerName,
-            tableLabel: tableCtx!.tableLabel,
-            staffName: staff?.name ?? '',
-            deviceName,
-            lines: now.map(toTicketLine),
-          },
-          printMode === 'rawbt'
-        )
-      }
+      printAppendTicket(lines)
       qc.invalidateQueries({ queryKey: ['order_lines', tableCtx!.orderId] })
       cart.clear()
       qc.invalidateQueries({ queryKey: ['open_table_orders'] })
@@ -280,7 +285,7 @@ export function useTableBill(startPayment: (o: PayingOrder) => void) {
   // Режим столов: добавить новые позиции (если есть) и открыть оплату всего счёта.
   // offline-флаг уводит последующий pay в офлайн-очередь (за append'ом, FIFO).
   const billToPay = useMutation({
-    mutationFn: async (): Promise<{ total: number; offline: boolean }> => {
+    mutationFn: async (): Promise<{ total: number; offline: boolean; lines: CartLine[] }> => {
       const c = useCartStore.getState()
       const key = tableCtx!.orderId
       const lines = prepareLines(c.lines)
@@ -290,15 +295,15 @@ export function useTableBill(startPayment: (o: PayingOrder) => void) {
           totalAfter += cartSubtotal(lines)
           enqueueTableAppend({ orderKey: key, orderId: null, staffId: staff!.id, lines, totalAfter })
         }
-        return { total: totalAfter, offline: true }
+        return { total: totalAfter, offline: true, lines }
       }
       const opUuid = crypto.randomUUID()
       try {
         if (lines.length > 0) {
           const r = await withOfflineFallback(() => appendToOrder(key, staff!.id, lines, opUuid))
-          return { total: r.total, offline: false }
+          return { total: r.total, offline: false, lines }
         }
-        return { total: tableCtx!.existingTotal, offline: false }
+        return { total: tableCtx!.existingTotal, offline: false, lines }
       } catch (e) {
         if (e instanceof OfflineError) {
           const totalAfter = tableCtx!.existingTotal + cartSubtotal(lines)
@@ -312,21 +317,36 @@ export function useTableBill(startPayment: (o: PayingOrder) => void) {
             tableId: tableCtx!.tableId,
             tableLabel: tableCtx!.tableLabel,
           })
-          return { total: totalAfter, offline: true }
+          return { total: totalAfter, offline: true, lines }
         }
         throw e
       }
     },
-    onSuccess: ({ total: billTotal, offline }) => {
+    onSuccess: ({ total: billTotal, offline, lines }) => {
+      // Новые позиции уже в счёте (на сервере или в очереди) — дальше как
+      // после «Отправить на кухню»: тикет сразу, из корзины в «Уже в счёте».
+      // Иначе отмена оплаты оставляла их в корзине, и каждое следующее
+      // «К оплате» дописывало их в счёт ещё раз
+      if (lines.length > 0) {
+        printAppendTicket(lines)
+        for (const l of lines) cart.removeLine(l.key)
+        cart.setTableCtx({ ...tableCtx!, existingTotal: billTotal })
+        qc.invalidateQueries({ queryKey: ['order_lines', tableCtx!.orderId] })
+        qc.invalidateQueries({ queryKey: ['open_table_orders'] })
+        qc.invalidateQueries({ queryKey: ['queue'] })
+      }
       startPayment({
         orderId: tableCtx!.orderId,
         dailyNumber: tableEcho?.serverDailyNumber ?? 0,
         total: billTotal,
         intent: 'choose',
         offline,
-        // Оплата отпускает придержанное (179): кухня получит его тикетом
-        // вместе с позициями, добавленными перед оплатой
-        releasedLines: existingLines.filter((l) => l.held).map(billLineToTicketLine),
+        // Оплата отпускает придержанное (179): кухня получит его тикетом —
+        // и то, что уже было в счёте, и придержанное из только что добавленного
+        releasedLines: [
+          ...existingLines.filter((l) => l.held).map(billLineToTicketLine),
+          ...lines.filter((l) => l.held).map(toTicketLine),
+        ],
       })
     },
     onError: (e) => toast.error(e.message),
