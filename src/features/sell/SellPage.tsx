@@ -120,7 +120,7 @@ export default function SellPage() {
   // Платёжный поток (place → чаевые → pay → чек/номер) — весь в usePayFlow;
   // счёт стола (дозаказ, скидка счёта, оплата, void) — в useTableBill.
   const {
-    payingOrder, tipping, splitRemainder, placedNumber,
+    payingOrder, tipping, splitRemainder, placedNumber, paidSummary,
     showSplit, setShowSplit, showEqualSplit, setShowEqualSplit,
     cartTip, setCartTip, showTipSheet, setShowTipSheet, percentBase, tipOptions,
     paidOrderId, paidLocalReceipt, showReceipt, setShowReceipt, receiptChoice, setReceiptChoice,
@@ -1432,12 +1432,36 @@ export default function SellPage() {
 
       {placedNumber !== null && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center">
-          <div className="card px-12 py-10 text-center animate-[pop-in_0.35s_cubic-bezier(0.34,1.56,0.64,1)]">
-            <div className="text-sm text-gray-500 mb-2">{t(lang, 'orderPlaced')}</div>
-            {/* Офлайн-заказ показывает локальный номер K-n (уже с префиксом) */}
-            <div className="text-7xl font-black text-gray-900 tabular-nums mb-8">
-              {typeof placedNumber === 'string' ? placedNumber : `#${placedNumber}`}
+          <div className="card px-12 py-10 min-w-[320px] text-center animate-[pop-in_0.35s_cubic-bezier(0.34,1.56,0.64,1)]">
+            {/* Оплата прошла — видно сразу, а не только по звуку */}
+            <div className="w-14 h-14 mx-auto mb-4 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M5 12.5L9.5 17L19 7.5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
             </div>
+            <div className="text-lg font-bold text-gray-900 tabular-nums">
+              {t(lang, 'paid')}
+              {paidSummary && ` · ${formatMoney(paidSummary.amount, lang)}`}
+            </div>
+            {paidSummary?.tableLabel ? (
+              <div className="text-4xl font-black text-gray-900 mt-2 mb-6">
+                {t(lang, 'tableLabel')} {paidSummary.tableLabel}
+              </div>
+            ) : (
+              // Офлайн-заказ показывает локальный номер K-n (уже с префиксом)
+              <div className="text-7xl font-black text-gray-900 tabular-nums mt-2 mb-6">
+                {typeof placedNumber === 'string' ? placedNumber : `#${placedNumber}`}
+              </div>
+            )}
+            {/* Сдача — то, что кассир отсчитывает прямо сейчас */}
+            {paidSummary && paidSummary.change > 0 && (
+              <div className="flex items-baseline justify-between gap-6 rounded-2xl bg-gray-50 px-6 py-4 mb-6">
+                <span className="text-base text-gray-500">{t(lang, 'change')}</span>
+                <span className="text-3xl font-black text-gray-900 tabular-nums">
+                  {formatMoney(paidSummary.change, lang)}
+                </span>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-2">
               <button
                 onClick={() => setShowReceipt(true)}

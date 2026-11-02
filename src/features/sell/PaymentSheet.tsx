@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { useLangStore } from '../../store/langStore'
 import { useDeviceStore } from '../../store/deviceStore'
 import { t } from '../../lib/i18n'
@@ -39,26 +39,8 @@ interface Props {
 
 type Method = PayMethodId
 
-/**
- * Быстрые купюры для расчёта сдачи (Square: Quick amounts), по режиму кассы:
- *  smart  — авто по сумме: «без сдачи» + округления вверх до круглых банкнот
- *  manual — «без сдачи» + заданные суммы, отсекая те, что меньше итога
- *  off    — только «без сдачи» (ровно к оплате)
- * Первая опция всегда = total (кнопка «Без сдачи»).
- */
-function quickCashOptions(total: number, mode: 'smart' | 'manual' | 'off', manual: number[]): number[] {
-  const opts = new Set<number>([total])
-  if (mode === 'smart') {
-    const shekels = total / 100
-    for (const step of [10, 20, 50, 100, 200]) {
-      const rounded = Math.ceil(shekels / step) * step
-      if (rounded * 100 >= total) opts.add(rounded * 100)
-    }
-  } else if (mode === 'manual') {
-    for (const a of manual) if (a >= total) opts.add(a)
-  }
-  return [...opts].sort((a, b) => a - b).slice(0, 5)
-}
+/** Монеты и купюры шекеля, агороты: тап прибавляет номинал к «Получено» */
+const CASH_DENOMINATIONS = [100, 500, 1000, 2000, 5000, 10000, 20000]
 
 /**
  * Оплата без отдельного режима «наличные + карта» (Square-подход):
@@ -71,8 +53,6 @@ export default function PaymentSheet({ total, tip = 0, startMode = 'choose', onC
   // первый — выбран по умолчанию. «Наличные» с кнопки перебивают
   const payMethodOrder = useDeviceStore((s) => s.payMethodOrder)
   const firstPayMethod = payMethodOrder[0] ?? 'cash'
-  const quickAmountsMode = useDeviceStore((s) => s.quickAmountsMode)
-  const quickAmountsManual = useDeviceStore((s) => s.quickAmountsManual)
   const [method, setMethod] = useState<Method>(startMode === 'cash' ? 'cash' : firstPayMethod)
   const [tenderedStr, setTenderedStr] = useState('')
   const [cardStr, setCardStr] = useState('')
@@ -97,13 +77,16 @@ export default function PaymentSheet({ total, tip = 0, startMode = 'choose', onC
   const cashRemaining = remainingStandardCashAllowance(total, parts)
   const cashRestricted = maxCash < total
 
-  const quick = useMemo(
-    () => cashRemaining < remaining
-      ? (cashRemaining > 0 ? [cashRemaining] : [])
-      : quickCashOptions(remaining, quickAmountsMode, quickAmountsManual),
-    [cashRemaining, remaining, quickAmountsMode, quickAmountsManual]
-  )
   const tendered = tenderedStr ? parseMoney(tenderedStr) : null
+  // «Без сдачи» ставит в «Получено» весь остаток; лимит наличных — его максимум
+  const cashCapped = cashRemaining < remaining
+  const exactCash = cashCapped ? Math.max(cashRemaining, 0) : remaining
+
+  /** Набор «Получено» кнопками: оплату закрывает только «Оплатить» */
+  function setTendered(amount: number) {
+    setTenderedStr(String(amount / 100))
+    setCashLimitError(false)
+  }
   const change = tendered !== null && tendered >= remaining ? tendered - remaining : null
   // Карта: пустой ввод = весь остаток; больше остатка картой не бывает
   const cardEntered = cardStr ? parseMoney(cardStr) : null
@@ -351,21 +334,25 @@ export default function PaymentSheet({ total, tip = 0, startMode = 'choose', onC
 
               {method === 'cash' && (
                 <div className="flex-1 flex flex-col gap-4">
-                  {/* Быстрые купюры: 1 тап = оплачено */}
-                  <div className="grid grid-cols-3 gap-2">
-                    {quick.map((amt) => (
+                  {/* «Без сдачи» и номиналы набирают «Получено», не закрывая счёт */}
+                  <div className="grid grid-cols-4 gap-2">
+                    <button
+                      onClick={() => setTendered(exactCash)}
+                      disabled={busy || exactCash <= 0}
+                      className="h-11 px-1 rounded-xl border border-gray-200 hover:border-gray-900 font-bold text-sm
+                                 leading-tight text-gray-900 transition-all active:scale-[0.96] disabled:opacity-40"
+                    >
+                      {cashCapped ? t(lang, 'cashLimitMax') : t(lang, 'exactAmount')}
+                    </button>
+                    {CASH_DENOMINATIONS.map((amt) => (
                       <button
                         key={amt}
-                        onClick={() => confirmCash(amt)}
+                        onClick={() => setTendered((tendered ?? 0) + amt)}
                         disabled={busy}
-                        className="h-11 rounded-xl border border-gray-200 hover:border-gray-900 font-bold text-sm
+                        className="h-11 px-1 rounded-xl border border-gray-200 hover:border-gray-900 font-bold text-sm
                                    text-gray-900 tabular-nums transition-all active:scale-[0.96]"
                       >
-                        {amt === remaining
-                          ? t(lang, 'exactAmount')
-                          : cashRestricted && amt === cashRemaining
-                            ? `${t(lang, 'cashLimitMax')} ${formatMoney(amt, lang)}`
-                            : formatMoney(amt, lang)}
+                        {formatMoney(amt, lang)}
                       </button>
                     ))}
                   </div>

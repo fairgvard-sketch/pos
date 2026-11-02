@@ -27,14 +27,6 @@ export type PayMethod = PayMethodId
 /** @deprecated синоним PayMethod — оставлен, чтобы не ломать импорты */
 export type FirstPayMethod = PayMethod
 
-/**
- * Быстрые суммы при оплате наличными (Square: Quick amounts):
- *  smart  — авто по сумме заказа (округления вверх до круглых банкнот)
- *  manual — свои фиксированные суммы (quickAmountsManual, до 3)
- *  off    — только «Без сдачи» (ровно к оплате)
- */
-export type QuickAmountsMode = 'smart' | 'manual' | 'off'
-
 /** Порядок кнопок ряда действий на экране продажи (перестановка long-press'ом) */
 export const DEFAULT_ACTION_ORDER = ['customItem', 'discount', 'loyalty', 'refund', 'tip', 'drawer']
 
@@ -82,10 +74,6 @@ export interface DevicePreferences {
   payMethodOrder: PayMethod[]
   /** Порядок кнопок ряда действий на экране продажи (long-press drag, как iOS) */
   actionOrder: string[]
-  /** Режим быстрых сумм наличных (Square: Quick amounts) */
-  quickAmountsMode: QuickAmountsMode
-  /** Ручные быстрые суммы, агороты (для quickAmountsMode='manual', до 3) */
-  quickAmountsManual: number[]
   /** Чаевые включены на этой кассе (Square: Collect Tips) */
   collectTips: boolean
   /** Автоматический шаг чаевых перед оплатой; выкл — только кнопкой на экране продажи */
@@ -123,8 +111,6 @@ interface DeviceState extends DevicePreferences {
   setDrawerPin: (v: DrawerPin) => void
   setPayMethodOrder: (o: PayMethod[]) => void
   setActionOrder: (o: string[]) => void
-  setQuickAmountsMode: (m: QuickAmountsMode) => void
-  setQuickAmountsManual: (a: number[]) => void
   setCollectTips: (v: boolean) => void
   setTipAskBeforePayment: (v: boolean) => void
   setTipPresets: (p: number[]) => void
@@ -157,8 +143,6 @@ export const DEFAULT_DEVICE_PREFERENCES: DevicePreferences = {
   drawerPin: 2,
   payMethodOrder: ['cash', 'card'],
   actionOrder: DEFAULT_ACTION_ORDER,
-  quickAmountsMode: 'smart',
-  quickAmountsManual: [2000, 5000, 10000],
   collectTips: false,
   tipAskBeforePayment: true,
   tipPresets: [10, 12, 15],
@@ -190,8 +174,6 @@ export const useDeviceStore = create<DeviceState>()(
       setDrawerPin: (drawerPin) => set({ drawerPin }),
       setPayMethodOrder: (payMethodOrder) => set({ payMethodOrder }),
       setActionOrder: (actionOrder) => set({ actionOrder }),
-      setQuickAmountsMode: (quickAmountsMode) => set({ quickAmountsMode }),
-      setQuickAmountsManual: (quickAmountsManual) => set({ quickAmountsManual }),
       setCollectTips: (collectTips) => set({ collectTips }),
       setTipAskBeforePayment: (tipAskBeforePayment) => set({ tipAskBeforePayment }),
       setTipPresets: (tipPresets) => set({ tipPresets }),

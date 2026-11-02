@@ -11,7 +11,6 @@ import { CATEGORIES, SEARCH_INDEX, type CategoryId, type DetailId } from './regi
 import { DetailHeader, Group, NavRow } from './ui'
 import PaymentsSection from './sections/PaymentsSection'
 import TippingDetail from './sections/TippingDetail'
-import QuickAmountsDetail from './sections/QuickAmountsDetail'
 import PayMethodsDetail from './sections/PayMethodsDetail'
 import ReceiptsSection from './sections/ReceiptsSection'
 import LoyaltySection from './sections/LoyaltySection'
@@ -27,7 +26,6 @@ function initialCat(): CategoryId {
 
 const DETAIL_TITLES: Record<DetailId, TranslationKey> = {
   tipping: 'tipTitle',
-  'quick-amounts': 'quickAmountsTitle',
   'pay-methods': 'payMethodsTitle',
 }
 
@@ -167,7 +165,6 @@ export default function SettingsPage() {
               <div key={detail} className="animate-[rise-in_0.2s_ease-out]">
                 <DetailHeader title={t(lang, DETAIL_TITLES[detail])} onBack={() => setDetail(null)} />
                 {detail === 'tipping' && <TippingDetail />}
-                {detail === 'quick-amounts' && <QuickAmountsDetail />}
                 {detail === 'pay-methods' && <PayMethodsDetail />}
               </div>
             ) : (

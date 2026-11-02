@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useLangStore } from '../../../store/langStore'
-import { useDeviceStore, type QuickAmountsMode } from '../../../store/deviceStore'
+import { useDeviceStore } from '../../../store/deviceStore'
 import { playPaymentChime } from '../../../lib/sound'
 import { t } from '../../../lib/i18n'
 import { useOutboxStore, pendingOpsCount, hasFailedOps } from '../../../lib/offline/outboxStore'
@@ -8,20 +8,14 @@ import OfflineOpsSheet from '../../offline/OfflineOpsSheet'
 import { Group, NavRow, ToggleRow } from '../ui'
 import type { DetailId } from '../registry'
 
-/** Название режима быстрых сумм для значения на строке */
-function quickAmountsLabel(mode: QuickAmountsMode): 'quickAmountsSmart' | 'quickAmountsManual' | 'settingOff' {
-  return mode === 'smart' ? 'quickAmountsSmart' : mode === 'manual' ? 'quickAmountsManual' : 'settingOff'
-}
-
 /**
- * Категория «Оплата» — только device-scoped: способы оплаты, быстрые
- * суммы, звук, чаевые (drill-down), офлайн-очередь. НДС и лояльность —
+ * Категория «Оплата» — только device-scoped: способы оплаты, звук,
+ * чаевые (drill-down), офлайн-очередь. НДС и лояльность —
  * настройки точки, переехали в веб-кабинет ANGLE.
  */
 export default function PaymentsSection({ openDetail }: { openDetail: (id: DetailId) => void }) {
   const lang = useLangStore((s) => s.lang)
   const payMethodOrder = useDeviceStore((s) => s.payMethodOrder)
-  const quickAmountsMode = useDeviceStore((s) => s.quickAmountsMode)
   const paymentSound = useDeviceStore((s) => s.paymentSound)
   const collectTips = useDeviceStore((s) => s.collectTips)
   const tipPresets = useDeviceStore((s) => s.tipPresets)
@@ -49,13 +43,6 @@ export default function PaymentsSection({ openDetail }: { openDetail: (id: Detai
           device
           value={methodsLabel}
           onClick={() => openDetail('pay-methods')}
-        />
-        <NavRow
-          label={t(lang, 'quickAmountsTitle')}
-          hint={t(lang, 'quickAmountsHint')}
-          device
-          value={t(lang, quickAmountsLabel(quickAmountsMode))}
-          onClick={() => openDetail('quick-amounts')}
         />
         <ToggleRow
           label={t(lang, 'paymentSoundTitle')}

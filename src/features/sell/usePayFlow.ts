@@ -47,6 +47,13 @@ export interface PayingOrder {
   releasedLines?: KitchenTicketLine[]
 }
 
+/** Итог оплаты для кассира: сколько принято, сколько сдачи, какой стол */
+export interface PaidSummary {
+  amount: number
+  change: number
+  tableLabel: string | null
+}
+
 /**
  * Платёжный поток экрана продажи: place → (чаевые) → pay → чек/номер.
  * Вынесен из SellPage целиком — состояние шагов, офлайн-ветки, сплиты,
@@ -85,6 +92,7 @@ export function usePayFlow() {
 
   // Номер к показу: серверный #42 или локальный K-3 (офлайн-продажа)
   const [placedNumber, setPlacedNumber] = useState<number | string | null>(null)
+  const [paidSummary, setPaidSummary] = useState<PaidSummary | null>(null)
   const [paidOrderId, setPaidOrderId] = useState<string | null>(null)  // последний оплаченный — для чека
   // Офлайн: временный чек последней продажи (кнопка «Чек» без сети)
   const [paidLocalReceipt, setPaidLocalReceipt] = useState<Receipt | null>(null)
@@ -109,7 +117,7 @@ export function usePayFlow() {
   // Разделить поровну на N гостей (один чек, N платежей)
   const [showEqualSplit, setShowEqualSplit] = useState(false)
   const [splitRemainder, setSplitRemainder] = useState<{ orderId: string; total: number } | null>(null)
-  // Режим столов: после финальной части цепочки сплита вернуться в зал
+  // Счёт стола (и вся цепочка его сплита): после «Готово» вернуться в зал
   const returnToHall = useRef(false)
   // Придержанное, которое отпустит оплата счёта стола (179): печатается
   // один раз — первой оплаченной частью цепочки
@@ -183,8 +191,13 @@ export function usePayFlow() {
     }
   }
 
-  function finishPaid(num: number | string, orderId: string, localReceipt?: Receipt) {
+  function finishPaid(num: number | string, orderId: string, payments: PaymentInput[], localReceipt?: Receipt) {
     const wasTable = !!cart.tableCtx
+    setPaidSummary({
+      amount: payments.reduce((s, p) => s + p.amount, 0),
+      change: payments.reduce((s, p) => s + (p.change_due ?? 0), 0),
+      tableLabel: cart.tableCtx?.tableLabel ?? null,
+    })
     // Автопечать — ДО очистки корзины (тикету нужны заметки позиций).
     // Тикет печатается один раз на заказ: при сплите остаток его не дублирует
     // (корзина к тому моменту уже пуста).
@@ -223,21 +236,11 @@ export function usePayFlow() {
     qc.invalidateQueries({ queryKey: ['order_lines'] })
     qc.invalidateQueries({ queryKey: ['queue'] })
     const continueFlow = () => {
-      // Цепочка сплита не закончена: показать номер/чек части,
-      // по «Готово» откроется оплата остатка (не уходим в зал)
-      if (splitRemainder) {
-        if (wasTable) returnToHall.current = true
-        setPlacedNumber(num)
-        return
-      }
-      if (wasTable || returnToHall.current) {
-        returnToHall.current = false
-        if (maybeLockAfterSale()) return
-        navigate('/hall')  // счёт стола закрыт — назад в зал
-        return
-      }
+      // Кассир всегда видит «Оплачено» и сдачу — и у стойки, и у стола.
+      // Закрывается по «Готово»: счёт стола после него уходит в зал,
+      // незаконченная цепочка сплита открывает оплату остатка
+      if (wasTable) returnToHall.current = true
       setPlacedNumber(num)
-      // Авто-скрытие убрано: закрывается по «Готово» или показу чека
     }
     // Сначала выбор чека (навигация/номер заказа ждут его), потом обычный поток
     if (receiptPromptOn) setReceiptChoice({ orderId, receipt: localReceipt, after: continueFlow })
@@ -249,12 +252,16 @@ export function usePayFlow() {
   function dismissPlaced() {
     const num = typeof placedNumber === 'number' ? placedNumber : 0
     setPlacedNumber(null)
+    setPaidSummary(null)
     if (splitRemainder) {
       startPayment({ orderId: splitRemainder.orderId, dailyNumber: num, total: splitRemainder.total, intent: 'choose' })
       setSplitRemainder(null)
       return
     }
-    maybeLockAfterSale()
+    const toHall = returnToHall.current
+    returnToHall.current = false
+    if (maybeLockAfterSale()) return
+    if (toHall) navigate('/hall')  // счёт стола закрыт — назад в зал
   }
 
   // Раздельная оплата: выбранные позиции → отдельный заказ со своим чеком
@@ -473,15 +480,15 @@ export function usePayFlow() {
       }
     },
     onSuccess: (res, v) => {
-      if (res) finishPaid(res.offlineNumber ?? v.dailyNumber, res.orderId, res.receipt)
-      else finishPaid(v.dailyNumber, v.orderId)
+      if (res) finishPaid(res.offlineNumber ?? v.dailyNumber, res.orderId, v.payments, res.receipt)
+      else finishPaid(v.dailyNumber, v.orderId, v.payments)
     },
     onError: (e) => toast.error(e.message),
   })
 
   return {
     // шаги потока
-    payingOrder, tipping, splitRemainder, placedNumber,
+    payingOrder, tipping, splitRemainder, placedNumber, paidSummary,
     showSplit, setShowSplit, showEqualSplit, setShowEqualSplit,
     // чаевые
     cartTip, setCartTip, showTipSheet, setShowTipSheet, percentBase, tipOptions,

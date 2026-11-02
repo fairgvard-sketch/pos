@@ -14,7 +14,7 @@ import type { TranslationKey } from '../../lib/i18n'
 
 export type CategoryId = 'payments' | 'receipts' | 'loyalty' | 'device'
 
-export type DetailId = 'tipping' | 'quick-amounts' | 'pay-methods'
+export type DetailId = 'tipping' | 'pay-methods'
 
 export const CATEGORIES: { id: CategoryId; label: TranslationKey }[] = [
   { id: 'payments', label: 'catPayments' },
@@ -33,7 +33,6 @@ export interface SearchEntry {
 
 export const SEARCH_INDEX: SearchEntry[] = [
   { cat: 'payments', detail: 'pay-methods', label: 'payMethodsTitle', hint: 'payMethodsHint' },
-  { cat: 'payments', detail: 'quick-amounts', label: 'quickAmountsTitle', hint: 'quickAmountsHint' },
   { cat: 'payments', label: 'paymentSoundTitle', hint: 'paymentSoundHint' },
   { cat: 'payments', label: 'offlinePayTitle', hint: 'offlinePayHint' },
   { cat: 'payments', detail: 'tipping', label: 'tipTitle', hint: 'collectTipsHint' },

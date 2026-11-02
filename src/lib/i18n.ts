@@ -172,7 +172,6 @@ export const translations = {
     cartEmptyHint: 'Нажмите на товар, чтобы добавить',
     customerNameOpt: 'Имя клиента (необязательно)',
     notesPlaceholder: 'Заметка к позиции...',
-    orderPlaced: 'Заказ оформлен',
     orderNo: 'Заказ',
     all: 'Все',
     favorites: 'Избранное',
@@ -617,13 +616,6 @@ export const translations = {
     payDefault: 'По умолчанию',
 
     // Быстрые суммы (Square: Quick amounts)
-    quickAmountsTitle: 'Быстрые суммы',
-    quickAmountsHint: 'Кнопки-номиналы при оплате наличными для расчёта сдачи.',
-    quickAmountsPageHint: 'При оплате наличными касса предлагает готовые суммы — быстрее считать сдачу.',
-    quickAmountsSmart: 'Авто',
-    quickAmountsManual: 'Свои',
-    quickAmountsManualLabel: 'Свои суммы (до 3)',
-    quickAmountsSmartHint: 'Касса сама подбирает круглые купюры выше суммы заказа.',
 
     // Запланированные пункты (Square-паритет, пока заглушки)
     serviceChargeTitle: 'Сервисный сбор',
@@ -1997,7 +1989,6 @@ export const translations = {
     cartEmptyHint: 'לחצו על פריט כדי להוסיף',
     customerNameOpt: 'שם הלקוח (אופציונלי)',
     notesPlaceholder: 'הערה לפריט...',
-    orderPlaced: 'ההזמנה בוצעה',
     orderNo: 'הזמנה',
     all: 'הכל',
     favorites: 'מועדפים',
@@ -2442,13 +2433,6 @@ export const translations = {
     payDefault: 'ברירת מחדל',
 
     // סכומים מהירים (Square: Quick amounts)
-    quickAmountsTitle: 'סכומים מהירים',
-    quickAmountsHint: 'כפתורי סכומים בתשלום מזומן לחישוב עודף.',
-    quickAmountsPageHint: 'בתשלום מזומן הקופה מציעה סכומים מוכנים — קל יותר לחשב עודף.',
-    quickAmountsSmart: 'אוטומטי',
-    quickAmountsManual: 'ידני',
-    quickAmountsManualLabel: 'סכומים משלך (עד 3)',
-    quickAmountsSmartHint: 'הקופה בוחרת שטרות עגולים מעל סכום ההזמנה.',
 
     // פריטים מתוכננים (התאמה ל-Square, בינתיים placeholder)
     serviceChargeTitle: 'דמי שירות',
@@ -3819,7 +3803,6 @@ export const translations = {
     cartEmptyHint: 'Tap an item to add it',
     customerNameOpt: 'Customer name (optional)',
     notesPlaceholder: 'Item note...',
-    orderPlaced: 'Order placed',
     orderNo: 'Order',
     all: 'All',
     favorites: 'Favorites',
@@ -4264,13 +4247,6 @@ export const translations = {
     payDefault: 'Default',
 
     // Быстрые суммы (Square: Quick amounts)
-    quickAmountsTitle: 'Quick amounts',
-    quickAmountsHint: 'Banknote buttons for cash payments to calculate change.',
-    quickAmountsPageHint: "For cash payments the register offers ready amounts — it's faster to work out the change.",
-    quickAmountsSmart: 'Auto',
-    quickAmountsManual: 'Custom',
-    quickAmountsManualLabel: 'Custom amounts (up to 3)',
-    quickAmountsSmartHint: 'The register picks round banknotes above the order total.',
 
     // Запланированные пункты (Square-паритет, пока заглушки)
     serviceChargeTitle: 'Service charge',
