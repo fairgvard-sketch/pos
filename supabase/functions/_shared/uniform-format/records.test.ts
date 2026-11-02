@@ -4,6 +4,7 @@ import {
   RECORD_LENGTHS,
   a000,
   a100,
+  b110,
   c100,
   d110,
   d120,
@@ -49,7 +50,7 @@ describe('служебные записи', () => {
     expect(slice(rec, 5, 13)).toBe('000000001')
     expect(slice(rec, 14, 22)).toBe('123456789')
     expect(slice(rec, 23, 37)).toBe('987654321012345')
-    expect(slice(rec, 38, 45)).toBe('&OF1.31 ')
+    expect(slice(rec, 38, 45)).toBe('&OF1.31&') // 8 символов, с закрывающим &
   })
 
   it('Z900: счётчик всех записей на 46–60', () => {
@@ -188,7 +189,7 @@ describe('A000 — ведущая запись INI.TXT', () => {
     softwareType: 2,
     outputPath: 'C:\\OPENFRMT',
     accountingType: 1,
-    batchLevel: '',
+    batchLevel: 0,
     businessName: 'Bulochka',
     businessStreet: '',
     businessHouse: '',
@@ -210,10 +211,39 @@ describe('A000 — ведущая запись INI.TXT', () => {
     expect(rec).toHaveLength(RECORD_LENGTHS.A000 + 2)
     expect(slice(rec, 1, 4)).toBe('A000')
     expect(slice(rec, 10, 24)).toBe('000000000002042')
-    expect(slice(rec, 49, 56)).toBe('&OF1.31 ')
+    expect(slice(rec, 49, 56)).toBe('&OF1.31&')
+    expect(slice(rec, 186, 186)).toBe('0') // 1014 — числовое, пусто = 0
+    expect(slice(rec, 187, 204)).toBe('000000000000000000') // 1015/1016 — числовые
     expect(slice(rec, 363, 366)).toBe('2026')
     expect(slice(rec, 395, 395)).toBe('0') // иврит
     expect(slice(rec, 396, 396)).toBe('1') // ISO-8859-8-i
     expect(slice(rec, 417, 419)).toBe('ILS')
+  })
+})
+
+describe('B110 — карточка счёта', () => {
+  it('длина, ключ, название, код מאזן בוחן и обороты', () => {
+    const rec = b110({
+      recordNumber: 2195,
+      taxId: identity.taxId,
+      accountKey: 'WALKIN',
+      accountName: 'לקוחות מזדמנים',
+      trialBalanceCode: 'CUSTOMERS',
+      trialBalanceName: 'לקוחות',
+      openingBalance: 0,
+      totalDebit: 1_234_500,
+      totalCredit: 1_234_500,
+      branchId: '',
+    })
+    expect(rec).toHaveLength(RECORD_LENGTHS.B110 + 2)
+    expect(slice(rec, 1, 4)).toBe('B110')
+    expect(slice(rec, 5, 13)).toBe('000002195')
+    expect(slice(rec, 23, 37)).toBe('WALKIN         ')
+    expect(rec[37]).toBe(0xec) // позиция 38: ל
+    expect(slice(rec, 88, 102).trimEnd()).toBe('CUSTOMERS')
+    expect(slice(rec, 278, 292)).toBe('+00000000000000')
+    expect(slice(rec, 293, 307)).toBe('+00000001234500')
+    expect(slice(rec, 308, 322)).toBe('+00000001234500')
+    expect(slice(rec, 323, 335)).toBe('0000000000000') // 1417 + 1419 — числовые
   })
 })

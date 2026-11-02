@@ -6,8 +6,12 @@
  * Позиции и длины полей сверены с официальным PDF спецификации
  * (Service_Pages_Income_tax_horaot-131.pdf, разделы 3–4); каждая схема
  * дополнительно проверена контрольной суммой длин полей против таблицы
- * длин записей (раздел 2.5). Бухгалтерские B100/B110 и складская M100
- * добавляются после решения о классификации ПО при регистрации.
+ * длин записей (раздел 2.5). Проводок B100 здесь нет намеренно: по
+ * разделу 1 это движения программы, которая сама ведёт двойную запись,
+ * а Kassa — модуль выпуска документов (A000, поле 1013 = 0 «לא רלוונטי»).
+ * B110 есть: это карточки счетов, на которые ссылается ключ клиента
+ * документа (C100, поле 1225), — официальный симулятор без них набор
+ * не принимает. Складская M100 появится вместе с работающим складом.
  *
  * Кодовые списки (типы документов, способы оплаты, компании карт) —
  * из приложений спецификации; перед прогоном официального симулятора
@@ -16,8 +20,11 @@
 
 import { alpha, amount15, composeRecord, date8, numeric, signedNumber, time4 } from './fields.ts'
 
-/** Константа формата в служебных записях. */
-const FORMAT_CONST = '&OF1.31'
+/**
+ * Константа формата в служебных записях — `&OF1.31&`, ровно 8 символов
+ * (поля 1005, 1104, 1154). До 02.11.2026 здесь не хватало закрывающего `&`.
+ */
+export const FORMAT_CONST = '&OF1.31&'
 
 /** Фиксированные длины записей (без CRLF) из раздела 2.5 спецификации. */
 export const RECORD_LENGTHS = {
@@ -26,6 +33,7 @@ export const RECORD_LENGTHS = {
   A100: 95,
   C100: 444,
   D110: 339,
+  B110: 376,
   D120: 222,
   Z900: 110,
 } as const
@@ -56,8 +64,11 @@ export interface IniHeader extends SetIdentity {
   outputPath: string // X(50)
   /** Тип бухучёта: 0 = не релевантно, 1 = одинарная, 2 = двойная. */
   accountingType: 0 | 1 | 2
-  /** Требуемая точность записей («רמת המנה»); обязательна при двойной. */
-  batchLevel: string // X(1)
+  /**
+   * Поле 1014 «איזון חשבונאי נדרש», числовое 9(1): 1 = уровень проводки,
+   * 2 = уровень пакета; обязательно только при двойной записи, иначе 0.
+   */
+  batchLevel: 0 | 1 | 2
   businessName: string // X(50)
   businessStreet: string // X(50)
   businessHouse: string // X(10)
@@ -96,9 +107,9 @@ export function a000(h: IniHeader): Uint8Array {
     numeric(h.softwareType, 1), //      134
     alpha(h.outputPath, 50), //         135–184
     numeric(h.accountingType, 1), //    185
-    alpha(h.batchLevel, 1), //          186
-    alpha('', 9), //                    187–195 ח"פ компании (не заполняем)
-    alpha('', 9), //                    196–204 ID представителя (не заполняем)
+    numeric(h.batchLevel, 1), //        186    числовое поле: пусто = 0
+    numeric(0, 9), //                   187–195 ח"פ в реестре компаний (числовое)
+    numeric(0, 9), //                   196–204 תיק ניכויים (числовое)
     alpha('', 10), //                   205–214 резервное поле
     alpha(h.businessName, 50), //       215–264
     alpha(h.businessStreet, 50), //     265–314
@@ -353,5 +364,53 @@ export function d120(p: PaymentLine): Uint8Array {
     date8(p.docDate), //                        148–155
     numeric(p.linkId, 7), //                    156–162
     alpha('', 60), //                           163–222 резерв
+  ])
+}
+
+/** Карточка счёта (B110, 376 байт) — здесь: клиент, на которого выписаны документы. */
+export interface AccountRecord {
+  recordNumber: number
+  taxId: number
+  /** Ключ счёта — тот же, что в C100 1225; уникален в наборе. */
+  accountKey: string // X(15)
+  accountName: string // X(50)
+  /** Код и описание группы в מאזן בוחן (обязательны). */
+  trialBalanceCode: string // X(15)
+  trialBalanceName: string // X(30)
+  /** Остаток на начало периода: «+» — дебет, «−» — кредит. */
+  openingBalance: number
+  /** Обороты периода без остатка на начало, агороты. */
+  totalDebit: number
+  totalCredit: number
+  /** ח.פ клиента (1419), если известен. */
+  counterpartyTaxId?: number
+  branchId: string // X(7)
+}
+
+export function b110(a: AccountRecord): Uint8Array {
+  return composeRecord(RECORD_LENGTHS.B110, [
+    alpha('B110', 4), //                         1–4
+    numeric(a.recordNumber, 9), //               5–13
+    numeric(a.taxId, 9), //                      14–22
+    alpha(a.accountKey, 15), //                  23–37
+    alpha(a.accountName, 50), //                 38–87
+    alpha(a.trialBalanceCode, 15), //            88–102
+    alpha(a.trialBalanceName, 30), //            103–132
+    alpha('', 50), //                            133–182 адрес: улица
+    alpha('', 10), //                            183–192 дом
+    alpha('', 30), //                            193–222 город
+    alpha('', 8), //                             223–230 индекс
+    alpha('', 30), //                            231–260 страна
+    alpha('', 2), //                             261–262 код страны
+    alpha('', 15), //                            263–277 счёт-агрегатор
+    amount15(a.openingBalance), //               278–292
+    amount15(a.totalDebit), //                   293–307
+    amount15(a.totalCredit), //                  308–322
+    numeric(0, 4), //                            323–326 код по форме 6111
+    numeric(a.counterpartyTaxId ?? 0, 9), //     327–335
+    alpha(a.branchId, 7), //                     336–342
+    amount15(0), //                              343–357 остаток в валюте
+    alpha('', 3), //                             358–360 код валюты
+    alpha('', 16), //                            361–376 резерв
   ])
 }

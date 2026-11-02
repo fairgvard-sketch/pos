@@ -7,7 +7,14 @@
  * POST { staff_session, from: 'YYYY-MM-DD', to: 'YYYY-MM-DD' }        — касса
  * POST { location_id,  from, to }                                     — ANGLE
  *   → { ini_base64, bkmvdata_zip_base64, control_report, total_records,
- *       record_counts, business, range } | { error }
+ *       record_counts, output_dir, business, software, range } | { error }
+ *
+ * control_report — все 27 типов приложения 1 с названиями (раздел 2.6),
+ * output_dir — путь набора по разделу 2.2 (он же поле 1012 в A000).
+ *
+ * Секреты (supabase secrets set …): UF_VENDOR_TAX_ID — номер
+ * производителя ПО (обязателен), UF_SOFTWARE_REGISTRATION — номер
+ * свидетельства регистрации (пока нет — 99999999). См. software.ts.
  *
  * Авторизация: запрос выполняется под JWT вызывающего (заголовок
  * Authorization пробрасывается в PostgREST). Кассовый путь — staff-сессия
@@ -21,8 +28,10 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { encodeBase64 } from 'https://deno.land/std@0.224.0/encoding/base64.ts'
 import { zipSync } from 'npm:fflate@0.8.2'
-import { buildExport } from '../_shared/uniform-format/build.ts'
+import { buildExport, generatePrimaryId } from '../_shared/uniform-format/build.ts'
 import type { ExportConfig, ExportDocument } from '../_shared/uniform-format/build.ts'
+import { softwareIdentity } from '../_shared/uniform-format/software.ts'
+import type { SoftwareIdentity } from '../_shared/uniform-format/software.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -39,14 +48,6 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 const PAGE_LIMIT = 200
 /** Предохранитель: больше этого числа документов за одну выгрузку не собираем. */
 const MAX_DOCUMENTS = 100_000
-
-/** 15-значный уникальный ID набора (מספר מזהה קבוע ואחיד). */
-function generatePrimaryId(): number {
-  const buf = new Uint32Array(2)
-  crypto.getRandomValues(buf)
-  // Стабильно 15 знаков в пределах safe integer: 1 + 7 + 7 случайных цифр
-  return 100_000_000_000_000 + (buf[0] % 9_000_000) * 10_000_000 + (buf[1] % 10_000_000)
-}
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
@@ -67,6 +68,14 @@ Deno.serve(async (req) => {
     return json({ error: 'bad_request' }, 400)
   }
   const web = !staff_session
+
+  // Реквизиты производителя ПО — из секретов, до любых запросов к данным
+  let software: SoftwareIdentity
+  try {
+    software = softwareIdentity((key) => Deno.env.get(key))
+  } catch (e) {
+    return json({ error: e instanceof Error ? e.message : 'uf_software_config' }, 500)
+  }
 
   // Клиент под JWT устройства: RLS и auth_org_id() работают как на кассе
   const supabase = createClient(
@@ -184,18 +193,13 @@ Deno.serve(async (req) => {
     taxId,
     primaryId: generatePrimaryId(),
     branchId: '', // одна точка в наборе — филиалы не размечаем
-    softwareRegistration: 0, // до получения свидетельства регистрации
-    softwareName: 'Kassa',
-    softwareVersion: '1.1.0',
-    vendorTaxId: taxId,
-    vendorName: business.business_name ?? 'Kassa',
+    ...software,
     businessName: business.business_name ?? '',
     businessStreet: business.address ?? '',
     taxYear: Number(from!.slice(0, 4)),
     rangeStart: from!.replaceAll('-', ''),
     rangeEnd: to!.replaceAll('-', ''),
     processedAt: new Date().toISOString(),
-    outputPath: 'OPENFRMT',
     archiverName: 'zip',
   }
 
@@ -208,7 +212,13 @@ Deno.serve(async (req) => {
       control_report: result.controlReport,
       total_records: result.totalRecords,
       record_counts: result.recordCounts,
+      output_dir: result.outputDir,
       business: { name: business.business_name, tax_id: taxId },
+      software: {
+        name: software.softwareName,
+        version: software.softwareVersion,
+        registration: software.softwareRegistration,
+      },
       range: { from, to },
     })
   } catch (e) {

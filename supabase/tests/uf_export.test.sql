@@ -1,8 +1,9 @@
--- pgTAP: выборка данных Единого формата 1.31 (миграция 073).
--- Права, staff-гейт 'manage', скоуп по точке и форма документов.
+-- pgTAP: выборка данных Единого формата 1.31 (миграции 073, 151, 185).
+-- Права, staff-гейт 'manage', скоуп по точке и форма документов;
+-- у возврата — исходный чек как документ-основание (185).
 
 BEGIN;
-SELECT plan(10);
+SELECT plan(12);
 
 -- ── Гранты ───────────────────────────────────────────────────
 SELECT ok(
@@ -155,6 +156,24 @@ SELECT is(
   ) -> 'documents' -> 1 ->> 'vat_rate',
   '18.00',
   'the refund inherits the vat rate of its order'
+);
+
+SELECT is(
+  uf_export_documents(
+    '43000000-0000-4000-8000-000000000001',
+    '2026-07-15', '2026-07-15', NULL, NULL, 200
+  ) -> 'documents' -> 1 ->> 'base_receipt_number',
+  '1042',
+  'the refund names the receipt it is based on (185)'
+);
+
+SELECT is(
+  uf_export_documents(
+    '43000000-0000-4000-8000-000000000001',
+    '2026-07-15', '2026-07-15', NULL, NULL, 200
+  ) -> 'documents' -> 1 ->> 'base_doc_type',
+  'invoice_receipt',
+  'the refund carries the document type of its base receipt (185)'
 );
 
 SELECT is(

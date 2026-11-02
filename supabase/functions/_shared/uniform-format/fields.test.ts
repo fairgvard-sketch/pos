@@ -13,10 +13,22 @@ describe('encodeIso8859_8', () => {
     expect(bytes(encodeIso8859_8('אבת'))).toEqual([0xe0, 0xe1, 0xfa])
   })
 
-  it('символ вне таблицы — один байт «?», включая эмодзи и ₪', () => {
-    expect(bytes(encodeIso8859_8('₪'))).toEqual([0x3f])
+  it('символ вне таблицы — один байт «?», включая эмодзи', () => {
     expect(bytes(encodeIso8859_8('☕'))).toEqual([0x3f]) // non-BMP → один байт, не два
     expect(encodeIso8859_8('a☕b')).toHaveLength(3)
+  })
+
+  it('знаки иврита вне таблицы — ASCII-двойниками, огласовки убираются', () => {
+    expect(bytes(encodeIso8859_8('צ׳'))).toEqual([0xf6, 0x27]) // герэш → '
+    expect(bytes(encodeIso8859_8('צה״ל'))).toEqual([0xf6, 0xe4, 0x22, 0xec]) // гершаим → "
+    expect(bytes(encodeIso8859_8('בְּ'))).toEqual([0xe1]) // огласовки не дают «?»
+    expect(String.fromCharCode(...encodeIso8859_8('₪ – “x”'))).toBe('ש"ח - "x"'.replace(/[א-ת]/g, (c) =>
+      String.fromCharCode(0xe0 + c.charCodeAt(0) - 0x05d0)))
+  })
+
+  it('кириллица транслитерируется, а не превращается в «?????»', () => {
+    expect(String.fromCharCode(...encodeIso8859_8('Чизкейк с ягодами'))).toBe('Chizkeyk s yagodami')
+    expect(String.fromCharCode(...encodeIso8859_8('Щи'))).toBe('Shchi')
   })
 })
 

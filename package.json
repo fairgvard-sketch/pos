@@ -28,6 +28,7 @@
     "check:appurl": "node scripts/check-app-url.mjs",
     "db:push": "node scripts/check-project-ref.mjs && supabase db push",
     "db:dump": "node scripts/check-project-ref.mjs && node scripts/db-dump.mjs",
+    "uf:simulator": "node --experimental-strip-types --no-warnings scripts/uf-simulator/build-set.mjs",
     "functions:deploy": "node scripts/check-project-ref.mjs && supabase functions deploy"
   },
   "dependencies": {
